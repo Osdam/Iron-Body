@@ -1,0 +1,42 @@
+# 40 · Mutación de la guarda V-3: un fichero temporal app/Services/Marketing/Ultron/ZzMutacionCatalogo.php con «Plan Mensual, $80.000» en un comentario y «Plan Valera por $65.000» en una cadena. Debe ponerse ROJA y nombrar solo lo de la cadena. Borrado después.
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging --filter test_ningun_dato tests/Unit/Marketing/Ultron/UltronCatalogStaticGuardsTest.php
+# 2026-11-19T00:31:51Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+F                                                                   1 / 1 (100%)
+
+Time: 00:00.107, Memory: 26.00 MB
+
+There was 1 failure:
+
+1) Tests\Unit\Marketing\Ultron\UltronCatalogStaticGuardsTest::test_ningun_dato_del_catalogo_escrito_a_mano
+un nombre, un precio o un beneficio del catálogo escrito a mano (o una excepción que ya no hace falta)
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+         'semestre' => 1,
+         'trimestre' => 1,
+     ],
+-    'backend/resources/ultron-prompts/n8n-29de5119/composer.txt' => Array &3 [
++    'backend/app/Services/Marketing/Ultron/ZzMutacionCatalogo.php' => Array &3 [
++        65000 => 1,
++        'plan valera' => 1,
++    ],
++    'backend/resources/ultron-prompts/n8n-29de5119/composer.txt' => Array &4 [
+         'trimestre' => 2,
+     ],
+-    'n8n/flujos/ultron-studio-s1/elegir-prompts.js' => Array &4 [
++    'n8n/flujos/ultron-studio-s1/elegir-prompts.js' => Array &5 [
+         'trimestre' => 2,
+     ],
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronCatalogStaticGuardsTest.php:89
+
+FAILURES!
+Tests: 1, Assertions: 1, Failures: 1.

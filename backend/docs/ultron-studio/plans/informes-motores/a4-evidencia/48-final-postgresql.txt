@@ -1,0 +1,16 @@
+# 48 · FINAL, PostgreSQL 14: el A4 nuevo (registro, panorama, catálogo dinámico, detectores de usted, instantánea legacy-usted) y A4 con su instantánea
+# Comando: UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+# 2026-11-19T00:46:03Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 141 ( 44%)
+............................................................... 126 / 141 ( 89%)
+...............                                                 141 / 141 (100%)
+
+Time: 00:51.830, Memory: 99.25 MB
+
+OK (141 tests, 1969 assertions)

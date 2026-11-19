@@ -1,0 +1,221 @@
+# 51 · Encabezado veraz hecho en el código; pruebas SIN actualizar todavía: lo que sale rojo es exactamente lo que fijaba «Planes de un mes» con un 4.º plan de un mes sin nombrar (PROMO X4)
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php
+# 2026-11-19T00:53:28Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...FFF...FF....................................................  63 / 168 ( 37%)
+.......FF.F................F.FFF.....F......F..............FF.F 126 / 168 ( 75%)
+F.........F.F.............................                      168 / 168 (100%)
+
+Time: 00:23.839, Memory: 100.50 MB
+
+There were 20 failures:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_tope_200_nombra_los_tres_de_un_mes_con_su_precio
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:211
+
+2) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_tope_160_suelta_la_frase_de_las_demas_duraciones
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:226
+
+3) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_studio_sin_tope_sale_entero_y_sin_medida
+D-1: el respaldo de precios cuelga de studio, no del tope
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:233
+
+4) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_plan_que_nombra_la_persona_va_primero
+Failed asserting that 'Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:281
+
+5) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_regla_depende_del_orden_del_catalogo
+Failed asserting that 'Claro. Algunos planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:290
+
+6) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_borrador_que_cierra_con_el_precio_no_se_recorta_se_descarta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:407
+
+7) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_pregunta_final_con_el_unico_precio_no_se_suelta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:423
+
+8) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado
+el respaldo de precios, por la rama de la política
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:458
+
+9) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r1_la_memoria_no_anota_el_precio_del_plan_del_modelo_si_no_salio
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:663
+
+10) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_en_la_rama_de_la_politica_con_la_version_y_sin_tope
+sin tope, el respaldo de precios entero
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:699
+
+11) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_respaldo_de_precios_no_nombra_un_plan_rechazado
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Plan Valera, $65.000 COP;".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:730
+
+12) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_las_demas_duraciones_solo_se_nombran_si_se_describen_bien
+un plan de 15 días no es «por semana»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:739
+
+13) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_textos_ajustados_que_aprueba_el_propietario
+los textos cambiaron: regenerar con A4_TEXTOS=escribir y volver a aprobarlos
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ ### `pricing_question` — entrante: «¿Qué planes tienen y cuánto cuesta la mensualidad?»
+ 
+ - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+ 
+ ### `payment_link_request` — entrante: «Mándame el link para pagar»
+ 
+@@ @@
+ ### «¿Qué planes tienen y cuánto cuesta la mensualidad?»
+ 
+ - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+ 
+ ### «¿Y el Élite cuánto cuesta? ¿Qué planes tienen?» (nombra un plan)
+ 
+ - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
+ 
+ ### «¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:901
+
+14) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_turno_2_real_la_mezcla_se_descarta_y_sale_la_lista_de_precios
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:266
+
+15) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_con_precio_sale_siempre_la_lista
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:557
+
+16) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_sin_precio_con_un_plan_sale_la_lista_y_con_dos_el_modelo
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:566
+
+17) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_un_plan_nombrado_y_que_otros_hay_es_panorama_con_ese_plan_primero
+Failed asserting that 'Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:595
+
+18) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_con_el_revisor_caido_sale_la_lista
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:602
+
+19) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_v2b_un_nombre_nuevo_en_el_crm_sale_en_decide_en_el_marcador_y_en_la_lista
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Ónix, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Plan Ónix, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:782
+
+20) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_v2d_el_orden_y_el_plan_por_defecto_los_decide_el_crm
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:813
+
+FAILURES!
+Tests: 168, Assertions: 2177, Failures: 20.

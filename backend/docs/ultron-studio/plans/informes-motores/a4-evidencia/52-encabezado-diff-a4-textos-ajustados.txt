@@ -1,0 +1,30 @@
+# 52 · Diff de a4-textos-ajustados.md tras regenerarlo con A4_TEXTOS=escribir (encabezado veraz). Comando: git diff --stat y git diff -U0 del fichero
+
+ .../plans/informes-motores/a4-textos-ajustados.md      | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/backend/docs/ultron-studio/plans/informes-motores/a4-textos-ajustados.md b/backend/docs/ultron-studio/plans/informes-motores/a4-textos-ajustados.md
+index 42c4dd9c..e6146c1b 100644
+--- a/backend/docs/ultron-studio/plans/informes-motores/a4-textos-ajustados.md
++++ b/backend/docs/ultron-studio/plans/informes-motores/a4-textos-ajustados.md
+@@ -12,3 +12,3 @@ ### `pricing_question` — entrante: «¿Qué planes tienen y cuánto cuesta la
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+@@ -226,3 +226,3 @@ ### «¿Qué planes tienen y cuánto cuesta la mensualidad?»
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+@@ -233,3 +233,3 @@ ### «¿Y el Élite cuánto cuesta? ¿Qué planes tienen?» (nombra un plan)
+-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 200** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+-- **Tope 160** (133) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 160** (141) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»

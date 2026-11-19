@@ -9,9 +9,9 @@ Leyenda: «Hoy (Legacy)» es lo que sale sin versión aplicada y no cambia; «Ve
 ### `pricing_question` — entrante: «¿Qué planes tienen y cuánto cuesta la mensualidad?»
 
 - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
 
 ### `payment_link_request` — entrante: «Mándame el link para pagar»
 
@@ -223,16 +223,16 @@ Leyenda: «Hoy (Legacy)» es lo que sale sin versión aplicada y no cambia; «Ve
 ### «¿Qué planes tienen y cuánto cuesta la mensualidad?»
 
 - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 200** (191) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 160** (133) «Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
+- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 200** (199) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 160** (141) «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?»
 
 ### «¿Y el Élite cuánto cuesta? ¿Qué planes tienen?» (nombra un plan)
 
 - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
-- **Versión aplicada, sin tope (320)** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 200** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 160** (133) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
+- **Versión aplicada, sin tope (320)** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 200** (199) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 160** (141) «Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
 
 ### «¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)
 

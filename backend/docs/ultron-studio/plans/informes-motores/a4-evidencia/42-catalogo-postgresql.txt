@@ -1,0 +1,52 @@
+# 42 · PostgreSQL 14 tras V-1 a V-4: el endpoint nuevo (registro, panorama y catálogo dinámico V-2) y A4 con su instantánea
+# Comando: UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+# 2026-11-19T00:32:49Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+................................E..............................  63 / 134 ( 47%)
+............................................................... 126 / 134 ( 94%)
+........                                                        134 / 134 (100%)
+
+Time: 00:49.047, Memory: 98.50 MB
+
+There was 1 error:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_v2f_un_catalogo_sintetico_sale_tal_cual_nada_esta_escrito_a_mano
+Illuminate\Database\UniqueConstraintViolationException: SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint "plans_pkey"
+DETAIL:  Key (id)=(2) already exists. (Connection: pgsql, Host: 127.0.0.1, Port: 55432, Database: ultron_studio_lead_ola5, SQL: insert into "plans" ("name", "price", "duration_days", "active", "sellable", "sort_order", "is_recommended", "benefits", "updated_at", "created_at") values (Plan Ámbar, 98765, 30, 1, 1, 101, 0, ["Acceso total al gimnasio"], 2026-11-18 22:47:00, 2026-11-18 22:47:00) returning "id")
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:838
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:794
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:411
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:398
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Query/Processors/PostgresProcessor.php:24
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php:4170
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:2237
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1436
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1401
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1240
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:725
+
+Caused by
+PDOException: SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint "plans_pkey"
+DETAIL:  Key (id)=(2) already exists.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:425
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:827
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:794
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:411
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:398
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Query/Processors/PostgresProcessor.php:24
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php:4170
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:2237
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1436
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1401
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1240
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:725
+
+ERRORS!
+Tests: 134, Assertions: 1904, Errors: 1.

@@ -95,7 +95,7 @@ final class UltronPromptOffer
      * La oferta para esta conversación: lo que va en la respuesta de `decide`
      * (`studio_prompts`) y lo que va firmado en el token (`x.sp`). Nunca lanza.
      *
-     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int}}
+     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int,t?:string}}
      */
     public function forConversation(int $conversationId): array
     {
@@ -200,6 +200,18 @@ final class UltronPromptOffer
             $sp['n'] = $tope;
         }
 
+        /*
+         * EL TONO PUBLICADO, FIRMADO PARA EL COMMIT (apartado 4 del cierre V2,
+         * H4-9, decisión T-1). Con la misma pauta que el tope: el commit
+         * comprueba el registro contra lo que se le PIDIÓ al modelo en este
+         * turno, sin releer la cadena. Solo si no es el de la línea base del
+         * compilador («cercano»: «como hoy», M1-4), y solo en `sp`.
+         */
+        $tono = $parte['governed'][UltronPromptCompiler::TONE] ?? null;
+        if (is_string($tono) && $tono !== UltronPromptCompiler::BASELINE[UltronPromptCompiler::TONE]) {
+            $sp['t'] = $tono;
+        }
+
         return ['response' => $respuesta, 'sp' => $sp];
     }
 
@@ -243,8 +255,8 @@ final class UltronPromptOffer
     /**
      * Lo que viaja firmado en el token (`x.sp`), con claves cortas: modo,
      * motivo, huella del paquete, versión, huella de contenido, entrada y seq.
-     * En `studio`, `offer()` añade `n` (el tope publicado) si no es el de la
-     * línea base; Legacy nunca lo lleva.
+     * En `studio`, `offer()` añade `n` (el tope publicado) y `t` (el tono
+     * publicado) si no son los de la línea base; Legacy nunca los lleva.
      *
      * @param  array<string,mixed>  $respuesta
      * @return array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int}

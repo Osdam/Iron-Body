@@ -77,9 +77,9 @@ class UltronA4LongitudYPreciosTest extends TestCase
 
     private const HORARIO_CONTENIDO = 'Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases.';
 
-    private const PRECIOS_200 = 'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?';
+    private const PRECIOS_200 = 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?';
 
-    private const PRECIOS_160 = 'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?';
+    private const PRECIOS_160 = 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?';
 
     private const HORARIO_200 = 'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.';
 
@@ -278,7 +278,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
     {
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Élite cuánto cuesta? ¿Qué planes tienen?');
-        $this->assertStringStartsWith('Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
+        $this->assertStringStartsWith('Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
     }
 
     public function test_la_regla_depende_del_orden_del_catalogo(): void
@@ -287,7 +287,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         Plan::query()->whereKey(14)->update(['sort_order' => 0]);
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
-        $this->assertStringStartsWith('Claro. Planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
+        $this->assertStringStartsWith('Claro. Algunos planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
     }
 
     // ── §5.4 · El horario ───────────────────────────────────────────────────
@@ -404,7 +404,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->publica(160);
         $borrador = 'Claro, te cuento del Élite. Incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo con guía nutricional. Su valor es {{PLAN_PRICE}} al mes.';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Cuánto cuesta el Élite?', $borrador, 8);
-        $this->assertSame('Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertSame('Claro. Algunos planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
         $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $this->ultimaAccion()->metadata['policy_violations']);
     }
 
@@ -420,7 +420,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $borrador = 'El Plan Mensual incluye acceso completo al gimnasio, rutinas guiadas desde la app y una valoración inicial con un entrenador para que empieces con buen pie desde el primer día. ¿Te interesa el Plan Mensual por {{PLAN_PRICE}} al mes?';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Cuánto cuesta el Plan Mensual?', $borrador, 4);
 
-        $this->assertSame('Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertSame('Claro. Algunos planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
         $fila = $this->ultimaAccion();
         $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $fila->metadata['policy_violations']);
         $this->assertEquals(['cap' => 200, 'action' => 'replaced', 'from' => 229, 'to' => UltronReplyFitter::measure($r['reply_final']), 'dropped' => 0], $fila->metadata['length']);
@@ -727,7 +727,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->publica(200);
         app(ConversationMemoryService::class)->recordPlanRejected($this->conversation, 3);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Plan Valera cuánto cuesta? ¿Qué planes tienen?');
-        $this->assertStringStartsWith('Claro. Planes de un mes: Plan Valera, $65.000 COP;', $r['reply_final']);
+        $this->assertStringStartsWith('Claro. Algunos planes de un mes: Plan Valera, $65.000 COP;', $r['reply_final']);
     }
 
     /** m-5: en «También hay…», 1 día → por día; de 5 a 9 → por semana; 32 o más → de varios meses; el resto no se menciona. */
@@ -736,7 +736,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         Plan::query()->whereKey(2)->update(['duration_days' => 15]);
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
-        $this->assertSame('Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final'], 'un plan de 15 días no es «por semana»');
+        $this->assertSame('Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final'], 'un plan de 15 días no es «por semana»');
     }
 
     /** m-3 (escenario R5): en la rama de la política, si el texto se sustituye, `metadata.length` lo dice. */
@@ -988,9 +988,17 @@ class UltronA4LongitudYPreciosTest extends TestCase
         config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
     }
 
+    /**
+     * El tono es el de la LÍNEA BASE («cercano»): esta prueba mide la longitud
+     * y los precios. Publicaba «profesional» (el de la canaria); desde H4-9
+     * (T-3 y T-4) ese tono descarta los borradores que tutean y escribe los
+     * respaldos de usted, y eso lo prueba `UltronA4RegistroYPanoramaTest`.
+     * Con la línea base, todo lo que fija esta prueba (y su documento
+     * aprobado) sigue siendo exactamente lo de antes.
+     */
     private function publica(int $maxChars): void
     {
-        $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION, ['persona.tone' => 'profesional', 'persona.maxChars' => $maxChars]), null);
+        $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION, ['persona.tone' => 'cercano', 'persona.maxChars' => $maxChars]), null);
     }
 
     private function entrante(string $texto): MarketingMessage

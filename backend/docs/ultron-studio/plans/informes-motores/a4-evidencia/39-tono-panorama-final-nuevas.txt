@@ -1,0 +1,17 @@
+# 39 · Final: las nuevas + A4 tras corregir el generador del documento (horario con su regla, fecha del acta en Bogotá) y regenerar a4-textos-usted.md
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+# 2026-11-19T00:25:58Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 251 ( 25%)
+............................................................... 126 / 251 ( 50%)
+............................................................... 189 / 251 ( 75%)
+..............................................................  251 / 251 (100%)
+
+Time: 00:21.987, Memory: 96.50 MB
+
+OK (251 tests, 2033 assertions)

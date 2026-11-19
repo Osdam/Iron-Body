@@ -1,0 +1,44 @@
+# 46 · Rojo ANTES de que los detectores entiendan el usted (ConversationMemoryService sin tocar; PREGUNTA_DESCUBRIMIENTO y VENDE_EN_MEMORIA sin tocar). Instantánea legacy-usted.json recién tomada con este código.
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging --filter "test_el_acta_sale_de_usted|test_a_|test_b_|test_un_turno_de_memoria|test_legacy_un_borrador" tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+# 2026-11-19T00:43:22Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+.FFEE..                                                             7 / 7 (100%)
+
+Time: 00:03.057, Memory: 84.50 MB
+
+There were 2 errors:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_b_un_saludo_que_pregunta_el_objetivo_de_usted_lo_caza_la_politica_igual_que_el_de_tu
+ErrorException: Undefined array key "policy_violations"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:661
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_un_turno_de_memoria_que_ofrece_los_planes_de_usted_lo_caza_la_politica
+ErrorException: Undefined array key "policy_violations"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:681
+
+--
+
+There were 2 failures:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_a_el_respaldo_de_pago_ofrece_de_usted_y_el_si_se_resuelve_contra_esa_oferta
+anotada como oferta, igual que su forma de tú
+Failed asserting that null is identical to 'generic_offer'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:641
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_a_una_oferta_de_usted_del_modelo_queda_anotada_con_su_clase
+Failed asserting that null is identical to 'explain_how_to_start'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:651
+
+ERRORS!
+Tests: 7, Assertions: 39, Errors: 2, Failures: 2.

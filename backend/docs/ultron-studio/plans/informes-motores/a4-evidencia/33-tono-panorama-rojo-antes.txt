@@ -1,0 +1,795 @@
+# 33 · Rojo ANTES del cambio: las pruebas nuevas con el código de 938c6180 (app/ sin tocar: git diff --quiet HEAD -- app = 0)
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+# 2026-11-18T23:19:42Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  63 / 150 ( 42%)
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEF.E 126 / 150 ( 84%)
+.FFFEFF..FEEEFFFEEFF.FF.                                        150 / 150 (100%)
+
+Time: 00:02.815, Memory: 86.50 MB
+
+There were 130 errors:
+
+1) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_los_tres_textos_de_la_prueba_real
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:28
+
+2) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_como_mucho_cinco_marcas
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:36
+
+3) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tú" ('tú', '¿Y tú qué opinas?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+4) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tu" ('tu', 'Con gusto revisamos tu caso.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+5) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tus" ('tus', 'Revisamos tus dudas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+6) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "te" ('te', 'Claro, te cuento.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+7) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "ti" ('ti', 'Lo dejamos listo para ti.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+8) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "contigo" ('contigo', 'Hablamos contigo mañana.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+9) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tuyo" ('tuyo', 'El plan es tuyo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+10) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tuya" ('tuya', 'La decisión es tuya.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+11) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tuyos" ('tuyos', 'Los datos tuyos están bien.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+12) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tuyas" ('tuyas', 'Las metas tuyas cuentan.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+13) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "cuéntame" ('cuéntame', 'Cuéntame qué buscas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+14) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "cuentame" ('cuentame', 'Cuentame que buscas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+15) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "dime" ('dime', 'Dime en qué ayudo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+16) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "dímelo" ('dímelo', 'Si prefiere, dímelo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+17) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "dimelo" ('dimelo', 'Si prefiere, dimelo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+18) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "escríbeme" ('escríbeme', 'Escríbeme cuando pueda.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+19) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "escribeme" ('escribeme', 'Escribeme cuando pueda.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+20) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "avísame" ('avísame', 'Avísame si viene.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+21) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "avisame" ('avisame', 'Avisame si viene.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+22) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "pregúntame" ('pregúntame', 'Pregúntame por una clase.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+23) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "preguntame" ('preguntame', 'Preguntame por una clase.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+24) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "cuéntanos" ('cuéntanos', 'Cuéntanos qué necesita.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+25) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "cuentanos" ('cuentanos', 'Cuentanos que necesita.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+26) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "escríbenos" ('escríbenos', 'Escríbenos por aquí.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+27) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "escribenos" ('escribenos', 'Escribenos por aqui.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+28) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "avísanos" ('avísanos', 'Avísanos si viene.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+29) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "avisanos" ('avisanos', 'Avisanos si viene.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+30) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "dinos" ('dinos', 'Dinos qué día.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+31) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "quieres" ('quieres', '¿Quieres saber más?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+32) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "puedes" ('puedes', 'Puedes venir hoy.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+33) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tienes" ('tienes', '¿Ya tienes experiencia?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+34) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "necesitas" ('necesitas', 'Lo que necesitas está aquí.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+35) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "buscas" ('buscas', '¿Qué buscas lograr?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+36) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "prefieres" ('prefieres', '¿Prefieres la mañana?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+37) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "vienes" ('vienes', '¿Ya vienes entrenando?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+38) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "estás" ('estás', '¿Estás empezando?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+39) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "sabes" ('sabes', '¿Sabes dónde quedamos?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+40) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "vas" ('vas', '¿Vas a venir?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+41) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "eres" ('eres', 'Si eres principiante, mejor.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+42) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "empiezas" ('empiezas', 'Si empiezas hoy, mejor.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+43) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "arrancas" ('arrancas', '¿Arrancas desde cero?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+44) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "entrenas" ('entrenas', 'Donde entrenas con guía.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+45) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "animas" ('animas', 'Si te animas, aquí estamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+46) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "alcanzaste" ('alcanzaste', 'Si no alcanzaste a venir, no ... nada.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+47) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "viniste" ('viniste', 'Cuando viniste estaba cerrado.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+48) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "quisieras" ('quisieras', 'Si quisieras, lo vemos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+49) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "podrías" ('podrías', '¿Podrías venir el lunes?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+50) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "podrias" ('podrias', '¿Podrias venir el lunes?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+51) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "has" ('has', '¿Ya has entrenado antes?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+52) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "vengas" ('vengas', 'Seas principiante o ya vengas...nando.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+53) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "seas" ('seas', 'Sea cual sea el plan, seas quien seas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+54) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "puedas" ('puedas', 'Algo que puedas sostener.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+55) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "quieras" ('quieras', 'Cuando quieras, aquí estamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+56) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "sientas" ('sientas', 'La idea es que sientas que lo...echas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+57) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "crees" ('crees', '¿Cuántos días crees que podrá venir?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+58) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "decides" ('decides', 'Si decides empezar, avisamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+59) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "ayudarte" ('ayudarte', 'Puedo ayudarte con eso.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+60) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "contarte" ('contarte', 'Quiero contarte algo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+61) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "darte" ('darte', 'Para no darte un dato equivocado.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+62) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "orientarte" ('orientarte', 'Para orientarte mejor.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+63) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "responderte" ('responderte', 'No quiero responderte cualquier cosa.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+64) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "resolverte" ('resolverte', 'Una duda que pueda resolverte.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+65) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "recomendarte" ('recomendarte', 'Para recomendarte el plan.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:118
+
+66) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_la_lista_es_cerrada_y_sin_repetidos
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:124
+
+67) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "su y sus (tercera persona o usted)" ('Su visita y sus dudas quedan anotadas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+68) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "usted" ('Con gusto le atendemos a uste...tedes.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+69) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "te dentro de otra palabra" ('Este gimnasio es parte de la ...parte.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+70) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "té con tilde" ('Tenemos té y café en la recepción.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+71) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "esta y estas sin tilde" ('Esta semana y estas fechas es...ertas.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+72) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "tu dentro de otra palabra" ('El estatus de la actualizació...toría.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+73) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "cita entre comillas latinas" ('Usted escribió «quieres que t...tamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+74) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "cita entre comillas rectas" ('Usted escribió "te puedo llam...tamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+75) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "cita entre comillas inglesas" ('Usted escribió “tú me dijiste...tamos.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+76) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "marcador" ('El precio es {{TU_PRECIO}} al mes.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+77) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "url" ('La app está en https://ironbo...garla.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+78) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "url sin protocolo" ('La app está en www.ironbody.e...garla.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+79) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "de usted completo" ('Hola, bienvenido a Iron Body,...r hoy?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+80) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "de usted con verbos" ('Si quiere, pregúnteme por una...ayudo.')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+81) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_lo_que_nunca_marca with data set "neutro de precios" ('Claro. Planes de un mes: Plan...ación?')
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:155
+
+82) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_un_nombre_de_plan_con_tu_no_cuenta
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:160
+
+83) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_la_cita_no_tapa_lo_que_va_fuera
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:168
+
+84) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_mayusculas_y_tildes
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:173
+
+85) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué planes tienen" ('¿Qué planes tienen?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+86) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "cuáles planes manejan" ('¿Cuáles planes manejan?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+87) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué membresías hay" ('¿Qué membresías hay?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+88) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué opciones tienen" ('Hola, ¿qué opciones tienen?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+89) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "planes hay" ('¿Y planes hay?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+90) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "membresías ofrecen" ('¿Membresías ofrecen?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+91) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué ofrecen" ('¿Qué ofrecen?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+92) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "los planes" ('Quisiera saber los planes')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+93) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "todos los planes" ('Mándame todos los planes')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+94) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "el de la prueba real" ('¿Qué planes tienen y cuánto c...lidad?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+95) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "con precio en plural" ('¿Qué planes tienen y cuánto cuestan?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+96) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "un plan nombrado y qué otros hay" ('¿Cuánto cuesta el Mensual y q...s hay?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+97) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué otros planes tienen" ('¿Qué otros planes tienen?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:43
+
+98) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "un plan nombrado" ('¿Cuánto cuesta el Mensual?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+99) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "la mensualidad, en singular" ('¿Cuánto cuesta la mensualidad?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+100) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "el precio a secas" ('¿Cuánto cuesta?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+101) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "qué otros días (no son planes)" ('¿Qué otros días abren?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+102) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "el horario" ('¿Cuál es el horario?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+103) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para estudiantes" ('¿Qué planes tienen para estudiantes?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+104) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para parejas" ('¿Qué planes tienen para parejas?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+105) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para dos" ('¿Qué planes hay para dos personas?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+106) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para niños" ('¿Qué planes tienen para niños?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+107) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para adultos mayores" ('¿Qué planes hay para adultos mayores?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+108) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para familias" ('¿Qué planes tienen para familias?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+109) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para empresas" ('¿Qué planes manejan para empresas?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+110) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "para principiantes" ('¿Qué planes tienen para principiantes?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+111) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "por días" ('¿Qué planes tienen por días?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+112) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "por semana" ('¿Qué planes hay por semana?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+113) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "de un mes" ('¿Qué planes tienen de un mes?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+114) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "por meses" ('¿Qué planes manejan por meses?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+115) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "con descuento" ('¿Qué planes tienen con descuento?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+116) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "promociones" ('¿Qué planes hay en promoción?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+117) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "con entrenador personalizado" ('¿Qué planes tienen con entren...izado?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+118) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "familiar" ('¿Tienen planes familiares?')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:78
+
+119) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_elegir_entre_opciones_dadas_no_es_panorama
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:83
+
+120) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_recepcion_memoria_y_visita_a_medias_no_son_panorama with data set "recepción" ('reception_mode')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:96
+
+121) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_recepcion_memoria_y_visita_a_medias_no_son_panorama with data set "memoria" ('memory_mode')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:96
+
+122) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_recepcion_memoria_y_visita_a_medias_no_son_panorama with data set "visita a medias" ('goal_takes_turn')
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::pideElPanorama()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:96
+
+123) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_la_pregunta_de_precio
+Error: Call to undefined method App\Services\Marketing\Ultron\CommercialTurnPolicy::preguntaPorPrecio()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:101
+
+124) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_un_tono_desconocido_se_ignora_con_aviso_y_sin_el_valor
+Mockery\Exception\InvalidCountException: Method warning(<Any Arguments>) from Mockery_2_Illuminate_Log_LogManager should be called
+ at least 1 times but called 0 times.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/CountValidator/AtLeast.php:42
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/Expectation.php:739
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/ReceivedMethodCalls.php:36
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/VerificationDirector.php:86
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:207
+
+125) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_turno_1_real_de_usted_sale_tal_cual
+ErrorException: Undefined array key "register"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:266
+
+126) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_ningun_respaldo_de_usted_lleva_marcas with data set "sin tope (320)" (320)
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:338
+
+127) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_ningun_respaldo_de_usted_lleva_marcas with data set "tope 200" (200)
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:338
+
+128) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_ningun_respaldo_de_usted_lleva_marcas with data set "tope 160" (160)
+Error: Class "App\Services\Marketing\Ultron\UltronRegisterDetector" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:338
+
+129) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_los_textos_de_usted_que_aprueba_el_propietario
+Error: Class "App\Services\Marketing\Ultron\UltronFormalReplies" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:406
+
+130) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_la_pregunta_sugerida_va_de_usted_solo_con_profesional
+Error: Undefined constant App\Services\Marketing\Ultron\StrategyContract::PREGUNTAS_DE_USTED
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:522
+
+--
+
+There were 14 failures:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_el_token_lleva_t_solo_con_studio_y_tono_distinto_de_la_linea_base
+Failed asserting that null is identical to 'profesional'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:171
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_turno_3_real_un_borrador_de_tu_se_descarta_y_sale_el_horario
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.'
++'Te entiendo, quieres saber el horario entre semana. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Quieres que te cuente también sobre las clases o los planes que tenemos?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:231
+
+3) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_turno_3_real_sin_tope_sale_el_ultimo_recurso_de_usted
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
++'Te entiendo, quieres saber el horario entre semana. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Quieres que te cuente también sobre las clases o los planes que tenemos?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:243
+
+4) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_turno_2_real_la_mezcla_se_descarta_y_sale_la_lista_de_precios
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro, el Plan Valera tiene una mensualidad de $65.000 COP y ofrece acceso ilimitado al gimnasio, asesoría semi personalizada y seguimiento en tus ejercicios.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:252
+
+5) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_el_tuteo_solo_en_la_pregunta_final_se_quita_la_pregunta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m.'
++'El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Quieres que te cuente también sobre las clases?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:274
+
+6) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_una_pregunta_final_de_tu_con_cifra_no_se_quita_se_descarta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.'
++'El gimnasio abre de lunes a viernes desde temprano. ¿Te queda bien venir a las 6 p. m.?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:285
+
+7) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_la_frase_que_retoma_la_visita_sale_de_usted
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Estamos en Cl. 24 Sur #33-53, Neiva, Huila. Y sobre su visita: ya tengo el día y solo me falta la hora: ¿a qué hora le queda bien?'
++'Estamos en Cl. 24 Sur #33-53, Neiva, Huila. Y sobre tu visita: ya tengo el día y solo me falta la hora: ¿a qué hora te queda bien?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:316
+
+8) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_la_bienvenida_a_quien_ya_saludamos_y_la_memoria_de_la_visita_salen_de_usted
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Hola de nuevo, muy buenas tardes. Cuénteme, ¿en qué le podemos ayudar hoy?'
++'Hola de nuevo, muy buenas tardes. Cuéntame, ¿en qué te podemos ayudar hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:348
+
+9) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_la_ultima_red_anota_una_ficha_que_tutea_y_sale_igual
+el texto de la base de datos no se reescribe
+Failed asserting that 'Con gusto te cuento. Iron Body Neiva es tu gimnasio en Neiva. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?' starts with "Con gusto le cuento. Iron Body Neiva es tu gimnasio en Neiva.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:368
+
+10) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_el_acta_de_una_visita_registrada_sale_de_usted
+Failed asserting that 'Dejé registrada tu solicitud de cortesía para el sábado 21 de noviembre a las 10:00 a. m. El equipo de Iron Body la revisará para tener todo preparado.' [UTF-8](length: 155) contains "Dejé registrada su solicitud de cortesía para el sábado 21 de noviembre a las 10:00 a. m." [UTF-8](length: 92).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:379
+
+11) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_con_precio_sale_siempre_la_lista
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro, el Plan Valera cuesta $65.000 COP al mes e incluye acceso total al gimnasio. ¿Le interesa?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:542
+
+12) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_sin_precio_con_un_plan_sale_la_lista_y_con_dos_el_modelo
+Failed asserting that 'Tenemos el Plan Valera, con acceso total al gimnasio. ¿Le cuento cómo empezar?' starts with "Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:551
+
+13) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_un_plan_nombrado_y_que_otros_hay_es_panorama_con_ese_plan_primero
+Failed asserting that 'El Élite cuesta $180.000 COP al mes. ¿Le cuento qué incluye?' starts with "Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:580
+
+14) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_panorama_con_el_revisor_caido_sale_la_lista
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Con gusto te cuento. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:587
+
+ERRORS!
+Tests: 150, Assertions: 92, Errors: 130, Failures: 14.

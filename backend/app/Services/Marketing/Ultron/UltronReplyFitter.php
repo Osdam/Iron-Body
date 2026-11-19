@@ -297,6 +297,21 @@ final class UltronReplyFitter
         if (self::fits($text, $cap)) {
             return ['text' => $text, 'dropped' => 0];
         }
+        $recorte = self::withoutFinalQuestion($text);
+
+        return $recorte !== null && self::fits($recorte, $cap) ? ['text' => $recorte, 'dropped' => 1] : null;
+    }
+
+    /**
+     * El borrador sin su pregunta final, con la regla de {@see self::draft()}
+     * (F1 del lead): la última frase que no sea el bloque de enlaces, si es
+     * una pregunta, no es la primera y no lleva ninguna cifra. Null si esa
+     * frase no se puede soltar. Es la misma regla para la longitud y para el
+     * registro (H4-9, T-3): quitar la pregunta final es lo único que se sabe
+     * que no se lleva la respuesta.
+     */
+    public static function withoutFinalQuestion(string $text): ?string
+    {
         $frases = self::sentences($text);
         $ultima = null;
         for ($i = count($frases) - 1; $i >= 0; $i--) {
@@ -311,9 +326,8 @@ final class UltronReplyFitter
         }
         $quedan = array_fill(0, count($frases), true);
         $quedan[$ultima] = false;
-        $recorte = self::join($frases, $quedan);
 
-        return self::fits($recorte, $cap) ? ['text' => $recorte, 'dropped' => 1] : null;
+        return self::join($frases, $quedan);
     }
 
     /**

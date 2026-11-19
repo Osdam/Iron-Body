@@ -1,0 +1,16 @@
+# 43 · PostgreSQL 14, segunda pasada: la 42 falló por la prueba (plans_pkey: la secuencia no avanza con ids explícitos); los planes sintéticos de V-2 (f) llevan ahora ids propios (901-903)
+# Comando: UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+# 2026-11-19T00:33:54Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 134 ( 47%)
+............................................................... 126 / 134 ( 94%)
+........                                                        134 / 134 (100%)
+
+Time: 00:49.041, Memory: 98.50 MB
+
+OK (134 tests, 1916 assertions)

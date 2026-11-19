@@ -1,0 +1,498 @@
+# 34 · Primera pasada de las pruebas EXISTENTES que publican «profesional» (o tocan el commit) con el cambio hecho y SIN tocar ninguna prueba existente
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php tests/Feature/Marketing/UltronDecidePromptsTest.php tests/Feature/Marketing/UltronCommitPromptsTest.php tests/Feature/Marketing/UltronPromptsTraceCommandTest.php tests/Feature/Marketing/UltronCommitTest.php tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php
+# 2026-11-19T00:17:34Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+..F...........F................................................  63 / 354 ( 17%)
+......F..F.FFFFFFF.FFFFFFFF..........F......................... 126 / 354 ( 35%)
+.........................................F..................... 189 / 354 ( 53%)
+....................F.......................................... 252 / 354 ( 71%)
+............................................................... 315 / 354 ( 88%)
+.......................................                         354 / 354 (100%)
+
+Time: 00:29.627, Memory: 120.50 MB
+
+There were 22 failures:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_n_fuera_de_rango_se_ignora_con_aviso
+sin tope válido no se mide
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?'
++'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:200
+
+2) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_informacion_general_a_200_y_160_conserva_la_identidad
+200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Con gusto te cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?'
++'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:337
+
+3) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_borrador_aprobado_que_se_pasa_se_recorta_desde_el_final
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Te cuento: el Élite tiene un costo mensual de $180.000 COP e incluye acceso total al gimnasio. Además tienes sesiones funcionales, rutinas guiadas y seguimiento continuo con tu entrenador.'
++'Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:391
+
+4) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_enlaces_de_la_app_no_cuentan_y_su_linea_no_se_suelta
+sin la pregunta; los enlaces salen, con su salto
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, esta es la app de Iron Body para descargarla en tu celular. Desde ahí pagas tu plan con Nequi o PSE.
+-
+-Android: https://play.google.com/store/apps/details?id=com.ironbodyneiva.workout · iPhone: https://apps.apple.com/co/app/iron-body-workout/id6792374138 · Web: https://web.ironbodyneiva.cloud'
++'Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:436
+
+5) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_precio_verificado_tiene_prioridad_sobre_el_cuerpo
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El precio actual del Plan Mensual es $80.000 COP.'
++'Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:475
+
+6) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_si_la_frase_del_precio_no_cabe_ni_sola_el_cuerpo_sale_como_estaba
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Sí, ese plan incluye acceso completo al gimnasio y rutinas guiadas desde la app. ¿Te ayudo con algo más?'
++'Sí, ese plan incluye acceso completo al gimnasio y rutinas guiadas desde la app.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:496
+
+7) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_frase_que_retoma_la_visita_solo_se_anade_si_cabe
+a 200 cabe y se retoma
+Failed asserting that 'Estamos en la Calle 24 Sur #33-53, en Neiva, Huila, muy cerca del centro y con parqueadero para motos y carros. Y sobre su visita: ¿qué día y a qué hora le queda bien?' starts with "Estamos en la Calle 24 Sur #33-53, en Neiva, Huila, muy cerca del centro y con parqueadero para motos y carros. Y sobre tu visita: ".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:513
+
+8) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear a 160" ('beginner_fear', 'Nunca he entrenado y me da miedo', 'Te entiendo. Muchas personas ...ocupa?', false, 160, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+9) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear a 200" ('beginner_fear', 'Nunca he entrenado y me da miedo', 'Te entiendo. Muchas personas ...ocupa?', false, 200, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+10) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "time_objection a 160" ('time_objection', 'No tengo tiempo', 'Te entiendo perfectamente. Co...ibres?', false, 160, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+11) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "time_objection a 200" ('time_objection', 'No tengo tiempo', 'Te entiendo perfectamente. Co...ibres?', false, 200, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+12) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "schedule_question a 200" ('schedule_question', '¿Cuál es el horario de atenci...emana?', 'Claro. El horario de atención...sirve?', false, 200, 'Claro. El horario de atención...quede.')
+el borrador, sin su pregunta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. El horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados y domingos abrimos de 8:00 a. m. a 2:00 p. m. para que entrenes cuando mejor te quede.'
++'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:567
+
+13) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "goal_fat_loss a 160" ('goal_fat_loss', 'Quiero bajar de peso', 'Listo. Para bajar de peso lo ...nando?', false, 160, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+14) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "goal_fat_loss a 200" ('goal_fat_loss', 'Quiero bajar de peso', 'Listo. Para bajar de peso lo ...nando?', false, 200, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+15) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear tras un saludo (R8) a 160" ('beginner_fear', 'Nunca he entrenado y me da miedo', '¡Hola de nuevo! Muchas person...ocupa?', true, 160, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+16) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear tras un saludo (R8) a 200" ('beginner_fear', 'Nunca he entrenado y me da miedo', '¡Hola de nuevo! Muchas person...ocupa?', true, 200, null)
+el respaldo de la intención
+Failed asserting that an array contains 'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:580
+
+17) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_s1_un_borrador_con_la_condicion_al_final_se_descarta_no_se_recorta
+160
+Failed asserting that an array contains 'Con gusto le ayudo con la ubicación y cómo llegar. Dígame si necesita también horarios o planes.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:602
+
+18) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r2_una_lista_numerada_sale_entera_o_no_sale
+a 200, la lista entera sin la pregunta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Te cuento lo que incluye el Élite:
+-1. Acceso total al gimnasio y a todas las máquinas.
+-2. Clases grupales funcionales todos los días.
+-3. Seguimiento con IRON IA en la app.'
++'Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:614
+
+19) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r7_la_constancia_de_una_visita_registrada_no_se_pierde
+200: el acta de la fila
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Dejé registrada tu solicitud de cortesía para el sábado 14 de noviembre a las 10:00 a. m. El equipo de Iron Body la revisará para tener todo preparado.'
++'Dejé registrada su solicitud de cortesía para el sábado 14 de noviembre a las 10:00 a. m. El equipo de Iron Body la revisará para tener todo preparado.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:638
+
+20) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_textos_ajustados_que_aprueba_el_propietario
+los textos cambiaron: regenerar con A4_TEXTOS=escribir y volver a aprobarlos
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ ### `payment_link_request` — entrante: «Mándame el link para pagar»
+ 
+ - **Hoy (Legacy)** (236) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?»
+-- **Versión aplicada, sin tope (320)** (236) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?»
+-- **Tope 200** (185) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. ¿Quieres que te pase la app para descargarla?»
+-- **Tope 160** (139) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata.»
++- **Versión aplicada, sin tope (320)** (233) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. También puede pagar en el gimnasio cuando venga. ¿Quiere que le pase la app para descargarla?»
++- **Tope 200** (184) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?»
++- **Tope 160** (139) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata.»
+ 
+ ### `price_objection` — entrante: «Está muy caro»
+ 
+ - **Hoy (Legacy)** (147) «Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?»
+-- **Versión aplicada, sin tope (320)** (147) «Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?»
+-- **Tope 200** (147) «Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?»
+-- **Tope 160** (147) «Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?»
++- **Versión aplicada, sin tope (320)** (144) «Le entiendo. Más que pagar por pagar, la idea es que sienta que lo va a aprovechar. ¿Quiere que le cuente para quién sí vale la pena el mensual?»
++- **Tope 200** (144) «Le entiendo. Más que pagar por pagar, la idea es que sienta que lo va a aprovechar. ¿Quiere que le cuente para quién sí vale la pena el mensual?»
++- **Tope 160** (144) «Le entiendo. Más que pagar por pagar, la idea es que sienta que lo va a aprovechar. ¿Quiere que le cuente para quién sí vale la pena el mensual?»
+ 
+ ### `time_objection` — entrante: «No tengo tiempo»
+ 
+ - **Hoy (Legacy)** (130) «Te entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana crees que podrías ir sin complicarte?»
+-- **Versión aplicada, sin tope (320)** (130) «Te entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana crees que podrías ir sin complicarte?»
+-- **Tope 200** (130) «Te entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana crees que podrías ir sin complicarte?»
+-- **Tope 160** (130) «Te entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana crees que podrías ir sin complicarte?»
++- **Versión aplicada, sin tope (320)** (131) «Le entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana cree que podría venir sin complicarse?»
++- **Tope 200** (131) «Le entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana cree que podría venir sin complicarse?»
++- **Tope 160** (131) «Le entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana cree que podría venir sin complicarse?»
+ 
+ ### `delay_objection` — entrante: «Lo voy a pensar»
+ 
+ - **Hoy (Legacy)** (129) «Tranquilo, puedes pensarlo con calma. Si decides empezar, te ayudamos a hacerlo bien. ¿Te queda alguna duda que pueda resolverte?»
+-- **Versión aplicada, sin tope (320)** (129) «Tranquilo, puedes pensarlo con calma. Si decides empezar, te ayudamos a hacerlo bien. ¿Te queda alguna duda que pueda resolverte?»
+-- **Tope 200** (129) «Tranquilo, puedes pensarlo con calma. Si decides empezar, te ayudamos a hacerlo bien. ¿Te queda alguna duda que pueda resolverte?»
+-- **Tope 160** (129) «Tranquilo, puedes pensarlo con calma. Si decides empezar, te ayudamos a hacerlo bien. ¿Te queda alguna duda que pueda resolverte?»
++- **Versión aplicada, sin tope (320)** (130) «Por supuesto, puede pensarlo con calma. Si decide empezar, le ayudamos a hacerlo bien. ¿Le queda alguna duda que pueda resolverle?»
++- **Tope 200** (130) «Por supuesto, puede pensarlo con calma. Si decide empezar, le ayudamos a hacerlo bien. ¿Le queda alguna duda que pueda resolverle?»
++- **Tope 160** (130) «Por supuesto, puede pensarlo con calma. Si decide empezar, le ayudamos a hacerlo bien. ¿Le queda alguna duda que pueda resolverle?»
+ 
+ ### `beginner_fear` — entrante: «Nunca he entrenado y me da miedo»
+ 
+ - **Hoy (Legacy)** (157) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué te preocupa más: ir solo o no saber qué hacer?»
+-- **Versión aplicada, sin tope (320)** (157) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué te preocupa más: ir solo o no saber qué hacer?»
+-- **Tope 200** (157) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué te preocupa más: ir solo o no saber qué hacer?»
+-- **Tope 160** (157) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué te preocupa más: ir solo o no saber qué hacer?»
++- **Versión aplicada, sin tope (320)** (160) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?»
++- **Tope 200** (160) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?»
++- **Tope 160** (160) «Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?»
+ 
+ ### `insecurity_body` — entrante: «Me da pena mi cuerpo»
+ 
+ - **Hoy (Legacy)** (162) «Te entiendo, y no tienes por qué sentirte juzgado por eso. Mucha gente empieza justo desde ahí, paso a paso. ¿Te preocupa más el ambiente o no saber cómo empezar?»
+-- **Versión aplicada, sin tope (320)** (162) «Te entiendo, y no tienes por qué sentirte juzgado por eso. Mucha gente empieza justo desde ahí, paso a paso. ¿Te preocupa más el ambiente o no saber cómo empezar?»
+-- **Tope 200** (162) «Te entiendo, y no tienes por qué sentirte juzgado por eso. Mucha gente empieza justo desde ahí, paso a paso. ¿Te preocupa más el ambiente o no saber cómo empezar?»
+-- **Tope 160** (112) «Te entiendo, y no tienes por qué sentirte juzgado por eso. ¿Te preocupa más el ambiente o no saber cómo empezar?»
++- **Versión aplicada, sin tope (320)** (161) «Le entiendo, y no tiene por qué sentirse juzgado por eso. Mucha gente empieza justo desde ahí, paso a paso. ¿Le preocupa más el ambiente o no saber cómo empezar?»
++- **Tope 200** (161) «Le entiendo, y no tiene por qué sentirse juzgado por eso. Mucha gente empieza justo desde ahí, paso a paso. ¿Le preocupa más el ambiente o no saber cómo empezar?»
++- **Tope 160** (111) «Le entiendo, y no tiene por qué sentirse juzgado por eso. ¿Le preocupa más el ambiente o no saber cómo empezar?»
+ 
+ ### `location_question` — entrante: «¿Dónde quedan?»
+ 
+ - **Hoy (Legacy)** (70) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Vas a ir por primera vez?»
+-- **Versión aplicada, sin tope (320)** (70) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Vas a ir por primera vez?»
+-- **Tope 200** (70) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Vas a ir por primera vez?»
+-- **Tope 160** (70) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Vas a ir por primera vez?»
++- **Versión aplicada, sin tope (320)** (72) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Va a venir por primera vez?»
++- **Tope 200** (72) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Va a venir por primera vez?»
++- **Tope 160** (72) «Estamos en Cl. 24 Sur #33-53, Neiva, Huila. ¿Va a venir por primera vez?»
+ 
+ ### `schedule_question` — entrante: «¿Cuál es el horario de  atención entre semana?»
+ 
+ - **Hoy (Legacy)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
+-- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
++- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?»
+ - **Tope 200** (186) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.»
+ - **Tope 160** (150) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m.»
+ 
+@@ @@
+ ### `general_info` — entrante: «Quiero información del gimnasio»
+ 
+ - **Hoy (Legacy)** (444) «Con gusto te cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. Iron Body Neiva está ubicado en Cl. 24 Sur #33-53, Neiva, Huila. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?»
+-- **Versión aplicada, sin tope (320)** (444) «Con gusto te cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. Iron Body Neiva está ubicado en Cl. 24 Sur #33-53, Neiva, Huila. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?»
+-- **Tope 200** (154) «Con gusto te cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?»
+-- **Tope 160** (154) «Con gusto te cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?»
++- **Versión aplicada, sin tope (320)** (444) «Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. Iron Body Neiva está ubicado en Cl. 24 Sur #33-53, Neiva, Huila. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?»
++- **Tope 200** (154) «Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?»
++- **Tope 160** (154) «Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?»
+ 
+ ### `goal_fat_loss` — entrante: «Quiero bajar de peso»
+ 
+ - **Hoy (Legacy)** (127) «Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. ¿Ya vienes entrenando o arrancas desde cero?»
+-- **Versión aplicada, sin tope (320)** (127) «Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. ¿Ya vienes entrenando o arrancas desde cero?»
+-- **Tope 200** (127) «Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. ¿Ya vienes entrenando o arrancas desde cero?»
+-- **Tope 160** (127) «Listo. Para bajar grasa lo más importante es empezar con algo que puedas sostener. ¿Ya vienes entrenando o arrancas desde cero?»
++- **Versión aplicada, sin tope (320)** (127) «Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?»
++- **Tope 200** (127) «Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?»
++- **Tope 160** (127) «Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?»
+ 
+ ### `goal_muscle_gain` — entrante: «Quiero ganar masa»
+ 
+ - **Hoy (Legacy)** (117) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Versión aplicada, sin tope (320)** (117) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Tope 200** (117) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Tope 160** (117) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya has entrenado antes o estás empezando?»
++- **Versión aplicada, sin tope (320)** (115) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya ha entrenado antes o está empezando?»
++- **Tope 200** (115) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya ha entrenado antes o está empezando?»
++- **Tope 160** (115) «Perfecto. Para ganar masa lo clave es entrenar constante y con buena guía. ¿Ya ha entrenado antes o está empezando?»
+ 
+ ### `goal_recomposition` — entrante: «Quiero bajar grasa y ganar músculo»
+ 
+ - **Hoy (Legacy)** (183) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. Lo clave es hacerlo con constancia y buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Versión aplicada, sin tope (320)** (183) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. Lo clave es hacerlo con constancia y buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Tope 200** (183) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. Lo clave es hacerlo con constancia y buena guía. ¿Ya has entrenado antes o estás empezando?»
+-- **Tope 160** (134) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. ¿Ya has entrenado antes o estás empezando?»
++- **Versión aplicada, sin tope (320)** (181) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. Lo clave es hacerlo con constancia y buena guía. ¿Ya ha entrenado antes o está empezando?»
++- **Tope 200** (181) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. Lo clave es hacerlo con constancia y buena guía. ¿Ya ha entrenado antes o está empezando?»
++- **Tope 160** (132) «Eso se puede trabajar como recomposición corporal: ganar músculo y bajar grasa poco a poco. ¿Ya ha entrenado antes o está empezando?»
+ 
+ ### `high_intent_close` — entrante: «Quiero inscribirme ya»
+ 
+ - **Hoy (Legacy)** (236) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?»
+-- **Versión aplicada, sin tope (320)** (236) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?»
+-- **Tope 200** (185) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. ¿Quieres que te pase la app para descargarla?»
+-- **Tope 160** (139) «El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata.»
++- **Versión aplicada, sin tope (320)** (233) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. También puede pagar en el gimnasio cuando venga. ¿Quiere que le pase la app para descargarla?»
++- **Tope 200** (184) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?»
++- **Tope 160** (139) «El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata.»
+ 
+ ### `greeting` — entrante: «Hola buenas tardes»
+ 
+ - **Hoy (Legacy)** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?»
+-- **Versión aplicada, sin tope (320)** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?»
+-- **Tope 200** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?»
+-- **Tope 160** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?»
++- **Versión aplicada, sin tope (320)** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?»
++- **Tope 200** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?»
++- **Tope 160** (110) «Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?»
+ 
+ ### `thanks` — entrante: «Gracias por la info»
+ 
+ - **Hoy (Legacy)** (93) «Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo sin problema.»
+-- **Versión aplicada, sin tope (320)** (93) «Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo sin problema.»
+-- **Tope 200** (93) «Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo sin problema.»
+-- **Tope 160** (93) «Con gusto. Si después quieres empezar o comparar planes, me escribes y te ayudo sin problema.»
++- **Versión aplicada, sin tope (320)** (91) «Con gusto. Si después quiere empezar o comparar planes, me escribe y le ayudo sin problema.»
++- **Tope 200** (91) «Con gusto. Si después quiere empezar o comparar planes, me escribe y le ayudo sin problema.»
++- **Tope 160** (91) «Con gusto. Si después quiere empezar o comparar planes, me escribe y le ayudo sin problema.»
+ 
+ ### `goodbye` — entrante: «Chao, hablamos luego»
+ 
+ - **Hoy (Legacy)** (92) «De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y te ayudo.»
+-- **Versión aplicada, sin tope (320)** (92) «De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y te ayudo.»
+-- **Tope 200** (92) «De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y te ayudo.»
+-- **Tope 160** (92) «De una, tranquilo. Si más adelante quieres empezar o resolver dudas, me escribes y te ayudo.»
++- **Versión aplicada, sin tope (320)** (82) «Con gusto. Si más adelante quiere empezar o resolver dudas, me escribe y le ayudo.»
++- **Tope 200** (82) «Con gusto. Si más adelante quiere empezar o resolver dudas, me escribe y le ayudo.»
++- **Tope 160** (82) «Con gusto. Si más adelante quiere empezar o resolver dudas, me escribe y le ayudo.»
+ 
+ ### `not_interested` — entrante: «No me interesa»
+ 
+ - **Hoy (Legacy)** (104) «Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.»
+-- **Versión aplicada, sin tope (320)** (104) «Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.»
+-- **Tope 200** (104) «Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.»
+-- **Tope 160** (104) «Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.»
++- **Versión aplicada, sin tope (320)** (95) «Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.»
++- **Tope 200** (95) «Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.»
++- **Tope 160** (95) «Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.»
+ 
+ ### `bot_question` — entrante: «¿Eres un bot?»
+ 
+ - **Hoy (Legacy)** (144) «Soy el asistente automático de Iron Body y te puedo ayudar con información inicial. Si prefieres hablar con una persona del equipo, solo dímelo.»
+-- **Versión aplicada, sin tope (320)** (144) «Soy el asistente automático de Iron Body y te puedo ayudar con información inicial. Si prefieres hablar con una persona del equipo, solo dímelo.»
+-- **Tope 200** (144) «Soy el asistente automático de Iron Body y te puedo ayudar con información inicial. Si prefieres hablar con una persona del equipo, solo dímelo.»
+-- **Tope 160** (144) «Soy el asistente automático de Iron Body y te puedo ayudar con información inicial. Si prefieres hablar con una persona del equipo, solo dímelo.»
++- **Versión aplicada, sin tope (320)** (145) «Soy el asistente automático de Iron Body y le puedo ayudar con información inicial. Si prefiere hablar con una persona del equipo, solo dígamelo.»
++- **Tope 200** (145) «Soy el asistente automático de Iron Body y le puedo ayudar con información inicial. Si prefiere hablar con una persona del equipo, solo dígamelo.»
++- **Tope 160** (145) «Soy el asistente automático de Iron Body y le puedo ayudar con información inicial. Si prefiere hablar con una persona del equipo, solo dígamelo.»
+ 
+ ### `human_request` — entrante: «Quiero hablar con una persona»
+ 
+ - **Hoy (Legacy)** (148) «Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo por aquí si quieres que te ayude con precios, ubicación o planes.»
+-- **Versión aplicada, sin tope (320)** (148) «Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo por aquí si quieres que te ayude con precios, ubicación o planes.»
+-- **Tope 200** (148) «Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo por aquí si quieres que te ayude con precios, ubicación o planes.»
+-- **Tope 160** (148) «Claro, dejo marcada tu solicitud para que alguien del equipo la revise. Igual sigo por aquí si quieres que te ayude con precios, ubicación o planes.»
++- **Versión aplicada, sin tope (320)** (147) «Claro, dejo marcada su solicitud para que alguien del equipo la revise. Igual sigo por aquí si quiere que le ayude con precios, ubicación o planes.»
++- **Tope 200** (147) «Claro, dejo marcada su solicitud para que alguien del equipo la revise. Igual sigo por aquí si quiere que le ayude con precios, ubicación o planes.»
++- **Tope 160** (147) «Claro, dejo marcada su solicitud para que alguien del equipo la revise. Igual sigo por aquí si quiere que le ayude con precios, ubicación o planes.»
+ 
+ ### `complaint` — entrante: «Tengo una queja del servicio»
+ 
+ - **Hoy (Legacy)** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuéntame qué pasó exactamente y lo atendemos.»
+-- **Versión aplicada, sin tope (320)** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuéntame qué pasó exactamente y lo atendemos.»
+-- **Tope 200** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuéntame qué pasó exactamente y lo atendemos.»
+-- **Tope 160** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuéntame qué pasó exactamente y lo atendemos.»
++- **Versión aplicada, sin tope (320)** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuénteme qué pasó exactamente y lo atendemos.»
++- **Tope 200** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuénteme qué pasó exactamente y lo atendemos.»
++- **Tope 160** (107) «Entiendo. Lo dejo marcado como caso para revisión del equipo. Cuénteme qué pasó exactamente y lo atendemos.»
+ 
+ ### `invoice_request` — entrante: «Necesito factura»
+ 
+ - **Hoy (Legacy)** (215) «Claro. Para factura necesito que el equipo confirme los datos correctos para no cometer errores. Te dejo marcada la solicitud de facturación. Si quieres, también puedo ayudarte con información de planes o ubicación.»
+-- **Versión aplicada, sin tope (320)** (215) «Claro. Para factura necesito que el equipo confirme los datos correctos para no cometer errores. Te dejo marcada la solicitud de facturación. Si quieres, también puedo ayudarte con información de planes o ubicación.»
+-- **Tope 200** (125) «Claro. Te dejo marcada la solicitud de facturación. Si quieres, también puedo ayudarte con información de planes o ubicación.»
+-- **Tope 160** (125) «Claro. Te dejo marcada la solicitud de facturación. Si quieres, también puedo ayudarte con información de planes o ubicación.»
++- **Versión aplicada, sin tope (320)** (214) «Claro. Para factura necesito que el equipo confirme los datos correctos para no cometer errores. Le dejo marcada la solicitud de facturación. Si quiere, también puedo ayudarle con información de planes o ubicación.»
++- **Tope 200** (124) «Claro. Le dejo marcada la solicitud de facturación. Si quiere, también puedo ayudarle con información de planes o ubicación.»
++- **Tope 160** (124) «Claro. Le dejo marcada la solicitud de facturación. Si quiere, también puedo ayudarle con información de planes o ubicación.»
+ 
+ ### `medical_risk_escalation` — entrante: «Me lesioné la rodilla»
+ 
+ - **Hoy (Legacy)** (266) «Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos por aquí para no darte una orientación irresponsable. Te dejo marcado que necesitas revisión del equipo, y mientras tanto puedo ayudarte con información general de planes o ubicación.»
+-- **Versión aplicada, sin tope (320)** (266) «Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos por aquí para no darte una orientación irresponsable. Te dejo marcado que necesitas revisión del equipo, y mientras tanto puedo ayudarte con información general de planes o ubicación.»
+-- **Tope 200** (151) «Gracias por contarlo. Te dejo marcado que necesitas revisión del equipo, y mientras tanto puedo ayudarte con información general de planes o ubicación.»
+-- **Tope 160** (151) «Gracias por contarlo. Te dejo marcado que necesitas revisión del equipo, y mientras tanto puedo ayudarte con información general de planes o ubicación.»
++- **Versión aplicada, sin tope (320)** (265) «Gracias por contarlo. Con una lesión es mejor no recomendar ejercicios específicos por aquí para no darle una orientación irresponsable. Le dejo marcado que necesita revisión del equipo, y mientras tanto puedo ayudarle con información general de planes o ubicación.»
++- **Tope 200** (150) «Gracias por contarlo. Le dejo marcado que necesita revisión del equipo, y mientras tanto puedo ayudarle con información general de planes o ubicación.»
++- **Tope 160** (150) «Gracias por contarlo. Le dejo marcado que necesita revisión del equipo, y mientras tanto puedo ayudarle con información general de planes o ubicación.»
+ 
+ ### `fraud_or_payment_claim` — entrante: «Me cobraron dos veces»
+ 
+ - **Hoy (Legacy)** (195) «Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La membresía solo queda activa cuando el pago está confirmado. ¿Quieres que te ayude con algo más mientras tanto?»
+-- **Versión aplicada, sin tope (320)** (195) «Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La membresía solo queda activa cuando el pago está confirmado. ¿Quieres que te ayude con algo más mientras tanto?»
+-- **Tope 200** (195) «Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La membresía solo queda activa cuando el pago está confirmado. ¿Quieres que te ayude con algo más mientras tanto?»
+-- **Tope 160** (132) «Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. ¿Quieres que te ayude con algo más mientras tanto?»
++- **Versión aplicada, sin tope (320)** (182) «Entiendo, lo dejo marcado para que el equipo revise su caso de pago con cuidado. La membresía solo queda activa cuando el pago está confirmado. ¿Le ayudo con algo más mientras tanto?»
++- **Tope 200** (182) «Entiendo, lo dejo marcado para que el equipo revise su caso de pago con cuidado. La membresía solo queda activa cuando el pago está confirmado. ¿Le ayudo con algo más mientras tanto?»
++- **Tope 160** (119) «Entiendo, lo dejo marcado para que el equipo revise su caso de pago con cuidado. ¿Le ayudo con algo más mientras tanto?»
+ 
+ ### `do_not_contact_request` — entrante: «No me escriban más»
+ 
+@@ @@
+ ### `spam_or_low_quality` — entrante: «asdf»
+ 
+ - **Hoy (Legacy)** (58) «Claro, con gusto te ayudo. Cuéntame, ¿en qué te ayudo hoy?»
+-- **Versión aplicada, sin tope (320)** (58) «Claro, con gusto te ayudo. Cuéntame, ¿en qué te ayudo hoy?»
+-- **Tope 200** (58) «Claro, con gusto te ayudo. Cuéntame, ¿en qué te ayudo hoy?»
+-- **Tope 160** (58) «Claro, con gusto te ayudo. Cuéntame, ¿en qué te ayudo hoy?»
++- **Versión aplicada, sin tope (320)** (58) «Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?»
++- **Tope 200** (58) «Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?»
++- **Tope 160** (58) «Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?»
+ 
+ ### `unknown` — entrante: «mmm»
+ 
+ - **Hoy (Legacy)** (86) «No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o ubicación?»
+-- **Versión aplicada, sin tope (320)** (86) «No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o ubicación?»
+-- **Tope 200** (86) «No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o ubicación?»
+-- **Tope 160** (86) «No quiero responderte cualquier cosa. ¿Te refieres a los planes, horarios o ubicación?»
++- **Versión aplicada, sin tope (320)** (85) «No quiero responderle cualquier cosa. ¿Se refiere a los planes, horarios o ubicación?»
++- **Tope 200** (85) «No quiero responderle cualquier cosa. ¿Se refiere a los planes, horarios o ubicación?»
++- **Tope 160** (85) «No quiero responderle cualquier cosa. ¿Se refiere a los planes, horarios o ubicación?»
+ 
+ ## Horario (ficha de producción)
+ 
+@@ @@
+ ### Entre semana — «¿Cuál es el horario de  atención entre semana?»
+ 
+ - **Hoy (Legacy)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
+-- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
++- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?»
+ - **Tope 200** (186) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.»
+ - **Tope 160** (150) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m.»
+ 
+@@ @@
+ ### Sábado — «¿y los sábados?»
+ 
+ - **Hoy (Legacy)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
+-- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
++- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?»
+ - **Tope 200** (186) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.»
+ - **Tope 160** (150) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m.»
+ 
+@@ @@
+ ### Sin día — «¿Qué horario tienen?»
+ 
+ - **Hoy (Legacy)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
+-- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?»
++- **Versión aplicada, sin tope (320)** (300) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?»
+ - **Tope 200** (186) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.»
+ - **Tope 160** (150) «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m.»
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:901
+
+21) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=canary · prompts=canary · canaria · /2 válida" ('canary', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     'e' => '13dfaea1-33aa-4f04-a857-1ae62b917bde',
+     's' => 1,
+     'n' => 200,
++    't' => 'profesional',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:219
+
+22) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=all · prompts=canary · canaria · /2 válida" ('all', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     'e' => '9150c6ba-b20f-4698-9329-c9557e41833b',
+     's' => 1,
+     'n' => 200,
++    't' => 'profesional',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:219
+
+FAILURES!
+Tests: 354, Assertions: 4253, Failures: 22.

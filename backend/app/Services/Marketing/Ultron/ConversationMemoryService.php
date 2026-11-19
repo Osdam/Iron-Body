@@ -46,6 +46,26 @@ final class ConversationMemoryService
         'plan_recommendation' => '/(te recomiende|te recomiendo|que plan|cual plan|opciones)/u',
     ];
 
+    /**
+     * Las mismas ofertas, DE USTED (cierre V2, apartado 4, H4-9; añadido del
+     * lead del 19-11), clase por clase y en el mismo orden. Solo con la
+     * versión del Studio en «profesional»: entonces «¿Quiere que le cuente
+     * cómo empezar?» se anota como oferta igual que su forma de tú, y un «sí»
+     * posterior se resuelve contra ella. Sin ese tono no se miran.
+     */
+    private const OFERTAS_DE_USTED = [
+        'explain_how_to_start' => '/(como (empezar|iniciar|seguir|inscribirse|arrancar)|los pasos|siguiente paso)/u',
+        'send_payment_link' => '/(link|enlace).{0,20}(pago|pagar)|pago.{0,20}(link|enlace)/u',
+        'book_visit' => '/(visita|valoracion|cita|agendar|agendemos|pase a conocer)/u',
+        'plan_details' => '/(detalles|le cuente mas|le explique (los|las) (planes|opciones)|le cuente sobre|le cuente como|le explique como|profundi)/u',
+        'plan_recommendation' => '/(le recomiende|le recomiendo|que plan|cual plan|opciones)/u',
+    ];
+
+    /** El verbo que hace de una pregunta una oferta: de tú (siempre) y de usted (solo con «profesional»). */
+    private const VERBO_DE_OFERTA = '/\b(quieres|te gustaria|te interesa|prefieres|deseas|te parece)\b/u';
+
+    private const VERBO_DE_OFERTA_DE_USTED = '/\b(quiere|le gustaria|le interesa|prefiere|desea|le parece)\b/u';
+
     public function __construct(
         private readonly MarketingKnowledgeBaseService $knowledge,
     ) {}
@@ -108,6 +128,7 @@ final class ConversationMemoryService
         array $resolution,
         ?int $outboundMessageId,
         bool $esUltimoRecurso = false,
+        ?string $tono = null,
     ): ConversationMemory {
         $m = ConversationMemory::fromArray(is_array($conversation->memory) ? $conversation->memory : null);
         $at = now()->toIso8601String();
@@ -188,7 +209,7 @@ final class ConversationMemoryService
         // cuál. Sin cifras: el texto final lleva el precio puesto y el modelo no
         // debe volver a verlo por esta vía.
         $question = $this->lastQuestionIn($replyFinal);
-        $offerKind = $question === null ? null : $this->offerKindOf($question);
+        $offerKind = $question === null ? null : $this->offerKindOf($question, $tono);
 
         /*
          * UN TEXTO DE RELLENO NO BORRA LO QUE SÍ SE OFRECIÓ.
@@ -457,14 +478,20 @@ final class ConversationMemoryService
         $conversation->forceFill(['memory' => $m->toArray()])->save();
     }
 
-    private function offerKindOf(string $question): ?string
+    /**
+     * La clase de oferta de la última pregunta del agente, o null si no ofrece.
+     * Con `$tono` = «profesional» también las de usted ({@see self::OFERTAS_DE_USTED});
+     * sin él, exactamente como siempre.
+     */
+    private function offerKindOf(string $question, ?string $tono = null): ?string
     {
         $q = SalesAgentDecisionSchema::normalize($question);
-        if (preg_match('/\b(quieres|te gustaria|te interesa|prefieres|deseas|te parece)\b/u', $q) !== 1) {
+        $deUsted = UltronFormalReplies::aplica($tono);
+        if (preg_match(self::VERBO_DE_OFERTA, $q) !== 1 && ! ($deUsted && preg_match(self::VERBO_DE_OFERTA_DE_USTED, $q) === 1)) {
             return null;
         }
         foreach (self::OFERTAS as $kind => $rx) {
-            if (preg_match($rx, $q) === 1) {
+            if (preg_match($rx, $q) === 1 || ($deUsted && preg_match(self::OFERTAS_DE_USTED[$kind], $q) === 1)) {
                 return $kind;
             }
         }

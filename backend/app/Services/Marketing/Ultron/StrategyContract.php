@@ -4,6 +4,7 @@ namespace App\Services\Marketing\Ultron;
 
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptOffer;
 
 /**
  * Lo que el Strategist puede PROPONER, y lo que Laravel le adelanta para que
@@ -34,6 +35,15 @@ final class StrategyContract
 
     /** Preguntas de descubrimiento que a quien ya quiere pagar le sobran. */
     private const PREGUNTA_DESCUBRIMIENTO = '/\b(cual es tu (objetivo|meta)|que (buscas|quieres lograr|te gustaria lograr|te motiva)|has entrenado antes|tienes experiencia|cuantos dias (a la semana|puedes)|que horario te (queda|sirve)|cual es tu presupuesto|cuantos anos tienes|que edad tienes|por que quieres)\b/u';
+
+    /**
+     * Las mismas preguntas, DE USTED (cierre V2, apartado 4, H4-9; añadido del
+     * lead del 19-11). Solo se miran con la versión en «profesional», y solo
+     * DENTRO de una pregunta: de usted coinciden con la tercera persona («el
+     * equipo tiene experiencia», «lo que busca la gente»), y de tú no hay esa
+     * ambigüedad. Sin ese tono, el detector es exactamente el de antes.
+     */
+    private const PREGUNTA_DESCUBRIMIENTO_DE_USTED = '/\b(cual es su (objetivo|meta)|que (busca|quiere lograr|le gustaria lograr|le motiva)|ha entrenado antes|tiene experiencia|cuantos dias (a la semana|puede)|que horario le (queda|sirve)|cual es su presupuesto|cuantos anos tiene|que edad tiene|por que quiere)\b/u';
 
     /**
      * Pistas deterministas para el estratega, derivadas del perfil (PUNTO 2)
@@ -121,10 +131,73 @@ final class StrategyContract
         return null;
     }
 
-    /** Una pregunta de descubrimiento comercial, la que no cabe en un saludo. */
-    public static function asksDiscovery(string $text): bool
+    /**
+     * LAS CINCO PREGUNTAS, DE USTED (cierre V2, apartado 4, H4-9; plan del
+     * arquitecto §2.3, decisión T-5 del lead). Con la versión ofrecida en
+     * «profesional», `decide` sustituye la pregunta sugerida por su variante:
+     * se le pasaba al modelo ya redactada de tú («seria tu primera vez…?»)
+     * con la orden de decirla con sus palabras, y eso empujaba hacia el
+     * tuteo. Sin tildes, como las de arriba: cruzan al modelo. Las mismas
+     * cinco, en el mismo orden que {@see self::preguntaAdaptativa()}.
+     */
+    public const PREGUNTAS_DE_USTED = [
+        'vienes buscando mantener tu rendimiento o cambiar tu composicion corporal?' => 'viene buscando mantener su rendimiento o cambiar su composicion corporal?',
+        'que buscas lograr al empezar: bajar grasa, ganar masa o coger el habito?' => 'que busca lograr al empezar: bajar grasa, ganar masa o coger el habito?',
+        'seria tu primera vez entrenando o ya tienes experiencia?' => 'seria su primera vez entrenando o ya tiene experiencia?',
+        'seria tu primera vez entrenando o ya vienes con experiencia?' => 'seria su primera vez entrenando o ya viene con experiencia?',
+        'que dias o en que franja te queda mejor entrenar?' => 'que dias o en que franja le queda mejor entrenar?',
+    ];
+
+    /**
+     * Las pistas con la pregunta sugerida de usted si el tono ofrecido en este
+     * turno es «profesional»; si no, las mismas pistas, sin tocar. El tono es
+     * el `t` del `sp` que `decide` acaba de calcular para el token (la misma
+     * oferta, sin otra lectura de la cadena).
+     *
+     * @param  array<string,mixed>  $hints
+     * @param  array<string,mixed>|null  $sp  lo ofrecido en este turno ({@see UltronPromptOffer}); null sin negociar
+     * @return array<string,mixed>
+     */
+    public static function conElRegistro(array $hints, ?array $sp): array
     {
-        return preg_match(self::PREGUNTA_DESCUBRIMIENTO, SalesAgentDecisionSchema::normalize($text)) === 1;
+        $pregunta = $hints['suggested_question'] ?? null;
+        if (! is_array($sp) || ($sp['m'] ?? null) !== UltronPromptOffer::MODE_STUDIO
+            || ! UltronFormalReplies::aplica($sp['t'] ?? null) || ! is_string($pregunta)) {
+            return $hints;
+        }
+        $hints['suggested_question'] = self::PREGUNTAS_DE_USTED[$pregunta] ?? $pregunta;
+
+        return $hints;
+    }
+
+    /**
+     * Una pregunta de descubrimiento comercial, la que no cabe en un saludo.
+     * Con `$tono` = «profesional», también la de usted; sin él (la llamada de
+     * hoy, Legacy, cualquier otro tono), solo la de tú, como siempre.
+     */
+    public static function asksDiscovery(string $text, ?string $tono = null): bool
+    {
+        return self::preguntaDeDescubrimiento(SalesAgentDecisionSchema::normalize($text), $tono);
+    }
+
+    /** El texto ya normalizado: la de tú en cualquier sitio; la de usted, solo dentro de una pregunta y con «profesional». */
+    private static function preguntaDeDescubrimiento(string $t, ?string $tono): bool
+    {
+        if (preg_match(self::PREGUNTA_DESCUBRIMIENTO, $t) === 1) {
+            return true;
+        }
+        if (! UltronFormalReplies::aplica($tono)) {
+            return false;
+        }
+        // Cada pregunta, desde el último signo que la separa de lo anterior hasta su «?».
+        preg_match_all('/[^.!?¿]*\?/u', $t, $preguntas);
+        foreach ($preguntas[0] as $pregunta) {
+            if (preg_match(self::PREGUNTA_DESCUBRIMIENTO_DE_USTED, $pregunta) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array<string,mixed> */
@@ -216,13 +289,13 @@ final class StrategyContract
     }
 
     /** ¿La respuesta final le hace una pregunta de descubrimiento a quien ya quiere pagar? */
-    public static function asksDiscoveryToReadyBuyer(string $replyFinal, array $hints): bool
+    public static function asksDiscoveryToReadyBuyer(string $replyFinal, array $hints, ?string $tono = null): bool
     {
         if (! ($hints['hot_lead_fast_path'] ?? false)) {
             return false;
         }
 
-        return preg_match(self::PREGUNTA_DESCUBRIMIENTO, SalesAgentDecisionSchema::normalize($replyFinal)) === 1;
+        return self::preguntaDeDescubrimiento(SalesAgentDecisionSchema::normalize($replyFinal), $tono);
     }
 
     /**

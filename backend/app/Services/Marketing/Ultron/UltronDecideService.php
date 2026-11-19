@@ -400,6 +400,14 @@ class UltronDecideService
          * Sin negociar no se llama: ni una consulta, ni una clave de más.
          */
         $prompts = $negotiatePrompts ? $this->promptOffer->forConversation((int) $conversation->id) : null;
+        /*
+         * Y LA PREGUNTA SUGERIDA, EN EL REGISTRO PUBLICADO (apartado 4 del
+         * cierre V2, H4-9, T-5): con la versión ofrecida en «profesional», de
+         * usted. El tono sale de la oferta que se acaba de calcular para este
+         * turno (`sp.t`), sin otra lectura de la cadena; sin oferta, Legacy o
+         * con otro tono, las pistas no cambian.
+         */
+        $strategyHints = StrategyContract::conElRegistro($strategyHints, $prompts['sp'] ?? null);
 
         $token = $this->tokens->issue(
             (int) $conversation->id,

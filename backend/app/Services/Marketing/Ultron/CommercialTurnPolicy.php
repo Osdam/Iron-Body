@@ -85,11 +85,53 @@ final class CommercialTurnPolicy
     /** Lo que convierte un recuerdo en una venta: se nombra el plan, se cotiza o se manda a pagar. */
     private const VENDE_EN_MEMORIA = '/\b(pag(o|ar|as|uelo)|link|enlace|inscri\w*|matric\w*|membres\w*|precio|tarifa|mensualidad|total access|plan elite|tu plan|el plan|descarg\w* la app|te (cuento|explico) (mas )?(sobre|de) (las clases|los planes|el plan))\b/u';
 
+    /**
+     * Lo mismo, DE USTED (H4-9; añadido del lead del 19-11): «su plan», «le
+     * cuento / le explico sobre los planes». Solo con la versión en
+     * «profesional»; sin ella, {@see self::VENDE_EN_MEMORIA} sola, como siempre.
+     */
+    private const VENDE_EN_MEMORIA_DE_USTED = '/\b(su plan|le (cuento|explico) (mas )?(sobre|de) (las clases|los planes|el plan))\b/u';
+
     /** Lo que convierte un saludo en una venta o en un formulario. */
     private const VENDE_EN_SALUDO = '/\b(pag(o|ar|as|uelo)|link|enlace|inscri\w*|matric\w*|membres\w*|precio|tarifa|mensualidad|plan(es)?|total access|objetivo|meta|bajar (de )?peso|bajar grasa|ganar (masa|musculo)|tonific\w*|descarg\w* la app|la app)\b/u';
 
     /** Pidió información del gimnasio y el texto no trae ni un hecho del CRM. */
     public const VIOLACION_SIN_HECHO = 'policy_answer_without_fact';
+
+    /**
+     * Pidió el panorama de planes y el borrador no lo da (H4-10): con precio,
+     * nunca puede (un borrador cotiza un solo plan); sin precio, no nombra al
+     * menos dos. La pone el commit, no {@see self::violations()}.
+     */
+    public const VIOLACION_PANORAMA = 'policy_plans_overview';
+
+    /**
+     * El panorama de planes pedido con palabras: los planes en PLURAL o lo que
+     * se ofrece en general. Es el subconjunto en plural de
+     * {@see self::PIDE_RECOMENDACION}, más «qué otros hay» (con un plan ya
+     * nombrado, pedir los demás). «La mensualidad» en singular no está: pide
+     * un plan, y cuál lo decide el catálogo (H4-8).
+     */
+    private const PIDE_PANORAMA = '/\b(que|cuales)\s+(planes|membresias|opciones)\b'
+        .'|\b(planes|membresias)\s+(tienen|hay|manejan|ofrecen)\b'
+        .'|\bque\s+ofrecen\b'
+        .'|\b(los|todos\s+los)\s+planes\b'
+        .'|\b(que|cuales)\s+otr[oa]s\s+(planes|membresias|opciones|hay|tienen|manejan|ofrecen)\b/u';
+
+    /**
+     * Un FILTRO sobre los planes: para quién, de qué duración, con qué. La
+     * lista de los de un mes no contesta «¿qué planes tienen para
+     * estudiantes?», y pisaría una respuesta del modelo que sí puede hacerlo.
+     * Lista cerrada, cada caso con su prueba (`CommercialTurnPolicyPanoramaTest`).
+     * Las duraciones van con palabras genéricas del calendario, nunca con
+     * nombres de plan («Trimestre», «Semestre» son planes del catálogo: la
+     * guarda `UltronCatalogStaticGuardsTest` los rechaza en el código).
+     */
+    private const FILTRO_DE_PLANES = '/\bpara\s+(estudiantes?|universitarios?|parejas?|dos|2|ninos?|ninas?|menores|jovenes|adultos(\s+mayores)?|mayores|abuelos|familias?|empresas?|empleados|grupos?|principiantes|mujeres|hombres)\b'
+        .'|\b(por|de\s+un|de\s+una|de\s+varios|de)\s+(dias?|semanas?|mes|meses|anos?)\b'
+        .'|\b(familiar(es)?|empresarial(es)?|estudiantil(es)?|corporativ[oa]s?)\b'
+        .'|\b(descuentos?|promocion(es)?|promos?|ofertas?)\b'
+        .'|\bcon\s+(entrenador|clases|nutricion|asesoria|valoracion)\b|\bpersonalizad[oa]s?\b/u';
 
     /**
      * La persona duda de un precio que ya se le dio, o ve dos distintos.
@@ -539,11 +581,15 @@ final class CommercialTurnPolicy
     /**
      * Lo que el borrador incumple, por su nombre. Vacío = cumple.
      *
+     * Con `$tono` = «profesional» (la versión del Studio de este turno, H4-9),
+     * los detectores de texto entienden además el usted; sin él (la llamada
+     * de hoy, Legacy, cualquier otro tono), son exactamente los de siempre.
+     *
      * @param  array<string,mixed>  $policy
      * @param  array<int,array<string,mixed>>  $activePlans
      * @return string[]
      */
-    public static function violations(string $draft, array $policy, array $activePlans, array $knownFacts = []): array
+    public static function violations(string $draft, array $policy, array $activePlans, array $knownFacts = [], ?string $tono = null): array
     {
         $t = SalesAgentDecisionSchema::normalize($draft);
         $fallos = [];
@@ -559,7 +605,7 @@ final class CommercialTurnPolicy
         if (($policy['reception_mode'] ?? false)
             && (self::plansNamedIn($t, $activePlans) !== []
                 || preg_match(self::HAY_PRECIO, $t) === 1
-                || StrategyContract::asksDiscovery($t)
+                || StrategyContract::asksDiscovery($t, $tono)
                 || preg_match(self::VENDE_EN_SALUDO, $t) === 1)) {
             $fallos[] = self::VIOLACION_SALUDO_COMERCIAL;
         }
@@ -569,8 +615,9 @@ final class CommercialTurnPolicy
         if (($policy['memory_mode'] ?? false)
             && (self::plansNamedIn($t, $activePlans) !== []
                 || preg_match(self::HAY_PRECIO, $t) === 1
-                || StrategyContract::asksDiscovery($t)
-                || preg_match(self::VENDE_EN_MEMORIA, $t) === 1)) {
+                || StrategyContract::asksDiscovery($t, $tono)
+                || preg_match(self::VENDE_EN_MEMORIA, $t) === 1
+                || (UltronFormalReplies::aplica($tono) && preg_match(self::VENDE_EN_MEMORIA_DE_USTED, $t) === 1))) {
             $fallos[] = self::VIOLACION_MEMORIA_VENDE;
         }
 
@@ -875,6 +922,55 @@ final class CommercialTurnPolicy
             || preg_match(self::PRECIO_EN_DUDA, $t) === 1
             || preg_match(self::PIDE_RECOMENDACION, $t) === 1
             || self::plansNamedIn($inbound, $activePlans) !== [];
+    }
+
+    /**
+     * ¿LA PERSONA PIDE EL PANORAMA DE PLANES? (cierre V2, apartado 4, H4-10;
+     * plan del arquitecto §3, decisión P-1 del lead).
+     *
+     * Medido en la prueba real del 18-11: a «¿Qué planes tienen y cuánto
+     * cuesta la mensualidad?» el modelo contestó con UN plan. No es un fallo
+     * de redacción: un borrador solo puede cotizar el precio de un plan (el
+     * marcador se resuelve contra uno), así que esta pregunta la contesta la
+     * lista del catálogo. Esto solo la reconoce; qué se exige lo decide el
+     * commit, y solo con la versión del Studio aplicada.
+     *
+     * Es panorama si el texto pide los planes en plural o lo que se ofrece
+     * ({@see self::PIDE_PANORAMA}), y NO lo es si:
+     *  - la persona elige entre opciones ya dadas (`choose_plan`);
+     *  - el turno es de recepción, de memoria o de la visita a medias (tienen
+     *    su propio texto y no se vende en ellos);
+     *  - pide un filtro ({@see self::FILTRO_DE_PLANES}): la lista no lo contesta.
+     *
+     * Un plan nombrado NO lo excluye si además pide el panorama («¿Cuánto
+     * cuesta el Mensual y qué otros hay?»: la lista pone primero el nombrado).
+     * Un plan nombrado a secas («¿Cuánto cuesta el Mensual?») no es panorama
+     * porque no pide los planes.
+     *
+     * PURA. No cambia {@see self::decide()} ni {@see self::violations()}.
+     *
+     * @param  array<string,mixed>  $policy  la del turno ({@see self::decide()})
+     * @param  array<string,mixed>  $resolution  lo que resolvió {@see ReferenceResolver}
+     */
+    public static function pideElPanorama(string $inbound, array $policy, array $resolution): bool
+    {
+        if (($resolution['type'] ?? null) === ReferenceResolver::CHOOSE_PLAN
+            || ($policy['reception_mode'] ?? false) || ($policy['memory_mode'] ?? false) || ($policy['goal_takes_turn'] ?? false)) {
+            return false;
+        }
+        $t = SalesAgentDecisionSchema::normalize($inbound);
+
+        return preg_match(self::PIDE_PANORAMA, $t) === 1 && preg_match(self::FILTRO_DE_PLANES, $t) !== 1;
+    }
+
+    /**
+     * ¿La persona pregunta un precio con sus palabras? El mismo criterio que
+     * usa {@see self::decide()} para «responde antes de preguntar»; público
+     * para que el commit sepa si el panorama pide precio (H4-10, P-1).
+     */
+    public static function preguntaPorPrecio(string $inbound): bool
+    {
+        return preg_match(self::PREGUNTA_PRECIO, SalesAgentDecisionSchema::normalize($inbound)) === 1;
     }
 
     /** El texto sigue hablando de la visita: eso es retomar el objetivo. */
