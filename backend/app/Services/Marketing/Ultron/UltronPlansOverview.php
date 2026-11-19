@@ -5,6 +5,7 @@ namespace App\Services\Marketing\Ultron;
 use App\Models\Plan;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesConversationReplyService;
+use App\Services\Marketing\SalesIntents;
 use InvalidArgumentException;
 
 /**
@@ -140,6 +141,44 @@ final class UltronPlansOverview
     public static function isMonthly(int $days): bool
     {
         return $days >= 28 && $days <= 31;
+    }
+
+    // ── La lista del turno ──────────────────────────────────────────────────
+
+    /**
+     * La lista firmada (`po`) si tiene la forma que emite `decide`: de
+     * {@see self::MIN_MARKERS} a {@see self::MAX_PLANS} id enteros positivos y
+     * distintos, en lista; si no, null. Está firmada, así que nadie la
+     * reescribe por el camino; aun así, otra forma no se interpreta. La usan el
+     * commit y la comprobación (`ai/check`, ola 4), para que lean lo mismo
+     * (extraída tal cual de `UltronCommitService::listaFirmada()`).
+     *
+     * @return list<int>|null
+     */
+    public static function signedList(mixed $po): ?array
+    {
+        $valida = is_array($po) && array_is_list($po)
+            && count($po) >= self::MIN_MARKERS && count($po) <= self::MAX_PLANS
+            && array_filter($po, fn (mixed $id): bool => is_int($id) && $id > 0) === $po
+            && count(array_unique($po)) === count($po);
+
+        return $valida ? $po : null;
+    }
+
+    /**
+     * ¿Es un turno de cobro? El enlace de pago pedido o una intención de cobro
+     * (P-3, cambio 5): en un turno de cobro la lista NO VALE y sus marcadores
+     * son desconocidos; el dinero nunca va pegado a una lista de tres precios.
+     * Se lee de la PROPUESTA (el validador solo puede quitarle a la intención
+     * lo de cobro, nunca dárselo). La usan el commit (paso 8.ter) y la
+     * comprobación (extraída tal cual del commit).
+     *
+     * @param  array<int,mixed>  $tools  las herramientas que pide el borrador
+     */
+    public static function isMoneyTurn(string $intent, array $tools): bool
+    {
+        return in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, $tools, true)
+            || in_array($intent, [SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PAYMENT_LINK_REQUEST], true);
     }
 
     // ── Lo que ve el modelo ─────────────────────────────────────────────────

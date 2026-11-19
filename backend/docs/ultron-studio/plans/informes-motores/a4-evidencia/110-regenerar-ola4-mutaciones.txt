@@ -1,0 +1,6 @@
+M1 presupuesto con >= (25 s ya no vale) → Tests: 112, Assertions: 742, Failures: 1. (restaurado)
+M2 la lista también vale en el cobro → Tests: 112, Assertions: 741, Failures: 2. (restaurado)
+M3 sin la decisión del lead (unknown_marker siempre) → Tests: 112, Assertions: 717, Failures: 4. (restaurado)
+M4 persist() sin la traza → Tests: 112, Assertions: 730, Failures: 3. (restaurado)
+M5 sin la lista blanca de cada reescritura → Tests: 112, Assertions: 740, Failures: 1. (restaurado)
+M6 los enlaces de la app no se cuentan → Tests: 112, Assertions: 745, Failures: 2. (restaurado)

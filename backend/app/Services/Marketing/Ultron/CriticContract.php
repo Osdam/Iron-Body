@@ -36,6 +36,14 @@ final class CriticContract
     public const MAX_NOTES = 500;
 
     /**
+     * Cuántas redacciones juzga, como mucho, el revisor de un turno: la
+     * primera y hasta dos reescrituras («regenerar antes de sustituir», P-2;
+     * antes era una sola y el tope, 2). Un n8n S1 nunca manda 3, así que lo de
+     * siempre se guarda igual.
+     */
+    public const MAX_ATTEMPTS = 3;
+
+    /**
      * Por HTTP el controller ya rechaza lo desconocido (fail-closed, 422): este
      * filtro es la defensa en profundidad para quien llame sin pasar por él.
      *
@@ -103,8 +111,8 @@ final class CriticContract
     {
         return [
             'verdict' => self::isFail($critic) ? 'fail' : 'pass',
-            // Solo hay un reintento: el intento es 1 o 2 (el endpoint tampoco admite más).
-            'attempt' => max(1, min(2, (int) ($critic['attempt'] ?? 1))),
+            // Como mucho dos reescrituras: el intento es 1, 2 o 3 (el endpoint tampoco admite más).
+            'attempt' => max(1, min(self::MAX_ATTEMPTS, (int) ($critic['attempt'] ?? 1))),
             'score' => isset($critic['score']) && is_numeric($critic['score']) ? round((float) $critic['score'], 2) : null,
             'issues' => self::issues($critic['issues'] ?? null),
             'hard_fail' => self::hardFailOf($critic),

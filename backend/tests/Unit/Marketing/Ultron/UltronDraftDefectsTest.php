@@ -118,6 +118,39 @@ class UltronDraftDefectsTest extends TestCase
         }
     }
 
+    /**
+     * DECISIÓN DEL LEAD (encargo de la ola 4; laguna de §4.1, paso 4a): un
+     * `PLAN_k` que no es de la lista hace que el commit rechace el turno (422
+     * `unknown_placeholder` → rendición) se pida o no el panorama, con
+     * herramientas o sin ellas y aunque haya otros marcadores válidos. Es justo
+     * el defecto que una reescritura arregla: la comprobación lo señala SIEMPRE.
+     */
+    public function test_un_marcador_que_no_es_de_la_lista_se_senala_siempre(): void
+    {
+        $borrador = 'Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?';
+
+        // Sin pedir el precio y con dos planes nombrados: la lista no se mira, el marcador sí.
+        $d = self::defectos($borrador, entrante: '¿Qué planes tienen?', intent: SalesIntents::GENERAL_INFO);
+        $this->assertSame(['plans_overview/unknown_marker'], self::codigos($d));
+        $this->assertSame(N::note(N::PLANS_OVERVIEW, O::UNKNOWN_MARKER, ['K' => 3]), $d[0]['note']);
+        $this->assertSame('relevance', $d[0]['issue']);
+
+        // Con herramientas en el turno, igual.
+        $this->assertSame(['plans_overview/unknown_marker'], self::codigos(self::defectos($borrador, tools: ['app_links_send'])));
+        $this->assertSame(['plans_overview/unknown_marker'], self::codigos(self::defectos($borrador, entrante: '¿Qué planes tienen?', intent: SalesIntents::GENERAL_INFO, tools: ['staff_review'])));
+
+        // Cualquier forma que no sea exactamente PLAN_1..n.
+        foreach (['{{PLAN_0}}', '{{PLAN_01}}', '{{plan_1}}', '{{ PLAN_3 }}'] as $marcador) {
+            $d = self::defectos('Tenemos {{PLAN_1}} y '.$marcador.'.', po: [3, 4], entrante: '¿Qué planes tienen?', intent: SalesIntents::GENERAL_INFO, tools: ['app_links_send']);
+            $this->assertSame(['plans_overview/unknown_marker'], self::codigos($d), $marcador);
+            $this->assertStringContainsString('solo tiene PLAN_1 a PLAN_2.', $d[0]['note'], $marcador);
+        }
+
+        // Fuera de la condición del panorama, lo demás de la lista sigue sin mirarse (como en el commit).
+        $this->assertSame([], self::codigos(self::defectos('Tenemos {{PLAN_1}}.', tools: ['app_links_send'])), 'falta un plan: no es de esta regla');
+        $this->assertSame([], self::codigos(self::defectos('Tenemos {{PLAN_1}} y {{PLAN_1}} con {{PLAN_PRICE}}.', tools: ['app_links_send'])), 'mezcla y repetido: tampoco');
+    }
+
     public function test_el_tuteo_solo_con_profesional_y_sobre_el_expandido(): void
     {
         $tutea = 'Claro, te cuento: {{PLAN_1}} y {{PLAN_2}}. ¿Cuál quieres?';

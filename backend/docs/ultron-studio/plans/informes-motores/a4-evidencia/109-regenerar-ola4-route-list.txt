@@ -1,0 +1,32 @@
+
+  POST       api/internal/marketing/ai-action .......................................................................................................................... Api\Internal\InternalMarketingController@aiAction
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:120,1
+  POST       api/internal/marketing/ai/analyze-message ........................................................................................................... Api\Internal\InternalMarketingController@analyzeMessage
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+  POST       api/internal/marketing/ai/check ......................................................................................................................................... Api\Internal\UltronController@check
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+  POST       api/internal/marketing/ai/commit ....................................................................................................................................... Api\Internal\UltronController@commit
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+  POST       api/internal/marketing/ai/decide ....................................................................................................................................... Api\Internal\UltronController@decide
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+  GET|HEAD   api/internal/marketing/ai/doctor .......................................................................................................................... Api\Internal\InternalMarketingController@aiDoctor
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+  POST       api/internal/marketing/ai/ultron/incidents ........................................................................................................................... Api\Internal\UltronController@incident
+             ⇂ api
+             ⇂ automation.internal
+             ⇂ throttle:internal-marketing-ai
+
+                                                                                                                                                                                                        Showing [7] routes
+

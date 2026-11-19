@@ -420,3 +420,298 @@ Guía: el encargo del lead (`encargo-be-r2.md`) y `plan-arquitecto-a4-regenerar.
 ### 3.9 Variables, migraciones y configuración
 
 Ninguna. Sin migraciones, sin `config/`, sin rutas y sin variables de entorno.
+
+---
+
+## 4. Ola 4
+
+19-11-2026 · rama `feat/ultron-studio-h9`, HEAD `ee8e0df0` (olas 1 a 3 confirmadas) · **sin commit**: todo está en el árbol de trabajo, nada desplegado, sin producción y sin n8n (ni MCP ni API).
+Guía: el encargo del lead (`encargo-be-r3.md`) y `plan-arquitecto-a4-regenerar.md` §1 (H7, H8, H9, H12, H13, H18), §3 P-1, P-2, P-5 a P-8, §4.1 a §4.4, §6 «Ola 4», §12 y §13; las condiciones 2, 5, 6 y 7 de `MATRIZ_CIERRE_V2.md` §5.
+
+### 4.0 Resumen
+
+- **La puerta nueva, de SOLO LECTURA:** `POST /api/internal/marketing/ai/check` (contrato `ultron-regen/1`), en el grupo de las otras (mismo secreto, mismo cubo `internal-marketing-ai`). Servicio nuevo `UltronDraftCheck`: `peek()` del token, sin cerrojo, sin escrituras, sin red y sin despachador; usa `UltronDraftDefects` y el resto de piezas puras tal cual. Sin versión del Studio contesta `legacy` sin leer nada **[C]**.
+- **El presupuesto:** `may_rewrite = attempt < 3 && (ahora − i) ≤ 25 s`, con `TIME_BUDGET_SECONDS = 25` como constante; `budget.reason` ∈ {`null`, `last_attempt`, `time_budget`, `legacy`} **[C]**.
+- **`decide`:** `regeneration: {contract: "ultron-regen/1", max_drafts: 3}` en la raíz, solo con versión del Studio **[C]**.
+- **`commit`:** acepta el bloque `regeneration` (§4.3, es TRAZA) y `critic.attempt` hasta 3. La fila lleva `metadata.regeneration`, escrito en `persist()` y con `consistent`; clase pura nueva `UltronRegenerationTrace` **[C]**.
+- **Decisión del lead (laguna de §4.1, paso 4a):** un `PLAN_k` que no es de la lista se señala SIEMPRE (`unknown_marker`), y en un turno sin lista o de cobro, `no_list` **[C]**.
+- **Invariantes [C]:**
+  - las dos instantáneas Legacy, en verde y sin regenerar (`git status` limpio en `tests/fixtures`);
+  - un commit sin el bloque deja la fila sin la clave, e idéntica en lo demás a la del mismo turno con el bloque;
+  - n8n intacto (los tres ficheros que se ejecutan allí, con el mismo sha256 que en HEAD, y sus fixtures sin regenerar: `decide` real no los genera).
+- **Números:**
+  - rojo antes: 280 pruebas, 8 errores y 101 fallos (102 y 103);
+  - en verde: las nuevas y las tocadas, 280 (104); el motor, 1 781 (105); Marketing, 6 701 (106); en PostgreSQL, 354 (107);
+  - las guardas: 141, con **una** roja, la esperada (108);
+  - `pint`: `passed`; seis mutaciones a mano, todas cazadas (110).
+
+### 4.1 Ficheros tocados
+
+| Fichero | Cambio | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronDraftCheck.php` | nuevo, 232 líneas | El servicio de la comprobación: `peek()`, la lista del turno, el texto expandido para medir, los defectos, el presupuesto, la respuesta con su lista blanca y una línea de log con códigos y números |
+| `app/Services/Marketing/Ultron/UltronRegenerationTrace.php` | nuevo, 118 | Pura: bloque `regeneration` → `metadata.regeneration`, forma cerrada y defensiva, `consistent` |
+| `app/Http/Controllers/Api/Internal/UltronController.php` | +115/−6 | `check()` (validación de §4.1, `unexpected_fields`, 422 `invalid_token` sin detalle); en el commit, `critic.attempt` ≤ `CriticContract::MAX_ATTEMPTS` y las reglas de `regeneration` (§4.3); `unexpectedKeys()` con los bloques como parámetro, `regeneration` en la lista y un nivel más dentro de la traza (`tokens` y cada `rewrites.*`); `lista()` (regla «lista, no objeto»); docblock «tres puertas» |
+| `routes/marketing.php` | +9/−4 | `Route::post('ai/check', …)` entre `decide` y `commit`, dentro del grupo `automation.internal` + `throttle:internal-marketing-ai`; el comentario de las puertas |
+| `app/Services/Marketing/Ultron/UltronDecideService.php` | +11/−1 | El bloque `regeneration` en la raíz, solo con `sp.m = studio` |
+| `app/Services/Marketing/Ultron/UltronCommitService.php` | +19/−10 | `persist()`: `metadata.regeneration`; el paso 8.ter y `listaFirmada()` llaman a las dos piezas extraídas (sin cambio de comportamiento); un comentario de `handleCriticFailure()` (el fallo puede llegar tras el tercer revisor) |
+| `app/Services/Marketing/Ultron/CriticContract.php` | +10/−2 | `MAX_ATTEMPTS = 3` y el recorte de `forMetadata()` a 3 |
+| `app/Services/Marketing/Ultron/UltronPlansOverview.php` | +39 | `signedList()` y `isMoneyTurn()`, extraídas tal cual del commit (decisión 2) |
+| `app/Services/Marketing/Ultron/UltronDraftDefects.php` | +10/−2 | La decisión del lead: con lista y fuera de la condición del panorama, `unknown_marker` igual; docblock |
+| Pruebas: 4 ficheros nuevos y 6 tocados | | §4.5 y §4.6 |
+| `docs/…/a4-evidencia/102` a `111` | nuevos | Salidas (§4.7) |
+
+**Sin tocar:**
+- el compilador, los prompts base, `config/`, las migraciones, `SalesConversationReplyService`, `SalesObjectionResponderService`, el guard y `CourtesyRequestService`;
+- el CRM y n8n, con sus fixtures;
+- `UltronDecideToken` (`peek()` tal cual), `UltronRegenerationNotes`, `UltronBenefitAttribution`, `UltronDraftPlaceholders` y `UltronReplyFitter`.
+
+### 4.2 El contrato tal como quedó (`ultron-regen/1`)
+
+**Petición** (lista blanca; cualquier otra clave en la raíz o en `draft` → 422 `unexpected_fields` con `fields`):
+
+| Campo | Regla |
+|---|---|
+| `conversation_id`, `message_id` | `required, integer, min:1` (sin `exists`: el token ata el par) |
+| `decide_token` | `required, string, max:2048` |
+| `attempt` | `required, integer, min:1, max:3` |
+| `draft` | `required, array` |
+| `draft.reply_draft` | `required, string, max:4000` |
+| `draft.intent` | `required, string, in: SalesAgentDecisionSchema::INTENTS` |
+| `draft.recommended_plan_id` | `nullable, integer, min:1` |
+| `draft.tools_requested` / `.*` | `nullable, array, max: count(TOOL_VOCABULARY)` (= 5) / `in: TOOL_VOCABULARY` |
+
+**Tres casos reales** (volcados por el endpoint con el escenario de las pruebas: la canaria «profesional, 200», los 13 planes de producción y «¿Qué planes tienen y cuánto cuesta la mensualidad?»; `po = [3, 4, 8]`; `decide` a las 22:47:00 UTC; el JSON completo, en `a4-evidencia/111-…json`). La petición es la misma en los tres salvo `attempt` y `reply_draft`:
+
+```json
+{"conversation_id": 1, "message_id": 1, "decide_token": "<el de decide>", "attempt": 1,
+ "draft": {"reply_draft": "…", "intent": "pricing_question", "recommended_plan_id": null, "tools_requested": []}}
+```
+
+1. **Pasa** (a los 7 s), `reply_draft` = «Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes. ¿Cuál le interesa más?»:
+
+```json
+{"ok": true, "contract": "ultron-regen/1", "mode": "studio", "attempt": 1, "pass": true, "defects": [], "issues": [], "notes": "",
+ "may_rewrite": true, "rewrite": false, "budget": {"max_drafts": 3, "elapsed_s": 7, "reason": null}}
+```
+
+2. **Pide reescritura** (a los 9 s), la lista que tutea y que, expandida, mide 241 (sin expandir cabría en 200):
+
+```json
+{"ok": true, "contract": "ultron-regen/1", "mode": "studio", "attempt": 1, "pass": false,
+ "defects": [{"code": "register_tuteo", "detail": null, "issue": "naturalness"},
+             {"code": "length_over_cap", "detail": null, "issue": "progressive_disclosure"}],
+ "issues": ["naturalness", "progressive_disclosure"],
+ "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia. DEMASIADO LARGO: el borrador mide 241 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta a lo que pregunto la persona, sin relleno, y como mucho una pregunta corta al final. Cada marcador cuenta como el texto que lo sustituye.",
+ "may_rewrite": true, "rewrite": true, "budget": {"max_drafts": 3, "elapsed_s": 9, "reason": null}}
+```
+
+3. **Sin presupuesto** (`attempt` 2, a los 26 s), la lista que tutea:
+
+```json
+{"ok": true, "contract": "ultron-regen/1", "mode": "studio", "attempt": 2, "pass": false,
+ "defects": [{"code": "register_tuteo", "detail": null, "issue": "naturalness"}], "issues": ["naturalness"],
+ "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia.",
+ "may_rewrite": false, "rewrite": false, "budget": {"max_drafts": 3, "elapsed_s": 26, "reason": "time_budget"}}
+```
+
+Con `attempt: 3`, lo mismo con `reason: "last_attempt"` (manda sobre `time_budget` si coinciden).
+
+**Sin versión del Studio** (token sin `sp`, o con `sp.m = legacy`), sin leer el mensaje ni los planes (cero sentencias, fijado por la prueba):
+
+```json
+{"ok": true, "contract": "ultron-regen/1", "mode": "legacy", "attempt": 2, "pass": true, "defects": [], "issues": [], "notes": "",
+ "may_rewrite": false, "rewrite": false, "budget": {"max_drafts": 2, "elapsed_s": null, "reason": "legacy"}}
+```
+
+**Errores:**
+- 401: el middleware.
+- 429: el limitador.
+- 422 de validación: la forma estándar de Laravel.
+- 422 `{"ok": false, "code": "unexpected_fields", "message": "…", "fields": ["draft.price", …]}`.
+- 422 `{"ok": false, "code": "invalid_token"}`, exactamente eso: sin motivo, sin ids y sin `message`. El motivo queda en el log de `peek()` (`ultron.decide_token.rejected`, sin el token).
+
+**`decide` (§4.2):** `"regeneration": {"contract": "ultron-regen/1", "max_drafts": 3}`, detrás de `studio_prompts` y antes de `superseded`, solo con `sp.m = studio`. Sin negociar o con los prompts del Studio apagados, la clave no aparece.
+
+**`commit` (§4.3).** Entrada:
+- `critic.attempt` ≤ 3;
+- `regeneration` con las reglas del plan, más:
+  - `regeneration.rewrites.*` → `array`;
+  - `rewrites`, `codes` e `issues`: lista, no objeto;
+  - topes contados: `codes` ≤ `count(CODES)` = 4 e `issues` ≤ `CriticContract::MAX_ISSUES` = 8;
+- una clave de más dentro de `regeneration`, de `regeneration.tokens` o de una reescritura → `unexpected_fields`.
+
+Traza en la fila, con la forma de §4.3:
+
+```json
+"regeneration": {"drafts": 3, "critics": 2, "checks": 2, "check_errors": 0,
+  "rewrites": [{"by": "server", "codes": ["register_tuteo", "length_over_cap"], "issues": ["naturalness", "progressive_disclosure"]},
+               {"by": "critic", "codes": [], "issues": ["relevance"]}],
+  "tokens": {"input": 41000, "output": 900}, "consistent": true}
+```
+
+### 4.3 La paridad (`UltronCheckCommitParityTest`)
+
+Sobre el MISMO turno (la misma conversación y el mismo token) se pasan primero la comprobación y después el commit, con el revisor aprobando. La comprobación marca cada código **si y solo si** el commit actúa por esa causa:
+
+| Código | En el commit |
+|---|---|
+| `register_tuteo` | `metadata.register.action` ≠ `ok` |
+| `length_over_cap` | `metadata.length.from` > `cap`. **No** `action` ≠ `fit`: la acción pasa a `replaced` cuando la política sustituye el texto por otra causa; lo descubrí en la primera pasada verde (§4.5) |
+| `plans_overview` | `policy_plans_overview`, o un 422 `unknown_placeholder` con un `PLAN_k`, o, con la lista, el 422 de la cifra escrita |
+| `benefit_misattributed` | `policy_benefit_misattributed` |
+
+**Matriz (23 borradores, todos en verde):**
+
+| Turno | Borradores | Resultado esperado y obtenido en los dos |
+|---|---|---|
+| Panorama con precio, lista firmada | usted · tutea · solo se pasa expandida · tutea y se pasa · falta la lista · mezcla con `PLAN_PRICE` · repetido · nombre a mano · `PLAN_4` · cifra · beneficio de otro plan · beneficio en su plan · beneficio y tuteo | `[]` · `register` · `length` · `register+length` · `plans` (×6) · `benefit` · `[]` · `register+benefit` |
+| Decisión del lead | `PLAN_4` con `app_links_send` · `PLAN_4` sin pedir el precio («¿Qué membresías tienen?») | `plans` · `plans` |
+| Cobro con la lista ofrecida | `payment_link_request` con los tres marcadores | `plans` (`no_list` / 422) |
+| Horario, sin lista | usted · tutea en la pregunta · largo · `PLAN_1` · beneficio de otro plan nombrado a mano | `[]` · `register` · `length` · `plans` · `benefit` |
+| Horario con `app_links_send` | no cabe con los enlaces (174 + enlaces = 204) · cabe | `length` · `[]` |
+
+**Las excepciones, una a una, documentadas en el docblock de la prueba.** Las tres primeras tienen además una prueba propia que fija la divergencia exacta:
+
+| # | Excepción | Comprobación | Commit | Prueba |
+|---|---|---|---|---|
+| E1 | Un plan de la lista deja de venderse entre los dos (H14) | `[]` | `plans_overview` (`not_sellable`): no lo arregla una reescritura | sí |
+| E2 | El commit retira frases antes de medir (`sinServiciosInventados()`: «clases de pilates y yoga») | `length_over_cap` | cabe (`fit`, `invented_service_dropped`) | sí |
+| E3 | Los enlaces de la app salieron hace menos de 60 min (memoria) | los cuenta → `length_over_cap` | no los pega → cabe | sí |
+| E4 | La línea del cobro con el enlace (`conCheckout()`) | no la pega (§4.1 solo habla de la app) | la pega antes de medir | no: la bandera del cobro está apagada aquí (estado de producción) |
+| E5 | La realineación del precio (`price_sentence`) o el plan que impone la política | mide con el plan propuesto | reescribe la frase del precio | no |
+| E6 | El panorama: intención saneada, política del momento, herramientas ejecutadas o relevo | intención del borrador y `po` | lo de ese instante | no |
+| E7 | Lo que el commit tumba antes de medir (URL, tarjeta, pago o membresía inventados, guard, presión, transición, efecto sin autoridad) | nada | 422 por otra causa | `test_no_es_un_oraculo_de_las_guardas` |
+
+Misma familia que E2, sin prueba propia: `sinConfirmarUnaCortesia…()`, `sinCambioDeVisitaQueNoSeHizo()`, `sinConstanciaDeUnaCortesia…()`, `sinNegarUnCobroDisponible()` y `sinExcusasDePrecio()`.
+
+**Sentido de la divergencia:** en E2, E3 y E5 la comprobación es MÁS estricta que el commit. Pide una reescritura que el commit no habría necesitado: cuesta una llamada al modelo, pero no deja pasar nada. En E1, E4 y E6 es más laxa, y la red sigue siendo el commit.
+
+### 4.4 Decisiones mías (el plan no las fija)
+
+1. **La decisión del lead vive en `UltronDraftDefects`, no en la puerta:**
+   - con lista y fuera de la condición del panorama, `verify() === unknown_marker` se señala igual;
+   - lo demás de la lista (falta, mezcla, nombre) sigue sin mirarse fuera de esa condición, como en el commit;
+   - en un turno de cobro, quien llama pasa la lista vacía y sale `no_list`.
+
+   Así la pieza pura sigue siendo la única que decide los defectos.
+2. **Dos piezas del commit, extraídas a `UltronPlansOverview` para no duplicarlas:** `signedList()` (la forma de `po`) e `isMoneyTurn()` (el cobro del paso 8.ter).
+   - El commit las llama con el mismo resultado: las pruebas de la ola 3 y las instantáneas siguen en verde, y la mutación M2 lo caza en la puerta.
+   - El `$turnoDeCobro` de la realineación (sobre la intención saneada) **no** se toca: es otra regla.
+3. **Respuesta:**
+   - `defects` sin la nota (el ejemplo del plan); las notas, unidas en `notes` por `merge()`;
+   - `issues` con `CriticContract::issues()`, sin repetir y del vocabulario;
+   - con presupuesto agotado, los defectos se dicen igual (`pass: false`, `rewrite: false`), para que la traza de n8n sepa por qué.
+4. **Presupuesto:**
+   - a los 25 s justos todavía se concede; a los 26 s, no;
+   - `last_attempt` manda sobre `time_budget`;
+   - `elapsed_s` no baja de 0.
+5. **Lecturas:**
+   - el cuerpo del mensaje, con `whereKey(m)->where('conversation_id', c)` (además del token);
+   - el catálogo, con `activePlans()`;
+   - con marcadores de la lista, una consulta `Plan::sellable()->whereIn(…)`, la misma del commit;
+   - si cotiza, el plan propuesto si se vende (el id leído como el commit, `is_numeric`) y, si no, `defaultMonthlyPlan()`.
+6. **Los enlaces de la app se pegan siempre que se piden**, sin mirar la memoria (el plan dice que no se lee): es la aproximación declarada (E3).
+7. **El log:** una línea `ultron.check.result` por comprobación del Studio, con el id de la conversación, el intento, los códigos (`plans_overview/missing`…), `may_rewrite`, `rewrite`, `reason` y `elapsed_s`. Un token malo deja solo la línea de `peek()` de siempre, sin el token.
+8. **La puerta no comprueba el interruptor de ULTRON, el freno ni el canario:** es de solo lectura y el plan no lo pide. El commit sigue exigiéndolos. Lo señalo para `api-security-specialist`.
+9. **La traza se escribe en `persist()`, así que la lleva TODA fila con el bloque** (también la rendición, el relevo y la hora de la visita).
+   - `consistent` compara `drafts` con el intento del revisor **tal como queda en esa fila**: `forMetadata()`, que en el camino del fallo del revisor vale 2 si no viene.
+   - Sin revisor en la fila, `null`: no hay con qué cuadrar.
+   - Un bloque con otro contrato o con `drafts` fuera de 1 a 3 no deja traza (por HTTP es un 422 antes).
+   - Ningún texto viaja a la fila.
+10. **`unexpectedKeys()` baja un nivel más en la traza** (`tokens` y cada `rewrites.*`). El plan solo pedía añadir `regeneration` a la lista. Sin esto, un `text` dentro de una reescritura no fallaría: `validated()` lo descartaría en silencio.
+11. **`CriticContract::MAX_ATTEMPTS = 3`**, usado en `forMetadata()`, en `critic.attempt` y en `regeneration.critics`: el tope se cuenta, no se escribe.
+12. **Sin `config/` y sin caché de rutas en el árbol.** La ruta nueva exige `route:cache` al desplegar (§9 del plan: `hotfix-backend.sh` no sirve).
+
+### 4.5 Aserciones existentes cambiadas, y por qué
+
+| Fichero | Cambio | Por qué |
+|---|---|---|
+| `tests/Unit/Marketing/CriticContractTest.php` | `test_there_is_only_one_retry_so_attempt_never_exceeds_two` → `test_at_most_two_rewrites_so_attempt_never_exceeds_three`. `forMetadata(['attempt' => 7])` daba 2 y ahora da **3**. Se añaden `MAX_ATTEMPTS = 3`, el 3 se queda en 3, el 2 en 2 y el vacío en 1 | Es el cambio obligatorio de P-2 (H8). El plan lo daba por no fijado [S]; sí lo estaba. **No se relaja:** el tope sigue fijado, ahora en 3 |
+| `tests/Feature/Marketing/UltronDecidePromptsTest.php` (`test_la_matriz_de_la_oferta`) | Las claves de la respuesta llevan `regeneration` tras `studio_prompts` **solo** cuando el motivo es `studio`; se añade la aserción del valor exacto (o `null` en Legacy) | El bloque nuevo de §4.2; más estricta que antes |
+| `tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php` | `UltronRegenerationTrace` entra en la lista de piezas puras. `UltronDraftCheck` entra, con el token, en la de «sin `\p{…}`» (`SOLO_PCRE`) | Ampliada, no relajada |
+| `tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php` | El docblock «dos puertas» pasa a «tres puertas», y una prueba nueva (§4.6) | El plan lo pedía |
+| `UltronDraftDefectsTest`, `UltronPlansOverviewTest` | Una prueba nueva en cada uno; ninguna existente cambia | — |
+
+**Mis propias pruebas, corregidas antes de darlas por buenas** (la versión final es la del rojo 103, igual que el 102 en números):
+- (a) La causa de longitud en la paridad, de `action ≠ fit` a `from > cap`, por el `replaced` descrito en §4.3.
+- (b) El borrador «enlaces de la app que no caben» medía 169 + 30 = 199 y cabía; se le añadió «aquí» (204).
+- (c) La comparación de filas de `UltronRegenerationCommitTest` quita además `outbound.message_id` (el id del saliente, distinto en cada conversación).
+
+Ninguna aserción se debilitó.
+
+### 4.6 Pruebas nuevas
+
+| Fichero | Pruebas | Qué fija |
+|---|---|---|
+| `tests/Feature/Marketing/UltronCheckEndpointTest.php` | 47 (18 métodos) | Los tres casos y la respuesta exacta; `attempt` 3 → `last_attempt`; 25 s todavía y 26 s → `time_budget`, con `setTestNow` en UTC. **Cada código con su nota LITERAL** (copiadas a mano de §7.2): tuteo, los seis detalles de la lista (también el repetido), la longitud con su medida y el beneficio. La decisión del lead (con herramientas, sin pedir el precio, cobro ×3). Legacy, sin negociar y con los prompts apagados: **cero sentencias**. `decide` ofrece el contrato solo con Studio. **P-8:** 401 sin secreto o con otro; 8 tokens que no valen → exactamente `{ok:false, code:invalid_token}`; `unexpected_fields` en la raíz y en `draft`; 16 formas inválidas; **solo `select`**, `Cache::lock` nunca, `Http::assertNothingSent()`, cola y bus vacíos, las filas de las tablas `marketing_*`, `plans`, `payment_transactions` e `incidents` iguales, y la conversación (memoria incluida) igual. Un entrante con nombre, conjunto y teléfono únicos que no salen ni en la respuesta ni en el log (`MessageLogged`), ni el token ni su firma, con la lista blanca de claves. **No es un oráculo:** URL y tarjeta pasan la comprobación y el commit las tumba. Una guarda estática: el servicio no nombra cerrojo, caché, red, despachador, escrituras, `UltronPublishedConfig`, el commit ni `verify()`, y sí `peek()` |
+| `tests/Feature/Marketing/UltronCheckCommitParityTest.php` | 26 | §4.3: la matriz de 23 y E1 a E3 |
+| `tests/Feature/Marketing/UltronRegenerationCommitTest.php` | 24 | Con el bloque, la fila lo lleva. Sin él, sin la clave y con lo demás idéntico: el texto, el saliente, la fase y la metadata salvo `critic` y los ids. Incoherente: solo `consistent: false`. `critic.attempt` 3 aceptado en el camino normal y en el del fallo del revisor (respaldo con la traza); la rendición, con `consistent: null`. 20 formas inválidas (el cuarto intento del revisor y 19 del bloque) → 422 sin fila. Tres claves de más → `unexpected_fields` exacto |
+| `tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php` | 4 | Sin bloque; la forma cerrada; `consistent` (true, false y null); la defensa en profundidad (contrato, `drafts`, rangos, códigos e issues fuera del vocabulario, autor ajeno, más de dos, ningún texto) |
+| `UltronDraftDefectsTest::test_un_marcador_que_no_es_de_la_lista_se_senala_siempre` | 1 | La decisión del lead en la pieza pura |
+| `UltronPlansOverviewTest::test_la_lista_firmada_y_el_turno_de_cobro` | 1 | Las dos piezas extraídas, con 11 formas de `po` que no valen |
+| `InternalSecretAuthoritySurfaceTest::test_the_third_ultron_door_only_reads` | 1 | La tercera puerta: 401, `invalid_token`, `legacy` y ni una fila |
+
+**Mutaciones a mano** (110; cada una deshecha y comprobada con `cmp`; además, al final, `cmp` de los nueve ficheros de producto contra el respaldo) **[C]**:
+
+| # | Mutación | Pruebas que fallan |
+|---|---|---|
+| M1 | El presupuesto con `>=` (a los 25 s ya no vale) | 1 |
+| M2 | La lista también vale en el cobro, en la puerta | 2 |
+| M3 | Sin la decisión del lead | 4 |
+| M4 | `persist()` sin la traza | 3 |
+| M5 | Sin la lista blanca de cada reescritura | 1 |
+| M6 | Los enlaces de la app no se cuentan | 2 |
+
+### 4.7 Números
+
+| # | Qué | Resultado |
+|---|---|---|
+| 102 | Las pruebas nuevas y las tocadas (primera versión) con `app/` y `routes/` = HEAD | **ROJO:** 280 pruebas, 8 errores, 101 fallos |
+| 103 | Las mismas, en su versión FINAL. `app/` y `routes/` puestos a HEAD con `git show` (las dos clases nuevas, apartadas), restaurados y comparados con `cmp` | **ROJO:** 280 pruebas, 8 errores, 101 fallos, 1 aviso (solo en rojo; en verde no hay ninguno con `--display-warnings`) |
+| 104 | Las mismas, en verde | **OK (280 pruebas, 11 530 aserciones)** |
+| 105 | Motor: `tests/Unit/Marketing/Ultron`, las tres A4, `UltronDecideTest`, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest`, `UltronPromptsN8nCommandTest`, `UltronPromptsTraceCommandTest` y las tres nuevas de Feature | **OK (1 781 pruebas, 36 897 aserciones)** |
+| 106 | `tests/Feature/Marketing tests/Unit/Marketing` | **OK (6 701 pruebas, 58 444 aserciones)**: las 6 597 de la ola 3 + 104 nuevas |
+| 107 | En PostgreSQL (`UNIT_DB=ultron_studio_lead_ola5`, local y desechable): las tres nuevas de Feature y las tres A4 | **OK (354 pruebas, 3 598 aserciones)**: 257 A4 + 97 nuevas |
+| 108 | Guardas: los 16 ficheros | 141 pruebas, **1 fallo esperado** (`OutreachIsolationTest::test_la_puerta_de_diff…`); ninguna otra guarda roja por la ruta o el controlador |
+| 109 | `php artisan route:list --path=internal/marketing/ai -v` | `POST api/internal/marketing/ai/check → UltronController@check`, con `api`, `automation.internal` y `throttle:internal-marketing-ai`, como `decide` y `commit` |
+| 110 | Mutaciones | 6 de 6 cazadas |
+| 111 | Volcado de los tres casos del contrato | §4.2 |
+| — | `vendor/bin/pint --test` sobre los 19 PHP tocados o nuevos | `passed`, sin cambios |
+| — | n8n | `git status` limpio en `n8n/`. Los sha256 de `elegir-prompts.js`, `preparar-commit.js` y `operaciones-mcp.json`, iguales a los de HEAD (`fec89513…`, `876a3f6a…`, `1e1aca5a…`). No hubo que regenerar nada: los fixtures `decide-*.json` son sintéticos y no salen de `decide` |
+
+Salida de la ruta (109):
+
+```
+POST  api/internal/marketing/ai/check ....... Api\Internal\UltronController@check
+      ⇂ api  ⇂ automation.internal  ⇂ throttle:internal-marketing-ai
+```
+
+**La puerta de diff del H9** nombra ahora **19** ficheros, y esta ola añade **3**: `UltronController.php`, `CriticContract.php` y `routes/marketing.php`. Los otros dos que toca esta ola (`UltronCommitService.php` y `UltronDecideService.php`) ya estaban, y `UltronDraftDefects.php` y `UltronPlansOverview.php` también, por las olas 1 a 3.
+
+Su segunda aserción, la de los ficheros nuevos sin seguimiento en zonas protegidas, no llega a ejecutarse porque falla la primera. Al subir nombrará `UltronDraftCheck.php` y `UltronRegenerationTrace.php`. Todo va a la Enmienda A4-3, donde el plan ya prevé el controlador y las rutas.
+
+### 4.8 Lo que no comprobé
+
+- **n8n:** el flujo S2 no existe todavía (ola 5). Que n8n trate cualquier respuesta que no sea un 200 bien formado como «no reescribir» es del flujo, no de aquí. Aquí solo se fija que la puerta contesta 401, 422 o 200 con su forma.
+- **La latencia real de la comprobación** (el plan supone de 0,1 a 0,3 s) no la medí: en las pruebas, con SQLite en memoria, no significa nada. Lee 3 o 4 sentencias `select` (el mensaje, el catálogo y, si hay marcadores, los planes de la lista y el que cotiza). El plan propone un tiempo máximo de 3 s en el nodo; eso es de la ola 5.
+- **E4 a E6** quedan declaradas sin prueba propia (§4.3).
+- **El cubo compartido de 120 por minuto (R4):** sin cambios. Dos comprobaciones más por turno del Studio; con la canaria es irrelevante y es condición antes de ampliar.
+- **La sonda de PCRE:** esta ola no añade ninguna expresión regular (grep de `preg_` y `regex:` en el diff: ninguna).
+- **Las pruebas solo de PostgreSQL** fuera de las nuevas y de las A4 no las ejecuté.
+- **Para `security` / `api-security-specialist`:**
+  - la decisión 8 (la puerta no mira el interruptor, el freno ni el canario);
+  - el 422 `invalid_token` sin detalle;
+  - la línea de log `ultron.check.result`;
+  - que la puerta revela, a quien tenga el secreto y un token válido, los nombres y precios de la lista firmada **solo** como medida (nunca en la respuesta: la nota N-L da la longitud, no el texto);
+  - el bloque `regeneration` como traza sin textos.
+- **Casos límite para `tester`:**
+  - un token emitido justo antes de un cambio de reloj del servidor (`elapsed_s` se acota a 0);
+  - un `po` con forma rara solo se fabrica re-firmando;
+  - la comprobación con un mensaje borrado (cuerpo vacío; sigue contestando);
+  - los casos de §6 «Ola 7» del plan que dependen de S2: el tercer borrador sin comprobar que el commit recorta, el servidor caído y el presupuesto agotado entre la comprobación 2 y el revisor 2.
+
+### 4.9 Variables, migraciones y configuración
+
+- Ninguna migración, ningún `config/` y ninguna variable de entorno.
+- **Sí hay una ruta nueva:** al desplegar hace falta `route:cache` y comprobar con `route:list` que existen `internal/marketing/ai/{decide,check,commit,ultron/incidents}`. Lo dice el plan, §9, paso 1; `hotfix-backend.sh` rechaza `backend/routes/*`.

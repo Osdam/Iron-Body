@@ -540,8 +540,8 @@ class UltronCommitService
          * a `unknown` o a `greeting`), nunca dárselo.
          */
         $listaOfrecida = $turno['studio'] ? $this->listaFirmada($token['extra']['po'] ?? null, (int) $conversation->id) : [];
-        $cobroPropuesto = in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($proposal['tools_requested'] ?? []), true)
-            || in_array((string) ($proposal['intent'] ?? ''), [SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PAYMENT_LINK_REQUEST], true);
+        // La misma regla que la comprobación (`ai/check`): una sola, en la lista.
+        $cobroPropuesto = UltronPlansOverview::isMoneyTurn((string) ($proposal['intent'] ?? ''), (array) ($proposal['tools_requested'] ?? []));
         $listaDelTurno = $cobroPropuesto ? [] : $listaOfrecida;
 
         $placeholdersDesconocidos = $this->placeholders->unknown($draft, count($listaDelTurno));
@@ -2198,8 +2198,9 @@ class UltronCommitService
             'origin' => 'ultron_curated_fallback',
             'log' => 'ultron.commit.critic_failed',
             'metadata' => [
-                // Un fail solo llega aquí tras el segundo Critic: si no dice el intento
-                // (ausente o null, que es como n8n manda lo que no aplica), fue el 2.
+                // Un fail solo llega aquí tras el segundo Critic (o el tercero, con S2, que
+                // siempre dice el intento): si no dice el intento (ausente o null, que es
+                // como n8n manda lo que no aplica), fue el 2.
                 'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
             ],
         ], $turno);
@@ -3013,6 +3014,16 @@ class UltronCommitService
             // Enmienda M-1 (§B.6). Sin `sp` en el token ni bloque `prompts` es
             // null y desaparece igual: la fila queda como hoy.
             'studio_prompts' => $studioPrompts,
+            /*
+             * «Regenerar antes de sustituir» (ola 4, §4.3): lo que n8n dice
+             * haber hecho en este turno (borradores, revisores, comprobaciones,
+             * quién pidió cada reescritura). Es TRAZA, como `prompts`: nada de
+             * este commit se ramifica por ella. Se escribe aquí, el único punto
+             * por el que pasan todas las filas, con el veredicto tal como queda
+             * en ESTA fila para `consistent`. Sin bloque es null y desaparece:
+             * la fila queda como hoy.
+             */
+            'regeneration' => UltronRegenerationTrace::forMetadata($payload['regeneration'] ?? null, $extraMetadata['critic'] ?? null),
         ], $extraMetadata);
 
         try {
@@ -5554,11 +5565,9 @@ class UltronCommitService
         if ($po === null) {
             return [];
         }
-        $valida = is_array($po) && array_is_list($po)
-            && count($po) >= UltronPlansOverview::MIN_MARKERS && count($po) <= UltronPlansOverview::MAX_PLANS
-            && array_filter($po, fn (mixed $id): bool => is_int($id) && $id > 0) === $po
-            && count(array_unique($po)) === count($po);
-        if (! $valida) {
+        // La forma, con la misma regla que la comprobación (`ai/check`).
+        $valida = UltronPlansOverview::signedList($po);
+        if ($valida === null) {
             ChannelLog::warning('ultron.commit.plans_overview_invalid', [
                 'conversation_id' => $conversationId, 'type' => get_debug_type($po),
             ]);
@@ -5566,7 +5575,7 @@ class UltronCommitService
             return [];
         }
 
-        return $po;
+        return $valida;
     }
 
     /**

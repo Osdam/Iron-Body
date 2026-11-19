@@ -18,7 +18,8 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
  * tope, la regla del panorama, `plansNamedIn()`), para que lo que se marque
  * aquí sea lo que el commit habría descartado, recortado o violado; el commit
  * lo vuelve a comprobar todo sobre su texto final, que puede diferir (pega
- * enlaces o el cobro y retira frases). Nadie la llama todavía (ola 1).
+ * enlaces o el cobro y retira frases). La llama la comprobación de solo
+ * lectura ({@see UltronDraftCheck}, ola 4).
  *
  * EN ESTE ORDEN, uno por código (§4.1, paso 4):
  *  (a) `plans_overview`, con {@see UltronPlansOverview::verify()}: solo si hay
@@ -26,7 +27,11 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
  *      del commit para el panorama (intención de precio, la persona pregunta
  *      el precio, o el texto nombra menos de dos planes). Además, sin lista,
  *      `no_list` si aparece un `PLAN_k` (también con herramientas: en un turno
- *      de cobro quien llama pasa la lista vacía).
+ *      de cobro quien llama pasa la lista vacía). Y con lista, `unknown_marker`
+ *      SIEMPRE que aparezca un `PLAN_k` que no es de ella, se cumpla o no esa
+ *      condición (decisión del lead en el encargo de la ola 4, que cierra una
+ *      laguna de §4.1, paso 4a): el commit rechaza ese turno con un 422 pase
+ *      lo que pase, y es justo el defecto que una reescritura arregla.
  *  (b) `register_tuteo`: el detector del tuteo sobre el texto expandido, solo
  *      con el tono firmado `profesional` (`sp.t`).
  *  (c) `length_over_cap`: la medida del texto expandido por encima del tope
@@ -71,6 +76,9 @@ final class UltronDraftDefects
             || count(array_unique(CommercialTurnPolicy::plansNamedIn($expanded, $catalog))) < 2
         )) {
             $detalle = UltronPlansOverview::verify($raw, $po, $catalog);
+        } elseif (UltronPlansOverview::verify($raw, $po, $catalog) === UltronPlansOverview::UNKNOWN_MARKER) {
+            // Fuera de la condición, lo demás de la lista no se mira (como en el commit); el marcador inexistente, sí.
+            $detalle = UltronPlansOverview::UNKNOWN_MARKER;
         }
         if ($detalle !== null) {
             $params = $detalle === UltronPlansOverview::UNKNOWN_MARKER ? ['K' => count($po)] : [];

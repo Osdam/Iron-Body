@@ -20,6 +20,8 @@ use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronDecideService;
+use App\Services\Marketing\Ultron\UltronDraftCheck;
+use App\Services\Marketing\Ultron\UltronRegenerationNotes;
 use App\Services\Marketing\Ultron\UltronSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,13 +30,16 @@ use Illuminate\Validation\Rule;
 /**
  * La frontera entre ULTRON (n8n) y Laravel.
  *
- * Dos puertas y ninguna más:
+ * Tres puertas y ninguna más:
  *
  *   POST /ai/decide  → lee. Devuelve contexto, decisión base, fase y listas
  *                      blancas. No crea filas ni tiene efectos de negocio:
  *                      su única escritura es la constancia `decide_outcome`
  *                      en el evento del turno cuando lo cierra sin commit
  *                      (pausa o relevo), y de ella depende el vigía.
+ *   POST /ai/check   → SOLO lee. ¿Aceptaría el servidor este borrador?
+ *                      («regenerar antes de sustituir», ola 4). Ni cerrojo,
+ *                      ni escrituras, ni red: un aviso que el commit no lee.
  *   POST /ai/commit  → escribe. Valida, aplica guardrails, persiste, ejecuta y
  *                      envía. (Se añade en su propia fase.)
  *
@@ -257,7 +262,8 @@ class UltronController extends Controller
 
             'critic' => ['nullable', 'array'],
             'critic.verdict' => ['nullable', 'string', Rule::in(['pass', 'fail'])],
-            'critic.attempt' => ['nullable', 'integer', 'min:1', 'max:2'],
+            // Como mucho dos reescrituras («regenerar antes de sustituir», P-2): el tercer intento existe. Era max:2.
+            'critic.attempt' => ['nullable', 'integer', 'min:1', 'max:'.CriticContract::MAX_ATTEMPTS],
             'critic.score' => ['nullable', 'numeric', 'min:0', 'max:1'],
             'critic.notes' => ['nullable', 'string', 'max:'.CriticContract::MAX_NOTES],
             // Vocabulario cerrado del Critic, para poder medirlo (PUNTO 5).
@@ -299,6 +305,32 @@ class UltronController extends Controller
             'prompts.reason' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
             'prompts.flow_rev' => ['required_with:prompts', 'string', 'max:32', 'regex:/^[A-Za-z0-9_.:-]+$/'],
             'prompts.execution_id' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+
+            /*
+             * LO QUE n8n DICE HABER HECHO PARA ESTE BORRADOR («regenerar antes de
+             * sustituir», ola 4, §4.3). Solo lo manda si `decide` devolvió
+             * `regeneration` con este contrato (con versión del Studio), así que
+             * el n8n de hoy no lo manda nunca. Es TRAZA, como `prompts`: nada de
+             * este commit se ramifica por él; acaba en `metadata.regeneration`.
+             * Sin textos: números, quién pidió cada reescritura y con qué
+             * códigos, del vocabulario cerrado.
+             */
+            'regeneration' => ['nullable', 'array'],
+            'regeneration.contract' => ['required_with:regeneration', 'string', Rule::in([UltronDraftCheck::CONTRACT])],
+            'regeneration.drafts' => ['required_with:regeneration', 'integer', 'min:1', 'max:'.UltronDraftCheck::MAX_DRAFTS],
+            'regeneration.critics' => ['nullable', 'integer', 'min:0', 'max:'.CriticContract::MAX_ATTEMPTS],
+            'regeneration.checks' => ['nullable', 'integer', 'min:0', 'max:2'],
+            'regeneration.check_errors' => ['nullable', 'integer', 'min:0', 'max:2'],
+            'regeneration.rewrites' => ['nullable', 'array', 'max:2', self::lista('rewrites')],
+            'regeneration.rewrites.*' => ['array'],
+            'regeneration.rewrites.*.by' => ['required', 'string', Rule::in(['server', 'critic'])],
+            'regeneration.rewrites.*.codes' => ['nullable', 'array', 'max:'.count(UltronRegenerationNotes::CODES), self::lista('codes')],
+            'regeneration.rewrites.*.codes.*' => ['string', Rule::in(UltronRegenerationNotes::CODES)],
+            'regeneration.rewrites.*.issues' => ['nullable', 'array', 'max:'.CriticContract::MAX_ISSUES, self::lista('issues')],
+            'regeneration.rewrites.*.issues.*' => ['string', Rule::in(CriticContract::DIMENSIONS)],
+            'regeneration.tokens' => ['nullable', 'array'],
+            'regeneration.tokens.input' => ['nullable', 'integer', 'min:0', 'max:2000000'],
+            'regeneration.tokens.output' => ['nullable', 'integer', 'min:0', 'max:2000000'],
         ]);
 
         /*
@@ -328,6 +360,52 @@ class UltronController extends Controller
                 'detail' => $e->detail ?: null,
             ], fn ($v) => $v !== null), $e->status);
         }
+    }
+
+    /**
+     * POST /api/internal/marketing/ai/check
+     *
+     * ¿ACEPTARÍA EL SERVIDOR ESTE BORRADOR? («regenerar antes de sustituir»,
+     * ola 4; contrato `ultron-regen/1`, plan §4.1). n8n pregunta entre el
+     * redactor y el revisor; si hay un defecto que el modelo puede corregir y
+     * queda presupuesto, reescribe con la nota exacta.
+     *
+     * DE SOLO LECTURA ({@see UltronDraftCheck}): ni cerrojo, ni escrituras, ni
+     * red, ni despachador. Sin `exists` en los ids: el token de `decide` ya ata
+     * el par, y sin un token válido para ESE par se contesta 422
+     * `invalid_token` sin ningún detalle (ni el motivo: el que importa se queda
+     * en el log). Mismo secreto y mismo limitador que las otras dos.
+     */
+    public function check(Request $request, UltronDraftCheck $check): JsonResponse
+    {
+        $data = $request->validate([
+            'conversation_id' => ['required', 'integer', 'min:1'],
+            'message_id' => ['required', 'integer', 'min:1'],
+            'decide_token' => ['required', 'string', 'max:2048'],
+            'attempt' => ['required', 'integer', 'min:1', 'max:'.UltronDraftCheck::MAX_DRAFTS],
+            'draft' => ['required', 'array'],
+            'draft.reply_draft' => ['required', 'string', 'max:4000'],
+            'draft.intent' => ['required', 'string', Rule::in(SalesAgentDecisionSchema::INTENTS)],
+            'draft.recommended_plan_id' => ['nullable', 'integer', 'min:1'],
+            // El tope se cuenta, como en el commit.
+            'draft.tools_requested' => ['nullable', 'array', 'max:'.count(UltronDecideService::TOOL_VOCABULARY)],
+            'draft.tools_requested.*' => ['string', Rule::in(UltronDecideService::TOOL_VOCABULARY)],
+        ]);
+
+        if ($extra = $this->unexpectedKeys($request->all(), $data, ['draft'])) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'unexpected_fields',
+                'message' => 'La petición trae campos que no pertenecen al contrato.',
+                'fields' => $extra,
+            ], 422);
+        }
+
+        $resultado = $check->check($data);
+
+        return $resultado === null
+            ? response()->json(['ok' => false, 'code' => 'invalid_token'], 422)
+            : response()->json($resultado);
     }
 
     /**
@@ -423,16 +501,22 @@ class UltronController extends Controller
 
     /**
      * Claves del request que no están en el contrato, en el primer nivel y en
-     * `proposal`/`critic`/`recovery`/`prompts`. Comparar contra lo validado y
-     * no contra una lista escrita a mano evita que las dos se separen.
+     * los bloques (`proposal`/`critic`/`recovery`/`prompts`/`regeneration` del
+     * commit; `draft` de la comprobación). Comparar contra lo validado y no
+     * contra una lista escrita a mano evita que las dos se separen.
      *
+     * La traza de las reescrituras baja un nivel más (sus `tokens` y cada una
+     * de sus `rewrites`): es el único bloque con objetos dentro, y sin esto un
+     * `text` dentro de una reescritura no fallaría, se perdería en silencio.
+     *
+     * @param  list<string>  $bloques
      * @return string[]
      */
-    private function unexpectedKeys(array $enviado, array $validado): array
+    private function unexpectedKeys(array $enviado, array $validado, array $bloques = ['proposal', 'critic', 'recovery', 'prompts', 'regeneration']): array
     {
         $extra = array_keys(array_diff_key($enviado, $validado));
 
-        foreach (['proposal', 'critic', 'recovery', 'prompts'] as $bloque) {
+        foreach ($bloques as $bloque) {
             if (! is_array($enviado[$bloque] ?? null)) {
                 continue;
             }
@@ -441,6 +525,31 @@ class UltronController extends Controller
             }
         }
 
+        $traza = in_array('regeneration', $bloques, true) && is_array($enviado['regeneration'] ?? null) ? $enviado['regeneration'] : [];
+        $trazaValidada = (array) ($validado['regeneration'] ?? []);
+        if (is_array($traza['tokens'] ?? null)) {
+            foreach (array_keys(array_diff_key($traza['tokens'], (array) ($trazaValidada['tokens'] ?? []))) as $k) {
+                $extra[] = 'regeneration.tokens.'.$k;
+            }
+        }
+        foreach (is_array($traza['rewrites'] ?? null) ? $traza['rewrites'] : [] as $i => $reescritura) {
+            if (is_array($reescritura)) {
+                foreach (array_keys(array_diff_key($reescritura, (array) ($trazaValidada['rewrites'][$i] ?? []))) as $k) {
+                    $extra[] = 'regeneration.rewrites.'.$i.'.'.$k;
+                }
+            }
+        }
+
         return $extra;
+    }
+
+    /** Una regla que exige una LISTA y no un objeto (el `array` de Laravel acepta los dos). */
+    private static function lista(string $campo): \Closure
+    {
+        return function (string $attr, mixed $v, \Closure $fail) use ($campo): void {
+            if (is_array($v) && ! array_is_list($v)) {
+                $fail($campo.' debe ser una lista, no un objeto.');
+            }
+        };
     }
 }

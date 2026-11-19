@@ -190,7 +190,10 @@ class UltronDecidePromptsTest extends TestCase
         $oferta = $res->json('studio_prompts');
         $this->assertIsArray($oferta);
         $this->assertSame(self::CLAVES_DE_LA_OFERTA, array_keys($oferta));
-        $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', 'superseded'], array_keys($res->json()));
+        // «Regenerar antes de sustituir» (ola 4, §4.2): con la versión del Studio aplicada, además el bloque
+        // `regeneration`, detrás de la oferta; en Legacy, ni la clave (n8n no pregunta al servidor).
+        $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', ...($motivo === 'studio' ? ['regeneration'] : []), 'superseded'], array_keys($res->json()));
+        $this->assertSame($motivo === 'studio' ? ['contract' => 'ultron-regen/1', 'max_drafts' => 3] : null, $res->json('regeneration'));
         $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 4], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 4 (Enmienda A4-2)');
 
         if ($motivo === 'studio') {

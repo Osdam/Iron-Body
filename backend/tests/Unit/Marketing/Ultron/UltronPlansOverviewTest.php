@@ -319,4 +319,30 @@ class UltronPlansOverviewTest extends TestCase
         $this->assertSame(O::NAME_WRITTEN, O::verify('{{PLAN_1}} y el Plan Mensual', $po, $c));
         $this->assertSame(O::DETAILS, [O::MISSING, O::MIXED, O::NAME_WRITTEN, O::UNKNOWN_MARKER, O::NO_LIST, O::PRICE_WRITTEN], 'los seis de §4.4, en su orden');
     }
+
+    /**
+     * OLA 4: la forma de la lista firmada (`po`) y el turno de cobro, extraídos
+     * del commit (`listaFirmada()` y el paso 8.ter) para que la comprobación
+     * (`ai/check`) y el commit lean lo mismo. Tal cual estaban: solo vale la
+     * forma que emite `decide` (de 2 a 3 id enteros positivos y distintos, en
+     * lista); el cobro es el enlace de pago pedido o una intención de cobro.
+     */
+    public function test_la_lista_firmada_y_el_turno_de_cobro(): void
+    {
+        $this->assertSame([3, 4, 8], O::signedList([3, 4, 8]));
+        $this->assertSame([8, 3], O::signedList([8, 3]));
+        foreach ([
+            'nula' => null, 'uno solo' => [3], 'cuatro' => [3, 4, 8, 9], 'vacía' => [], 'texto' => '3,4',
+            'ids como texto' => ['3', '4'], 'cero' => [0, 4], 'negativo' => [-3, 4], 'repetido' => [3, 3],
+            'objeto' => ['a' => 3, 'b' => 4], 'desordenada' => [1 => 3, 0 => 4], 'decimal' => [3.0, 4],
+        ] as $caso => $po) {
+            $this->assertNull(O::signedList($po), $caso);
+        }
+
+        $this->assertTrue(O::isMoneyTurn('pricing_question', ['payment_link_send']));
+        $this->assertTrue(O::isMoneyTurn('high_intent_close', []));
+        $this->assertTrue(O::isMoneyTurn('payment_link_request', ['app_links_send']));
+        $this->assertFalse(O::isMoneyTurn('pricing_question', ['app_links_send', 'staff_review']));
+        $this->assertFalse(O::isMoneyTurn('general_info', []));
+    }
 }

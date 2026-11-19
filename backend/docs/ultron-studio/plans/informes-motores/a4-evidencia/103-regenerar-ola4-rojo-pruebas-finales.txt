@@ -1,0 +1,1005 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+..E......F..............EEEEEFF................................  63 / 280 ( 22%)
+...................................F........................... 126 / 280 ( 45%)
+..............F.............................FFFFFFFFFFFFFFFFEFF 189 / 280 ( 67%)
+FFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF 252 / 280 ( 90%)
+FFFFFFFFFFFFFFF....F........                                    280 / 280 (100%)
+
+Time: 00:17.364, Memory: 112.50 MB
+
+There were 8 errors:
+
+1) Tests\Unit\Marketing\CriticContractTest::test_at_most_two_rewrites_so_attempt_never_exceeds_three
+Error: Undefined constant App\Services\Marketing\Ultron\CriticContract::MAX_ATTEMPTS
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/CriticContractTest.php:33
+
+2) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_la_lista_firmada_y_el_turno_de_cobro
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronPlansOverview::signedList()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:332
+
+3) Tests\Unit\Marketing\Ultron\UltronRegenerationTraceTest::test_sin_bloque_no_hay_traza
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationTrace" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php:40
+
+4) Tests\Unit\Marketing\Ultron\UltronRegenerationTraceTest::test_el_bloque_pasa_a_la_fila_con_su_forma_cerrada
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationTrace" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php:58
+
+5) Tests\Unit\Marketing\Ultron\UltronRegenerationTraceTest::test_consistent_solo_marca
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationTrace" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php:69
+
+6) Tests\Unit\Marketing\Ultron\UltronRegenerationTraceTest::test_lo_que_no_es_del_contrato_no_entra
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationTrace" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php:79
+
+7) Tests\Feature\Marketing\UltronCheckEndpointTest::test_decide_ofrece_el_contrato_solo_con_version_del_studio
+ErrorException: Undefined array key "regeneration"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:382
+
+8) Tests\Feature\Marketing\UltronCheckEndpointTest::test_el_servicio_no_nombra_nada_que_escriba
+ErrorException: file_get_contents(/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftCheck.php): Failed to open stream: No such file or directory
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:628
+
+--
+
+There were 101 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_un_marcador_que_no_es_de_la_lista_se_senala_siempre
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'plans_overview/unknown_marker',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:134
+
+2) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_ninguna_expresion_nueva_lleva_propiedades_unicode
+Failed asserting that file "/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationTrace.php" exists.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:71
+
+3) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_las_piezas_nuevas_son_puras
+Failed asserting that '' [ASCII](length: 0) contains "final class " [ASCII](length: 12).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:96
+
+4) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=canary · prompts=canary · canaria · /2 válida" ('canary', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     9 => 'decide_token',
+     10 => 'expires_at',
+     11 => 'studio_prompts',
+-    12 => 'regeneration',
+-    13 => 'superseded',
++    12 => 'superseded',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:195
+
+5) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=all · prompts=canary · canaria · /2 válida" ('all', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     9 => 'decide_token',
+     10 => 'expires_at',
+     11 => 'studio_prompts',
+-    12 => 'regeneration',
+-    13 => 'superseded',
++    12 => 'superseded',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:195
+
+6) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_borrador_que_pasa
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:162
+
+7) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_borrador_que_tutea_y_se_pasa_pide_reescritura_con_sus_notas
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:185
+
+8) Tests\Feature\Marketing\UltronCheckEndpointTest::test_el_tercer_borrador_no_tiene_presupuesto
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:211
+
+9) Tests\Feature\Marketing\UltronCheckEndpointTest::test_pasados_25_segundos_no_hay_presupuesto
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:237
+
+10) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "tuteo" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [['register_tuteo', null, 'naturalness']], 'REESCRIBE DE USTED: la versio...decia.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+11) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "falta la lista" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, de...eresa?', null, [['plans_overview', 'missing', 'relevance']], 'FALTA LA LISTA DE PLANES: la ...PRICE.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+12) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "mezcla" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y {...eresa?', 3, [['plans_overview', 'mixed', 'relevance']], 'MARCADORES MEZCLADOS: con la ...ATION.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+13) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "repetido" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y o...eresa?', null, [['plans_overview', 'mixed', 'relevance']], 'MARCADORES MEZCLADOS: con la ...ATION.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+14) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "nombre a mano" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos el Plan Valera...eresa?', null, [['plans_overview', 'name_written', 'relevance']], 'NOMBRE DUPLICADO: no escribas...recio.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+15) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "marcador inexistente" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...eresa?', null, [['plans_overview', 'unknown_marker', 'relevance']], 'MARCADOR INEXISTENTE: este tu...laves.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+16) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "cifra escrita" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y {...eresa?', null, [['plans_overview', 'price_written', 'factuality']], 'SIN CIFRAS: no escribas preci...dores.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+17) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_codigo_con_su_nota_literal with data set "marcador sin lista" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'Abrimos de lunes a viernes de...o más?', null, [['plans_overview', 'no_list', 'relevance']], 'SIN LISTA DE PLANES: en este ...tegia.')
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:276
+
+18) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_longitud_se_mide_expandida_con_su_nota_literal
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:290
+
+19) Tests\Feature\Marketing\UltronCheckEndpointTest::test_el_beneficio_de_otro_plan_con_su_nota_literal
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:301
+
+20) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_marcador_que_no_es_de_la_lista_se_senala_siempre
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:323
+
+21) Tests\Feature\Marketing\UltronCheckEndpointTest::test_sin_version_del_studio_contesta_legacy_sin_leer_nada
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:357
+
+22) Tests\Feature\Marketing\UltronCheckEndpointTest::test_sin_secreto_401
+Expected response status code [401] but received 404.
+Failed asserting that 404 is identical to 401.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:404
+
+23) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "de otra conversación" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+24) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "de otro mensaje de la misma conversación" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+25) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "caducado" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+26) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "con la firma alterada" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+27) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "con la carga alterada y la firma de antes" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+28) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "sin punto" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+29) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "con tres partes" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+30) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_token_que_no_vale_da_422_invalid_token_sin_detalle with data set "firmado pero sin JSON dentro" (Closure Object ())
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:473
+
+31) Tests\Feature\Marketing\UltronCheckEndpointTest::test_una_clave_de_mas_da_422_unexpected_fields
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:483
+
+32) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "sin conversación" (Closure Object (), 'conversation_id')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+33) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "conversación cero" (Closure Object (), 'conversation_id')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+34) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "sin mensaje" (Closure Object (), 'message_id')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+35) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "sin token" (Closure Object (), 'decide_token')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+36) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "token enorme" (Closure Object (), 'decide_token')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+37) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "sin intento" (Closure Object (), 'attempt')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+38) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "intento cero" (Closure Object (), 'attempt')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+39) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "cuarto intento" (Closure Object (), 'attempt')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+40) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "sin borrador" (Closure Object (), 'draft')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+41) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "borrador como texto" (Closure Object (), 'draft')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+42) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "texto vacío" (Closure Object (), 'draft.reply_draft')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+43) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "texto de más de 4000" (Closure Object (), 'draft.reply_draft')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+44) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "intención inventada" (Closure Object (), 'draft.intent')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+45) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "plan cero" (Closure Object (), 'draft.recommended_plan_id')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+46) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "herramienta inventada" (Closure Object (), 'draft.tools_requested.0')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+47) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_forma_se_valida_en_el_borde with data set "seis herramientas" (Closure Object (), 'draft.tools_requested')
+Expected response status code [422] but received 404.
+Failed asserting that 404 is identical to 422.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:522
+
+48) Tests\Feature\Marketing\UltronCheckEndpointTest::test_solo_lee
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:543
+
+49) Tests\Feature\Marketing\UltronCheckEndpointTest::test_ni_la_respuesta_ni_el_log_llevan_texto_de_la_persona_ni_el_token
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:573
+
+50) Tests\Feature\Marketing\UltronCheckEndpointTest::test_no_es_un_oraculo_de_las_guardas
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:608
+
+51) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista de usted" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, [])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+52) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que tutea" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['register_tuteo'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+53) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que solo se pasa expandida" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['length_over_cap'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+54) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que tutea y se pasa" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['register_tuteo', 'length_over_cap'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+55) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "falta la lista" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, de...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+56) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "mezcla con el precio" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y {...eresa?', 3, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+57) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador repetido" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y o...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+58) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "nombre a mano" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos el Plan Valera...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+59) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador inexistente" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+60) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "cifra escrita" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y {...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+61) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_1}} incluye ent...eresa?', null, [], true, ['benefit_misattributed'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+62) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio en su plan" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_3}} incluye ent...eresa?', null, [], true, [])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+63) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan y tuteo" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_1}} incluye ent...eresa?', null, [], true, ['register_tuteo', 'benefit_misattributed'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+64) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador inexistente con herramientas" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a app.', null, ['app_links_send'], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+65) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador inexistente sin pedir el precio" ('¿Qué membresías tienen?', 'general_info', 'Claro. Tenemos {{PLAN_1}}, {{...eresa?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+66) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "la lista en un turno de cobro" ('¿Qué planes tienen y cuánto c...lidad?', 'payment_link_request', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+67) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario de usted" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...ernos?', null, [], false, [])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+68) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario que tutea en la pregunta" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...lases?', null, [], false, ['register_tuteo'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+69) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario largo" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...emana?', null, [], false, ['length_over_cap'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+70) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador de la lista sin lista" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...o más?', null, [], false, ['plans_overview'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+71) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan sin lista" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...pezar?', null, [], true, ['benefit_misattributed'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+72) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "enlaces de la app que no caben" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...a app.', null, ['app_links_send'], false, ['length_over_cap'])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+73) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "enlaces de la app que caben" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...a app.', null, ['app_links_send'], false, [])
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:230
+
+74) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e1_un_plan_que_deja_de_venderse_entre_la_comprobacion_y_el_commit
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:246
+
+75) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e2_el_commit_retira_una_frase_antes_de_medir
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:263
+
+76) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e3_los_enlaces_que_ya_salieron_no_se_pegan
+Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:300
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:282
+
+77) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_con_el_bloque_la_fila_lo_lleva_y_sin_el_es_la_de_hoy
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:280
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:137
+
+78) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_un_bloque_incoherente_solo_marca_consistent_false
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:280
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:157
+
+79) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_el_tercer_intento_del_revisor_se_acepta_y_se_audita
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:280
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:171
+
+80) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "cuarto intento del revisor" (Closure Object (), 'critic.attempt')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+81) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "bloque como texto" (Closure Object (), 'regeneration')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+82) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "otro contrato" (Closure Object (), 'regeneration.contract')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+83) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "sin contrato" (Closure Object (), 'regeneration.contract')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+84) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "sin borradores" (Closure Object (), 'regeneration.drafts')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+85) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "cero borradores" (Closure Object (), 'regeneration.drafts')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+86) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "cuatro borradores" (Closure Object (), 'regeneration.drafts')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+87) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "cuatro revisores" (Closure Object (), 'regeneration.critics')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+88) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "tres comprobaciones" (Closure Object (), 'regeneration.checks')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+89) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "tres errores de comprobación" (Closure Object (), 'regeneration.check_errors')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+90) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "tres reescrituras" (Closure Object (), 'regeneration.rewrites')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+91) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "reescrituras como objeto" (Closure Object (), 'regeneration.rewrites')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+92) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "reescritura de otro" (Closure Object (), 'regeneration.rewrites.0.by')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+93) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "reescritura sin autor" (Closure Object (), 'regeneration.rewrites.0.by')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+94) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "código inventado" (Closure Object (), 'regeneration.rewrites.0.codes.0')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+95) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "cinco códigos" (Closure Object (), 'regeneration.rewrites.0.codes')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+96) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "issue inventado" (Closure Object (), 'regeneration.rewrites.0.issues.0')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+97) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "nueve issues" (Closure Object (), 'regeneration.rewrites.0.issues')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+98) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "tokens negativos" (Closure Object (), 'regeneration.tokens.input')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+99) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_la_forma_del_bloque_se_valida with data set "tokens de más" (Closure Object (), 'regeneration.tokens.output')
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:228
+
+100) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_una_clave_de_mas_en_el_bloque_da_unexpected_fields
+decide ofrece el contrato
+Failed asserting that null is identical to Array &0 [
+    'contract' => 'ultron-regen/1',
+    'max_drafts' => 3,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:347
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:252
+
+101) Tests\Feature\Marketing\InternalSecretAuthoritySurfaceTest::test_the_third_ultron_door_only_reads
+Expected response status code [401] but received 404.
+Failed asserting that 404 is identical to 401.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php:202
+
+ERRORS!
+Tests: 280, Assertions: 10960, Errors: 8, Failures: 101, Warnings: 1.

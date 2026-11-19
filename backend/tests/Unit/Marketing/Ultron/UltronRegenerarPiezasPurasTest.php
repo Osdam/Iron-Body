@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
  *     producción es el 10.39 y no las compila todas (clases explícitas, como
  *     `UltronRegisterDetector` y `UltronReplyFitter`). Se mira el código sin
  *     comentarios: un comentario puede nombrar `\p{L}` para decir que no se usa.
- *  2. Las cuatro clases nuevas son PURAS: ni base de datos, ni config, ni
+ *  2. Las cuatro clases nuevas (y la traza de la ola 4) son PURAS: ni base de datos, ni config, ni
  *     reloj, ni log, ni caché, ni red. Lo que necesitan se lo pasa quien llama.
  *  3. `peek()` no lee el estado del mundo: ni la fase, ni las transiciones, ni
  *     la versión del conocimiento.
@@ -25,6 +25,14 @@ class UltronRegenerarPiezasPurasTest extends TestCase
         'app/Services/Marketing/Ultron/UltronBenefitAttribution.php',
         'app/Services/Marketing/Ultron/UltronRegenerationNotes.php',
         'app/Services/Marketing/Ultron/UltronDraftDefects.php',
+        // Ola 4: la traza de las reescrituras (bloque → metadata), también pura.
+        'app/Services/Marketing/Ultron/UltronRegenerationTrace.php',
+    ];
+
+    /** Ola 4: la comprobación de solo lectura no es pura (lee `Plan` y el mensaje), pero su PCRE es el de producción. */
+    private const SOLO_PCRE = [
+        'app/Services/Marketing/Ultron/UltronDecideToken.php',
+        'app/Services/Marketing/Ultron/UltronDraftCheck.php',
     ];
 
     /** Lo que una pieza pura no puede usar: clases y métodos de consulta o escritura. */
@@ -59,7 +67,7 @@ class UltronRegenerarPiezasPurasTest extends TestCase
 
     public function test_ninguna_expresion_nueva_lleva_propiedades_unicode(): void
     {
-        foreach ([...self::NUEVAS, 'app/Services/Marketing/Ultron/UltronDecideToken.php'] as $fichero) {
+        foreach ([...self::NUEVAS, ...self::SOLO_PCRE] as $fichero) {
             $this->assertFileExists(self::raiz().'/'.$fichero);
             $codigo = self::sinComentarios($fichero);
             $this->assertDoesNotMatchRegularExpression('/\\\\[pP]\{/', $codigo, $fichero.' lleva \p{…} o \P{…}');

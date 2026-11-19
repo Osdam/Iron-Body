@@ -1,0 +1,120 @@
+{
+    "pasa": {
+        "status": 200,
+        "peticion": {
+            "conversation_id": 1,
+            "message_id": 1,
+            "decide_token": "<el de decide>",
+            "attempt": 1,
+            "draft": {
+                "reply_draft": "Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes. ¿Cuál le interesa más?",
+                "intent": "pricing_question",
+                "recommended_plan_id": null,
+                "tools_requested": []
+            }
+        },
+        "respuesta": {
+            "ok": true,
+            "contract": "ultron-regen/1",
+            "mode": "studio",
+            "attempt": 1,
+            "pass": true,
+            "defects": [],
+            "issues": [],
+            "notes": "",
+            "may_rewrite": true,
+            "rewrite": false,
+            "budget": {
+                "max_drafts": 3,
+                "elapsed_s": 7,
+                "reason": null
+            }
+        }
+    },
+    "reescribe": {
+        "status": 200,
+        "peticion": {
+            "conversation_id": 1,
+            "message_id": 1,
+            "decide_token": "<el de decide>",
+            "attempt": 1,
+            "draft": {
+                "reply_draft": "Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad. ¿Cuál te interesa más?",
+                "intent": "pricing_question",
+                "recommended_plan_id": null,
+                "tools_requested": []
+            }
+        },
+        "respuesta": {
+            "ok": true,
+            "contract": "ultron-regen/1",
+            "mode": "studio",
+            "attempt": 1,
+            "pass": false,
+            "defects": [
+                {
+                    "code": "register_tuteo",
+                    "detail": null,
+                    "issue": "naturalness"
+                },
+                {
+                    "code": "length_over_cap",
+                    "detail": null,
+                    "issue": "progressive_disclosure"
+                }
+            ],
+            "issues": [
+                "naturalness",
+                "progressive_disclosure"
+            ],
+            "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia. DEMASIADO LARGO: el borrador mide 241 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta a lo que pregunto la persona, sin relleno, y como mucho una pregunta corta al final. Cada marcador cuenta como el texto que lo sustituye.",
+            "may_rewrite": true,
+            "rewrite": true,
+            "budget": {
+                "max_drafts": 3,
+                "elapsed_s": 9,
+                "reason": null
+            }
+        }
+    },
+    "sin_presupuesto": {
+        "status": 200,
+        "peticion": {
+            "conversation_id": 1,
+            "message_id": 1,
+            "decide_token": "<el de decide>",
+            "attempt": 2,
+            "draft": {
+                "reply_draft": "Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes. ¿Cuál te interesa más?",
+                "intent": "pricing_question",
+                "recommended_plan_id": null,
+                "tools_requested": []
+            }
+        },
+        "respuesta": {
+            "ok": true,
+            "contract": "ultron-regen/1",
+            "mode": "studio",
+            "attempt": 2,
+            "pass": false,
+            "defects": [
+                {
+                    "code": "register_tuteo",
+                    "detail": null,
+                    "issue": "naturalness"
+                }
+            ],
+            "issues": [
+                "naturalness"
+            ],
+            "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia.",
+            "may_rewrite": false,
+            "rewrite": false,
+            "budget": {
+                "max_drafts": 3,
+                "elapsed_s": 26,
+                "reason": "time_budget"
+            }
+        }
+    }
+}

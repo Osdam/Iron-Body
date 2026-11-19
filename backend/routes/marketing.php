@@ -64,15 +64,19 @@ Route::middleware(['automation.internal', 'throttle:internal-marketing-ai'])
         Route::get('ai/doctor', [InternalMarketingController::class, 'aiDoctor']);
 
         /*
-         * ULTRON — las dos únicas puertas del asesor orquestado desde n8n.
+         * ULTRON — las tres únicas puertas del asesor orquestado desde n8n.
          *
-         * `decide` lee y no escribe; `commit` es el único camino por el que una
-         * propuesta de n8n puede llegar a ejecutarse y a salir por WhatsApp.
+         * `decide` lee y no escribe; `check` SOLO lee: le dice a n8n si el
+         * servidor aceptaría un borrador antes de enviarlo al revisor
+         * («regenerar antes de sustituir», ola 4; ni cerrojo, ni escrituras, ni
+         * red, y el commit no lee su resultado); `commit` es el único camino por
+         * el que una propuesta de n8n puede llegar a ejecutarse y a salir por
+         * WhatsApp.
          * ULTRON no cobra por su cuenta: pide la herramienta por `commit` y el
          * permiso lo decide Laravel (`SalesPaymentReadinessService`), que exige
          * Wompi productivo Y la bandera del negocio.
          *
-         * OJO: el WORKFLOW de ULTRON solo usa estas dos puertas, pero el SECRETO
+         * OJO: el WORKFLOW de ULTRON solo usa estas tres puertas, pero el SECRETO
          * no distingue puertas. Quien tenga `automation.internal_secret` puede
          * llamar también a `payment-links` y a `payment-links/send` de aquí
          * arriba, que son anteriores (Fase 1.5). Durante un tiempo eso significó
@@ -88,6 +92,7 @@ Route::middleware(['automation.internal', 'throttle:internal-marketing-ai'])
          * {@see \Tests\Feature\Marketing\InternalSecretAuthoritySurfaceTest}.
          */
         Route::post('ai/decide', [UltronController::class, 'decide']);
+        Route::post('ai/check', [UltronController::class, 'check']);
         Route::post('ai/commit', [UltronController::class, 'commit']);
         // Por donde el workflow avisa de una averia. Alimenta IRON GUARD.
         Route::post('ai/ultron/incidents', [UltronController::class, 'incident']);

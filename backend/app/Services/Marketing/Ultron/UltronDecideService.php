@@ -672,7 +672,17 @@ class UltronDecideService
             'knowledge_version' => $knowledgeVersion,
             'decide_token' => $token['token'],
             'expires_at' => $token['expires_at'],
-        ] + ($prompts === null ? [] : ['studio_prompts' => $prompts['response']]);
+        ] + ($prompts === null ? [] : ['studio_prompts' => $prompts['response']])
+            /*
+             * «REGENERAR ANTES DE SUSTITUIR» (ola 4, §4.2): solo con la versión
+             * del Studio aplicada, el contrato de la comprobación. Es lo que hace
+             * que n8n pregunte a `ai/check`, pida hasta dos reescrituras y mande
+             * la traza en el commit. Sin él (Legacy, sin negociar, la llave
+             * apagada) n8n sigue el camino de hoy, con las mismas llamadas.
+             */
+            + (($prompts['sp']['m'] ?? null) === UltronPromptStamp::MODE_STUDIO
+                ? ['regeneration' => ['contract' => UltronDraftCheck::CONTRACT, 'max_drafts' => UltronDraftCheck::MAX_DRAFTS]]
+                : []);
     }
 
     /**

@@ -23,9 +23,18 @@ class CriticContractTest extends TestCase
         $this->assertFalse(CriticContract::isFail(['verdict' => 'pass', 'hard_fail' => '']));
     }
 
-    public function test_there_is_only_one_retry_so_attempt_never_exceeds_two(): void
+    /**
+     * «Regenerar antes de sustituir» (P-2): como mucho dos reescrituras, así que
+     * el intento es 1, 2 o 3. Antes el tope era 2 (una sola reescritura); un
+     * n8n S1 nunca manda 3, así que lo de siempre se guarda igual.
+     */
+    public function test_at_most_two_rewrites_so_attempt_never_exceeds_three(): void
     {
-        $this->assertSame(2, CriticContract::forMetadata(['attempt' => 7])['attempt']);
+        $this->assertSame(3, CriticContract::MAX_ATTEMPTS);
+        $this->assertSame(3, CriticContract::forMetadata(['attempt' => 7])['attempt']);
+        $this->assertSame(3, CriticContract::forMetadata(['attempt' => 3])['attempt']);
+        $this->assertSame(2, CriticContract::forMetadata(['attempt' => 2])['attempt']);
         $this->assertSame(1, CriticContract::forMetadata(['attempt' => 0])['attempt']);
+        $this->assertSame(1, CriticContract::forMetadata([])['attempt']);
     }
 }

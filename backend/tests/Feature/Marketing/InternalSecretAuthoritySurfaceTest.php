@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Marketing;
 
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
@@ -17,8 +18,9 @@ use Tests\TestCase;
 /**
  * QUÉ ABRE DE VERDAD EL SECRETO INTERNO.
  *
- * El diseño de ULTRON se cuenta así: n8n solo tiene dos puertas, `ai/decide` y
- * `ai/commit`, y el dinero lo decide Laravel. Eso es cierto del WORKFLOW. No lo
+ * El diseño de ULTRON se cuenta así: n8n solo tiene tres puertas, `ai/decide`,
+ * `ai/commit` y, desde «regenerar antes de sustituir» (ola 4), `ai/check`, que
+ * solo lee; y el dinero lo decide Laravel. Eso es cierto del WORKFLOW. No lo
  * es del SECRETO: `automation.internal_secret` abre todo el grupo
  * `internal/marketing/*`, donde viven desde la Fase 1.5 dos endpoints que
  * generan y envían enlaces de pago reales, y que NO consultan la bandera del
@@ -161,6 +163,50 @@ class InternalSecretAuthoritySurfaceTest extends TestCase
             $this->getJson($ruta, $this->h())->assertOk();
             $this->getJson($ruta)->assertStatus(401);
         }
+    }
+
+    /**
+     * LA TERCERA PUERTA DE ULTRON, DE SOLO LECTURA («regenerar antes de
+     * sustituir», ola 4; plan §3 P-8). `ai/check` vive en el mismo grupo, con
+     * el mismo secreto y el mismo limitador: sin secreto, 401. Con secreto pero
+     * sin un token de `decide` para ESE par conversación/mensaje, 422
+     * `invalid_token` sin detalle. Y con todo en regla no escribe nada: ni una
+     * fila, ni un mensaje, ni un cobro. Su seguridad completa la fija
+     * {@see UltronCheckEndpointTest}.
+     */
+    public function test_the_third_ultron_door_only_reads(): void
+    {
+        config()->set('marketing.ultron.enabled', true);
+        config()->set('marketing.ai.enabled', true);
+        config()->set('marketing.ai.driver', 'fake');
+        $conversation = MarketingConversation::create([
+            'lead_id' => $this->lead->id, 'channel' => 'whatsapp', 'status' => 'open',
+            'ai_enabled' => true, 'human_takeover' => false,
+        ]);
+        config()->set('marketing.ultron.canary_conversation_id', $conversation->id);
+        $message = MarketingMessage::create([
+            'conversation_id' => $conversation->id, 'direction' => MarketingMessage::DIRECTION_INBOUND,
+            'sender_type' => MarketingMessage::SENDER_LEAD, 'body' => 'cuanto vale el mes?',
+            'meta_message_id' => 'surface.check', 'status' => 'received',
+        ]);
+        $token = $this->postJson('/api/internal/marketing/ai/decide', [
+            'conversation_id' => $conversation->id, 'message_id' => $message->id,
+        ], $this->h())->assertOk()->json('decide_token');
+        $cuerpo = [
+            'conversation_id' => $conversation->id, 'message_id' => $message->id, 'decide_token' => $token, 'attempt' => 1,
+            'draft' => ['reply_draft' => 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}.', 'intent' => 'pricing_question', 'recommended_plan_id' => $this->plan->id, 'tools_requested' => ['payment_link_send']],
+        ];
+        $filas = fn (): array => [MarketingAiAction::count(), MarketingMessage::count(), PaymentTransaction::count()];
+        $antes = $filas();
+
+        $this->postJson('/api/internal/marketing/ai/check', $cuerpo)->assertStatus(401);
+        $this->postJson('/api/internal/marketing/ai/check', ['decide_token' => $token.'0'] + $cuerpo, $this->h())
+            ->assertStatus(422)->assertExactJson(['ok' => false, 'code' => 'invalid_token']);
+        // Sin versión del Studio contesta «legacy»; con o sin ella, no escribe nada.
+        $this->postJson('/api/internal/marketing/ai/check', $cuerpo, $this->h())
+            ->assertOk()->assertJsonPath('mode', 'legacy')->assertJsonPath('may_rewrite', false);
+
+        $this->assertSame($antes, $filas(), 'ni una fila, ni un mensaje, ni un cobro');
     }
 
     // ── La otra puerta por la que entra texto de máquina ─────────────────────
