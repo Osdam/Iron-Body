@@ -85,10 +85,10 @@ APARTADOS = {
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
     ]),
     10: (0.35, [
-        ("Libro de autorizaciones, lector y rutas", 30, 0.50, "integrado el 22-11 (lote 4, 323a6118): seguridad de API y revisión final sin bloqueantes y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
+        ("Libro de autorizaciones, lector y rutas", 30, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de sus rutas (PT-18, en corrección)", "c"),
         ("CRM: pantalla de autorizaciones de contacto", 10, 0.34, "implementada y probada (814 pruebas del CRM en verde y compilación de producción, verificadas por el lead el 22-11); falta su revisión final (PT-10)", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
-        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.50, "integrado el 22-11 (lote 4, 323a6118): seguridad de API y revisión final sin bloqueantes y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
+        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de su ruta (PT-18, en corrección)", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Dos personas reales vinculadas", 15, 0.00, "acción del propietario", "o"),
     ]),

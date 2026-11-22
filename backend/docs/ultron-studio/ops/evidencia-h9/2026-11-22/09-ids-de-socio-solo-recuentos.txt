@@ -1,0 +1,7 @@
+I1 · filas | 4144 | 4144 | 4144 | 0
+I2 · rangos de id | 31 | 8016 | 31 | 8013
+I3 · members enlazados: ¿coincide members.id con su user_id? | 1 | 4143
+I4 · colisión: users.id que es TAMBIÉN el members.id de OTRA persona | 4124
+I5 · users cuyo id no existe como members.id (darían 404) | 19
+I6 · users con una fila members enlazada | 4144
+I7 · columnas de members | id, member_uuid, access_hash, full_name, email, document_number, phone, gender, goal, training_level, injuries, birth_date, is_minor, status, created_at, updated_at, user_id, biometric_status, anonymized_at, profile_photo_url, profile_photo_path, profile_photo_updated_at, is_staff, identity_id, access_hash_revoked_at
