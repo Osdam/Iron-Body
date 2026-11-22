@@ -92,4 +92,24 @@ final class VoiceFrequency
 
         return is_int($tope) ? min(self::PER_WEEK_DEFAULT, max(1, $tope)) : self::PER_WEEK_DEFAULT;
     }
+
+    /**
+     * N-7 (revisión de security del lote 3): «cuenta como intento» en SQL, sobre
+     * una fila de `voice_calls`, para quien cuenta las salientes en la base y no
+     * con {@see count()} (el presupuesto omnicanal del H9, que solo puede
+     * importar esta clase de la telefonía): un estado de {@see COUNTED_STATUSES}
+     * o, C-3 (E19-3), la `failed_to_start` cerrada por la salida de una
+     * `ambiguous`, con LA MISMA condición que usa `VoiceCallFacts`
+     * ({@see VoiceAmbiguousResolution::resolvedSql()}): una sola regla. Solo
+     * texto y valores; sin consultas.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    public static function countedSql(): array
+    {
+        [$resuelta, $valores] = VoiceAmbiguousResolution::resolvedSql();
+        $marcas = implode(', ', array_fill(0, count(self::COUNTED_STATUSES), '?'));
+
+        return ["(voice_calls.status IN ({$marcas}) OR {$resuelta})", [...self::COUNTED_STATUSES, ...$valores]];
+    }
 }

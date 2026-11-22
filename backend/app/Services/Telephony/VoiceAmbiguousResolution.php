@@ -36,8 +36,9 @@ use DateTimeInterface;
  * llamada sí sonó y el operador no la listó, no puede admitirse otra a la
  * misma persona ese día. Lo que se suelta es la reserva de coste y la
  * concurrencia, que es para lo que existe la salida. Lo aplica
- * {@see VoiceCallFacts} con {@see resolvedSql()}; una `failed_to_start` de
- * siempre (el proveedor la rechazó) sigue sin contar.
+ * {@see VoiceCallFacts} con {@see resolvedSql()}, y el presupuesto omnicanal
+ * del H9 con la misma condición ({@see VoiceFrequency::countedSql()}, N-7);
+ * una `failed_to_start` de siempre (el proveedor la rechazó) sigue sin contar.
  *
  * EL ESQUEMA AÚN NO LO ADMITE: el grafo de D8-13 (DB8, disparador
  * `vc_status_forward`; DF-S3) no deja pasar de `ambiguous` a

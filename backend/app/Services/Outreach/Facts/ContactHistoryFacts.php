@@ -14,16 +14,18 @@ use Illuminate\Support\Facades\Schema;
  * (contrato H9, D9-4 «Historial», D9-7 `ContactBudget`). Es lo que alimenta
  * `contact.count`, `contact.days_since_last`, `contact.last_outcome` y el
  * presupuesto omnicanal. Tablas: `marketing_messages` + `marketing_conversations`,
- * `voice_calls` + `voice_contacts`, y las del H9 `outreach_outcomes`,
+ * `voice_calls` (con `voice_call_events`, C-3) + `voice_contacts`, y las del H9 `outreach_outcomes`,
  * `outreach_jobs`, `outreach_enrollments` y `ultron_studio_strategies`.
  *
  * CUENTA COMO CONTACTO (D9-7), y NADA MÁS:
  *  - los salientes PROACTIVOS de la IA: `sender_type = ai`, salientes, con
  *    `metadata.kind` distinto de `reply` (`ContactPolicy.php:104-116`). Una
  *    respuesta a lo que preguntó la persona no consume cuota;
- *  - las salientes de voz en `VoiceFrequency::COUNTED_STATUSES`, al número de
- *    alguno de los contactos de voz de la persona (por la huella, como cuenta
- *    la frecuencia del H8);
+ *  - las salientes de voz que cuenta la frecuencia del H8
+ *    (`VoiceFrequency::countedSql()`: `COUNTED_STATUSES` y, C-3, la `ambiguous`
+ *    cerrada como «no iniciada», que sale con su estado real; N-7), al número
+ *    de alguno de los contactos de voz de la persona (por la huella, como
+ *    cuenta la frecuencia del H8);
  *  - los contactos ASISTIDOS registrados: el resultado que registró una persona
  *    (`source = staff`) de un trabajo asistido en `live`. Un trabajo simulado
  *    nunca cuenta.
@@ -49,6 +51,8 @@ final class ContactHistoryFacts
     public const TABLES = [
         'marketing_messages', 'marketing_conversations', 'voice_calls', 'voice_contacts',
         'outreach_outcomes', 'outreach_jobs', 'outreach_enrollments', 'ultron_studio_strategies',
+        // N-7: el `EXISTS` de la regla C-3 (el evento `reconciled` de la salida de una `ambiguous`), dentro de la misma sentencia.
+        'voice_call_events',
     ];
 
     public const MAX_CONTACTS = OutreachCatalog::MAX_COUNT + 1;
@@ -135,9 +139,11 @@ final class ContactHistoryFacts
             if ($huellas !== []) {
                 $lista = array_keys($huellas);
                 sort($lista, SORT_STRING);
+                // N-7: lo que cuenta la frecuencia de la voz, con su regla C-3 (la misma condición, en la misma sentencia).
+                [$cuenta, $valores] = VoiceFrequency::countedSql();
                 $llamadas = DB::table('voice_calls')
                     ->where('direction', 'outbound')
-                    ->whereIn('status', VoiceFrequency::COUNTED_STATUSES)
+                    ->whereRaw($cuenta, $valores)
                     ->whereIn('remote_hash', $lista)
                     ->where('created_at', '>=', $desde)
                     ->where('created_at', '<=', $hasta)

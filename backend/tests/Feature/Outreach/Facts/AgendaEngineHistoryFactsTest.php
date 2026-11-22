@@ -2,14 +2,22 @@
 
 namespace Tests\Feature\Outreach\Facts;
 
+use App\Models\Voice\VoiceCall;
+use App\Services\Outreach\Core\ContactBudget;
 use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Facts\ClassFacts;
 use App\Services\Outreach\Facts\ContactHistoryFacts;
+use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\FactSelection;
 use App\Services\Outreach\Facts\SubjectKey;
 use App\Services\Outreach\Facts\SubjectRef;
 use App\Services\Outreach\Facts\ValuationFacts;
+use App\Services\Telephony\VoiceAmbiguousResolution;
+use App\Services\Telephony\VoiceCallFacts;
+use App\Services\Telephony\VoiceFrequency;
+use App\Services\Telephony\VoicePhone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -232,6 +240,42 @@ class AgendaEngineHistoryFactsTest extends TestCase
         // Ni cuerpos ni números.
         $this->assertStringNotContainsString('TEXTO-PRIVADO', $foto->canonicalJson());
         $this->assertStringNotContainsString('573001112233', $foto->canonicalJson());
+    }
+
+    /**
+     * N-7 (revisión de security del lote 3; C-3, E19-3): una saliente `ambiguous` cerrada como «no iniciada» por la orden
+     * de E19-3 (`failed_to_start` con su `reconciled`) PUDO SONAR: cuenta en el historial, y con él en el límite diario
+     * omnicanal, igual que en la frecuencia de la voz. Una `failed_to_start` de siempre (el proveedor la rechazó) sigue
+     * sin contar en ninguno de los dos.
+     */
+    public function test_la_ambigua_cerrada_como_no_iniciada_cuenta_en_el_limite_diario_como_en_la_frecuencia_de_voz(): void
+    {
+        $resuelta = $this->socio();
+        $rechazada = $this->socio();
+        $this->voiceContact('member', $resuelta['member'], '+573005550003');
+        $this->voiceContact('member', $rechazada['member'], '+573005550004');
+        // 08:00 de Bogotá: la saliente queda `ambiguous` (el job no supo si marcó).
+        $this->travelTo(self::at('2026-11-09 13:00:00'));
+        $ambigua = $this->outboundCall('+573005550003', 'requested', '2026-11-09 13:00:00');
+        $this->assertTrue(VoiceCall::transition($ambigua, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_AMBIGUOUS, ['failure_code' => 'job_failed']));
+        $this->outboundCall('+573005550004', 'failed_to_start', '2026-11-09 13:00:00');
+        // Pasado el plazo de gracia, una persona la da por no iniciada (E19-3, la salida manual).
+        $this->travelTo(self::at(self::NOW));
+        $uuid = (string) DB::table('voice_calls')->where('id', $ambigua)->value('uuid');
+        $this->assertSame(0, Artisan::call('voice:resolve-ambiguous', ['call' => $uuid, '--confirm' => true, '--reason' => 'Comprobado en los dos proveedores: nada a esa hora']), Artisan::output());
+        $this->assertTrue(VoiceAmbiguousResolution::wasResolved(VoiceCall::query()->findOrFail($ambigua)));
+
+        $foto = $this->snap([SubjectKey::member($resuelta['member']), SubjectKey::member($rechazada['member'])], self::NOW, new FactSelection([], [], true));
+        $limites = ContactBudget::effectiveLimits();
+        foreach (['resuelta' => [$resuelta, '+573005550003', true], 'rechazada' => [$rechazada, '+573005550004', false]] as $caso => [$socio, $telefono, $cuenta]) {
+            $sujeto = $foto->subject(SubjectKey::member($socio['member']));
+            $this->assertSame($cuenta ? [['at' => '2026-11-09T13:00:00Z', 'medium' => 'voice', 'outcome' => null, 'purpose' => 'commercial', 'source' => 'voice_call', 'status' => 'failed_to_start', 'strategy' => null]] : [],
+                $sujeto->contacts, "{$caso}: el historial");
+            $presupuesto = ContactBudget::check(CoreProjection::budgetHistory($sujeto), self::at(self::NOW), 'commercial', 'whatsapp', $limites);
+            $frecuencia = VoiceFrequency::count(self::at(self::NOW), VoiceCallFacts::historyFor(VoicePhone::hash($telefono), self::at(self::NOW)));
+            $this->assertSame($cuenta, in_array(ContactBudget::DAILY_LIMIT, $presupuesto->reasons, true), "{$caso}: el límite diario omnicanal");
+            $this->assertSame($cuenta ? 1 : 0, $frecuencia['today'], "{$caso}: la frecuencia de la voz, lo mismo");
+        }
     }
 
     public function test_sin_las_tablas_del_h9_la_fuente_no_esta_y_el_historial_sigue_contando_lo_demas(): void
