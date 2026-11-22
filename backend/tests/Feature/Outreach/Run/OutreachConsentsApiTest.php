@@ -691,6 +691,92 @@ class OutreachConsentsApiTest extends TestCase
         $this->assertSame('denied', $this->motor($q['key']), 'al leer, gana la retirada');
     }
 
+    /**
+     * informe-db-cierre §B.3, falta 1 · LA CARRERA VISTA DESDE EL HERMANO. Q, un prospecto suelto con el número de P
+     * y su PROPIA confirmación del libro, concede. A deja EN VUELO una retirada de P con su número; B confirma, también
+     * en vuelo, una petición ANTIGUA de P (anterior a la retirada): entra sin esperar, porque la guarda
+     * (`ocon_grant_not_superseded`) no ve una retirada sin confirmar. Mientras A no confirma, Q y P conceden; en cuanto
+     * confirma, P lee la retirada (cuenta en su lugar, después de la petición que B confirmó) y la regla de los hermanos
+     * calla a Q: gana la negativa, aunque la confirmación de P haya llegado después.
+     */
+    public function test_solo_en_postgres_la_retirada_en_vuelo_vista_desde_el_hermano_que_comparte_el_numero(): void
+    {
+        $this->preparaCarrera();
+        $p = $this->socioConWhatsapp();
+        $q = $this->hermanoConSuConfirmacion($p);
+        $pet = $this->pedida($p);
+        $this->assertSame(['missing', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'antes: P solo lo pidió, Q concede por su confirmación');
+
+        [$a, $b] = [$this->pgConnect(), $this->pgConnect()];
+        $this->pgExec($a, 'BEGIN');
+        $this->assertSame(1, $this->pgExec($a, ...$this->insertOrIgnoreSql($this->consentRevocationRow(['member_id' => $p['member'], 'phone_ref' => $p['ref']]))));
+        $this->pgExec($b, 'BEGIN');
+        $this->assertSame([null, 1], $this->pgEntraSinEsperar($b, $this->insertOrIgnoreSql($this->consentResolutionRow($pet, 'granted')), 'la confirmación de la petición antigua'));
+        $this->assertSame(['missing', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'las dos en vuelo: ninguna existe');
+
+        $this->pgExec($b, 'COMMIT');
+        $this->assertSame(['granted', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'confirmada la de B y la retirada aún en vuelo: P concede y Q también');
+
+        $this->pgExec($a, 'COMMIT');
+        $this->assertSame(['denied', 'denied'], [$this->motor($p['key']), $this->motor($q)], 'confirmada la retirada: P la lee y Q queda callado por el número');
+        $this->assertSame(1, DB::connection(self::RACE)->table('outreach_consents')->where('request_uuid', $pet['uuid'])->where('kind', 'granted')->count(), 'la confirmación entró');
+    }
+
+    /**
+     * informe-db-cierre §B.3, falta 2 · DOS RETIRADAS DE LA MISMA PERSONA EN VUELO, una con su número y otra sin él
+     * (p. ej. la palabra de baja y recepción a la vez). No hay UNIQUE que las separe: entran las dos sin esperarse. La
+     * que NO lleva número solo es de P (Q sigue concediendo cuando se confirma ella sola); la que lo lleva calla a Q.
+     */
+    public function test_solo_en_postgres_dos_retiradas_en_vuelo_entran_las_dos_y_la_del_numero_calla_al_hermano(): void
+    {
+        $this->preparaCarrera();
+        $p = $this->socioConWhatsapp();
+        $q = $this->hermanoConSuConfirmacion($p);
+        $this->resolveConsent($this->pedida($p));
+        $this->assertSame(['granted', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'antes: los dos conceden');
+
+        [$a, $b] = [$this->pgConnect(), $this->pgConnect()];
+        $this->pgExec($a, 'BEGIN');
+        $this->assertSame(1, $this->pgExec($a, ...$this->insertOrIgnoreSql($this->consentRevocationRow(['member_id' => $p['member'], 'phone_ref' => $p['ref']]))));
+        $this->pgExec($b, 'BEGIN');
+        $this->assertSame([null, 1], $this->pgEntraSinEsperar($b, $this->insertOrIgnoreSql($this->consentRevocationRow(['member_id' => $p['member'], 'actor_type' => 'admin',
+            'recorded_by_admin_id' => 3, 'recorded_by_name' => 'Caro', 'recorded_by_role' => 'recepcion', 'evidence' => 'Pidió en recepción que no le escriban más'])), 'la retirada sin número'));
+        $this->assertSame(['granted', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'las dos en vuelo: ninguna existe');
+
+        $this->pgExec($b, 'COMMIT');
+        $this->assertSame(['denied', 'granted'], [$this->motor($p['key']), $this->motor($q)], 'la que no lleva número es solo de P');
+
+        $this->pgExec($a, 'COMMIT');
+        $this->assertSame(['denied', 'denied'], [$this->motor($p['key']), $this->motor($q)], 'la que lleva número calla también a Q');
+        $c = DB::connection(self::RACE)->table('outreach_consents')->where('subject_key', $p['key'])->where('kind', 'revoked');
+        $this->assertSame([2, 1], [(clone $c)->count(), (clone $c)->whereNotNull('phone_ref')->count()], 'entraron las dos');
+    }
+
+    /**
+     * informe-db-cierre §B.3, falta 3 · EL ORDEN DE LLEGADA ES EL DE LOS IDS. El lector ordena por `id` (la posición
+     * de cada evento; un `granted`, en la de su petición), y eso solo es el orden de llegada si la secuencia no reparte
+     * bloques por sesión: `outreach_consents_id_seq` tiene CACHE 1 y no se debe cambiar. Con CACHE 20, la sesión A
+     * daría 1 y 2 y la B 21, y una retirada de A posterior a una confirmación de B quedaría «antes».
+     */
+    public function test_solo_en_postgres_la_secuencia_del_libro_tiene_cache_1_y_los_ids_siguen_el_orden_de_llegada(): void
+    {
+        $this->preparaCarrera();
+        $this->assertSame(1, (int) DB::scalar("SELECT s.seqcache FROM pg_sequence s WHERE s.seqrelid = pg_get_serial_sequence('outreach_consents', 'id')::regclass"));
+
+        [$a, $b] = [$this->pgConnect(), $this->pgConnect()];
+        $ids = [];
+        foreach ([[$a, 7101], [$b, 7102], [$a, 7103], [$b, 7104]] as [$conexion, $socio]) {
+            [$sql, $parametros] = $this->insertOrIgnoreSql($this->consentRevocationRow(['member_id' => $socio]));
+            $r = @pg_query_params($conexion, $sql.' RETURNING id', $parametros);
+            $this->assertNotFalse($r, (string) pg_last_error($conexion));
+            $ids[] = (int) pg_fetch_result($r, 0, 0);
+        }
+        $ordenados = $ids;
+        sort($ordenados);
+        $this->assertSame($ordenados, $ids, 'A, B, A, B: cada id es mayor que el anterior, sea de la sesión que sea');
+        $this->assertSame(3, $ids[3] - $ids[0], 'y sin huecos entre sesiones');
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     /** @return array{member: int, lead: int, key: string, ref: string} */
@@ -701,6 +787,25 @@ class OutreachConsentsApiTest extends TestCase
         $this->conversation($l, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
 
         return ['member' => $s['member'], 'lead' => $l, 'key' => SubjectKey::member($s['member']), 'ref' => (string) PhoneRef::fromRaw($phone)];
+    }
+
+    /**
+     * Q, un prospecto SUELTO con el número de P en otro formato, su conversación de WhatsApp y SU PROPIA confirmación
+     * del libro para ese número (confirmada por la conexión de apoyo); su `consent_status` no concede nada por sí solo.
+     *
+     * @param  array{ref: string}  $p
+     * @return string la clave de Q
+     */
+    private function hermanoConSuConfirmacion(array $p): string
+    {
+        $suelto = $this->lead(['phone' => '+57 300 111 0001', 'consent_status' => 'unknown']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $this->resolveConsent($this->requestConsent([
+            'member_id' => null, 'lead_id' => $suelto, 'phone_ref' => $p['ref'], 'legal_version' => self::LEGAL_VERSION,
+            'legal_hash' => hash('sha256', self::LEGAL_TEXT), 'recorded_by_admin_id' => 900,
+        ]));
+
+        return SubjectKey::lead($suelto);
     }
 
     /** @param  array{member: int}  $p  @return array<string, mixed> */
@@ -854,6 +959,26 @@ class OutreachConsentsApiTest extends TestCase
             usleep(25000);
         }
         $this->fail('La segunda conexión no llegó a esperar a la primera: la carrera no se produjo.');
+    }
+
+    /**
+     * La sentencia, asíncrona, tiene que TERMINAR sin esperar a nadie (como mucho 2 s): si se queda esperando un
+     * cerrojo, la prueba falla diciendo a quién espera (y el tearDown deshace las dos conexiones).
+     *
+     * @param  array{0: string, 1: list<mixed>}  $sentencia
+     * @return array{0: ?string, 1: int} [SQLSTATE o null, filas afectadas]
+     */
+    private function pgEntraSinEsperar(Connection $conexion, array $sentencia, string $que): array
+    {
+        $this->assertTrue(pg_send_query_params($conexion, ...$sentencia));
+        for ($i = 0; $i < 80; $i++) {
+            if (! pg_connection_busy($conexion)) {
+                return $this->pgAsyncResult($conexion);
+            }
+            usleep(25000);
+        }
+        $bloqueadores = (string) DB::connection(self::RACE)->scalar('SELECT pg_blocking_pids(?::int)::text', [pg_get_pid($conexion)]);
+        $this->fail("{$que} no entró sin esperar (la bloquean: {$bloqueadores}).");
     }
 
     /** @return array{0: ?string, 1: int} [SQLSTATE o null, filas afectadas] */
