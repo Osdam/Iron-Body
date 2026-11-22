@@ -13,6 +13,7 @@ use App\Services\Outreach\Run\OutreachReadModels;
 use App\Services\Outreach\Run\OutreachStore;
 use App\Services\Outreach\Run\SubjectSuppressions;
 use App\Services\Outreach\Run\WhatsappTemplateOutcomes;
+use App\Services\ReplyClassification\OpenAiReplyClassifierTransport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -82,16 +83,24 @@ class ReplyClassifierEndToEndTest extends TestCase
     {
         $s = $this->sentTemplate();
         $espia = new FakeReplyTransport(FakeReplyTransport::says('not_interested', 99));
-        // La bandera sola, con todo lo demás por defecto (cupo y techo 0, sin modelo, sin precios, sin transporte).
+        // La bandera sola, con el transporte REAL que enlaza el proveedor de servicios y todo lo demás por defecto
+        // (cupo y techo 0, sin modelo, sin precios, sin clave propia): no llama (Http::preventStrayRequests lo vigilaría).
+        $this->assertInstanceOf(OpenAiReplyClassifierTransport::class, app(ReplyClassifierTransport::class));
         config(['outreach.classifier.enabled' => true]);
         $this->inbound($s['member']['lead'], 'No me interesa, gracias');
 
         $r = (new WhatsappTemplateOutcomes)->run(now());
 
         $this->assertSame(['replied' => 1], $r['recorded']);
-        $this->assertSame(['calls' => 0, 'costMicros' => 0, 'skipped.transport_unbound' => 1], $r['classifier']);
+        $this->assertSame(['calls' => 0, 'costMicros' => 0, 'skipped.not_configured' => 1], $r['classifier']);
         $this->assertSame(0, $this->classifierOutcomes()->count());
         $this->assertNull($this->classifierCounter());
+
+        // Sin ningún transporte enlazado (si alguien quitara la línea del proveedor): tampoco.
+        unset($this->app[ReplyClassifierTransport::class]);
+        $this->assertFalse(app()->bound(ReplyClassifierTransport::class));
+        $c = (new ReplyClassifier)->classifyReply($s['job'], (int) $s['job']->enrollment_id, 1, [1], now()->toDateTimeImmutable(), now());
+        $this->assertSame(['state' => 'skipped', 'reason' => 'transport_unbound', 'outcome' => null, 'calls' => 0, 'costMicros' => 0], $c);
 
         // Con transporte, pero sin modelo (o sin precios, o sin su clave) y con cupo 0: tampoco.
         $this->app->instance(ReplyClassifierTransport::class, $espia);
@@ -461,9 +470,10 @@ class ReplyClassifierEndToEndTest extends TestCase
     {
         $apagado = OutreachConfig::status();
         $this->assertFalse($apagado['classifier'], 'la bandera de siempre, igual');
+        // El transporte lo enlaza el proveedor de servicios (`transport`); sin su clave propia ni modelo no está `configured`.
         $this->assertSame([
             'implemented' => true, 'version' => '1', 'promptRef' => ReplyClassifierPrompt::ref(), 'labels' => ReplyClassifierPrompt::LABELS,
-            'enabled' => false, 'transport' => false, 'configured' => false, 'model' => null, 'dailyCap' => 0, 'dailyBudgetMicros' => 0, 'timeoutSeconds' => 5, 'effective' => false,
+            'enabled' => false, 'transport' => true, 'configured' => false, 'model' => null, 'dailyCap' => 0, 'dailyBudgetMicros' => 0, 'timeoutSeconds' => 5, 'effective' => false,
         ], $apagado['classifierSetup']);
 
         $this->classifierOn(new FakeReplyTransport(FakeReplyTransport::says('not_interested', 95)));

@@ -37,6 +37,8 @@ use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
+use App\Services\Outreach\Run\Classifier\ReplyClassifierTransport;
+use App\Services\ReplyClassification\OpenAiReplyClassifierTransport;
 use App\Services\Telephony\VoicePostCall;
 use App\Services\Telephony\VoiceTools;
 use App\Services\UltronStudio\StudioVoiceLabSessions;
@@ -116,6 +118,13 @@ class AppServiceProvider extends ServiceProvider
                 default => new FakeAiSalesResponder,
             };
         });
+
+        // AI9 (contrato H9, «Enmienda AI9»): el transporte del clasificador de
+        // respuestas de la automatización comercial. El H9 solo conoce el
+        // puerto; la red vive en este adaptador, fuera de `App\Services\Outreach`.
+        // Sin su clave PROPIA, sin modelo, sin precios o con el cupo a 0 (lo de
+        // por defecto) no sale ninguna petición. Lo vigila ReplyClassifierStaticGuardsTest.
+        $this->app->bind(ReplyClassifierTransport::class, OpenAiReplyClassifierTransport::class);
     }
 
     /**
