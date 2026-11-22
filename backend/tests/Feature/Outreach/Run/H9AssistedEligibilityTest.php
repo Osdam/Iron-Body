@@ -482,6 +482,46 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame([['kind' => 'member', 'id' => $p['member']['member']], true, null], self::contact($r['job']), 'la relectura no retiene de más');
     }
 
+    // ── F-1 · El modo o el canal asistido, apagados por configuración ───────
+
+    /** @return array<string, array{0: array<string, mixed>}> */
+    public static function apagados(): array
+    {
+        return [
+            'el modo, a sombra (N2: lo vivo ya no sale)' => [['outreach.mode' => 'shadow']],
+            'el modo, apagado (N2 mode_off)' => [['outreach.mode' => 'off']],
+            'el canal asistido, apagado (N4 channel_disabled)' => [['outreach.assisted.enabled' => false]],
+        ];
+    }
+
+    /**
+     * F-1: lo que ya salió y la configuración ya no dejaría salir se retiene como un freno, en cuatro pasos: no se
+     * ofrece, no se deja reclamar, quien ya lo reclamó pierde el enlace y el guion y, al volver a encender, vuelve todo.
+     *
+     * @param  array<string, mixed>  $apagar
+     */
+    #[DataProvider('apagados')]
+    public function test_f1_el_modo_o_el_canal_apagados_despues_de_salir_retienen_como_un_freno_y_al_encender_vuelve(array $apagar): void
+    {
+        $gente = $this->threePeople();
+        [$mio, $libre] = $this->startedFor(['3001234561', '3001234562']);
+        $cola = new AssistedQueue;
+        $cola->claim($gente['ana'], (string) $mio['job']->uuid, (string) Str::uuid());
+        $encendido = ['outreach.mode' => config('outreach.mode'), 'outreach.assisted.enabled' => config('outreach.assisted.enabled')];
+
+        config($apagar);
+        // Pasos 1 a 3: no se ofrece (y se cuenta), no se reclama (409, `brake` al registro) y el reclamante, sin contacto.
+        $this->assertWithheldEverywhere($cola, (string) $mio['job']->uuid, (string) $libre['job']->uuid, 'brake', '300123456');
+
+        // Paso 4: al volver a encender, vuelve todo.
+        config($encendido);
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), (string) $libre['job']->uuid), 'encendido: el libre se ofrece');
+        $this->assertSame(0, $cola->page($gente['beto'], 'unclaimed', 50)['withheld']);
+        $this->assertSame([['kind' => 'member', 'id' => $mio['member']['member']], true, null], self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), (string) $mio['job']->uuid)), 'y el reclamante recupera el contacto');
+        $r = $cola->claim($gente['beto'], (string) $libre['job']->uuid, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $libre['member']['member']], true, null], self::contact($r['job']), 'y se deja reclamar con el contacto');
+    }
+
     // ── m-1 · Ninguna consulta por fila ─────────────────────────────────────
 
     /**

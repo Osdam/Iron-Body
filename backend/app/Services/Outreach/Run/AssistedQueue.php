@@ -40,7 +40,9 @@ use Illuminate\Support\Str;
  * MISMAS entradas de la escalera. Cada trabajo tiene, como mucho, UN motivo de
  * retención, por este orden ({@see WITHHELD_REASONS}):
  *  - `brake`: la PARADA GLOBAL, el freno del canal del trabajo o el de su
- *    estrategia, con la misma lectura que N2 ({@see OutreachStop::openScopes()});
+ *    estrategia, con la misma lectura que N2 ({@see OutreachStop::openScopes()}),
+ *    o la configuración que ya no deja salir un asistido: el modo fuera de
+ *    `live` o el canal asistido apagado (F-1, {@see openBrakes()});
  *  - `strategy_stopped`: la (versión, parte) de su inscripción ya no está en
  *    marcha en la cadena: pausada, apagada, revertida, retirada, archivada o
  *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
@@ -178,7 +180,7 @@ final class AssistedQueue
         $yo = (int) $viewer->id;
         $ahora = self::now();
         // I-3: los frenos con la MISMA lectura que N2 (una consulta), lo primero. Si no se pueden leer, la excepción sube: falla cerrado, como el despachador.
-        $abiertos = $this->stop->openScopes();
+        $abiertos = $this->openBrakes();
         // N-2: la cadena de las estrategias de la vista, una vez por página (antes de leer ninguna fila).
         $partes = $this->viewParts($yo, $filter);
         $enMarcha = $this->runningParts(array_map(static fn (object $p): int => (int) $p->strategy_id, $partes));
@@ -251,7 +253,7 @@ final class AssistedQueue
             throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
         }
         // I-3: los frenos, ANTES de repetir o de reclamar. Si no se pueden leer, la excepción sube: no se entrega ni se reclama nada.
-        $abiertos = $this->stop->openScopes();
+        $abiertos = $this->openBrakes();
         $ahora = self::now();
         if ($trabajo->assisted_claimed_by_admin_id !== null) {
             if ((int) $trabajo->assisted_claimed_by_admin_id === (int) $by->id) {
@@ -277,7 +279,7 @@ final class AssistedQueue
         // m-2 y R3-2: TODO otra vez tras escribir, con lecturas nuevas y en el mismo orden (frenos, cadena, foto y libro). Lo que llegue
         // entre la comprobación y el UPDATE (un freno, una pausa, un «no contactar») retiene el contacto ya en esta respuesta.
         $reclamado = $this->assistedJob($jobUuid);
-        $motivo = $this->withholdReasons([$reclamado], $ahora, $this->stop->openScopes(), $this->runningParts([(int) $reclamado->strategy_id]))[(int) $reclamado->id] ?? null;
+        $motivo = $this->withholdReasons([$reclamado], $ahora, $this->openBrakes(), $this->runningParts([(int) $reclamado->strategy_id]))[(int) $reclamado->id] ?? null;
 
         return ['job' => $this->dto($reclamado, (int) $by->id, $motivo), 'replayed' => false];
     }
@@ -341,6 +343,25 @@ final class AssistedQueue
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
+
+    /**
+     * Los frenos, con la MISMA lectura que N2 ({@see OutreachStop::openScopes()}; una consulta, lo primero), y F-1: la
+     * CONFIGURACIÓN. Con el modo fuera de `live` (N2 `mode_off`; también la sombra) o el canal asistido apagado (N4
+     * `channel_disabled`), el despachador ya no sacaría un asistido ({@see Channels\AssistedChannel::attempt()}): la
+     * bandeja retiene TODO como con la PARADA GLOBAL (`brake`). Se lee en cada petición: al volver a encender, vuelve.
+     * La maestra apagada ya la corta el controlador (409 `outreach_disabled`).
+     *
+     * @return array{global: bool, channels: list<string>, strategies: list<string>}
+     */
+    private function openBrakes(): array
+    {
+        $abiertos = $this->stop->openScopes();
+        if (! OutreachConfig::isLive() || ! OutreachConfig::channelEnabled('assisted')) {
+            $abiertos['global'] = true;
+        }
+
+        return $abiertos;
+    }
 
     /** m-7 (REV9, L9-66): un trabajo asistido cuya inscripción ya se cerró (vencida, cancelada) no se reclama ni admite resultado. */
     private function requireOpenEnrollment(int $enrollmentId): void
