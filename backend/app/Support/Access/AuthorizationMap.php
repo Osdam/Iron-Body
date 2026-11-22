@@ -893,6 +893,13 @@ final class AuthorizationMap
         'GET api/admin/ultron-studio/outreach/assisted/queue' => 'commercial_automation.assisted_work',
         'POST api/admin/ultron-studio/outreach/assisted/{uuid}/claim' => 'commercial_automation.assisted_work',
         'POST api/admin/ultron-studio/outreach/assisted/{uuid}/outcome' => 'commercial_automation.assisted_work',
+        // C9-3 (Enmienda C9): las autorizaciones de contacto (routes/commercial-automation.php, 5 rutas,
+        // OutreachConsentController::ROUTES). Dentro, además, una persona y la llave de VER a la persona.
+        'GET api/admin/commercial-automation/consents' => ['commercial_automation.consents_record', 'commercial_automation.consents_confirm'],
+        'POST api/admin/commercial-automation/consents' => 'commercial_automation.consents_record',
+        'POST api/admin/commercial-automation/consents/{uuid}/confirm' => 'commercial_automation.consents_confirm',
+        'POST api/admin/commercial-automation/consents/{uuid}/reject' => 'commercial_automation.consents_confirm',
+        'POST api/admin/commercial-automation/consents/revoke' => ['commercial_automation.consents_record', 'commercial_automation.consents_confirm'],
 
         // VOZ Y TELEFONÍA · Hito 8 (D8-22, «API»): el CRM de la telefonía en
         // routes/voice.php. El registro, las métricas y el estado, con

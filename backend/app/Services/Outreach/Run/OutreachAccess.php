@@ -29,7 +29,14 @@ final class OutreachAccess
 
     public const RELEASE = 'commercial_automation.release';
 
-    public const PERMISSIONS = [self::VIEW, self::SIMULATE_REAL, self::TIMELINE_VIEW, self::ASSISTED_WORK, self::STOP, self::RELEASE];
+    /** C9-3: registrar (pedir) y retirar autorizaciones de contacto. Solo Super Admin por defecto. */
+    public const CONSENTS_RECORD = 'commercial_automation.consents_record';
+
+    /** C9-3: confirmar (otra cuenta) y rechazar autorizaciones de contacto, y retirarlas. Solo Super Admin por defecto. */
+    public const CONSENTS_CONFIRM = 'commercial_automation.consents_confirm';
+
+    public const PERMISSIONS = [self::VIEW, self::SIMULATE_REAL, self::TIMELINE_VIEW, self::ASSISTED_WORK, self::STOP, self::RELEASE,
+        self::CONSENTS_RECORD, self::CONSENTS_CONFIRM];
 
     /** El dominio que el token compartido nunca obtiene (D9-13). */
     public const DOMAIN = 'commercial_automation';
@@ -51,6 +58,30 @@ final class OutreachAccess
         }
 
         return $acceso;
+    }
+
+    /**
+     * Como {@see require()}, con varias llaves: basta UNA (las rutas que abren
+     * perfiles distintos, como la lista de autorizaciones de contacto de C9-3).
+     *
+     * @param  non-empty-list<string>  $permissions
+     *
+     * @throws OutreachException 403 `person_required` sin persona; 403 `forbidden` sin ninguna llave
+     */
+    public static function requireAny(Request $request, array $permissions): self
+    {
+        $admin = AdminActor::from($request);
+        if (! $admin instanceof Admin) {
+            throw OutreachException::personRequired();
+        }
+        $acceso = new self($admin);
+        foreach ($permissions as $permiso) {
+            if ($acceso->can($permiso)) {
+                return $acceso;
+            }
+        }
+
+        throw OutreachException::forbidden($permissions[0]);
     }
 
     public function can(string $permission): bool

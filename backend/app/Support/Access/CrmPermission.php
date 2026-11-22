@@ -330,6 +330,11 @@ final class CrmPermission
             'ultron.person_bindings_manage',
             'commercial_automation.simulate_real',
             'commercial_automation.release',
+            // C9 (Enmienda C9 del H9): las autorizaciones de contacto por WhatsApp llevan
+            // datos personales y habilitan mensajes: solo Super Admin por defecto, como
+            // los contactos de voz; se reparten a mano (cuatro ojos: hacen falta dos cuentas).
+            'commercial_automation.consents_record',
+            'commercial_automation.consents_confirm',
             // Plantillas de WhatsApp de Meta desde el CRM (L9-96, PLANTILLAS_META_PLAN
             // §5.10): enviar crea plantillas reales en la cuenta de WhatsApp del gimnasio
             // (irreversible) y da fe de lo que Meta responde. Solo Super Admin por defecto.
