@@ -1,0 +1,4 @@
+# Lote 4 · --migraciones (cierre/consent, C9): tabla nueva, aditiva e inerte, con sus funciones propias
+# (outreach_consent_forbid y outreach_consent_chk_*) y el REVOKE de UPDATE, DELETE y TRUNCATE a la aplicación: queda con
+# SELECT e INSERT (ra). La vuelta atrás la borra solo vacía y sin dependencias, con sus funciones, en una transacción.
+2026_11_22_100001_create_outreach_consents_table tabla outreach_consents - outreach_consent_ ra deshacer
