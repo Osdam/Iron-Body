@@ -21,7 +21,8 @@ use UnexpectedValueException;
  *    `delivered`, `read`, `failed`, también los que llegaron fuera de orden);
  *  - los ENTRANTES de los prospectos de la persona por WhatsApp entre dos
  *    instantes, SIN SU TEXTO: de cada uno solo sale si es una BAJA SEGURA o
- *    una POSIBLE BAJA.
+ *    una POSIBLE BAJA. La excepción es AI9 ({@see replyText()}): el texto de
+ *    UNA respuesta, para enmascararlo y clasificarlo, sin guardarlo.
  *
  * LA BAJA (D9-15, Ley 2300 art. 5 par. 2: «una forma fácil y efectiva de
  * dejar de recibir mensajes»; SC-2 de la revisión de seguridad del cierre),
@@ -224,6 +225,31 @@ final class WhatsappSignals
         }
 
         return $out;
+    }
+
+    /**
+     * AI9 · el texto de UNA respuesta, para el clasificador: la única salida
+     * del cuerpo de un entrante fuera de esta clase. Solo si el mensaje es un
+     * ENTRANTE de WhatsApp de uno de los prospectos dados (nunca el de otra
+     * persona ni un saliente); si no, o si no es texto, null. Quien lo pide lo
+     * enmascara, lo manda al modelo y lo olvida: no se guarda ni se registra.
+     *
+     * @param  list<int>  $leadIds
+     */
+    public function replyText(int $messageId, array $leadIds): ?string
+    {
+        if ($leadIds === []) {
+            return null;
+        }
+        $cuerpo = DB::table('marketing_messages as m')
+            ->join('marketing_conversations as c', 'c.id', '=', 'm.conversation_id')
+            ->where('m.id', $messageId)
+            ->whereIn('c.lead_id', $leadIds)
+            ->where('c.channel', 'whatsapp')
+            ->where('m.direction', 'inbound')
+            ->value('m.body');
+
+        return is_string($cuerpo) && trim($cuerpo) !== '' ? $cuerpo : null;
     }
 
     /**

@@ -34,6 +34,12 @@ use Illuminate\Support\Facades\DB;
  *  - `voice.excluded` ⇔ alguna exclusión sobre el número de alguno de sus
  *    contactos activos, o una consulta al RNE vigente que dice `listed`.
  *  - `voice.rne_check_missing` ⇔ algún contacto activo sin consulta vigente.
+ *  - `voice.consent_revoked` ⇔ algún contacto activo cuyo último evento VÁLIDO
+ *    (el mismo orden de `VoiceConsentRule`) es `revoked`: la persona revocó.
+ *    No lo lee la escalera (para ella basta que el consentimiento no esté
+ *    concedido); la bandeja asistida lo usa para decir `opted_out` y no
+ *    `policy_unknown` (R3-1 de `informe-security-bandeja-ronda3.md`). Sale de
+ *    los mismos eventos ya leídos: ninguna consulta de más.
  */
 final class VoiceConsentFacts
 {
@@ -43,7 +49,7 @@ final class VoiceConsentFacts
 
     public const POLICY = [
         'consent.voice_call.commercial', 'consent.voice_call.collections', 'consent.voice_call.service',
-        'voice.excluded', 'voice.rne_check_missing',
+        'voice.excluded', 'voice.rne_check_missing', 'voice.consent_revoked',
     ];
 
     /** El alcance de las salientes a contactos (`OutboundPolicy::SCOPE_CONTACTS`). */
@@ -116,8 +122,12 @@ final class VoiceConsentFacts
                 $hechos['subject.has_voice_contact'] = $mios !== [];
                 foreach ($mios as $id => $c) {
                     $huella = (string) $c->phone_hash;
-                    if (VoiceConsentRule::hasConsent($eventos[$id] ?? [], false)) {
+                    $suyos = $eventos[$id] ?? [];
+                    if (VoiceConsentRule::hasConsent($suyos, false)) {
                         $politica['consent.voice_call.commercial'] = true;
+                    } elseif (array_filter($suyos, static fn (array $e): bool => VoiceConsentRule::valid($e, false)) !== []) {
+                        // Hay eventos válidos y el último no es un `granted`: es un `revoked` (los válidos solo son esos dos).
+                        $politica['voice.consent_revoked'] = true;
                     }
                     $regla = VoiceExclusionRule::evaluate(self::SCOPE_CONTACTS, isset($excluidas[$huella]), null, $rne[$huella] ?? null, $b->now, $vigencia);
                     $politica['voice.excluded'] = $politica['voice.excluded'] || $regla['excluded'];

@@ -1,0 +1,49 @@
+CRM DEL CIERRE · PUBLICACIÓN EN PRODUCCIÓN · 22-11-2026, 15:02 UTC (10:02 en Bogotá)
+lead · orden del propietario del 22-11: «necesito que cuando ya vaya terminando hagas los despliegues»
+
+ALCANCE: repositorio del CRM, 0cfad9d → a9e7e7a (12 commits de cierre/crm; 39 ficheros, todos en los módulos commercial-automation y ultron-studio).
+Revisión final independiente (rev-crm): APROBADO, 0 bloqueantes, 4 menores a la lista (plans/informes-cierre/informe-reviewer-crm.md).
+Pruebas del autor y del revisor: commercial-automation 676 de 676; ultron-studio 1 419 de 1 419; comprobación de literales y compilación de producción sin errores.
+Compatibilidad comprobada por el revisor contra el backend de hoy (fddd3450) y contra el del lote 3 (sin desplegar): sin el campo nuevo, cada pantalla se ve como antes.
+
+── COMPILACIÓN SELLADA (Mac, árbol limpio, commit ya en origin/main) ──
+compilación de producción del CRM sobre a9e7e7a · inicio 15:01:30 UTC · árbol limpio: 0
+Application bundle generation complete. [29.105 seconds] - 2026-11-22T15:02:00.581Z
+código de salida: 0 · fin 15:02:01 UTC
+
+── PUBLICACIÓN (ops/deploy-crm.sh a9e7e7a 0cfad9d, sin --delete) ──
+publicación del CRM · inicio 15:02:14 UTC
+== 1. Sello del build
+main nuevo: main-4BJM6KB7.js
+== 2. Nada se movió
+main en producción: main-JRSC7MXW.js
+== 3. Respaldo
+total 44
+drwxr-xr-x   2 root root  4096 Nov 22 15:02 .
+drwx------ 102 root root 12288 Nov 22 15:02 ..
+-rw-r--r--   1 root root 20677 Nov 22 15:02 index.html
+-rw-r--r--   1 root root   104 Nov 22 15:02 version.json
+== 4. Publicar (sin --delete)
+== 5. Verificación pública
+{
+  "commit": "a9e7e7a",
+  "dirty": false,
+  "builtAt": "2026-11-22T15:02:01.283Z",
+  "inboxV2": true
+}
+index.html → main-4BJM6KB7.js OK
+main-4BJM6KB7.js       200
+main-JRSC7MXW.js       200
+/marketing/ultron-studio 200
+RESPALDO: /var/backups/ironbody/crm-pre-a9e7e7a-20261122-150214
+CRM PUBLICADO Y VERIFICADO
+código de salida del guion: 0 · fin 15:02:27 UTC
+── Los módulos nuevos, servidos por producción ──
+complaint_unknown → chunk-JKOGCGFT.js · HTTP 200 · presente en lo servido: sí
+classifierSetup → chunk-JKOGCGFT.js · HTTP 200 · presente en lo servido: sí
+rulePhraseAuthor → chunk-CZ6ZMQ4V.js · HTTP 200 · presente en lo servido: sí
+observed_not_business_number → chunk-WW6GABI6.js · HTTP 200 · presente en lo servido: sí
+version.json público: {  "commit": "a9e7e7a",  "dirty": false,  "builtAt": "2026-11-22T15:02:01.283Z",  "inboxV2": true}
+
+LECTURA: el CRM está PUBLICADO y verificado desde fuera. No está visto con una sesión real (lo puede comprobar el propietario al recargar el CRM).
+VUELTA ATRÁS (no ha hecho falta): reponer index.html y version.json desde /var/backups/ironbody/crm-pre-a9e7e7a-20261122-150214 (los ficheros del build anterior siguen en disco).

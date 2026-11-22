@@ -1,0 +1,255 @@
+LOTE 1 DEL CIERRE · SEGURIDAD DE LA BANDEJA ASISTIDA · DESPLIEGUE EN PRODUCCIÓN · 22-11-2026, 13:34 UTC (08:34 en Bogotá)
+lead · orden del propietario del 22-11: «haz los commit push y despliegues de forma controlada para ir avanzando»
+
+ALCANCE: producción 66b14467 → 45b53023 (main). 4 ficheros de producto (Outreach/Run/AssistedQueue.php,
+Outreach/Run/OutreachPublishedStrategies.php, Outreach/Facts/VoiceConsentFacts.php, Outreach/Facts/FactNames.php), 8 de pruebas y 89 de
+documentos. Sin migraciones, rutas ni configuración. Las constantes de llamadas y de envíos, cerradas en los dos lados.
+NO TOCA: el motor de WhatsApp, la publicación del Studio, la voz ni pagos.
+
+ANTES DE DESPLEGAR
+· Revisión de seguridad (620b2d40): APTO. Revisión final independiente (rev-bandeja): APROBADO para desplegar con el asistido apagado, 0 bloqueantes
+  (plans/informes-cierre/informe-reviewer-bandeja.md). Antes de encender el asistido en vivo: I-1 (WhatsApp comercial sin consentimiento) y los textos del CRM.
+· Batería completa sobre el commit exacto 45b53023: Tests: 19044, Assertions: 491965, Failures: 1, PHPUnit Deprecations: 8, Skipped: 672.
+  Único fallo: el de la línea base (PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote). REGRESIONES: 0.
+· Ensayo sobre tres ramas (bandeja + cuatro ojos + clasificador, dc184828): Tests: 19205, Assertions: 497193, Failures: 1, PHPUnit Deprecations: 8, Skipped: 675. REGRESIONES: 0.
+· Producción, en solo lectura (08:18 UTC): 0 trabajos en outreach_jobs, 0 reclamados; 14 procesos RUNNING; 0 production.ERROR hoy; árbol limpio en 66b14467.
+· Smoke del H9 de referencia sobre 66b14467 (08:30 UTC): RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO · código de salida 3 (sin fallos, con un OMITIDO: los presupuestos de PERF9).
+
+── SALIDA DEL GUION (ops/hotfix-backend.sh, como root en el servidor) ──
+despliegue del lote 1 · inicio 13:33:49 UTC
+0. producción 66b1446 limpia · origin/main 45b5302 · 44 commit(s) · ficheros: backend/app/Services/Outreach/Facts/FactNames.php backend/app/Services/Outreach/Facts/VoiceConsentFacts.php backend/app/Services/Outreach/Run/AssistedQueue.php backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php backend/docs/ultron-studio/MATRIZ_CIERRE_V2.md backend/docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md backend/docs/ultron-studio/ops/RUNBOOK_PRIMERA_LLAMADA.md backend/docs/ultron-studio/ops/apertura-llamadas/README.md backend/docs/ultron-studio/ops/carga-bandeja/AssistedQueueLoadBench.php backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/barrido.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/checks-abierta.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/cierre-abierta.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/junit-abierta.xml backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/sim-elevenlabs.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/sim-twilio.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/valla.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/phpunit.out backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/preflight.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/red-fuera-de-127.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/red-muestras.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/resumen-linea.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-elevenlabs.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-twilio.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-valla.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/verify-voice.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/barrido-evidencia.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/barrido.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/checks-cerrada.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/cierre-cerrada.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/junit-cerrada.xml backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/sim-elevenlabs.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/sim-twilio.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/valla.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/phpunit.out backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/preflight.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/red-fuera-de-127.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/red-muestras.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/resumen-linea.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-elevenlabs.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-twilio.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-valla.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/verify-voice.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/giro-constante.diff backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/resumen.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/barrido.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/checks-salientes.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/cierre-salientes.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/junit-salientes.xml backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/sim-elevenlabs.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/sim-twilio.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/valla.jsonl backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/phpunit.out backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/preflight.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/red-fuera-de-127.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/red-muestras.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/resumen-linea.txt backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-elevenlabs.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-twilio.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-valla.json backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/verify-voice.json backend/docs/ultron-studio/ops/evidencia-h9/2026-11-21/cuatro-ojos/01-cuentas-roles-y-vinculos.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/01-voz-y-meta-lectura-de-partida.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/02-reglas-del-studio-y-cuentas-lectura.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/03-seguridad-copias-del-entorno-lectura.txt backend/docs/ultron-studio/ops/herramientas-lead/avance.py backend/docs/ultron-studio/ops/motores/n8n-copia-s2/LEEME.md backend/docs/ultron-studio/ops/motores/n8n-copia-s2/pins-s2.cjs backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/plantillas.php backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/salida.txt backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/validar.php backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-lab.md backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-pagos.md backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-telefonia.md backend/docs/ultron-studio/plans/informes-cierre/informe-arq-capas.md backend/docs/ultron-studio/plans/informes-cierre/informe-be-bandeja-r3.md backend/docs/ultron-studio/plans/informes-cierre/informe-be-voz.md backend/docs/ultron-studio/plans/informes-cierre/informe-security-bandeja-r3.md backend/docs/ultron-studio/plans/informes-cierre/plantillas-propuestas.md backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/147-despliegue-comprobaciones-previas.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/148-despliegue-1.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/149-ensayo-de-reversion.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/150-despliegue-2-definitivo.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/151-pruebas-tras-el-despliegue.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/152-n8n-s2-importacion.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/153-n8n-s2-ensayo-con-datos-fijados.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/154-n8n-s2-cambio.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/155-vigilancia-15-minutos.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/156-version-3-y-laboratorio.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/157-gate-4i-primer-turno-real-por-s2.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/158-gate-4j-aprobacion-de-la-version-3.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/159-gate-4k-veredicto-del-laboratorio.txt backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/160-gate-4l-reversion-de-la-version-2.txt backend/tests/Feature/Outreach/Facts/LeadAndVoiceFactsTest.php backend/tests/Feature/Outreach/Run/H9AssistedClaimRaceTest.php backend/tests/Feature/Outreach/Run/H9AssistedConditionsTest.php backend/tests/Feature/Outreach/Run/H9AssistedEligibilityTest.php backend/tests/Feature/Outreach/Run/H9AssistedOptOutStrategyTest.php backend/tests/Feature/Outreach/Run/Support/RunWorld.php backend/tests/Feature/Outreach/Run/Support/assisted-claim-worker.php backend/tests/Unit/Outreach/Run/AssistedQueueOptedOutTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=45b5302
+   root 644 backend/app/Services/Outreach/Facts/FactNames.php
+   root 644 backend/app/Services/Outreach/Facts/VoiceConsentFacts.php
+   root 644 backend/app/Services/Outreach/Run/AssistedQueue.php
+   root 644 backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php
+   root 644 backend/docs/ultron-studio/MATRIZ_CIERRE_V2.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md
+   root 644 backend/docs/ultron-studio/ops/RUNBOOK_PRIMERA_LLAMADA.md
+   root 644 backend/docs/ultron-studio/ops/apertura-llamadas/README.md
+   root 644 backend/docs/ultron-studio/ops/carga-bandeja/AssistedQueueLoadBench.php
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/barrido.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/checks-abierta.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/cierre-abierta.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/junit-abierta.xml
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/sim-elevenlabs.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/sim-twilio.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/logs/valla.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/phpunit.out
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/preflight.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/red-fuera-de-127.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/red-muestras.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/resumen-linea.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-elevenlabs.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-twilio.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/stats-valla.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/abierta/verify-voice.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/barrido-evidencia.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/barrido.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/checks-cerrada.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/cierre-cerrada.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/junit-cerrada.xml
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/sim-elevenlabs.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/sim-twilio.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/logs/valla.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/phpunit.out
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/preflight.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/red-fuera-de-127.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/red-muestras.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/resumen-linea.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-elevenlabs.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-twilio.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/stats-valla.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/cerrada/verify-voice.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/giro-constante.diff
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/resumen.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/barrido.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/checks-salientes.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/cierre-salientes.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/junit-salientes.xml
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/sim-elevenlabs.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/sim-twilio.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/logs/valla.jsonl
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/phpunit.out
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/preflight.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/red-fuera-de-127.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/red-muestras.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/resumen-linea.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-elevenlabs.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-twilio.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/stats-valla.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T050408Z-0c57d7c4/salientes/verify-voice.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-21/cuatro-ojos/01-cuentas-roles-y-vinculos.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/01-voz-y-meta-lectura-de-partida.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/02-reglas-del-studio-y-cuentas-lectura.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/03-seguridad-copias-del-entorno-lectura.txt
+   root 644 backend/docs/ultron-studio/ops/herramientas-lead/avance.py
+   root 644 backend/docs/ultron-studio/ops/motores/n8n-copia-s2/LEEME.md
+   root 644 backend/docs/ultron-studio/ops/motores/n8n-copia-s2/pins-s2.cjs
+   root 644 backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/plantillas.php
+   root 644 backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/salida.txt
+   root 644 backend/docs/ultron-studio/ops/plantillas/primeras-plantillas/validar.php
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-lab.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-pagos.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/diseno-arq-telefonia.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-arq-capas.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-be-bandeja-r3.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-be-voz.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-security-bandeja-r3.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/plantillas-propuestas.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/147-despliegue-comprobaciones-previas.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/148-despliegue-1.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/149-ensayo-de-reversion.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/150-despliegue-2-definitivo.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/151-pruebas-tras-el-despliegue.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/152-n8n-s2-importacion.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/153-n8n-s2-ensayo-con-datos-fijados.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/154-n8n-s2-cambio.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/155-vigilancia-15-minutos.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/156-version-3-y-laboratorio.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/157-gate-4i-primer-turno-real-por-s2.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/158-gate-4j-aprobacion-de-la-version-3.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/159-gate-4k-veredicto-del-laboratorio.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/160-gate-4l-reversion-de-la-version-2.txt
+   root 644 backend/tests/Feature/Outreach/Facts/LeadAndVoiceFactsTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedClaimRaceTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedConditionsTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedEligibilityTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedOptOutStrategyTest.php
+   root 644 backend/tests/Feature/Outreach/Run/Support/RunWorld.php
+   root 644 backend/tests/Feature/Outreach/Run/Support/assisted-claim-worker.php
+   root 644 backend/tests/Unit/Outreach/Run/AssistedQueueOptedOutTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3265 → 3265
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach 66b1446 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS
+código de salida del guion: 0 · fin 13:34:07 UTC
+
+── SMOKE DEL H9 DESPUÉS DEL DESPLIEGUE (45b53023; SMOKE_PHASE=2 SMOKE_EXPECT_M1=1 SMOKE_PROMPTS_KEY=canary SMOKE_EXPECT_META_TEMPLATES=full) ──
+== Smoke del Hito 9 (fase 2) · 2026-11-22T13:35:46Z · https://api.ironbodyneiva.cloud/api
+INFO    presupuestos de rendimiento: sin presupuestos (PERF9 no los ha entregado o no están junto al smoke): OMITIDOS
+OK      configuración del H9 de la fase 2: {"deployed":true,"enabled":true,"mode":"shadow","scheduler":true,"monitor":true,"assisted":false,"whatsapp":false,"voice":false,"classifier":false,"sends":false,"strategies":true,"publishing":true,"stream":true}
+OK      el programador: 53 tareas, 3 del Studio, 5 de voz y 5 de outreach (esperado 5 en la fase 2)
+INFO    órdenes outreach:* desplegadas: outreach:dispatch outreach:monitor outreach:reconcile outreach:replay outreach:stop outreach:suppress-subject outreach:sweep outreach:voice-outcomes outreach:whatsapp-outcomes
+OK      ultron:prompt-trace con la llave de prompts en canary: canary legacy part_legacy
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 22 huellas saladas de secretos del servidor
+OK      27 tablas ultron_studio_* y 8 outreach_* en la base
+cuenta 32 activa como Super Admin
+== Smoke del Hito 9 (fase 2) · superadmin · https://api.ironbodyneiva.cloud/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET ultron-studio/outreach/status → 200 con data.config (OutreachConfig::status)  [HTTP 200]
+OK      status: data.config.mode «shadow» (fase 2)  [mode="shadow"]
+OK      status: data.config.enabled true (COMMERCIAL_AUTOMATION_ENABLED, fase 2)  [enabled=true]
+OK      status: la constante de envío cerrada (data.config.sendsEnabledInCode = false)  [sendsEnabledInCode=false]
+INFO    status: canales automáticos declarados (live = puerta implementada; implementado no es abierto, L9-80/L9-81)  [whatsapp_template, voice_call]
+OK      status: ningún canal hacia personas puede salir (whatsapp_template y voice_call presentes y la constante de envío cerrada)  [declarados: whatsapp_template, voice_call · sendsEnabledInCode=false]
+INFO    status: frenos abiertos (data.brakes.open)  [0]
+OK      status: la cabeza de la cadena de estrategias verifica (data.chain.head.verified; sin nada publicado, verifica)  [{"verified": true, "result": null, "seq": null}]
+OK      las otras 12 rutas de la ejecución con sesión y la maestra encendida: listas 200, inventados 404, cuerpos vacíos 422 (el freno global pide motivo: no se abre ninguno), nunca un 2xx en un POST
+INFO    gobierno de las estrategias (ULTRON_STUDIO_STRATEGIES_ENABLED)  [encendido]
+INFO    publicar/promover/reanudar (ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED), según el catálogo  [encendido]
+OK      las otras 29 rutas del gobierno con sesión: lecturas 200, inventados 404, cuerpos vacíos 422, publicar/promover/reanudar sin aplicar nada (404/409/422)
+INFO    GET strategies (fase 2: puede haber estrategias del canario)  [HTTP 200 · total None]
+        (sin respuesta de GET /admin/ultron-studio/stream?ticket=<tique>&topics=ledger: TimeoutError)
+INFO    canal SSE encendido: abre y emite (cortado a los 4 s; el smoke no lo lee)
+OK      status: engine.prompts.key = canary  [key="canary"]
+OK      status: engine.prompts con la base n8n-29de5119, el compilador 4 y la huella Legacy 3f6a5674…  [base="n8n-29de5119" compiler=4 legacy=3f6a5674]
+INFO    status: engine.prompts.current (llave en canary)  [{"mode": "legacy", "reason": "part_legacy"}]
+OK      status: engine.prompts.lastTurns ≤ 20 y cada turno solo {at, declared, offered, observed, state} (sin ids ni textos)  [5 turnos]
+OK      GET strategies/templates/meta/status → 200 (responde también con el módulo apagado)  [HTTP 200]
+OK      meta/status: el módulo en «full» (enabled, syncEnabled, submitEnabled = true, true, true)  [{"enabled": true, "syncEnabled": true, "submitEnabled": true}]
+INFO    meta/status: la última sonda y los envíos (informativo con SMOKE_EXPECT_META_TEMPLATES=full)  [lastProbe=null submissions={"SENDING": 0, "SUBMITTED": 0, "FAILED": 0, "UNKNOWN": 0}]
+INFO    meta/status (informativo, sin secretos)  [{"driver": "graph", "graphVersion": "v25.0", "configured": true, "configurationProblem": null, "credentialSource": "database", "metaEnabled": true}]
+INFO    POST strategies/templates/meta/probe  [no se toca con el módulo en «full»: hablaría con Meta]
+INFO    POST strategies/templates/<inventado>/meta/refresh  [no se toca con el módulo en «full»: la puerta de la persona dejaría en el libro el intento denegado de la cuenta del smoke]
+OK      enviar (cuerpo vacío: 422 antes del servicio) de las plantillas de Meta con sesión → 403/404/409/422 (nada sale hacia Meta, ninguna fila)
+OMITIDO presupuestos de rendimiento  [sin fichero de PERF9 (ops/perf-h9/presupuestos-h9.json, copiado como presupuestos-h9.json junto al smoke; SMOKE_BUDGETS=…): D9-16 queda sin medir en este smoke]
+OK      las 30 rutas del gobierno sin sesión → 401 (10 GET y 20 POST/PUT)
+OK      las 13 rutas de la ejecución sin sesión → 401
+OK      GET ultron-studio/stream sin tique → 401 (o 409 si la bandera va antes del tique)  [HTTP 401 admin_token_required]
+OK      las 4 rutas de las plantillas de Meta sin sesión → 401
+OK      cuerpos (96): sin claves prohibidas del H6 (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (96): sin claves propias del H9 (subject_key, member_id, documento, correo, cuerpo de mensaje; solo subjectRef, P9-9)
+OK      cuerpos (96): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (96): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (96): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (96): ninguna clave nombra una conversación
+OK      cuerpos (96): ninguno lleva el id de la conversación canaria
+OK      cuerpos (96): ninguno contiene un secreto del servidor (centinela exacto, 22 huellas saladas)
+OK      Cache-Control «no-store, private» en las 97 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de outreach_* nombra a la cuenta 32
+OK      recuento exacto de las 35 tablas (27 del Studio y 8 de outreach) igual antes y después: ninguna escritura, ningún freno, ninguna inscripción
+OK      incidentes de IRON GUARD (ultron_studio y outreach; filas · ocurrencias): 0 0, los mismos
+OK      colas (outreach* / whatsapp+voice+marketing): 0/0, las mismas
+OK      laravel*.log: ningún ERROR durante el smoke
+INFO    vigía de red: 0 sockets distintos de PHP hacia las IP de Meta, ElevenLabs o Twilio durante el smoke (débil: una CDN comparte IP; lo estricto es la base)
+== Sombra: una pasada del barrido y del despacho (sin envíos)
+        Barrido     : 0 estrategia(s)
+OK      outreach:sweep salió con 0
+OK      outreach:dispatch --inline salió con 0
+OK      sin envíos: marketing_messages, voice_calls y voice_call_events iguales [marketing_messages=8597 voice_call_events=0 voice_calls=0]
+OK      trabajos outreach_jobs en modo live: 0
+OK      colas (outreach* / whatsapp+voice+marketing) sin trabajos nuevos: 0/0
+OK      las 27 tablas del Studio iguales tras la pasada (la ejecución no escribe en el gobierno)
+OK      ningún ERROR en la pasada en sombra
+INFO    outreach_* tras la pasada (informativo: la sombra sí escribe pasadas, inscripciones, decisiones y trabajos simulados): outreach_brakes=0 outreach_budget_counters=0 outreach_cursors=1 outreach_decisions=0 outreach_enrollments=0 outreach_jobs=0 outreach_outcomes=0 outreach_runs=35986 
+cuenta 32 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H9: código de salida 3
+SMOKE H9: código de salida 3
+
+── COMPARACIÓN ──
+Las dos pasadas del smoke (antes y después) son iguales línea a línea, sin contar los tiempos ni los recuentos de pasadas en sombra:
+RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO (antes) · RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO (después). La cuenta 32 quedó en reposo las dos veces.
+
+── ESTADO DEL APARTADO 4 TRAS EL DESPLIEGUE (solo lectura; el punto de control no se ha tocado) ──
+GATE 4-M · estado antes de pedir la publicación (solo lectura) · 22-11-2026 13:35 UTC
+P1 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 22-11-2026 03:52:45 | 24b29173
+P1 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | ROLLED_BACK | 22-11-2026 04:02:55 | 24b29173
+P1 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36 | 24b29173
+P2 · en canario o publicadas | 0 | 0
+P3 · veredicto de la ejecución 11 | approved | Desarrolladores | ["C-02"] | t | t | 0
+P4 · última entrada de la cadena | 4 | rollback | 2e243853 | 22-11-2026 04:02:55
+P5 · conversación canaria desde las 04:06 UTC del 22-11 | 0 | 0
+P6 · salientes a conversaciones no canarias desde el despliegue | 0
+P7 · trabajos fallidos desde el despliegue | 0
+P8 · hora del servidor en Bogotá | 22-11-2026 08:35:15
+── el servidor ──
+código: 45b53023
+Llave del motor: canary · estado: legacy
+Cabeza: entrada 4 (rollback, 2026-11-22T04:02:55+00:00) · verifica
+Canario: Legacy
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+ULTRON · prompts del motor (solo lectura)
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo part_legacy
+
++-------------------+------------------+---------------------------+--------------------+---------+
+| Minuto (UTC)      | Declarada        | Ofrecida                  | Observada          | Estado  |
++-------------------+------------------+---------------------------+--------------------+---------+
+| 2026-11-18T22:47Z | applied 2e243853 | studio 2e243853 af9e0d23  | studio af9e0d23 S1 | applied |
+| 2026-11-20T00:11Z | applied 2e243853 | studio 2e243853 af9e0d23  | studio af9e0d23 S1 | applied |
+| 2026-11-22T03:44Z | applied 2e243853 | legacy   compiler_changed | legacy 3f6a5674 S2 | legacy  |
++-------------------+------------------+---------------------------+--------------------+---------+
+procesos RUNNING: 14 · otros: 0
+production.ERROR hoy: 0
+
+VUELTA ATRÁS (no ha hecho falta): ( cd /var/www/api && umask 022 && git checkout -q --detach 66b1446 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+
+LECTURA: el lote 1 está DESPLEGADO y VERIFICADO EN PRODUCCIÓN. Con el modo asistido apagado, la bandeja no entrega ninguna identidad.
+No está ACEPTADO FUNCIONALMENTE: eso exige el modo asistido en vivo con una prueba real, que depende de estrategias publicadas y de I-1.
+Nota de operación: el Mac del lead estuvo suspendido entre las 09:13 y las 13:33 UTC (subida a main a las 09:13; despliegue a las 13:33); en ese
+intervalo nadie movió main ni producción (el guion lo comprueba antes de tocar nada).

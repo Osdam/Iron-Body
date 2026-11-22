@@ -30,8 +30,8 @@ use PHPUnit\Framework\TestCase;
  */
 class StudioPublicationParityTest extends TestCase
 {
-    /** Los recuentos que fija el README (y la Enmienda 1). */
-    private const SECTIONS = ['classify' => 34, 'effectiveJson' => 21, 'signature' => 24, 'scope' => 63, 'gates' => 71, 'evidence' => 18];
+    /** Los recuentos que fija el README (y la Enmienda 1; `gates` 71 → 74 con los tres de B-2, Enmienda del 22-11-2026). */
+    private const SECTIONS = ['classify' => 34, 'effectiveJson' => 21, 'signature' => 24, 'scope' => 63, 'gates' => 74, 'evidence' => 18];
 
     /** Puertas de A5.1/A5.2 anteriores a la parte pura (o el reintento): con ellas, el fixture no dice nada de la parte pura. */
     private const BEFORE = [
@@ -136,7 +136,8 @@ class StudioPublicationParityTest extends TestCase
                 $nombres[] = $caso['name'];
             }
         }
-        $this->assertCount(231, $nombres);
+        // 231 + los tres de B-2 (Enmienda del 22-11-2026).
+        $this->assertCount(234, $nombres);
         $this->assertSame(count($nombres), count(array_unique($nombres)), 'nombres de caso repetidos');
 
         // La clasificación depende del catálogo: el transcrito tiene que ser el real, en su orden.

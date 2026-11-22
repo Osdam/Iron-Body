@@ -319,11 +319,17 @@ final class OutreachPublishedStrategies
         ];
     }
 
-    /** El guion de una plantilla asistida (lo que ve el personal en la bandeja, D9-9.5); null si no es asistida. */
-    public function assistedScript(int $templateId): ?string
+    /**
+     * El guion de una plantilla asistida (lo que ve el personal en la bandeja, D9-9.5); null si no es asistida o si ya
+     * no está APROBADA e íntegra (F-3: la que se retira después de salir el trabajo no entrega su guion, lo que N4
+     * llama `template_not_approved`). Con `$sealHash` (la huella del sello del trabajo), además, solo si es esa.
+     */
+    public function assistedScript(int $templateId, ?string $sealHash = null): ?string
     {
-        $fila = DB::table(OutreachTables::TEMPLATES)->where('id', $templateId)->first(['channel', 'content_json']);
-        if ($fila === null || (string) $fila->channel !== StudioMessageTemplates::CHANNEL_ASSISTED) {
+        $fila = DB::table(OutreachTables::TEMPLATES)->where('id', $templateId)->first(['channel', 'status', 'content_json', 'content_hash']);
+        if ($fila === null || (string) $fila->channel !== StudioMessageTemplates::CHANNEL_ASSISTED || (string) $fila->status !== 'APPROVED'
+            || ! hash_equals(hash('sha256', (string) $fila->content_json), (string) $fila->content_hash)
+            || ($sealHash !== null && ! hash_equals((string) $fila->content_hash, strtolower($sealHash)))) {
             return null;
         }
         $c = json_decode((string) $fila->content_json, true);

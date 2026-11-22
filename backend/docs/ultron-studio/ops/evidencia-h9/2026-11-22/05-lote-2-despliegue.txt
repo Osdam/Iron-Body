@@ -1,0 +1,143 @@
+LOTE 2 DEL CIERRE · CUATRO OJOS POR REGLA, CLASIFICADOR DE RESPUESTAS (APAGADO) Y AVISO DE «COBRADO SIN SERVICIO» (APAGADO) · DESPLIEGUE EN PRODUCCIÓN · 22-11-2026, 14:58 UTC (09:58 en Bogotá)
+lead · orden del propietario del 22-11: «necesito que cuando ya vaya terminando hagas los despliegues… avanzando de forma rápida segura y comprobada»
+
+ALCANCE: producción 45b53023 → fddd3450 (main). 71 ficheros: 25 de producto (app/Services/UltronStudio: cuatro ojos por regla; app/Services/Outreach/Run/** y
+ReplyClassification: el clasificador; IronGuard y un comando: el aviso de pagos; una línea en AppServiceProvider; config/outreach.php, config/observability.php,
+routes/console.php, .env.example) y UNA migración aditiva (2026_11_22_100001_allow_classifier_budget_scope: amplía el CHECK obud_scope_chk). Todo nace apagado.
+NO TOCA: el motor de WhatsApp (decide / ai/check / commit), n8n, la voz ni el núcleo de pagos. Las constantes de llamadas y de envíos, cerradas.
+
+ANTES DE DESPLEGAR
+· Seguridad de cada rama: apto. Revisión final (rev-lote2): A APROBADO, B APROBADO CON CONDICIONES (las de despliegue), C APROBADO; 0 bloqueantes.
+· Revisión independiente del guion (rev-guion): APROBADO CON CONDICIONES de ejecución (tmux, rato sin errores ajenos, vuelta manual tardía). Cumplidas.
+· Batería completa sobre el commit exacto fddd3450: Tests: 19227, Assertions: 497291, Failures: 1, PHPUnit Deprecations: 8, Skipped: 675. Único fallo: el de la línea base. REGRESIONES: 0.
+· Smoke del H9 de referencia sobre 45b53023: RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO · código 3.
+· Estado previo:
+    Llave del motor: canary · estado: applied
+    Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+    Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+    Resto: Legacy
+    La publicación vigente cuadra con el motor.
+    salida de publication-check: 0
+      llave de prompts: canary · llave del sello: canary · canario: configurado
+      base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+      decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+    production.ERROR hoy: 0 · en los últimos 15 min:  · trabajos fallidos: 2
+
+── --solo-comprobar (no toca nada) ──
+== deploy-cierre-lote.sh · 2026-11-22T14:57:40Z · modo comprobar · PREVIO=45b53023 · NUEVO=fddd3450 · lista /root/cierre-lote-2/lista.txt
+   declaraciones: migraciones /root/cierre-lote-2/migraciones.txt (orden migracion-primero) · config /root/cierre-lote-2/config.txt · rutas — · programador /root/cierre-lote-2/programador.txt
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 45b53023 limpia · origin/main fddd3450 · 45 commit(s) · 71 ficheros = la lista: 20 de backend/app · 2 de config · 1 de routes · 1 migración(es) · 0 de bootstrap · 18 de tests · 28 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador con --programador
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 45b53023 y en fddd3450; los dos ficheros sin cambios
+      fddd3450 Merge remote-tracking branch origin/main into lote/2: la documentación del gate 4-M, para que el lote sea un 
+      088589fb docs(ultron-studio): gate 4-M cerrado: la versión 3 publicada en canario y verificada en el servidor
+      b952b220 Merge branch cierre/pagos-aviso: el aviso de «cobrado sin servicio», apagado (lote 2 del cierre)
+      54a17e5c Merge branch cierre/motores: el clasificador de respuestas AI9, apagado (lote 2 del cierre)
+      e2ef523e Merge branch cierre/gobierno: cuatro ojos por regla (B-2), lote 2 del cierre
+      a2502d77 Merge branch cierre/ops-lotes: el guion de despliegue por lotes y las declaraciones de los lotes 2, 3 y 4
+      e6887659 docs(ultron-studio): revisión final del lote 2 (cuatro ojos, clasificador y aviso de pagos): aprobadas, 0 blo
+      cdcf82d1 docs(ultron-studio): lote 1 del cierre desplegado y verificado en producción (bandeja asistida, 45b53023)
+      7369a00d Merge branch lote/1-bandeja: el lote 1 del cierre (bandeja asistida), desplegado en producción el 22-11-2026
+      b7bf4a57 docs(cierre): informe de devops del despliegue por lotes (informe-ops-lotes)
+      4599d1a0 docs(cierre): DEPLOY_CIERRE_LOTES.md, la ficha de los lotes 2, 3 y 4 y su ensayo
+      6d6787f9 ops(cierre): banco local del despliegue por lotes y las declaraciones de los lotes 2, 3 y 4
+      … y 33 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_allow_classifier_budget_scope · check outreach_budget_counters obud_scope_chk classifier:reply · esquema [1 true false] = antes · vuelta: deshacer
+   pendientes frente a origin/main: [2026_11_22_100001_allow_classifier_budget_scope] = las declaradas · cerrojos de otras sesiones sobre ['outreach_budget_counters']: 0 · transacciones de más de 30 s: 0
+   /usr/local/bin/ironbody-migrate = la copia versionada de iron-ia/ops (sha256 8ecb14798c0c260e…)
+   route:list: 1046 rutas · schedule:list: 53 tareas
+   banderas declaradas, hoy en la caché: outreach.classifier.enabled false|outreach.classifier.daily_cap ausente|outreach.classifier.daily_budget_usd ausente|outreach.classifier.model ausente|outreach.classifier.price_input_usd_per_mtok ausente|outreach.classifier.price_output_usd_per_mtok ausente|outreach.classifier.api_key ausente|observability.approved_unactivated.enabled ausente
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+código de salida: 0
+
+── SALIDA DEL DESPLIEGUE (deploy-cierre-lote.sh, como root, dentro de tmux) ──
+== deploy-cierre-lote.sh · 2026-11-22T14:58:13Z · modo despliegue · PREVIO=45b53023 · NUEVO=fddd3450 · lista /root/cierre-lote-2/lista.txt
+   declaraciones: migraciones /root/cierre-lote-2/migraciones.txt (orden migracion-primero) · config /root/cierre-lote-2/config.txt · rutas — · programador /root/cierre-lote-2/programador.txt
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 45b53023 limpia · origin/main fddd3450 · 45 commit(s) · 71 ficheros = la lista: 20 de backend/app · 2 de config · 1 de routes · 1 migración(es) · 0 de bootstrap · 18 de tests · 28 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador con --programador
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 45b53023 y en fddd3450; los dos ficheros sin cambios
+      fddd3450 Merge remote-tracking branch origin/main into lote/2: la documentación del gate 4-M, para que el lote sea un 
+      088589fb docs(ultron-studio): gate 4-M cerrado: la versión 3 publicada en canario y verificada en el servidor
+      b952b220 Merge branch cierre/pagos-aviso: el aviso de «cobrado sin servicio», apagado (lote 2 del cierre)
+      54a17e5c Merge branch cierre/motores: el clasificador de respuestas AI9, apagado (lote 2 del cierre)
+      e2ef523e Merge branch cierre/gobierno: cuatro ojos por regla (B-2), lote 2 del cierre
+      a2502d77 Merge branch cierre/ops-lotes: el guion de despliegue por lotes y las declaraciones de los lotes 2, 3 y 4
+      e6887659 docs(ultron-studio): revisión final del lote 2 (cuatro ojos, clasificador y aviso de pagos): aprobadas, 0 blo
+      cdcf82d1 docs(ultron-studio): lote 1 del cierre desplegado y verificado en producción (bandeja asistida, 45b53023)
+      7369a00d Merge branch lote/1-bandeja: el lote 1 del cierre (bandeja asistida), desplegado en producción el 22-11-2026
+      b7bf4a57 docs(cierre): informe de devops del despliegue por lotes (informe-ops-lotes)
+      4599d1a0 docs(cierre): DEPLOY_CIERRE_LOTES.md, la ficha de los lotes 2, 3 y 4 y su ensayo
+      6d6787f9 ops(cierre): banco local del despliegue por lotes y las declaraciones de los lotes 2, 3 y 4
+      … y 33 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_allow_classifier_budget_scope · check outreach_budget_counters obud_scope_chk classifier:reply · esquema [1 true false] = antes · vuelta: deshacer
+   pendientes frente a origin/main: [2026_11_22_100001_allow_classifier_budget_scope] = las declaradas · cerrojos de otras sesiones sobre ['outreach_budget_counters']: 0 · transacciones de más de 30 s: 0
+   /usr/local/bin/ironbody-migrate = la copia versionada de iron-ia/ops (sha256 8ecb14798c0c260e…)
+   route:list: 1046 rutas · schedule:list: 53 tareas
+   banderas declaradas, hoy en la caché: outreach.classifier.enabled false|outreach.classifier.daily_cap ausente|outreach.classifier.daily_budget_usd ausente|outreach.classifier.model ausente|outreach.classifier.price_input_usd_per_mtok ausente|outreach.classifier.price_output_usd_per_mtok ausente|outreach.classifier.api_key ausente|observability.approved_unactivated.enabled ausente
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo /var/backups/ironbody/cierre-lote-20261122-145816 (700 de root; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 1 esquema(s) de tabla, el guion y SHA256SUMS (17 ficheros)
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100001_allow_classifier_budget_scope ............... 24.90ms DONE
+      config cache regenerada (www-data:www-data); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100001_allow_classifier_budget_scope: aplicada (intento 1) · esquema [1 true true] = después · copia /var/lib/ironbody-deploy/cierre-lote-20261122-145816/0-2026_11_22_100001_allow_classifier_budget_scope/2026_11_22_100001_allow_classifier_budget_scope.php (f61608d6217a…)
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=fddd3450 (merge --ff-only, umask 022) · www-data lee los 71 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como www-data, umask 077) · www-data 600 / www-data 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como www-data): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_allow_classifier_budget_scope: [1 true true] = despues
+   schedule:list: 53 → 53 tareas · diferencia [] (declarada [])
+   schedule:list sin «payments:approved-unactivated-check» (declarada ausente)
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: outreach.classifier.enabled false|outreach.classifier.daily_cap 0|outreach.classifier.daily_budget_usd 0|outreach.classifier.model vacia|outreach.classifier.price_input_usd_per_mtok 0|outreach.classifier.price_output_usd_per_mtok 0|outreach.classifier.api_key null|observability.approved_unactivated.enabled false
+   production.ERROR nuevos en laravel*.log desde el inicio: 0
+   producción sirve fddd3450 · respaldo /var/backups/ironbody/cierre-lote-20261122-145816 · registro /var/backups/ironbody/cierre-lote-20261122-145816/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · production.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash /root/deploy-cierre-lote.sh 45b53023 fddd3450 /root/cierre-lote-2/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261122-145816
+LOTE DESPLEGADO SIN DESVÍOS
+CÓDIGO DE SALIDA DEL GUION: 0
+
+── DESPUÉS ──
+Smoke del H9 sobre fddd3450: RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO · código 3. Las dos pasadas, iguales línea a línea (sin tiempos ni recuentos de pasadas en sombra).
+código: fddd3450
+Llave del motor: canary · estado: applied
+Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+--- aviso de pagos, en seco (solo SELECT):
+Pagos de pasarela aprobados del 2026-11-15T14:59:47+00:00 al 2026-11-22T14:54:47+00:00 (en seco: no se escribe nada).
+Ninguno sin su membresía.
+salida: 0
+--- programador: 0 entrada(s) del aviso de pagos
+production.ERROR hoy: 0 · procesos RUNNING: 14 · otros: 0 · trabajos fallidos: 2
+
+LECTURA: el lote 2 está DESPLEGADO y VERIFICADO EN PRODUCCIÓN. La versión 3 sigue publicada en canario, con la misma huella (26d57565) y la cadena verificada.
+El aviso de pagos, lanzado en seco en producción, lee y no encuentra ningún pago aprobado sin su membresía; su tarea NO está en el programador (bandera apagada).
+El clasificador está apagado (enabled false, cupo 0, presupuesto 0, sin modelo ni clave). Nada de esto está ACEPTADO con una prueba real: son funciones apagadas.
+VUELTA ATRÁS (no ha hecho falta): bash /root/deploy-cierre-lote.sh 45b53023 fddd3450 /root/cierre-lote-2/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261122-145816
+
+── VIGILANCIA DEL LOTE 2 Y DEL CRM · 22-11-2026 15:14 UTC (solo lectura) ──
+código: fddd3450 · procesos RUNNING: 14 · otros: 0
+production.ERROR hoy: 0
+trabajos fallidos en total: 2 · desde las 14:58 UTC: 0
+respuestas de la API desde las 14:58 UTC (por clase): 2xx=887 4xx=89 
+respuestas 5xx desde las 14:58 UTC: 0
+mensajes de WhatsApp desde las 14:58 UTC: entrantes 0 · salientes 0 · salientes fallidos 0
+publication-check: salida 0
+CRM público: {  "commit": "a9e7e7a",  "dirty": false,  "builtAt": "2026-11-22T15:02:01.283Z",  "inboxV2": true} · página del Studio: HTTP 200
+Lectura de la vigilancia: 15 minutos después, los 14 procesos siguen en marcha, 0 errores, 0 trabajos fallidos nuevos y 0 respuestas 5xx (887 respuestas 2xx y 89 4xx).
+No entró ni salió ningún mensaje de WhatsApp en ese rato (domingo por la mañana): el lote no toca ese camino y la cadena de publicaciones sigue verificando.

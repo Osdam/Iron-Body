@@ -1,0 +1,2 @@
+# Lote 3 · --config (cierre/telefonia, config/voice.php): la condición del número, apagada.
+voice.number.shared_with_messaging=false

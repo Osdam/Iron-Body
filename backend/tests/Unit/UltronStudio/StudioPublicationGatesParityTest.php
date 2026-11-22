@@ -66,7 +66,7 @@ class StudioPublicationGatesParityTest extends TestCase
         }
     }
 
-    public function test_los_71_casos_caen_en_las_puertas_puras_o_en_las_de_http(): void
+    public function test_los_74_casos_caen_en_las_puertas_puras_o_en_las_de_http(): void
     {
         $puras = 0;
         foreach (self::fixture()['gates'] as $caso) {
@@ -74,7 +74,8 @@ class StudioPublicationGatesParityTest extends TestCase
             $this->assertTrue(in_array($codigo, self::PURE[$caso['kind']], true) || in_array($codigo, self::HTTP_ONLY, true), $caso['name']);
             $puras += in_array($codigo, self::PURE[$caso['kind']], true) && ! self::earlierThanPure($caso) ? 1 : 0;
         }
-        $this->assertCount(71, self::fixture()['gates']);
+        // 71 + los tres de B-2 (cuatro ojos por regla, Enmienda del 22-11-2026).
+        $this->assertCount(74, self::fixture()['gates']);
         $this->assertGreaterThanOrEqual(40, $puras, 'la mayoría de los casos los decide una puerta pura');
     }
 
@@ -145,7 +146,7 @@ class StudioPublicationGatesParityTest extends TestCase
         $h = [
             'canPublish' => true,
             'status' => StudioVersionStatus::from($f['version']['status']),
-            'fourEyes' => ! $f['actor']['isAuthor'],
+            'fourEyes' => ! $f['actor']['isAuthor'] && ! ($f['actor']['isRulePhraseAuthor'] ?? false),
             'integrity' => $f['version']['integrityOk'],
             'revalidation' => $f['revalidation'],
             'findings' => [],

@@ -261,6 +261,23 @@ class OutreachSchemaTest extends TestCase
         self::T_BUDGETS => ['obud_limits_chk', 'obud_mode_chk', 'obud_scope_chk'],
     ];
 
+    /**
+     * Las migraciones POSTERIORES a 100002 que cambian sus tablas o sus
+     * guardas, en su orden. LISTA CERRADA: la vigila
+     * {@see test_las_migraciones_posteriores_que_tocan_la_ejecucion_estan_en_su_lista}.
+     * La ida y vuelta de 100002 (`down()` + `up()`) recrea el esquema del
+     * 12-11, y `migrate` aplicaría después estas: la prueba hace lo mismo antes
+     * de comparar, sin relajar la comparación. Una nueva entra con UNA línea
+     * (su nombre y lo que toca).
+     */
+    private const LATER_EXECUTION_MIGRATIONS = [
+        // AI9: el CHECK de alcance de los contadores admite `classifier:reply` (el contador del clasificador).
+        '2026_11_22_100001_allow_classifier_budget_scope' => 'obud_scope_chk',
+    ];
+
+    /** Lo que delata que una migración toca la ejecución de 100002: sus ocho tablas, los prefijos de sus guardas y sus funciones. */
+    private const TOUCHES_EXECUTION = '/\boutreach_(runs|cursors|enrollments|jobs|decisions|outcomes|brakes|budget_counters)\b|\b(orun|ocur|oenr|ojob|odec|oout|obrk|obud)_[a-z0-9_]+|\boutreach_(forbid|chk_)|OutreachTables::(RUNS|CURSORS|ENROLLMENTS|JOBS|DECISIONS|OUTCOMES|BRAKES|BUDGETS)\b/';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -586,6 +603,10 @@ class OutreachSchemaTest extends TestCase
             }
             $this->assertSame($gobierno, $this->footprint(self::GOVERNANCE_TABLES), 'down() tocó el gobierno');
             $m->up();
+            // `up()` deja el esquema del 12-11; `migrate` aplicaría después las posteriores que lo cambian (lista cerrada, en su orden).
+            foreach (array_keys(self::LATER_EXECUTION_MIGRATIONS) as $posterior) {
+                $this->migrationNamed($posterior)->up();
+            }
             $this->assertSame($h9, $this->footprint(self::EXECUTION_TABLES, $m::ownFunctions()), 'up() no dejó lo mismo que la primera vez');
             $this->assertSame($gobierno, $this->footprint(self::GOVERNANCE_TABLES), 'up() tocó el gobierno');
             $this->assertGuarded(fn () => $this->db()->table(self::T_RUNS)->insert($this->runRow(['status' => 'completed', 'finished_at' => now()])),
@@ -594,6 +615,39 @@ class OutreachSchemaTest extends TestCase
             DB::rollBack();
         }
         $this->assertSame($h9, $this->footprint(self::EXECUTION_TABLES, $m::ownFunctions()));
+    }
+
+    /**
+     * La lista de {@see LATER_EXECUTION_MIGRATIONS} es CERRADA y completa:
+     * toda migración posterior a 100002 cuyo código (sin comentarios) nombra
+     * una de sus ocho tablas, uno de sus prefijos de CHECK, índice o
+     * disparador, o sus funciones, está en la lista, y la lista no nombra
+     * ninguna que no exista o no la toque. Una migración nueva sobre la
+     * ejecución cae aquí con su nombre, en vez de dejar en rojo la ida y
+     * vuelta sin saber por qué.
+     */
+    public function test_las_migraciones_posteriores_que_tocan_la_ejecucion_estan_en_su_lista(): void
+    {
+        $tocan = [];
+        foreach (glob(database_path('migrations/*.php')) ?: [] as $ruta) {
+            $nombre = basename($ruta, '.php');
+            if (strcmp($nombre, self::EXECUTION_MIGRATION) <= 0) {
+                continue;
+            }
+            $codigo = '';
+            foreach (token_get_all((string) file_get_contents($ruta)) as $t) {
+                if (! is_array($t) || ! in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                    $codigo .= is_array($t) ? $t[1] : $t;
+                }
+            }
+            if (preg_match(self::TOUCHES_EXECUTION, $codigo) === 1) {
+                $tocan[] = $nombre;
+            }
+        }
+        $this->assertSame(array_keys(self::LATER_EXECUTION_MIGRATIONS), $tocan,
+            'Una migración posterior a 100002 toca la ejecución y no está en LATER_EXECUTION_MIGRATIONS (o la lista nombra una que ya no la toca): '
+            .'añádela con su motivo, en su orden; la ida y vuelta de 100002 la vuelve a aplicar.');
+        $this->assertNotSame([], $tocan, 'el rastreo ve la del clasificador');
     }
 
     /** @param  list<string>  $esperados  @param  list<string>  $reales */

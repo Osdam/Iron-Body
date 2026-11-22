@@ -1,0 +1,74 @@
+CIERRE DEFINITIVO · LECTURAS DE PARTIDA DE LOS FRENTES DE VOZ Y DE META · producción, SOLO LECTURA · 22-11-2026, 04:50–05:10 UTC (21-11, 23:50 a 22-11, 00:10 en Bogotá)
+lead · directiva definitiva del propietario del 21-11 (§7: «Verifica capacidades reales de Twilio Voice en la cuenta actual»; §9: «Comprueba el estado efectivo de… plantillas existentes, permisos efectivos»). Sin teléfonos completos, ids completos ni secretos.
+
+── 1. Voz: base de datos (transacción de solo lectura) ──
+== sondas de Twilio guardadas (las 3 ultimas; hechos saneados, sin numeros completos)
+== instantaneas por proveedor
+meta_ads | config |  | 2026-11-02 04:54 | 1
+twilio | config |  | 2026-11-11 05:20 | 2
+voice | config |  | 2026-11-11 05:20 | 3
+voice | probe | ok | 2026-11-16 12:20 | 3
+== voz: recuentos
+voice_profiles | 3
+voice_publications | 0
+voice_agents | 4
+voice_lab_sessions | 4
+voice_calls | 0
+canary_numbers | 0
+== columnas de canary_numbers, voice_brakes y voice_profiles
+ultron_studio_canary_numbers | id, uuid, client_request_id, channel, alias, phone_hash, phone_last4, country_code, phone_encrypted, status, expected_version_id, consent_attested, registered_by_admin_id, registered_by_name, registered_by_role, authorized_by_admin_id, authorized_by_name, authorized_by_role, authorized_at, activated_by_admin_id, activated_by_name, activated_by_role, activated_at, revoked_by_admin_id, revoked_by_name, revoked_by_role, revoked_at, revoke_reason, status_changed_at, created_at, updated_at
+ultron_studio_voice_lab_sessions | id, uuid, client_request_id, agent_id, status, budget_day, reserved_micros, cost_micros, max_seconds, duration_seconds, url_expires_at, started_at, ended_at, end_reason, guard_codes, verdict, verdict_note, verdict_by_admin_id, verdict_by_name, verdict_by_role, verdict_at, created_by_admin_id, created_by_name, created_by_role, created_at, status_changed_at, updated_at
+ultron_studio_voice_profiles | id, uuid, client_request_id, revision, based_on_profile_id, label, language, max_duration_seconds, retention_days, record_calls, record_voice, transfer_count, transfer_destinations_encrypted, content, content_hash, status, created_by_admin_id, created_by_name, created_by_role, created_at, submitted_by_admin_id, submitted_by_name, submitted_by_role, submitted_at, reviewed_by_admin_id, reviewed_by_name, reviewed_by_role, reviewed_at, review_note, status_changed_at, updated_at
+voice_brakes | id, uuid, kind, brake_id, reason, open_key, call_id, event_id, evidence, note, client_request_id, actor_type, actor_admin_id, actor_name, actor_role, created_at
+== perfiles de voz (revision, estado, quien)
+1 | 1 | ULTRON Voice - Iron Body Neiva - Canario V1 | approved | 300 | 27 | 27 | 38 | 2026-11-09 18:24 | 2026-11-09 18:47 | 1 | 2a70e23d5db4
+2 | 2 | Sofia Medellin | approved | 300 | 27 | 27 | 38 | 2026-11-10 21:31 | 2026-11-10 21:36 | 1 | b91556769471
+3 | 3 | Sofia Medellin | submitted | 300 | 32 | 32 |  | 2026-11-11 18:54 |  | 3 | fa955ebb7bc5
+== sesiones del laboratorio hablado
+1 | 1 | ended | provider_report | 0 | 0 |  |  | 32 | 2026-11-11 05:51
+2 | 2 | ended | provider_report | 52 | 69334 |  |  | 32 | 2026-11-11 11:30
+3 | 3 | ended | provider_report | 67 | 89334 |  |  | 32 | 2026-11-11 11:34
+4 | 4 | ended | provider_report | 97 | 129334 |  |  | 32 | 2026-11-11 18:55
+== agentes de voz (sin ids del proveedor)
+ultron_studio_voice_agents | id, uuid, client_request_id, purpose, studio_version_id, studio_content_hash, voice_profile_id, voice_profile_hash, compiler_version, spec_hash, payload_hash, projection_hash, transfer_destination_hashes, provider, provider_agent_id, observed_hash, observed_at, status, failure_code, serves_canary, serves_rest, created_by_admin_id, created_by_name, created_by_role, created_at, status_changed_at, updated_at
+== versiones del Studio (id, etiqueta, estado, creador)
+1 | ad1f1562 | ULTRON Studio - Canario V1 - Pruebas | APPROVED | 27 | 2026-11-09 18:53
+2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 32 | 2026-11-11 19:17
+3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | ROLLED_BACK | 32 | 2026-11-13 16:52
+4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 32 | 2026-11-22 03:35
+== frenos de voz (ultimos 5 eventos)
+
+── 2. Voz: bash /root/h8-voice-scope.sh estado ──
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD 66b1446 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: sí · driver elevenlabs · presupuesto/día 3.00 US$ · por sesión 1.00 US$ · 300 s · 5 sesiones/día
+   monitor de voz: sí · publicar la voz (Studio): sí · monitor del H7: sí (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbodyneiva.cloud · ELEVENLABS_AGENT_PHONE_NUMBER_ID — · TWILIO_VOICE_FROM — · TWILIO_VOICE_ACCOUNT_SID —
+   referencias (ids, no secretos): herramientas kamkGnyTO6r2B9cO3EzP · iniciación uLQzXuYqc3n8loCO3uZA · webhook post-llamada 8782487b46c14b00835a53d9a02deb42
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID falta · TWILIO_VOICE_API_KEY_SECRET falta · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): sin declarar (se trata como «admite»)
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   hechos de consultar_horarios (huellas, nunca el texto): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1 · la herramienta los dice: sí (bash /root/h8-voice-scope.sh hechos …)
+   programador (total · del Studio · de voz): 53 3 5 (de voz: 5 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 14 0 · ironbody-voice en RUNNING: 1 (lo exige «salientes on»)
+   fichero de entorno: www-data:www-data 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+
+── 3. Meta: plantillas de WhatsApp (tres GET con el cliente del propio Studio; el fichero de la sonda se borró del servidor al terminar) ──
+origen de la credencial: database · la cuenta del registro y la del entorno coinciden: NO (entorno …8956)
+driver efectivo: graph · graph v25.0 · cuenta de WhatsApp configurada: sí (…7733)
+sonda: {"outcome":"ok","scopes":{"whatsapp_business_management":true},"templatesReadable":true,"templatesError":null,"requests":2,"durationMs":468}
+plantillas en la cuenta de WhatsApp: 0 · por estado: []
+(Con el id del fichero de entorno, …8956, la misma sonda da no_waba_access / not_found: ese id no lo usa el Studio; manda la conexión guardada en la base, …7733.)
+
+Lectura:
+· Voz: código 66b1446, constante de llamadas cerrada, salientes y entrantes apagadas, cupo y presupuesto en 0. Faltan las piezas de Twilio de la voz (cuenta, número de origen, id importado en ElevenLabs y la key restringida). 0 llamadas, 0 publicaciones de voz, 0 canarios registrados, ningún freno.
+· Perfil «Sofia Medellin»: la revisión 2 está aprobada (la creó la cuenta 27 y la aprobó la 38); la revisión 3, con las tres herramientas, sigue ENVIADA a revisión desde el 11-11 (la creó la cuenta técnica 32): falta que la apruebe otra cuenta.
+· Laboratorio hablado: 4 sesiones terminadas, las cuatro abiertas por la cuenta técnica 32; ninguna tiene veredicto.
+· Meta: la integración SÍ puede gestionar plantillas (permiso whatsapp_business_management concedido y la cuenta de WhatsApp legible). En la cuenta de WhatsApp hay 0 plantillas: no hay ninguna aprobada que reutilizar; la primera hay que crearla, enviarla y esperar la revisión de Meta.
+· Hallazgo aparte, sin tocar: META_WHATSAPP_BUSINESS_ACCOUNT_ID del fichero de entorno (…8956) no es la cuenta que rige (…7733, la de la conexión del CRM); no afecta mientras rija la conexión de la base.
