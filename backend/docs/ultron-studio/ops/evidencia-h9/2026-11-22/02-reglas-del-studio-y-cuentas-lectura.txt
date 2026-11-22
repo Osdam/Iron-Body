@@ -1,0 +1,32 @@
+CIERRE DEFINITIVO · LECTURAS DE COMPROBACIÓN · producción, SOLO LECTURA · 22-11-2026, 05:35–06:25 UTC
+lead · condición C-1 de la revisión de API de los cuatro ojos por regla (informe-apisec-cuatro-ojos.md), plan de la voz y decisión de telefonía. Sin correos, teléfonos completos ni nombres de persona.
+
+── 1. Reglas del Studio (06:24 UTC): ¿hay alguna S-NNN anterior al despliegue de B-2? ──
+== reglas del Studio en produccion (C-1 de la revision de API de los cuatro ojos por regla)
+12 | 0 | 0
+== columnas de la tabla de reglas
+id, uuid, code, source, enforcement, status, description, type, priority, layers, refs, origin, revision, content_hash, client_request_id, created_by_admin_id, created_by_name, updated_by_admin_id, updated_by_name, archived_at, archive_reason, created_at, updated_at, conditions
+== lineas del libro sobre reglas
+rule.legacy_imported | 12
+rule.legacy_synced | 8
+== versiones cuyo contenido copia alguna regla
+1 | ad1f1562 | APPROVED | 12
+2 | 4017639c | ROLLED_BACK | 12
+3 | 2e243853 | ROLLED_BACK | 12
+4 | 39cfae9f | APPROVED | 12
+Lectura: 12 reglas, todas importadas del motor (R-xx): 0 S-NNN y ninguna línea rule.created ni rule.updated en el libro. Las cuatro versiones copian esas 12, que no aportan frases. La condición C-1 se cumple hoy.
+
+── 2. Cuentas para el circuito de la voz (05:36 UTC) ──
+== cuenta tecnica 32 y cuenta 26: estado, rol y ultima entrada (sin nombres de persona ni correos)
+== permisos del rol de la cuenta 32 que importan para la voz y el canario
+== quien tiene telephony.call_place y ultron.canary_authorize repartido a mano (roles)
+26 | Administrativo | active | 2026-11-21 14:59
+32 | Super Admin | inactive | 2026-11-22 03:34
+telephony.call_place | Administrativo · ultron.canary_authorize | Administrativo · ultron.canary_manage | Administrativo · ultron.voice_lab_run | Administrativo · ultron.voice_manage | Administrativo, QA de Ultron Studio · ultron.voice_publish | Administrativo
+Lectura: la cuenta técnica 32 es Super Admin y está inactiva (se abre solo para una tarea); la cuenta 26 (rol Administrativo) tiene las llaves de llamar, de los canarios y de publicar la voz.
+
+── 3. Telefonía (06:13 UTC) ──
+conversación canaria 882: los últimos 4 dígitos del teléfono de su prospecto son 6026 (12 dígitos)
+{"display_configurado":true,"protegidos":1,"5483_es_whatsapp":true}
+commit servido: 66b14467 · migraciones pendientes: 0
+Lectura: el …6026 es el teléfono canario del propietario; el código de producción reconoce el …5483 como número de WhatsApp (los cerrojos de la protección 6 lo rechazarían hoy como origen de voz).
