@@ -82,6 +82,25 @@ return [
         'restore_stale_after_days' => (int) env('RESTORE_STALE_AFTER_DAYS', 10),
     ],
 
+    /*
+    | Pagos de pasarela APROBADOS que se quedaron sin su membresía («cobrado sin
+    | servicio»): la orden `payments:approved-unactivated-check`, SOLO AVISO
+    | (UnactivatedApprovedPayments). No activa nada ni escribe en pagos ni en
+    | socios; abre un incidente crítico y deja un `Log::error`.
+    |
+    | Su bandera es PROPIA y NO depende de IRON_GUARD_ENABLED: con IRON GUARD
+    | apagado su barrido no corre, pero esto sí (los incidentes los abre
+    | IncidentRecorder, que no mira el interruptor). Apagada, el programador no
+    | la agenda y la orden no hace nada; con --dry-run informa sin escribir.
+    */
+    'approved_unactivated' => [
+        'enabled' => filter_var(env('PAYMENTS_UNACTIVATED_CHECK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Hasta dónde mira hacia atrás, por la fecha de aprobación.
+        'window_days' => (int) env('PAYMENTS_UNACTIVATED_CHECK_WINDOW_DAYS', 7),
+        // Un pago aprobado hace menos que esto puede estar activándose todavía.
+        'grace_minutes' => (int) env('PAYMENTS_UNACTIVATED_CHECK_GRACE_MINUTES', 5),
+    ],
+
     // Remediación automática. Doble llave: el flag general Y la allowlist.
     // Nada que no esté nombrado aquí puede ejecutarse solo, jamás.
     'remediation' => [
