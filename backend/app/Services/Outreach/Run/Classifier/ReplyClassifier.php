@@ -75,6 +75,7 @@ final class ReplyClassifier
         private readonly WhatsappSignals $signals = new WhatsappSignals,
         private readonly BudgetReservations $budgets = new BudgetReservations,
         private readonly ?ReplyClassifierTransport $transport = null,
+        private readonly ReplyClassifierHealth $health = new ReplyClassifierHealth,
     ) {}
 
     /**
@@ -144,18 +145,23 @@ final class ReplyClassifier
         $traza = ['job' => (string) $job->uuid, 'version' => ReplyClassifierPrompt::VERSION, 'prompt_ref' => ReplyClassifierPrompt::ref(), 'model' => $modelo,
             'cost_micros' => $coste, 'latency_ms' => is_int($r['latencyMs'] ?? null) ? $r['latencyMs'] : null];
 
+        // C4: cada llamada sin salida usable suma a la racha de fallos del proveedor; una salida que se lee la vuelve a 0.
         if ($error !== null || ! array_key_exists('output', $r)) {
-            $motivo = in_array($error, ReplyClassifierTransport::ERRORS, true) ? 'provider_'.$error : 'provider_unknown';
+            $conocido = in_array($error, ReplyClassifierTransport::ERRORS, true);
+            $motivo = $conocido ? 'provider_'.$error : 'provider_unknown';
+            $this->health->failed($conocido ? (string) $error : ReplyClassifierHealth::UNKNOWN, $now);
             Log::info('outreach.classifier.discarded', $traza + ['reason' => $motivo]);
 
             return self::result(self::STATE_DISCARDED, $motivo, null, $llamadas, $coste);
         }
         $leido = self::read($r['output']);
         if ($leido === null) {
+            $this->health->failed('invalid_output', $now);
             Log::info('outreach.classifier.discarded', $traza + ['reason' => 'invalid_output']);
 
             return self::result(self::STATE_DISCARDED, 'invalid_output', null, $llamadas, $coste);
         }
+        $this->health->answered();
         [$etiqueta, $confianza] = $leido;
         // M5 de security: al descartar, el registro lleva el motivo y NO la etiqueta ni la confianza junto al trabajo.
         if ($etiqueta === ReplyClassifierPrompt::NONE) {

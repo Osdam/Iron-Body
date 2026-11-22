@@ -81,6 +81,10 @@ return [
         'failure_threshold_permille' => $entero('COMMERCIAL_AUTOMATION_FAILURE_PERMILLE', 200, 1, 1000),
         // Mínimo de trabajos que salieron en 24 h para que una tasa signifique algo (una muestra de 1 no abre frenos).
         'min_sample' => $entero('COMMERCIAL_AUTOMATION_MONITOR_MIN_SAMPLE', 5, 1, 1000),
+        // AI9 (C4 de security): llamadas SEGUIDAS del clasificador sin salida usable (la clave, la cuota, el límite de
+        // peticiones, una caída...) a partir de las que el monitor abre un incidente. Sin freno: el clasificador ya falla
+        // cerrado. 5 por defecto, como la muestra mínima: un corte suelto no llega; una clave revocada, en 5 respuestas.
+        'classifier_failures' => $entero('COMMERCIAL_AUTOMATION_MONITOR_CLASSIFIER_FAILURES', 5, 1, 1000),
     ],
 
     // El canal asistido (una persona ejecuta lo que ULTRON decidió), solo en `live`.

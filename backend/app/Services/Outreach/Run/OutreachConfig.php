@@ -351,13 +351,20 @@ final class OutreachConfig
         return array_values(array_diff(OutreachCatalog::PURPOSES, [OutreachCatalog::PURPOSE_SERVICE]));
     }
 
-    /** @return array{optOutPermille: int, failurePermille: int, minSample: int} */
+    /**
+     * Los umbrales del monitor. `classifierFailures` (AI9, C4 de security):
+     * las llamadas SEGUIDAS del clasificador sin salida usable a partir de las
+     * que abre un incidente, sin freno.
+     *
+     * @return array{optOutPermille: int, failurePermille: int, minSample: int, classifierFailures: int}
+     */
     public static function monitorThresholds(): array
     {
         return [
             'optOutPermille' => self::int('outreach.monitor.opt_out_threshold_permille', 50, 1, 1000),
             'failurePermille' => self::int('outreach.monitor.failure_threshold_permille', 200, 1, 1000),
             'minSample' => self::int('outreach.monitor.min_sample', 5, 1, 1000),
+            'classifierFailures' => self::int('outreach.monitor.classifier_failures', 5, 1, 1000),
         ];
     }
 

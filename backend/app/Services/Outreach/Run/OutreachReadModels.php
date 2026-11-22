@@ -7,6 +7,7 @@ use App\Services\Outreach\Core\RelativeTime;
 use App\Services\Outreach\Facts\OperationalBrakes;
 use App\Services\Outreach\Facts\SubjectRef;
 use App\Services\Outreach\Facts\SubjectTimeline;
+use App\Services\Outreach\Run\Classifier\ReplyClassifierHealth;
 use DateTimeImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,8 @@ final class OutreachReadModels
         $config = OutreachConfig::status();
         // Aditivo (AI9), dentro de su bloque: lo que el clasificador lleva hoy (día de Bogotá). Las claves de primer nivel no cambian.
         $config['classifierSetup']['today'] = $this->classifierToday($now);
+        // C4 de security: los fallos SEGUIDOS del proveedor, su última clase y el umbral del incidente del monitor.
+        $config['classifierSetup']['providerFailures'] = (new ReplyClassifierHealth)->read() + ['alertAfter' => OutreachConfig::monitorThresholds()['classifierFailures']];
 
         return [
             'config' => $config,
