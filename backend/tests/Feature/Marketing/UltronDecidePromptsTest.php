@@ -194,7 +194,7 @@ class UltronDecidePromptsTest extends TestCase
         // `regeneration`, detrás de la oferta; en Legacy, ni la clave (n8n no pregunta al servidor).
         $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', ...($motivo === 'studio' ? ['regeneration'] : []), 'superseded'], array_keys($res->json()));
         $this->assertSame($motivo === 'studio' ? ['contract' => 'ultron-regen/1', 'max_drafts' => 3] : null, $res->json('regeneration'));
-        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 4], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 4 (Enmienda A4-2)');
+        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 5], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 5 (Enmienda A4-5)');
 
         if ($motivo === 'studio') {
             $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, $gobernados));
