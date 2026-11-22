@@ -1,0 +1,91 @@
+CUATRO OJOS · LAS CUENTAS «QA ULTRON Editor», «QA ULTRON Revisor» Y «Desarrolladores»: ROLES, PERMISOS Y VÍNCULO CON UNA PERSONA · producción, SOLO LECTURA · 22-11-2026, 04:20 UTC (21-11, 23:20 en Bogotá)
+lead · a petición del propietario («Verifica en solo lectura si estas tres cuentas están vinculadas correctamente al módulo Personal y qué autorizaciones puede realizar cada una… No crees más usuarios… No abras otro ciclo de auditorías»). Sin correos, documentos ni teléfonos; los nombres de personas no se imprimen. El gate 4-M del apartado 4 no se toca.
+
+── 1. Las cuentas, sus roles, los vínculos cuenta → persona y el módulo Personal ──
+C1 · cuentas | 27 | Desarrolladores | Super Admin | active | 22-11-2026 04:16 | f
+C1 · cuentas | 37 | QA ULTRON Editor | QA de Ultron Studio | active | (nunca) | f
+C1 · cuentas | 38 | QA ULTRON Revisor | QA ULTRON - Revisor | active | 22-11-2026 04:15 | f
+C2 · roles de esas cuentas | QA ULTRON - Revisor | f | f | 2 | 1
+C2 · roles de esas cuentas | QA de Ultron Studio | f | f | 3 | 1
+C2 · roles de esas cuentas | Super Admin | t | f | 0 | 4
+C5 · perfiles de Personal en total | active | 3
+(C3 y C4 no devuelven filas: la tabla de vínculos está vacía.)
+
+── 2. Permisos de los roles de QA, perfiles de Personal y uso real de cada circuito ──
+D1 · permisos concedidos a los roles de QA | QA ULTRON - Revisor | ultron.approve, ultron.view
+D1 · permisos concedidos a los roles de QA | QA de Ultron Studio | ultron.approve, ultron.view, ultron.voice_manage
+D2 · filas del rol Super Admin en role_permissions | 0 | 0
+D3 · cuentas Super Admin activas | 2 | (cuenta #2) | 30-09-2026
+D3 · cuentas Super Admin activas | 27 | Desarrolladores | 22-11-2026
+D3 · cuentas Super Admin activas | 31 | (cuenta #31) | 16-10-2026
+D3 · cuentas Super Admin activas | 39 | (cuenta #39) | (nunca)
+D4 · perfiles de Personal | 1 | 2e76b75e | active | ["administrative"] | t | 15 | (nombre de una persona: no se imprime) | Desarrolladores | 16-10-2026 05:18 | 0
+D4 · perfiles de Personal | 2 | aca93dd5 | active | ["receptionist"] | t | 12 | (nombre de una persona: no se imprime) | Desarrolladores | 16-10-2026 19:35 | 0
+D4 · perfiles de Personal | 3 | c09f880d | active | ["receptionist"] | t | 1 | (nombre de una persona: no se imprime) | Desarrolladores | 16-10-2026 19:36 | 0
+D5 · vínculos cuenta → persona en total | 0 | 0
+D6 · uso real de cada circuito | revisiones de versiones | 4 | Desarrolladores, QA ULTRON Revisor
+D6 · uso real de cada circuito | veredictos del laboratorio | 3 | Desarrolladores
+D6 · uso real de cada circuito | publicaciones de versiones | 4 | Desarrolladores
+D6 · uso real de cada circuito | estrategias | 0 | -
+D6 · uso real de cada circuito | versiones de estrategia | 0 | -
+D6 · uso real de cada circuito | revisiones de estrategia | 0 | -
+D6 · uso real de cada circuito | publicaciones de estrategia | 0 | -
+D6 · uso real de cada circuito | plantillas de mensajes | 0 | -
+D6 · uso real de cada circuito | publicaciones de voz | 0 | -
+D7 · versiones del Studio por autora | 27 | Desarrolladores | 1
+D7 · versiones del Studio por autora | 32 | Studio smoke (temporal) | 3
+
+── 3. Cuentas que pueden aprobar o publicar frente a Personal, y roles con permisos de ULTRON ──
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 2 | Super Admin | active | (cuenta #2) | f | f | 0
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 27 | Super Admin | active | Desarrolladores | f | f | 0
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 31 | Super Admin | active | (cuenta #31) | f | f | 0
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 37 | QA de Ultron Studio | active | QA ULTRON Editor | f | f | 0
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 38 | QA ULTRON - Revisor | active | QA ULTRON Revisor | f | f | 0
+E1 · cuentas que pueden publicar o aprobar, frente a Personal | 39 | Super Admin | active | (cuenta #39) | f | f | 0
+E2 · roles con algún permiso de ULTRON repartido a mano | Administrativo | ultron.approve, ultron.campaigns_manage, ultron.canary_authorize, ultron.canary_manage, ultron.edit_draft, ultron.integrations_manage, ultron.lab_manage, ultron.lab_run, ultron.manage_rules, ultron.meta_templates_submit, ultron.person_bindings_manage, ultron.publish, ultron.rollback, ultron.strategies_edit, ultron.strategies_publish, ultron.strategies_rollback, ultron.view, ultron.voice_lab_run, ultron.voice_manage, ultron.voice_publish
+E2 · roles con algún permiso de ULTRON repartido a mano | QA ULTRON - Revisor | ultron.approve, ultron.view
+E2 · roles con algún permiso de ULTRON repartido a mano | QA de Ultron Studio | ultron.approve, ultron.view, ultron.voice_manage
+
+── 4. El rol «Administrativo» ──
+F1 · cuentas con el rol Administrativo | 1 | 1 | 26 | 21-11-2026
+F2 · el rol | Administrativo | t | f | - | 03-09-2026 | 115
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.lab_run | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.rollback | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.voice_publish | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.meta_templates_submit | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.strategies_publish | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.person_bindings_manage | Desarrolladores | 17-11-2026 14:03
+F3 · cuándo se le dieron los permisos de ULTRON reservados | ultron.publish | Desarrolladores | 17-11-2026 14:03
+F4 · cuentas activas por rol | Super Admin | 4
+F4 · cuentas activas por rol | Recepción | 2
+F4 · cuentas activas por rol | QA de Ultron Studio | 1
+F4 · cuentas activas por rol | QA ULTRON - Revisor | 1
+F4 · cuentas activas por rol | Administrativo | 1
+
+── 5. Qué permiso pide cada acción (app/Support/Access/AuthorizationMap.php) ──
+Versiones de WhatsApp: editar el borrador, crear y enviar a revisión → ultron.edit_draft · aprobar o rechazar → ultron.approve (no lo propio) ·
+  publicar y promover → ultron.publish (no lo propio) · revertir y volver a Legacy → ultron.rollback
+Laboratorio: escenarios → ultron.lab_manage · lanzar → ultron.lab_run · veredicto → ultron.approve (cuatro ojos respecto de la autora de la versión)
+Voz: perfil → ultron.voice_manage · aprobar el perfil y veredicto del laboratorio hablado → ultron.approve · publicar → ultron.voice_publish
+Estrategias: crear, editar, versiones, simulaciones y plantillas → ultron.strategies_edit · aprobar estrategia o plantilla → ultron.approve ·
+  publicar, promover y reanudar → ultron.strategies_publish · pausar y revertir → ultron.strategies_rollback · enviar plantillas a Meta → ultron.meta_templates_submit
+Vínculos cuenta → persona: ultron.person_bindings_manage, nunca el propio; los dos primeros, solo por consola
+  (ultron-studio:person-bindings --bootstrap, con la autorización escrita del propietario) y solo mientras no haya ninguno vivo.
+
+── 6. Las dos clases de cuatro ojos ──
+POR CUENTA (versiones de WhatsApp, laboratorio, voz): nadie aprueba ni publica lo que creó; se compara el id de la cuenta.
+POR PERSONA (estrategias comerciales y plantillas; StudioPersonBindings::requirePerson): aprobar, publicar, promover y reanudar exigen un
+  vínculo VERIFICADO y sin revocar con una identidad, y se comparan personas: dos cuentas de la misma persona no se aprueban entre sí.
+
+Lectura:
+· Las tres cuentas existen y están activas. «QA ULTRON Editor» no ha entrado nunca.
+· NINGUNA está vinculada a una persona: en producción hay 0 vínculos, de ninguna cuenta. Personal tiene 3 perfiles activos (1 administrativo y 2 de
+  recepción), de personas reales; ninguno lleva el nombre de estas cuentas.
+· «QA ULTRON Revisor»: ver y aprobar. «QA ULTRON Editor»: ver, aprobar y gestionar perfiles de voz; NO puede crear versiones de WhatsApp ni estrategias.
+  «Desarrolladores»: Super Admin, todos los permisos.
+· Por cuenta, ejercido en producción: 4 revisiones de versiones (Desarrolladores y QA ULTRON Revisor), 3 veredictos y 4 publicaciones (Desarrolladores).
+· Por persona, sin ejercer: 0 estrategias, 0 plantillas, 0 vínculos. Hoy nadie puede aprobar ni publicar una estrategia en producción.
+· El rol «Administrativo» (de sistema) lleva los 20 permisos de ULTRON, incluidos los reservados (publicar, revertir, publicar estrategias, vínculos,
+  plantillas de Meta, voz); se los concedió «Desarrolladores» el 17-11-2026 a las 14:03 UTC. Una cuenta activa lo tiene (la 26).
+· Hay cuatro cuentas Super Admin activas (2, 27, 31 y 39); la 39 no ha entrado nunca.
+· Pruebas automáticas del circuito: 56 ficheros y 96 pruebas nombran las reglas de cuatro ojos; 6 ficheros, las de los vínculos de persona.
