@@ -407,6 +407,12 @@ return new class extends Migration
         // planificador cambia por un Seq Scan paralelo). SQLite no tiene INCLUDE: el mismo índice, sin las incluidas.
         DB::statement('CREATE INDEX ocon_subject_idx ON '.self::TABLE.' (subject_key, purpose, channel, id)'
             .(DB::connection()->getDriverName() === 'pgsql' ? ' INCLUDE (kind, request_uuid, phone_ref)' : ''));
+        // La regla de los hermanos (C-2; N-B1 de informe-db-cierre §B.2): las retiradas de WhatsApp POR NÚMERO. Sin él, esa
+        // parte de la tanda lee la tabla entera y crece con todo el libro (25 000 filas: la de una persona, 5,5 ms con Seq
+        // Scan frente a 0,12 ms con Index Scan). La consulta compara `phone_ref` con `CAST(? AS CHAR(64))` (bpchar con
+        // bpchar): sin ese CAST, PG no lo usa. Parcial y NO único, igual en los dos motores: si una migración futura
+        // reconstruyera la tabla en SQLite y perdiera el WHERE, solo crecería; no cambiaría ningún resultado.
+        DB::statement('CREATE INDEX ocon_revoked_phone_idx ON '.self::TABLE." (phone_ref) WHERE kind = 'revoked' AND channel = 'whatsapp'");
     }
 
     private function upPostgres(): void

@@ -24,8 +24,10 @@ use Tests\TestCase;
  * como `iron_app` en producción).
  *
  * Recuentos: PG 8 disparadores, 13 CHECK, 3 funciones `outreach_consent_%`
- * (ninguna SECURITY DEFINER), 0 parciales; SQLite 20 disparadores (los 7 de
- * fila y entre filas sin el de TRUNCATE, más los 13 equivalentes de los CHECK).
+ * (ninguna SECURITY DEFINER), 1 índice parcial NO único
+ * (`ocon_revoked_phone_idx`, la regla de los hermanos); SQLite 20 disparadores
+ * (los 7 de fila y entre filas sin el de TRUNCATE, más los 13 equivalentes de
+ * los CHECK) y el mismo parcial.
  * Informe: plans/informes-cierre/informe-db-consent.md.
  */
 class OutreachConsentsSchemaTest extends TestCase
@@ -108,10 +110,22 @@ class OutreachConsentsSchemaTest extends TestCase
         $this->assertSame([
             'ocon_client_request_unique' => ['client_request_id', true],
             'ocon_request_unique' => ['request_uuid', true],
+            'ocon_revoked_phone_idx' => ['phone_ref', false],
             'ocon_subject_idx' => [$this->isPostgres() ? 'subject_key,purpose,channel,id,kind,request_uuid,phone_ref' : 'subject_key,purpose,channel,id', false],
             'ocon_uuid_unique' => ['uuid', true],
         ], array_diff_key($indices, ['primary' => 1, 'outreach_consents_pkey' => 1]));
-        $this->assertSame([], $this->partialPredicates([self::T_CONSENTS]), 'sin índices parciales (un único total no lo rehace SQLite al reconstruir)');
+        // N-B1 (informe-db-cierre §B.2): el ÚNICO parcial, el de la regla de los hermanos, y NO único (si una migración
+        // futura reconstruyera la tabla en SQLite y perdiera el WHERE, el índice solo crecería: no cambiaría nada). Esta
+        // prueba corre después de TODAS las migraciones: una que lo reconstruyera sin su WHERE la haría caer aquí.
+        $this->assertSame(['ocon_revoked_phone_idx' => $this->isPostgres()
+            ? "(((kind)::text = 'revoked'::text) AND ((channel)::text = 'whatsapp'::text))|0"
+            : "kind = 'revoked' AND channel = 'whatsapp'|0"], $this->consentPartialIndexes(), 'un solo índice parcial, con su WHERE, no único');
+        $this->assertSame($this->isPostgres()
+            ? "CREATE INDEX ocon_revoked_phone_idx ON public.outreach_consents USING btree (phone_ref) WHERE (((kind)::text = 'revoked'::text) AND ((channel)::text = 'whatsapp'::text))"
+            : "CREATE INDEX ocon_revoked_phone_idx ON outreach_consents (phone_ref) WHERE kind = 'revoked' AND channel = 'whatsapp'",
+            $this->isPostgres()
+                ? (string) DB::scalar("SELECT indexdef FROM pg_indexes WHERE indexname = 'ocon_revoked_phone_idx'")
+                : (string) DB::table('sqlite_master')->where('name', 'ocon_revoked_phone_idx')->value('sql'));
         // El de la lectura: cubridor en PG (Index Only Scan de la tanda), simple en SQLite (sin INCLUDE).
         $this->assertSame($this->isPostgres()
             ? 'CREATE INDEX ocon_subject_idx ON public.outreach_consents USING btree (subject_key, purpose, channel, id) INCLUDE (kind, request_uuid, phone_ref)'
@@ -699,5 +713,31 @@ class OutreachConsentsSchemaTest extends TestCase
         putenv('ULTRON_STUDIO_DB_APP_ROLE=iron_app; DROP TABLE outreach_consents');
         $this->expectException(RuntimeException::class);
         $m::appRole();
+    }
+
+    /**
+     * Los índices parciales del libro: nombre → «predicado|único». Aparte de `partialPredicates()` (que exige que
+     * todo parcial sea ÚNICO, la regla de DB9): el de las retiradas por número es parcial y no único a propósito.
+     *
+     * @return array<string, string>
+     */
+    private function consentPartialIndexes(): array
+    {
+        $out = [];
+        if ($this->isPostgres()) {
+            foreach (DB::select("SELECT c.relname AS nombre, pg_get_expr(i.indpred, i.indrelid) AS predicado, i.indisunique::int AS unico FROM pg_index i
+                JOIN pg_class c ON c.oid = i.indexrelid WHERE i.indrelid = 'public.outreach_consents'::regclass AND i.indpred IS NOT NULL ORDER BY 1") as $f) {
+                $out[(string) $f->nombre] = $f->predicado.'|'.(int) $f->unico;
+            }
+
+            return $out;
+        }
+        foreach (DB::table('sqlite_master')->where('type', 'index')->where('tbl_name', self::T_CONSENTS)->orderBy('name')->get(['name', 'sql']) as $f) {
+            if (is_string($f->sql) && str_contains($f->sql, ' WHERE ')) {
+                $out[(string) $f->name] = substr($f->sql, strpos($f->sql, ' WHERE ') + 7).'|'.(str_starts_with($f->sql, 'CREATE UNIQUE INDEX') ? 1 : 0);
+            }
+        }
+
+        return $out;
     }
 }
