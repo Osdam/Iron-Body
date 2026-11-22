@@ -155,7 +155,7 @@ final class StudioLabEngineCheck
      * @param  array<string,mixed>  $turn  como en {@see check()}
      * @param  array{reply_draft:string,recommended_plan_id:mixed,critic:array<string,mixed>}  $commit  {@see StudioLabEngineFlow::prepareCommit()}
      * @param  array<string,mixed>  $strategy  la estrategia validada (intención y herramientas)
-     * @return array{origin:string,cause:?string,codes:list<string>,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool}
+     * @return array{origin:string,cause:?string,codes:list<string>,measured:int,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool}
      */
     public function predict(array $turn, array $commit, array $strategy): array
     {
@@ -213,6 +213,8 @@ final class StudioLabEngineCheck
             'origin' => $causa === null ? self::ORIGIN_MODEL : self::ORIGIN_FALLBACK,
             'cause' => $causa,
             'codes' => $codigos,
+            // Lo que mide el borrador expandido, antes de cualquier recorte; `chars`, el texto que saldría.
+            'measured' => UltronReplyFitter::measure($expandido),
             'chars' => $mide,
             'cap' => $tope,
             'withinCap' => $tope === null || $mide <= $tope,

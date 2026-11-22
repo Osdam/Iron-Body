@@ -44,7 +44,8 @@ class StudioLabIsolationTest extends TestCase
      * recorrido S2 (`StudioLabEngineFlow`), puro y sin nombrar el motor.
      */
     private const NUCLEO = [
-        'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineChecks.php', 'StudioLabEngineFlow.php', 'StudioLabFakeClient.php',
+        'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineCase.php', 'StudioLabEngineChecks.php', 'StudioLabEngineFlow.php',
+        'StudioLabEngineModelClient.php', 'StudioLabFakeClient.php',
         'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
     ];
 
