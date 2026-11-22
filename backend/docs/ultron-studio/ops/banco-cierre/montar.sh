@@ -6,12 +6,15 @@
 #   <banco>/fusion      clon desechable donde se fusionan las ramas, con --no-ff, sobre <previo>.
 #   <banco>/prod        hace de /var/www/api: clon de origen.git con HEAD en <previo>, vendor clonado (APFS) del árbol
 #                       que se indique y un fichero de entorno SINTÉTICO (sin ninguna credencial real).
-#   PostgreSQL 14 desechable (127.0.0.1:55432, pgunit.sh): base <ultron_studio_ops_…> con el modelo de roles de
-#                       producción del banco del H9 (h5_owner = iron, dueño; h5_app = iron_app, solo DML), migrada hasta
-#                       <previo> por el dueño (con los REVOKE: ULTRON_STUDIO_DB_APP_ROLE=h5_app).
-# Uso: bash montar.sh <banco, fuera del repo> <previo> <base ultron_studio_ops_…> <rama> [<rama>…]
+#   PostgreSQL 14 desechable (127.0.0.1:55432, pgunit.sh): base <ultron_studio_ops_…|ultron_studio_ops2_…> con el modelo
+#                       de roles de producción del banco del H9 (h5_owner = iron, dueño; h5_app = iron_app, solo DML),
+#                       migrada hasta <previo> por el dueño (con los REVOKE: ULTRON_STUDIO_DB_APP_ROLE=h5_app).
+# Uso: bash montar.sh <banco, fuera del repo> <previo> <base ultron_studio_ops_…> <rama o commit> [<rama o commit>…]
 # Variables: BANCO_VENDOR (el árbol del que se clona backend/vendor; tiene que tener el mismo composer.lock que <previo>),
-#            BANCO_PORT (8591: la API de artisan serve que usa ensayar.sh).
+#            BANCO_PORT (8591: la API de artisan serve que usa ensayar.sh) y BANCO_UNION=1: si una rama choca con el
+#            previo SOLO en documentación, pruebas o .env.example (nada que lea artisan), los choques se resuelven por
+#            unión (git merge-file --union) y se dice cuáles; un choque en cualquier otro fichero sigue parando el banco.
+#            Esa resolución es del banco: la integración real de la rama es de quien la integre.
 set -euo pipefail
 export LC_ALL=C PGGSSENCMODE=disable
 AQUI=$(cd "$(dirname "$0")" && pwd -P)
@@ -21,7 +24,8 @@ muere() { echo "banco: $*" >&2; exit 1; }
 B=$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"); PREVIO=$2; DB=$3; shift 3
 case "$B/" in "$WT"/*) muere "el banco no puede vivir dentro del repo ($B): lleva un fichero de entorno" ;; esac
 [ ! -e "$B" ] || muere "ya existe $B (bash $AQUI/ensayar.sh $B borrar)"
-[[ "$DB" =~ ^ultron_studio_ops_[a-z0-9_]{1,40}$ ]] || muere "la base tiene que llamarse ultron_studio_ops_<algo> (se crea y se borra al terminar)"
+RE_DB='^ultron_studio_ops2?_[a-z0-9_]{1,40}$'
+[[ "$DB" =~ $RE_DB ]] || muere "la base tiene que llamarse ultron_studio_ops_<algo> o ultron_studio_ops2_<algo> (se crea y se borra al terminar)"
 PORT=${BANCO_PORT:-8591}
 VENDOR=${BANCO_VENDOR:-$WT}
 PG=(psql -X -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U ironbody)
@@ -44,7 +48,21 @@ git -C "$B/origen.git" update-ref refs/heads/main "$P"
 for r in "$@"; do git -C "$B/origen.git" update-ref "refs/heads/$r" "$(git -C "$WT" rev-parse --verify "$r^{commit}")"; done
 "${G[@]}" clone -q --shared --no-checkout "$B/origen.git" "$B/fusion"
 ( cd "$B/fusion" && "${G[@]}" checkout -q -B lote origin/main
-  for r in "$@"; do "${G[@]}" merge -q --no-ff --no-edit -m "merge($r): banco del cierre" "origin/$r" || muere "la fusión de $r tiene conflictos: este banco no los resuelve"; done
+  for r in "$@"; do
+    "${G[@]}" merge -q --no-ff --no-edit -m "merge($r): banco del cierre" "origin/$r" > /dev/null 2>&1 && continue
+    CHOQUES=$(git diff --name-only --diff-filter=U)
+    [ -n "$CHOQUES" ] && [ "${BANCO_UNION:-0}" = 1 ] || muere "la fusión de $r tiene conflictos [$(printf '%s\n' "$CHOQUES" | paste -sd ' ' -)]: este banco no los resuelve (BANCO_UNION=1, solo si son de docs, tests o .env.example)"
+    while IFS= read -r f; do
+      case "$f" in backend/docs/*|backend/tests/*|backend/.env.example) ;; *) muere "la fusión de $r choca en $f, que lee la aplicación: este banco no lo resuelve" ;; esac
+      git show ":1:$f" > "$B/run/union-base" 2> /dev/null || : > "$B/run/union-base"
+      git show ":2:$f" > "$B/run/union-nuestro" && git show ":3:$f" > "$B/run/union-suyo" || muere "no se pudieron leer los dos lados de $f"
+      git merge-file --union -p "$B/run/union-nuestro" "$B/run/union-base" "$B/run/union-suyo" > "$f" || true
+      git add -- "$f"
+      echo "   choque en $f: resuelto por unión (solo para el banco)"
+    done <<< "$CHOQUES"
+    [ -z "$(git diff --name-only --diff-filter=U)" ] || muere "quedan choques sin resolver en la fusión de $r"
+    "${G[@]}" commit -q --no-edit -m "merge($r): banco del cierre (choques de docs, tests o .env.example, por unión)"
+  done
   "${G[@]}" push -q origin lote:refs/heads/main )
 N=$(git -C "$B/origen.git" rev-parse main)
 echo "   previo $(git -C "$B/origen.git" rev-parse --short=8 "$P") → nuevo $(git -C "$B/origen.git" rev-parse --short=8 "$N") ($(git -C "$B/origen.git" rev-list --count "$P..$N") commits, $(git -C "$B/origen.git" diff --name-only --no-renames "$P" "$N" | wc -l | tr -d ' ') ficheros)"
