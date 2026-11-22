@@ -312,3 +312,48 @@ El apartado 4 conserva sus bloques A a E. Para actualizar se cambia solo la etap
 **Primera lectura con este cálculo (22-11-2026, 07:30 UTC): Global 59,0 %** (58,96). Con la estimación anterior era 53,2 %. Los 5,8 puntos de diferencia son 5,4 técnicos (código implementado, probado y revisado esta noche, todavía sin desplegar) y 0,4 operativos (los permisos de Meta verificados en producción). Nada de esto está desplegado: cada lote que se despliegue y se verifique sube la parte operativa de su función de 0,50 a 0,70, y cada prueba real, hasta 1,00.
 
 **Segunda lectura (22-11-2026, 13:45 UTC): Global 59,7 %** (59,71). Sube por el lote 1 (la seguridad de la bandeja pasa de 0,40 a 0,70: apartado 9, de 72,0 % a 79,2 %) y por el aviso de pagos, implementado y probado (apartado 12, de 57,3 % a 62,6 %).
+
+---
+
+## 11. Control de cierre definitivo (propietario, 22-11-2026, 11:00 a. m. en Bogotá): alcance congelado y lista finita de pendientes técnicos
+
+**Lo que ordenó** (resumen fiel; su texto está en la conversación): congelar el alcance técnico; una lista FINITA de pendientes con identificador, estado, responsable y criterio verificable de cierre; no abrir agentes automáticamente y como mucho TRES a la vez, cada uno justificado por un pendiente de la lista; las revisiones de seguridad y las pruebas obligatorias siguen, con sus hallazgos clasificados en bloqueantes y no bloqueantes (los no bloqueantes se documentan y no amplían el cierre); lo cerrado no se reabre sin evidencia de un defecto bloqueante; prioridad a terminar, integrar y certificar lo ya implementado, incluidas las tres pantallas del CRM; nada de optimizaciones ni auditorías nuevas; y se mantienen los controles de seguridad y los HUMAN GATE. Cada informe lleva solo: pendientes iniciales, cerrados, restantes, bloqueantes nuevos justificados, agentes activos y la siguiente actividad hacia **CIERRE TÉCNICO READY**.
+
+**CIERRE TÉCNICO READY** = los pendientes PT de esta lista, cerrados con su criterio. No incluye el cierre operativo (desplegar, verificar en producción, las acciones del propietario y de terceros) ni la aceptación final (las pruebas reales): eso sigue en §8.4, §8.6 y §10.
+
+### 11.1 Pendientes técnicos (lista inicial: 16; se quitan de «restantes» al cumplirse su criterio)
+
+| Id | Pendiente | Estado el 22-11 a las 16:05 UTC | Responsable | Criterio verificable de cierre |
+|---|---|---|---|---|
+| PT-01 | Corrección del turno de planes de WhatsApp (apartado 4; `lote/a4-notas`, `f1fe6cac`) | Implementada; seguridad: apta, 0 bloqueantes; revisión final: aprobada, 0 bloqueantes; batería completa al 96 % | lead | Batería completa sobre `f1fe6cac` sin regresiones (se esperan solo el fallo de la línea base y la puerta de diff del H9, que cae hasta subir) |
+| PT-02 | Lote 4, backend: autorizaciones de contacto y quejas (`integracion/consent`) | Última tanda terminando (`be-lote4b`) | backend → seguridad de API → revisión final → lead | Tanda verificada por el lead; repaso de seguridad de API de los cambios, 0 bloqueantes; revisión final, 0 bloqueantes; batería completa sobre el commit del lote, sin regresiones |
+| PT-03 | Lote 3, backend: voz y telefonía (`integracion/voz`) | Implementado y verificado (966 pruebas de voz y telefonía); seguridad del código: apto con condiciones para desplegar cerrado y para la llamada canaria | revisión final → lead | Revisión final, 0 bloqueantes; batería completa sobre el commit del lote, sin regresiones |
+| PT-04 | Runbook y mando de la primera llamada: B-1, B-2 y B-3 de la revisión de seguridad de los mandos | Identificados el 22-11; bloquean declarar la identidad y la primera llamada, NO el despliegue con las llamadas cerradas | devops | Los tres corregidos (textos del runbook y, para B-1, el mando); el ensayo del banco en verde; comprobación puntual de seguridad |
+| PT-05 | Lote 5, backend: laboratorio frente al motor real (`cierre/lab`) | Arreglos de seguridad y de base de datos confirmados (B1 incluido); terminando (`be-lab2`) | backend → revisión final → lead | Tanda verificada por el lead; revisión final, 0 bloqueantes; batería completa sobre el commit del lote, sin regresiones |
+| PT-06 | Guion de despliegue por lotes: correcciones de su revisión (m1 bloquea el lote 4; m2, el lote 3) y declaraciones de los lotes 3 a 5 | Terminando (`ops-lotes2`) | devops → lead | Ensayo en el banco local de los lotes 3, 4 y 5, con despliegue y vuelta atrás, en verde |
+| PT-07 | CRM: pantalla «Autorizaciones de contacto» | En curso (`fe-lote4`) | frontend | Pruebas del módulo en verde y compilación de producción sin errores |
+| PT-08 | CRM: registrar y descartar quejas | En curso (`fe-lote4`) | frontend | Pruebas del módulo en verde y compilación de producción sin errores |
+| PT-09 | CRM: lanzar y ver una ejecución del motor en el laboratorio | Sin empezar | frontend | Pruebas del módulo en verde y compilación de producción sin errores |
+| PT-10 | Revisión final del CRM nuevo (PT-07 a PT-09) | Pendiente | reviewer | Veredicto con 0 bloqueantes |
+| PT-11 | Integración final de todos los lotes en una rama | Pendiente (tras PT-01 a PT-06) | lead | Batería completa sobre la integración final, sin regresiones |
+| PT-12 | Recorridos de extremo a extremo simulados sobre la integración final (apartado 14) | Pendiente (tras PT-11) | tester | Los recorridos de la directiva (§12), en verde y con su evidencia |
+| PT-13 | Matriz final de aceptación técnica | Pendiente (tras PT-12) | lead | Documento con cada función, su evidencia y su estado |
+| PT-14 | Gobierno de lo que Sofía dice de los planes (C-1 iii de seguridad) | Espera la decisión del propietario; obligatorio antes de llamar a clientes reales, no para la llamada canaria | propietario → backend | Decisión tomada e implementada; seguridad, 0 bloqueantes |
+| PT-15 | Condiciones previas a ampliar WhatsApp más allá del canario (H4-11 y H4-13, §4) | Sin empezar; no bloquean el canario | backend | Implementadas con sus pruebas; revisión final, 0 bloqueantes |
+| PT-16 | Corrección del cobro manual con IVA adicional (defecto latente del núcleo de pagos; hoy inerte) | Espera la autorización del propietario (núcleo de pagos) | propietario → backend | Autorizada, implementada (la prueba de la línea base pasa a verde) y revisada |
+
+**Condicional conocido, fuera de la lista mientras no ocurra:** si la cuarta prueba real vuelve a fallar en el turno de planes, hará falta ajustar las instrucciones firmadas (un compilador nuevo y republicar la versión). Sería un bloqueante nuevo, a justificar entonces.
+
+### 11.2 Hallazgos no bloqueantes, documentados (NO se hacen en este cierre)
+
+- **Voz:** N-5 (las notas de las herramientas pueden llevar a una frase que la guarda frena: falla al lado seguro; la corrección propuesta chocaba con otra guarda), N-4 y N-6 (huecos del léxico y nombres de plan con año), N-2 y N-3 de la revisión del código (paso 0 del runbook; credenciales de la cuenta). De los mandos: N-1 a N-6 de su revisión.
+- **Laboratorio:** NB3 (un limitador propio para estimar en modo motor).
+- **Bandeja, consentimiento y quejas:** NB4, NB5, NB7, NB8 y NB9 de la revisión de API; N-B2 de base de datos.
+- **Corrección del turno de planes:** los cinco de su revisión final (la prueba de las combinaciones de notas no es exhaustiva; la nota de longitud con presupuesto sale aunque la lista no se juzgue; el caso de nombres muy largos; el rótulo «sin dato»).
+- **CRM:** los cuatro menores de la revisión del CRM del lote 2.
+- **Guion de despliegue:** lo que no sea m1, m2 y las declaraciones.
+
+### 11.3 Agentes
+
+Como mucho tres a la vez. Cada agente nuevo se justifica antes, con el pendiente PT que cierra. Al dictarse el control había siete: se detuvo el del plan alternativo de instrucciones (no era un pendiente de la lista) y se cerraron, ya terminados y verificados, los de voz y de seguridad de los mandos; los cuatro restantes estaban terminando su entrega.
+
