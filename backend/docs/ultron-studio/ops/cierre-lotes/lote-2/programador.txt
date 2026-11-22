@@ -1,0 +1,3 @@
+# Lote 2 · --programador: routes/console.php añade payments:approved-unactivated-check SOLO con su bandera encendida.
+# Apagada, schedule:list no cambia (ninguna línea +/-) y la tarea no aparece.
+ausente payments:approved-unactivated-check
