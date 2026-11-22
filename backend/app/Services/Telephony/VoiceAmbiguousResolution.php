@@ -25,10 +25,19 @@ use DateTimeInterface;
  *    mismas reglas de la fila, sin la pasada (la decide una persona).
  *
  * El final es `failed_to_start` (D8-13: «no llegó a iniciarse»; la reserva se
- * libera, `VoiceCostGuard::RELEASED_STATUSES`, y no cuenta para la
- * frecuencia), con su evento `reconciled` de resultado {@see OUTCOME} y la
- * evidencia (la pasada y la ventana, o el motivo). FALLA CERRADO: ante
- * cualquier duda la fila se queda `ambiguous` y sigue contando como viva.
+ * libera, `VoiceCostGuard::RELEASED_STATUSES`, y deja de contar como viva),
+ * con su evento `reconciled` de resultado {@see OUTCOME} y la evidencia (la
+ * pasada y la ventana, o el motivo). FALLA CERRADO: ante cualquier duda la
+ * fila se queda `ambiguous` y sigue contando como viva.
+ *
+ * C-3 (revisión de security del 22-11-2026; decisión del lead): una fila
+ * cerrada así SIGUE CONTANDO como intento para la frecuencia del día y de la
+ * semana (Ley 2300) y para el cupo diario de salientes (`placedToday`): si la
+ * llamada sí sonó y el operador no la listó, no puede admitirse otra a la
+ * misma persona ese día. Lo que se suelta es la reserva de coste y la
+ * concurrencia, que es para lo que existe la salida. Lo aplica
+ * {@see VoiceCallFacts} con {@see resolvedSql()}; una `failed_to_start` de
+ * siempre (el proveedor la rechazó) sigue sin contar.
  *
  * EL ESQUEMA AÚN NO LO ADMITE: el grafo de D8-13 (DB8, disparador
  * `vc_status_forward`; DF-S3) no deja pasar de `ambiguous` a
@@ -135,6 +144,20 @@ final class VoiceAmbiguousResolution
         }
 
         return false;
+    }
+
+    /**
+     * C-3: la condición SQL de «cerrada por esta salida» sobre una fila de
+     * `voice_calls` (la regla de {@see wasResolved()}), con sus valores, para
+     * que las sentencias de {@see VoiceCallFacts} la cuenten como intento sin
+     * otra consulta (el `EXISTS` va por `vce_call_idx`).
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    public static function resolvedSql(): array
+    {
+        return ['voice_calls.status = ? AND EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = voice_calls.id AND e.kind = ? AND e.outcome = ?)',
+            [self::FINAL, 'reconciled', self::OUTCOME]];
     }
 
     /** ¿Se cerró la fila por esta salida? (`failed_to_start` con su evento `ambiguous_resolved`.) */

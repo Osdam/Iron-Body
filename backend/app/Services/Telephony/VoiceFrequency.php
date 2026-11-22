@@ -13,7 +13,9 @@ use DateTimeZone;
  *  - Cuenta como intento (DF-P3): `requested`, `ambiguous`, `dialing`,
  *    `active`, `completed`, `busy`, `no_answer`, `failed` y `hung_up`. No
  *    cuentan `canceled` ni `failed_to_start` (no salió nada). Las entrantes
- *    nunca cuentan, tampoco las `denied`.
+ *    nunca cuentan, tampoco las `denied`. C-3 (E19-3): la `ambiguous` cerrada
+ *    como «no iniciada» pudo sonar y cuenta: `VoiceCallFacts::historyFor()`
+ *    la entrega aquí como `ambiguous`.
  *  - «Hoy» es la fecha de Bogotá de `now`. La semana, desde el lunes 00:00 de
  *    Bogotá (la lectura de la ley) o los 7 días móviles `(now − 7 d, now]`,
  *    la lectura más estricta (DF-P4). El propietario elige [P-11]; por

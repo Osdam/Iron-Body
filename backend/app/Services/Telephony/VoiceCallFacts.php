@@ -4,6 +4,7 @@ namespace App\Services\Telephony;
 
 use App\Models\Voice\VoiceCall;
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,12 @@ use Illuminate\Support\Facades\DB;
  *    gasta el cupo de los canarios).
  *  - Salientes del día: las del día de Bogotá que salieron o pueden haber
  *    salido (no `canceled` ni `failed_to_start`).
+ *
+ * C-3 (E19-3): una `failed_to_start` cerrada por la salida de una `ambiguous`
+ * ({@see VoiceAmbiguousResolution::resolvedSql()}) PUDO SONAR: cuenta en las
+ * salientes del día y, para la frecuencia, {@see historyFor()} la devuelve
+ * como `ambiguous` (`VoiceFrequency` no cambia). En curso no cuenta: soltar
+ * la concurrencia es el objeto de la salida.
  */
 final class VoiceCallFacts
 {
@@ -34,24 +41,37 @@ final class VoiceCallFacts
 
     public static function outboundPlacedOn(string $budgetDay): int
     {
+        [$resuelta, $valores] = VoiceAmbiguousResolution::resolvedSql();
+
         return VoiceCall::query()->where('budget_day', $budgetDay)->where('direction', VoiceCall::DIRECTION_OUTBOUND)
-            ->whereNull('transfer_of_call_id')->whereNotIn('status', VoiceCostGuard::RELEASED_STATUSES)->count();
+            ->whereNull('transfer_of_call_id')
+            ->where(static fn (Builder $w) => $w->whereNotIn('status', VoiceCostGuard::RELEASED_STATUSES)->orWhereRaw($resuelta, $valores))
+            ->count();
     }
 
     /**
      * Las salientes a una huella de los últimos 8 días (la frecuencia, D8-15).
+     * C-3: la cerrada por E19-3, como `ambiguous` (un intento que pudo sonar).
      *
      * @return list<array{at: string, status: string, direction: string}>
      */
     public static function historyFor(string $remoteHash, DateTimeInterface $now): array
     {
+        [$resuelta, $valores] = VoiceAmbiguousResolution::resolvedSql();
+
         return VoiceCall::query()
             ->where('remote_hash', $remoteHash)
             ->where('direction', VoiceCall::DIRECTION_OUTBOUND)
             ->whereNull('transfer_of_call_id')
             ->where('created_at', '>=', Carbon::instance($now)->subDays(8))
-            ->get(['created_at', 'status', 'direction'])
-            ->map(static fn (VoiceCall $c): array => ['at' => $c->created_at->toIso8601String(), 'status' => (string) $c->status, 'direction' => (string) $c->direction])
+            ->select(['created_at', 'status', 'direction'])
+            ->selectRaw("CASE WHEN {$resuelta} THEN 1 ELSE 0 END AS unstarted_resolved", $valores)
+            ->get()
+            ->map(static fn (VoiceCall $c): array => [
+                'at' => $c->created_at->toIso8601String(),
+                'status' => (int) $c->getAttribute('unstarted_resolved') === 1 ? VoiceCall::STATUS_AMBIGUOUS : (string) $c->status,
+                'direction' => (string) $c->direction,
+            ])
             ->all();
     }
 

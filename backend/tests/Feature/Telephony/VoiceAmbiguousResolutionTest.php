@@ -3,12 +3,17 @@
 namespace Tests\Feature\Telephony;
 
 use App\Console\Commands\Voice\VoiceResolveAmbiguousCommand;
+use App\Models\Admin;
 use App\Models\Voice\VoiceBrakeEntry;
 use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
+use App\Services\Telephony\OutboundGate;
 use App\Services\Telephony\VoiceAmbiguousResolution;
+use App\Services\Telephony\VoiceCallFacts;
 use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Telephony\VoiceEvents;
+use App\Services\Telephony\VoiceFrequency;
+use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoiceReconciler;
 use App\Services\Voice\Dto\CarrierCall;
 use App\Services\Voice\Dto\CarrierCallsPage;
@@ -21,6 +26,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use LogicException;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
@@ -112,6 +118,69 @@ class VoiceAmbiguousResolutionTest extends TestCase
         $this->signed($this->postCallBody($fa, 'conv_h8fx_0960'))->assertOk()->assertJson(['status' => 'failed_to_start', 'anomaly' => 'resolved_call_reappeared']);
         $this->assertSame(VoiceCall::STATUS_FAILED_TO_START, VoiceCall::query()->findOrFail($a->id)->status);
         $this->assertSame(['unknown_provider_call'], VoiceBrakeEntry::query()->pluck('reason')->all());
+    }
+
+    /**
+     * C-3 (revisión de security del 22-11-2026, decisión del lead): el recorrido del informe, pasos 1 a 5. Una fila
+     * cerrada por la salida de E19-3 (la automática o la de consola) PUDO SONAR: sigue contando para la frecuencia del
+     * día y de la semana y para el cupo diario; se sueltan la reserva y la concurrencia. Y una `failed_to_start` de
+     * siempre (el proveedor la rechazó) sigue sin contar.
+     */
+    public function test_c3_la_cerrada_como_no_iniciada_sigue_contando_para_la_frecuencia_y_el_cupo_y_suelta_reserva_y_concurrencia(): void
+    {
+        config(['voice.twilio.daily_call_cap' => 5]);
+        $this->publishVoice();
+        $ana = $this->person(Admin::ROLE_SUPER_ADMIN, 'Ana Frecuencia');
+        $mismo = $this->activeVoiceCanary('+573000000091');
+        $otro = $this->activeVoiceCanary('+573000000092');
+        $puerta = app(OutboundGate::class);
+        $motivos = static fn (string $canario): array => $puerta->request($ana, OutboundGate::TARGET_CANARY, $canario, (string) Str::uuid())['body']['reasons'] ?? [];
+        $frecuencia = static fn (string $telefono): array => VoiceFrequency::count(now(), VoiceCallFacts::historyFor(VoicePhone::hash($telefono), now()));
+        $excedida = static fn (string $telefono): bool => VoiceFrequency::exceeded($frecuencia($telefono), VoiceFrequency::perWeekFromConfig(), VoiceFrequency::weekModeFromConfig());
+
+        // 1. T0: el POST salió, la respuesta se perdió y la persona contestó: la fila queda `ambiguous`.
+        $a = $this->voiceCall('outbound', 'ambiguous', ['remote' => '+573000000091', 'canary_number_uuid' => $mismo]);
+        $b = $this->ambiguousCall('+573000000093');   // la de consola
+        $rechazada = $this->voiceCall('outbound', 'failed_to_start', ['remote' => '+573000000094']);   // la de siempre
+        $dia = (string) $a->budget_day;
+        $this->assertSame(['today' => 1, 'week' => 1, 'rolling7' => 1], $frecuencia('+573000000091'));
+        $this->assertTrue($excedida('+573000000091'));
+        $this->assertSame(2, VoiceCallFacts::outboundPlacedOn($dia), 'las dos ambiguas; la rechazada no');
+        $this->assertGreaterThan(0, VoiceCostGuard::committedMicros($dia));
+        $this->assertSame(2, VoiceCallFacts::liveCount());
+
+        // 2 y 3. La post-llamada no llega y la lista de Twilio no la ve (C-2): a T0 + 61 min, una pasada completa y limpia.
+        $this->travel(VoiceAmbiguousResolution::GRACE_MINUTES + 1)->minutes();
+        $this->assertSame(0, Artisan::call('voice:resolve-ambiguous', ['call' => $b->uuid, '--confirm' => true, '--reason' => 'Comprobado en Twilio y ElevenLabs: nada a esa hora']), Artisan::output());
+        $resumen = $this->pass();
+        $this->assertSame([['resolved' => 1, 'held' => []], 0], [$resumen['ambiguous'], $resumen['unknown']]);
+        $this->assertSame(0, VoiceBrakeEntry::query()->count(), 'ningún freno');
+        foreach ([$a, $b] as $fila) {
+            $this->assertTrue(VoiceAmbiguousResolution::wasResolved(VoiceCall::query()->findOrFail($fila->id)));
+        }
+
+        // 4. Lo que se suelta y lo que sigue contando.
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia), 'la reserva se libera');
+        $this->assertSame(0, VoiceCallFacts::liveCount(), 'la concurrencia se libera');
+        foreach (['+573000000091' => 'automática', '+573000000093' => 'consola'] as $telefono => $salida) {
+            $this->assertSame(['today' => 1, 'week' => 1, 'rolling7' => 1], $frecuencia($telefono), "la {$salida}: sigue siendo el intento del día y de la semana");
+            $this->assertTrue($excedida($telefono), "la {$salida}: frecuencia excedida");
+        }
+        $this->assertSame(['today' => 0, 'week' => 0, 'rolling7' => 0], $frecuencia('+573000000094'), 'la rechazada de siempre sigue sin contar');
+        $this->assertSame(2, VoiceCallFacts::outboundPlacedOn($dia), 'el cupo diario las sigue contando; la rechazada, no');
+
+        // 5. La puerta: a la misma persona ese día, niega por la frecuencia; a otra, la frecuencia no la frena.
+        $alMismo = $motivos($mismo);
+        $alOtro = $motivos($otro);
+        $this->assertContains('frequency_exceeded', $alMismo);
+        $this->assertNotContains('frequency_exceeded', $alOtro);
+        $this->assertSame(['frequency_exceeded'], array_values(array_diff($alMismo, $alOtro)), 'la única diferencia entre las dos personas');
+        foreach (['concurrency_exceeded', 'daily_cap_reached', 'budget_exhausted'] as $suelto) {
+            $this->assertNotContains($suelto, $alOtro, $suelto);
+        }
+        $this->assertContains('calls_disabled_in_code', $alOtro, 'la constante sigue cerrada');
+        $this->assertSame([(int) $a->id, (int) $b->id, (int) $rechazada->id], VoiceCall::query()->orderBy('id')->pluck('id')->map(static fn ($id): int => (int) $id)->all(),
+            'la puerta (cerrada) no crea filas');
     }
 
     public function test_cada_duda_la_deja_ambiguous_con_su_motivo(): void
