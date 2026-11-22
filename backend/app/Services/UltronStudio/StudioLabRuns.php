@@ -377,6 +377,8 @@ final class StudioLabRuns
             ->with(['verdict', 'targetVersion:id,uuid,created_by_admin_id'])
             ->when($filters['version'] ?? null, fn ($q, string $uuid) => $q->whereIn('target_version_id', StudioVersion::query()->select('id')->where('uuid', $uuid)))
             ->when($filters['target'] ?? null, fn ($q, string $kind) => $q->where('target_kind', $kind))
+            // Apartado 5 del cierre: el modo, con la misma marca que la puerta. Sin él, la consulta de siempre.
+            ->when($filters['fidelity'] ?? null, fn ($q, string $fidelity) => self::whereFidelity($q, 'prompt_version', $fidelity))
             ->when(($filters['scope'] ?? 'all') === 'mine', fn ($q) => $q->where('created_by_admin_id', $access->id()))
             ->orderByDesc('id')
             ->paginate($perPage);
@@ -384,6 +386,25 @@ final class StudioLabRuns
         [$conteos, $enVuelo] = self::countsByRun($pagina->getCollection()->pluck('id')->all());
 
         return $pagina->through(fn (StudioLabRun $r): array => $this->summary($access, $r, $conteos[$r->id] ?? self::emptyCounts(), isset($enVuelo[$r->id])));
+    }
+
+    /**
+     * LAS EJECUCIONES DE UN MODO (apartado 5 del cierre): las del motor tienen
+     * un `prompt_version` que empieza por {@see StudioLabEngineFlow::PROMPT_VERSION_PREFIX};
+     * las de la simulación, no. La usan las listas (`GET lab/runs?fidelity=`) y
+     * la puerta de publicar ({@see StudioLabVerdicts::latestFor()}): una sola
+     * marca, en un solo sitio.
+     *
+     * @template T of \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
+     *
+     * @param  T  $query
+     * @return T
+     */
+    public static function whereFidelity(mixed $query, string $column, string $fidelity): mixed
+    {
+        $patron = StudioLabEngineFlow::PROMPT_VERSION_PREFIX.'%';
+
+        return $fidelity === self::FIDELITY_MODE_ENGINE ? $query->where($column, 'like', $patron) : $query->where($column, 'not like', $patron);
     }
 
     /** La ejecución si quien mira puede verla; si no, el mismo 404 que un uuid inexistente. */
@@ -434,7 +455,7 @@ final class StudioLabRuns
             'resultsHash' => $run->results_hash,
             'requiredAcknowledgements' => self::requiredAcknowledgements($casos->all()),
             'actions' => $this->actions($access, $run),
-        ] + ($motor ? ['fidelityMode' => self::FIDELITY_MODE_ENGINE, 'engine' => self::engineOut(is_array($run->target_snapshot['engine'] ?? null) ? $run->target_snapshot['engine'] : [])] : []);
+        ] + ($motor ? ['engine' => self::engineOut(is_array($run->target_snapshot['engine'] ?? null) ? $run->target_snapshot['engine'] : [])] : []);
     }
 
     /**
@@ -484,7 +505,8 @@ final class StudioLabRuns
                 'by' => ['name' => $veredicto->reviewer_name, 'role' => $veredicto->reviewer_role],
                 'at' => $veredicto->created_at?->toIso8601String(),
             ] : null,
-        ];
+            // Solo en las del motor: el resumen de una simulación no gana ninguna clave.
+        ] + (StudioLabEngineFlow::isEnginePromptVersion($run->prompt_version) ? ['fidelityMode' => self::FIDELITY_MODE_ENGINE] : []);
     }
 
     // ── Cálculos compartidos con el runner y el veredicto ───────────────────

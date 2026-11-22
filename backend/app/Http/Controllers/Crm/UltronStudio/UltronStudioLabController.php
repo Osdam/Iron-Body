@@ -65,6 +65,8 @@ class UltronStudioLabController extends Controller
             'version' => ['sometimes', 'nullable', 'uuid'],
             'target' => ['sometimes', 'nullable', Rule::in(StudioLabRun::TARGET_KINDS)],
             'scope' => ['sometimes', 'nullable', 'in:all,mine'],
+            // Apartado 5 del cierre: el modo, como en lab/runs y lab/estimate. Sin él, la lista de siempre.
+            'fidelity' => ['sometimes', 'string', Rule::in(StudioLabRuns::FIDELITY_MODES)],
             'page' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);
@@ -73,6 +75,7 @@ class UltronStudioLabController extends Controller
             'version' => isset($data['version']) ? strtolower($data['version']) : null,
             'target' => $data['target'] ?? null,
             'scope' => $data['scope'] ?? 'all',
+            'fidelity' => $data['fidelity'] ?? null,
         ], $this->resolvePerPage($request))]);
     }
 

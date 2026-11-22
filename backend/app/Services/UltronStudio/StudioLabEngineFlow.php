@@ -229,16 +229,24 @@ final class StudioLabEngineFlow
 
     private const RECOMMENDATION = ['none', 'single_plan', 'compare_plans'];
 
+    /**
+     * LA MARCA de una ejecución del motor: su `prompt_version` empieza por
+     * esto. El único sitio donde está escrita: la leen la puerta de publicar,
+     * las listas del laboratorio y el runner (por {@see isEnginePromptVersion()}
+     * y `StudioLabRuns::whereFidelity()`), así que no pueden separarse.
+     */
+    public const PROMPT_VERSION_PREFIX = 'motor-';
+
     /** El `prompt_version` de una ejecución del motor (≤ 32, la columna). */
     public static function promptVersion(): string
     {
-        return 'motor-'.self::FLOW_REV.'-c'.self::COMPILER.'-'.self::VERSION;
+        return self::PROMPT_VERSION_PREFIX.self::FLOW_REV.'-c'.self::COMPILER.'-'.self::VERSION;
     }
 
     /** ¿Es el `prompt_version` de una ejecución del motor (de cualquier revisión)? */
     public static function isEnginePromptVersion(?string $promptVersion): bool
     {
-        return is_string($promptVersion) && str_starts_with($promptVersion, 'motor-');
+        return is_string($promptVersion) && str_starts_with($promptVersion, self::PROMPT_VERSION_PREFIX);
     }
 
     /**

@@ -132,9 +132,8 @@ final class StudioLabVerdicts
 
         // Apartado 5 del cierre: cada familia de ejecuciones (la simulación o el recorrido del motor, `motor-…`)
         // solo ve las suyas, también para `stale_prompts`: un veredicto del motor no cuenta para la simulación.
-        $deSuFamilia = static fn ($q) => StudioLabEngineFlow::isEnginePromptVersion($promptVersion)
-            ? $q->where('lab_run.prompt_version', 'like', 'motor-%')
-            : $q->where('lab_run.prompt_version', 'not like', 'motor-%');
+        $deSuFamilia = static fn ($q) => StudioLabRuns::whereFidelity($q, 'lab_run.prompt_version',
+            StudioLabEngineFlow::isEnginePromptVersion($promptVersion) ? StudioLabRuns::FIDELITY_MODE_ENGINE : StudioLabRuns::FIDELITY_SIMULATION);
 
         $ultimo = $sobreEstaHuella()
             ->where('lab_run.prompt_version', $promptVersion)
