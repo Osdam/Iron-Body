@@ -73,7 +73,7 @@ final class ContactHistoryFacts
      */
     public const LEGACY_PURPOSE = 'commercial';
 
-    /** @var array<string, bool> por conexión: ¿existen las tablas del H9? (una vez por proceso, no por instancia) */
+    /** @var array<string, true> por conexión: las tablas del H9 existen (solo se recuerda el sí; por proceso, no por instancia) */
     private static array $outreachSource = [];
 
     /**
@@ -208,19 +208,28 @@ final class ContactHistoryFacts
     }
 
     /**
-     * ¿Existen ya las tablas del H9 que cuentan los contactos asistidos? Se
-     * mira UNA VEZ POR PROCESO Y CONEXIÓN, no por instancia: cada foto crea su
-     * adaptador, y detectarlo por instancia costaba cuatro consultas de
-     * catálogo por lote (la foto completa pasó de 39 a 43 al llegar DB9). El
-     * esquema no cambia en caliente; una prueba que lo cambie llama a
-     * {@see forgetOutreachSource()}.
+     * ¿Existen ya las tablas del H9 que cuentan los contactos asistidos? Solo
+     * se recuerda el SÍ, por proceso y conexión (no por instancia: cada foto
+     * crea su adaptador, y detectarlo por instancia costaba cuatro consultas
+     * de catálogo por lote; la foto completa pasó de 39 a 43 al llegar DB9).
+     * Mientras falte alguna se pregunta en cada lote: un trabajador arrancado
+     * antes de las migraciones del H9 cuenta esos contactos en cuanto existen,
+     * sin reiniciarse (el gemelo de C-5 de `informe-apisec-consent.md`). Una
+     * prueba que quite las tablas llama a {@see forgetOutreachSource()}.
      */
     public function hasOutreachSource(): bool
     {
         $conexion = DB::connection()->getName();
+        if (isset(self::$outreachSource[$conexion])) {
+            return true;
+        }
+        if (! (Schema::hasTable('outreach_outcomes') && Schema::hasTable('outreach_jobs')
+            && Schema::hasTable('outreach_enrollments') && Schema::hasTable('ultron_studio_strategies'))) {
+            return false;
+        }
+        self::$outreachSource[$conexion] = true;
 
-        return self::$outreachSource[$conexion] ??= Schema::hasTable('outreach_outcomes') && Schema::hasTable('outreach_jobs')
-            && Schema::hasTable('outreach_enrollments') && Schema::hasTable('ultron_studio_strategies');
+        return true;
     }
 
     /** Olvida la detección (pruebas que crean o quitan las tablas del H9 dentro del mismo proceso). */
