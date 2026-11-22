@@ -53,7 +53,7 @@ APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
         ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.50, "integrado el 22-11 (lote 5, bdb93199): seguridad, base de datos y revisión final sin bloqueantes abiertos (B-1 corregido) y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
-        ("CRM: lanzar y ver una ejecución del motor", 15, 0.34, "implementada y probada (1 453 pruebas del Studio en verde y compilación de producción, verificadas por el lead el 22-11); falta su revisión final (PT-10)", "c"),
+        ("CRM: lanzar y ver una ejecución del motor", 15, 0.40, "implementada, probada y con su revisión final aprobada (PT-09 y PT-10, 22-11); falta publicarla (HUMAN GATE)", "c"),
         ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
     ]),
     6: (0.50, [
@@ -86,7 +86,7 @@ APARTADOS = {
     ]),
     10: (0.35, [
         ("Libro de autorizaciones, lector y rutas", 30, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de sus rutas (PT-18, en corrección)", "c"),
-        ("CRM: pantalla de autorizaciones de contacto", 10, 0.34, "implementada y probada (814 pruebas del CRM en verde y compilación de producción, verificadas por el lead el 22-11); falta su revisión final (PT-10)", "c"),
+        ("CRM: pantalla de autorizaciones de contacto", 10, 0.40, "implementada, probada y con su revisión final aprobada tras cerrar el bloqueante del identificador del socio (PT-07, PT-10 y PT-18, 22-11); falta publicarla (HUMAN GATE)", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
         ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de su ruta (PT-18, en corrección)", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
@@ -102,7 +102,7 @@ APARTADOS = {
     12: (0.45, [
         ("Análisis de los tres asuntos, contrastado con producción", 20, 1.00, "0 pagos aprobados sin activar", "t"),
         ("Aviso automático de pago aprobado sin membresía", 40, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
-        ("Corrección del cobro manual con IVA adicional", 25, 0.00, "decisión del propietario (núcleo de pagos)", "c"),
+        ("Corrección del cobro manual con IVA adicional", 25, 0.50, "integrado el 22-11 (PT-16, e1c2af3c): revisión final aprobada y dentro de la batería de la integración definitiva; inerte en producción; falta desplegarlo (HUMAN GATE)", "c"),
         ("Decisión sobre el activador de membresías", 15, 0.00, "recomendado no tocar; lo decide el propietario", "o"),
     ]),
     13: (0.40, [
@@ -112,8 +112,8 @@ APARTADOS = {
         ("Reimportar el número en ElevenLabs con clave restringida y rotar el token maestro", 20, 0.00, "", "o"),
     ]),
     14: (0.00, [
-        ("Batería completa sobre la integración final", 15, 0.00, "ensayo sobre tres ramas: 19 205 pruebas, 0 regresiones; falta la integración final", "t"),
-        ("Recorridos de extremo a extremo simulados sobre la integración", 25, 0.00, "", "t"),
+        ("Batería completa sobre la integración final", 15, 1.00, "hecha el 22-11 sobre integracion/final c4323242: 19 643 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
+        ("Recorridos de extremo a extremo simulados sobre la integración", 25, 1.00, "hechos el 22-11 (PT-12): WhatsApp, automatización, gobierno y seguridad demostrados en simulado; voz parcial (el audio y el corte por duración solo los demuestra una llamada real)", "t"),
         ("Pruebas canarias reales de los cinco recorridos", 45, 0.00, "", "o"),
         ("Matriz final de aceptación", 15, 0.00, "", "o"),
     ]),
