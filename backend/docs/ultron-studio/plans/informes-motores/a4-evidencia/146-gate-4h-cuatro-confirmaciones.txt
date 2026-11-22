@@ -248,7 +248,7 @@ Lo demás: batería completa sobre 0400b267, 18 985 pruebas, sin ninguna otra ro
 ampliar más allá de la canaria: informe-security-a4-regenerar.md).
 
 ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-5. EL ENSAYO DE REVERSIÓN Y LOS SERVICIOS CRÍTICOS (añadido el 22-11, 03:40 UTC, a petición del propietario)
+5. EL ENSAYO DE REVERSIÓN Y LOS SERVICIOS CRÍTICOS (añadido el 22-11, 03:08 UTC, a petición del propietario)
 ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 El ensayo es: desplegar → comprobar → --vuelta-atras=<respaldo> → comprobar → desplegar otra vez, con el mismo guion.
 
