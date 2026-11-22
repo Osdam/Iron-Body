@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\StrategyContent;
 use App\Services\Outreach\Facts\CatalogDomains;
+use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\OutreachConsentFacts;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutcomeRecorder;
@@ -563,6 +564,42 @@ class H9AssistedEligibilityTest extends TestCase
         } finally {
             OutreachConsentFacts::forgetLedger();
         }
+    }
+
+    // ── I-1 (revisor de la bandeja) · Perder el consentimiento comercial de WhatsApp sin un «denegado» ──
+
+    /**
+     * I-1 de `informe-reviewer-bandeja.md` (su sonda P-2), con la directiva del propietario («un contacto que pierde
+     * elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal restringido»). El asistido
+     * comercial por WhatsApp sale con el prospecto `granted` y Ana lo reclama. Después, la persona escribe desde
+     * OTRO número: nace un prospecto suyo con `consent_status = null` y conversación de WhatsApp. `LeadFacts` toma ese,
+     * el más reciente: `consent.whatsapp.commercial = false` y `lead.consent_denied = false` (null no es
+     * «denegado»). La escalera negaría (`no_consent_for_purpose_channel`); la bandeja retiene con `policy_unknown`,
+     * como por voz. Antes seguía entregando la ficha y el guion.
+     */
+    public function test_i1_por_whatsapp_comercial_perder_el_consentimiento_sin_un_denegado_retiene_con_policy_unknown(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b] = $this->startedFor(['3001234567', '3001234568']);
+        $mio = (string) $a['job']->uuid;
+        $libre = (string) $b['job']->uuid;
+        $cola = new AssistedQueue;
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $a['member']['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+
+        foreach ([$a, $b] as $i => $p) {
+            $nuevo = '300999000'.$i;
+            $lead = $this->lead(['member_id' => $p['member']['member'], 'phone' => $nuevo, 'consent_status' => null]);
+            $this->conversation($lead);
+            // El número nuevo también es un número de prueba activo: el caso no es F-2 (`canary_scope_mismatch`).
+            $this->canary('+57'.$nuevo, 'whatsapp');
+        }
+        // Lo que lee N1: sin la autorización comercial de WhatsApp y sin un «denegado» que conste.
+        $foto = $this->snap([$a['member']['key']], '2026-11-17 15:15:00', CoreProjection::selectionFor([]))->subject($a['member']['key']);
+        $this->assertSame(['missing', false], [CoreProjection::policyInput($foto, 'commercial', null)['consent']['whatsapp'], $foto->policy('lead.consent_denied')]);
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '300123456', '300999000');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
     }
 
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────

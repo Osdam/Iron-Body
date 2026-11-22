@@ -82,9 +82,17 @@ class AssistedQueueOptedOutTest extends TestCase
             'R3-1: la revocación de voz no cuenta en un trabajo por WhatsApp' => [['consent.voice_call.commercial' => false, 'voice.consent_revoked' => true] + self::LIMPIA, 'commercial', 'whatsapp', false],
             'R3-1: voz con el consentimiento sin leer: no se sabe' => [$sin('consent.voice_call.commercial'), 'commercial', 'voice', null],
             'R3-1: la voz sin consentimiento no cuenta en un trabajo por WhatsApp' => [['consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'whatsapp', false],
-            // R3-1 NO se extiende a WhatsApp: el de servicio depende de la ventana de 24 h (`LeadFacts`) y retendría trabajos válidos.
+            // R3-1 NO se extiende a WhatsApp de servicio: depende de la ventana de 24 h (`LeadFacts`) y retendría trabajos válidos.
             'R3-1: WhatsApp de servicio fuera de la ventana de 24 h: no cuenta' => [['consent.whatsapp.service' => false] + self::LIMPIA, 'service', 'whatsapp', false],
-            'R3-1: WhatsApp comercial sin consentimiento: no cuenta' => [['consent.whatsapp.commercial' => false] + self::LIMPIA, 'commercial', 'whatsapp', false],
+            // I-1 (revisor de la bandeja; decisión del lead, directiva del propietario): por WhatsApp COMERCIAL, un
+            // consentimiento que no es `granted` y sin `denied` es «no se sabe», como por voz. Hasta I-1 este caso daba
+            // `false` (no retenía): la regla es más estricta a propósito, no una prueba adaptada a un fallo.
+            'I-1: WhatsApp comercial sin el consentimiento concedido y sin un denegado: no se sabe (retiene)' => [['consent.whatsapp.commercial' => false] + self::LIMPIA, 'commercial', 'whatsapp', null],
+            'I-1: WhatsApp comercial con el consentimiento sin leer: no se sabe' => [$sin('consent.whatsapp.commercial'), 'commercial', 'whatsapp', null],
+            'I-1: WhatsApp comercial concedido por C9 (el número de hoy): se sabe que no' => [['consent.whatsapp.commercial' => false, 'c9.whatsapp.commercial.granted' => true] + self::LIMPIA, 'commercial', 'whatsapp', false],
+            'I-1: un sí sabido gana al consentimiento perdido' => [['consent.whatsapp.commercial' => false, 'lead.do_not_contact' => true] + self::LIMPIA, 'commercial', 'whatsapp', true],
+            'I-1: no alcanza a la cobranza por WhatsApp (solo la comercial)' => [['consent.whatsapp.collections' => false] + self::LIMPIA, 'collections', 'whatsapp', false],
+            'I-1: ni al servicio por WhatsApp' => [['consent.whatsapp.service' => false, 'consent.whatsapp.commercial' => false] + self::LIMPIA, 'service', 'whatsapp', false],
             'R3-1: un sí sabido gana a la voz sin consentimiento' => [['lead.do_not_contact' => true, 'consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'voice', true],
             // C-1 de la revisión de API del consentimiento: la retirada del libro (C9) para la finalidad del trabajo, por WhatsApp.
             'C-1: retirada de C9 comercial, en un trabajo comercial por WhatsApp: lo pidió' => [['c9.whatsapp.commercial.revoked' => true] + self::LIMPIA, 'commercial', 'whatsapp', true],

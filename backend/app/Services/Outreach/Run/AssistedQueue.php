@@ -568,9 +568,15 @@ final class AssistedQueue
      * (`no_consent_for_purpose_channel`), y revocarlo (`revoked` en `voice_consents`, D8-18: «revocar no espera a
      * nadie») lo deja en `missing`, no en `denied`. Aquí retiene igual: `true` si se sabe que revocó
      * (`voice.consent_revoked`: el último evento válido de algún contacto activo es `revoked`); si no (un contacto
-     * desactivado, nunca concedido o sin leer), `null`, porque decir «lo pidió» sin saberlo sería falso. Por WhatsApp NO se extiende:
-     * `consent.whatsapp.service` depende de la ventana de 24 h y retendría trabajos de servicio válidos; la baja por
-     * WhatsApp ya llega como `lead.consent_denied`.
+     * desactivado, nunca concedido o sin leer), `null`, porque decir «lo pidió» sin saberlo sería falso. A WhatsApp de
+     * SERVICIO no se extiende: `consent.whatsapp.service` depende de la ventana de 24 h y retendría trabajos de
+     * servicio válidos; la baja por WhatsApp ya llega como `lead.consent_denied`.
+     *
+     * I-1 de `informe-reviewer-bandeja.md` (decisión del lead por la directiva del propietario: «un contacto que pierde
+     * elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal restringido»): por WhatsApp
+     * COMERCIAL, un consentimiento que ya no es `granted` y no consta `denied` (un prospecto nuevo de la persona con
+     * `consent_status` nulo, el más reciente, que es el que lee N1) es «no se sabe»: `null`, `policy_unknown`, como
+     * por voz. La autorización de C9 confirmada para el número de hoy cuenta como `granted` (`consentFor()`).
      *
      * C-1 de `informe-apisec-consent.md` (Enmienda C9): la RETIRADA del libro de autorizaciones para la finalidad del
      * trabajo (`c9.whatsapp.<finalidad>.revoked`, la suya o la de otra ficha con uno de sus números) es una petición
@@ -590,6 +596,7 @@ final class AssistedQueue
             match (true) {
                 $consentimiento === 'denied' => $s->policy('lead.consent_denied'),
                 $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => $s->policy('voice.consent_revoked') === true ? true : null,
+                $medium === OutreachCatalog::MEDIUM_WHATSAPP && $purpose === OutreachCatalog::PURPOSE_COMMERCIAL && $consentimiento !== 'granted' => null,
                 default => false,
             },
             $medium === OutreachCatalog::MEDIUM_WHATSAPP && $s->policy("c9.whatsapp.{$purpose}.revoked") === true,
