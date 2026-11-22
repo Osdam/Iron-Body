@@ -12,6 +12,7 @@ use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
 use App\Services\Outreach\Run\OutreachPublishedStrategies;
 use App\Services\Outreach\Run\OutreachReplay;
+use App\Services\Outreach\Run\OutreachStore;
 use App\Services\Telephony\VoiceContacts;
 use App\Support\Privacy\PhoneFingerprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,6 +36,8 @@ use Tests\TestCase;
  *  - R3-2: un «no contactar» o una pausa de la estrategia que llegan ENTRE la comprobación y el `UPDATE` de
  *    `claim()` no entregan el contacto ni una vez (la carrera con dos conexiones de verdad, en
  *    `H9AssistedClaimRaceTest`, solo PostgreSQL);
+ *  - m-1 de `informe-security-bandeja-r3.md`: la inscripción que se cierra en ese mismo hueco da 409
+ *    `enrollment_closed`, como la repetición, sin entregar el contacto;
  *  - m-1: la página no hace consultas por fila.
  *
  * El martes 17-11-2026 a las 10:00 de Bogotá (15:00Z), en vivo, con la fuente de eventos encendida (L9-26),
@@ -485,6 +488,60 @@ class H9AssistedEligibilityTest extends TestCase
         $r = (new AssistedQueue)->claim($gente['beto'], (string) $p['job']->uuid, (string) Str::uuid());
 
         $this->assertSame([['kind' => 'member', 'id' => $p['member']['member']], true, null], self::contact($r['job']), 'la relectura no retiene de más');
+    }
+
+    // ── m-1 (security R3) · La inscripción que se cierra entre la comprobación y el UPDATE ──
+
+    /** @return array<string, array{0: string, 1: string, 2: string|null}> */
+    public static function cierresEntreLaComprobacionYElUpdate(): array
+    {
+        return [
+            'el fin de la ventana (el despachador: expired)' => ['expired', 'enrollment_window_over', 'no_response'],
+            'el éxito (completed)' => ['completed', 'success_reached', null],
+            'un opt-out en otra estrategia (el registro de resultados: exited)' => ['exited', 'opted_out', null],
+        ];
+    }
+
+    /**
+     * m-1 de `informe-security-bandeja-r3.md`: la inscripción se cierra justo DESPUÉS de la última lectura de la
+     * comprobación (la del libro de supresiones) y ANTES del `UPDATE`, por `OutreachStore::closeEnrollment()` (el camino
+     * del despachador y del registro de resultados). La reclamación queda escrita (no se deshace nada), pero no entrega
+     * el contacto ni una vez: 409 `enrollment_closed`, lo MISMO que la repetición. En la misma conexión: la de dos
+     * conexiones de verdad está en `H9AssistedClaimRaceTest` (PG).
+     */
+    #[DataProvider('cierresEntreLaComprobacionYElUpdate')]
+    public function test_m1_r3_la_inscripcion_que_se_cierra_entre_la_comprobacion_y_el_update_da_409_enrollment_closed_sin_contacto(string $estado, string $motivo, ?string $ultimo): void
+    {
+        $gente = $this->threePeople();
+        [$p] = $this->startedFor(['3001234567']);
+        $uuid = (string) $p['job']->uuid;
+        $cola = new AssistedQueue;
+        $sql = [];
+        $inyectada = null;
+        DB::listen(function ($q) use (&$sql, &$inyectada, $estado, $motivo, $ultimo, $p): void {
+            $sql[] = strtolower($q->sql);
+            if ($inyectada === null && str_contains(strtolower($q->sql), '"detail_code"')) {
+                $inyectada = count($sql) - 1;
+                $this->assertTrue((new OutreachStore)->closeEnrollment((int) $p['job']->enrollment_id, $estado, $motivo, AssistedQueue::now(), $ultimo), 'la inscripción estaba abierta');
+            }
+        });
+
+        foreach (['la reclamación' => (string) Str::uuid(), 'la repetición' => (string) Str::uuid()] as $que => $peticion) {
+            try {
+                $r = $cola->claim($gente['beto'], $uuid, $peticion);
+                $this->fail("{$que} entregó la fila de una inscripción cerrada: ".json_encode(self::contact($r['job'])));
+            } catch (OutreachException $e) {
+                $this->assertSame([409, 'enrollment_closed'], [$e->status, $e->errorCode], $que);
+                $this->assertStringNotContainsString('3001234567', json_encode([$e->getMessage(), $e->payload]));
+            }
+        }
+        $update = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with(ltrim($q), 'update "outreach_jobs"')));
+        $this->assertNotNull($inyectada, 'el cierre llegó a mitad');
+        $this->assertNotNull($update, 'la reclamación llegó a escribir');
+        $this->assertLessThan($update, $inyectada, 'después de comprobar y ANTES del UPDATE: '.json_encode($sql));
+        $this->assertSame((int) $gente['beto']->id, (int) DB::table('outreach_jobs')->where('uuid', $uuid)->value('assisted_claimed_by_admin_id'), 'el trabajo queda reclamado: no se deshace nada');
+        $this->assertSame($estado, DB::table('outreach_enrollments')->where('id', $p['job']->enrollment_id)->value('status'));
+        $this->assertSame([], $cola->queue($gente['beto'], 'mine'), 'tampoco en «mine»');
     }
 
     // ── F-1 · El modo o el canal asistido, apagados por configuración ───────

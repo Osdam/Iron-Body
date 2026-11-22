@@ -7,7 +7,8 @@
  * la prueba y reclama UN trabajo con `AssistedQueue::claim()`. Justo después de la última lectura de la
  * comprobación (la del libro de supresiones) y ANTES del `UPDATE`, espera en una BARRERA (un cerrojo
  * consultivo de PostgreSQL que la prueba retiene en exclusiva): mientras espera, la prueba confirma la señal
- * por su conexión y suelta la barrera. Escribe su resultado en JSON por la salida estándar. No es una prueba
+ * por su conexión y suelta la barrera. Escribe su resultado en JSON por la salida estándar (un 409 de la
+ * bandeja va en `conflict`, con su estado y su código: es una respuesta, no un fallo). No es una prueba
  * ni se carga en la suite (no acaba en `Test.php`).
  *
  * Argumento: un JSON `{now, barrier, job, clientRequestId, adminId, adminName}`. El entorno (la base, la
@@ -18,6 +19,7 @@ declare(strict_types=1);
 
 use App\Models\Admin;
 use App\Services\Outreach\Run\AssistedQueue;
+use App\Services\Outreach\Run\OutreachException;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +57,9 @@ try {
     // La cuenta que reclama, sin leerla: `claim()` solo usa su id y su nombre.
     $quien = (new Admin)->forceFill(['id' => (int) $args['adminId'], 'name' => (string) $args['adminName']]);
     $salida['claim'] = (new AssistedQueue)->claim($quien, (string) $args['job'], (string) $args['clientRequestId']);
+} catch (OutreachException $e) {
+    // Un 409 de la bandeja es su RESPUESTA (m-1 de security R3: `enrollment_closed`), no un fallo del trabajador.
+    $salida['conflict'] = ['status' => $e->status, 'code' => $e->errorCode, 'message' => $e->getMessage()];
 } catch (Throwable $e) {
     $salida['error'] = ['class' => $e::class, 'message' => $e->getMessage()];
 }

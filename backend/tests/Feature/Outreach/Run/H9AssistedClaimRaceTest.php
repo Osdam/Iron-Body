@@ -21,7 +21,8 @@ use Tests\TestCase;
  * espera, la prueba CONFIRMA por su conexión un «no contactar» del prospecto o la pausa de la estrategia en la
  * cadena, y suelta la barrera. El trabajador escribe la reclamación y su 201 ya no lleva ni el enlace ni el
  * guion: la relectura completa tras el `UPDATE` ve, en READ COMMITTED, lo que la otra conexión confirmó.
- * Sin señal (el control), el 201 lleva el contacto.
+ * Sin señal (el control), el 201 lleva el contacto. Si lo que confirma es el CIERRE de la inscripción (m-1 de
+ * `informe-security-bandeja-r3.md`), no hay 201: 409 `enrollment_closed`, como la repetición.
  *
  * Las filas que el trabajador tiene que ver se CONFIRMAN por una conexión de apoyo (la transacción de
  * `RefreshDatabase` no las vería) y se borran al final, solo ellas, con los disparadores apagados (base
@@ -122,7 +123,60 @@ class H9AssistedClaimRaceTest extends TestCase
         $trabajo = $this->committedStartedJob($vivo, $persona);
         $apoyo = DB::connection(self::CONNECTION);
 
-        // La barrera, cogida ANTES de lanzar al trabajador.
+        $salida = $this->claimAcrossTheBarrier($trabajo, fn () => match ($senal) {
+            'dnc' => $apoyo->table('marketing_leads')->where('id', $persona['lead'])->update(['do_not_contact' => true, 'updated_at' => now()]),
+            'pause' => $this->pauseStrategy($vivo),
+            'none' => null,
+        });
+        $r = $salida['claim'];
+        $this->assertFalse($r['replayed']);
+        $this->assertSame(self::CLAIMER, (int) $apoyo->table('outreach_jobs')->where('id', $trabajo['id'])->value('assisted_claimed_by_admin_id'), 'la reclamación queda escrita y confirmada: no se deshace nada');
+        if ($motivo === null) {
+            $this->assertSame([['kind' => 'member', 'id' => $persona['member']], true, null], [$r['job']['person'], is_string($r['job']['script']), $r['job']['contactWithheld']], 'sin señal, el 201 lleva el contacto');
+        } else {
+            $this->assertSame([null, null, $motivo], [$r['job']['person'], $r['job']['script'], $r['job']['contactWithheld']], "{$senal}: el 201 ya no lleva ni el enlace ni el guion");
+        }
+        $this->assertStringNotContainsString('3001234567', json_encode($salida));
+    }
+
+    /**
+     * m-1 de `informe-security-bandeja-r3.md` con dos conexiones: mientras el trabajador espera en la barrera (ya
+     * comprobado y antes de su `UPDATE`), la otra conexión CONFIRMA el cierre de la inscripción, con las columnas de
+     * `OutreachStore::closeEnrollment()` en el fin de la ventana del despachador. El trabajador escribe la reclamación
+     * (no se deshace nada) y responde 409 `enrollment_closed`, como la repetición, sin 201 y sin contacto: la relectura
+     * tras el `UPDATE` ve, en READ COMMITTED, la inscripción cerrada.
+     */
+    public function test_m1_la_inscripcion_que_otra_conexion_cierra_entre_la_comprobacion_y_el_update_da_409_enrollment_closed(): void
+    {
+        $vivo = $this->liveStrategy($this->validContent($this->assistedTemplate(), ['exclusions' => null]));
+        $persona = $this->committedMember('3001234567');
+        $trabajo = $this->committedStartedJob($vivo, $persona);
+        $apoyo = DB::connection(self::CONNECTION);
+        $inscripcion = (int) $apoyo->table('outreach_jobs')->where('id', $trabajo['id'])->value('enrollment_id');
+
+        $salida = $this->claimAcrossTheBarrier($trabajo, fn () => $this->assertSame(1, $apoyo->table('outreach_enrollments')->where('id', $inscripcion)->whereIn('status', ['active', 'waiting'])->update([
+            'status' => 'expired', 'exit_reason' => 'enrollment_window_over', 'last_outcome' => 'no_response', 'ended_at' => now(), 'next_due_at' => null,
+            'status_changed_at' => now(), 'updated_at' => now(),
+        ]), 'la otra conexión cierra la inscripción abierta'));
+
+        $this->assertArrayNotHasKey('claim', $salida, 'sin 201: no se entrega nada');
+        $this->assertSame([409, 'enrollment_closed'], [$salida['conflict']['status'] ?? null, $salida['conflict']['code'] ?? null]);
+        $this->assertSame(self::CLAIMER, (int) $apoyo->table('outreach_jobs')->where('id', $trabajo['id'])->value('assisted_claimed_by_admin_id'), 'la reclamación queda escrita y confirmada: no se deshace nada');
+        $this->assertSame('expired', $apoyo->table('outreach_enrollments')->where('id', $inscripcion)->value('status'));
+        $this->assertStringNotContainsString('3001234567', json_encode($salida));
+    }
+
+    /**
+     * La coreografía de la carrera: la barrera, cogida ANTES de lanzar al trabajador; con él ya comprobado y parado ANTES
+     * de su `UPDATE`, `$entreMedias` CONFIRMA la señal por la conexión de apoyo; se suelta la barrera y se recoge su
+     * salida, que tiene que haber pasado por la barrera antes del `UPDATE` y sin transacción que lo envuelva.
+     *
+     * @param  array{id: int, uuid: string}  $trabajo
+     * @return array<string, mixed>
+     */
+    private function claimAcrossTheBarrier(array $trabajo, callable $entreMedias): array
+    {
+        $apoyo = DB::connection(self::CONNECTION);
         $apoyo->select('SELECT pg_advisory_lock(?)', [self::BARRIER]);
         $p = $this->spawnWorker($trabajo['uuid']);
         $esperando = 0;
@@ -138,27 +192,19 @@ class H9AssistedClaimRaceTest extends TestCase
         }
         $this->assertNull($apoyo->table('outreach_jobs')->where('id', $trabajo['id'])->value('assisted_claimed_by_admin_id'), 'en la barrera, todavía sin reclamar');
 
-        // Con el trabajador ya comprobado y parado ANTES de su UPDATE, la otra conexión CONFIRMA la señal.
-        match ($senal) {
-            'dnc' => $apoyo->table('marketing_leads')->where('id', $persona['lead'])->update(['do_not_contact' => true, 'updated_at' => now()]),
-            'pause' => $this->pauseStrategy($vivo),
-            'none' => null,
-        };
-        $apoyo->select('SELECT pg_advisory_unlock(?)', [self::BARRIER]);
+        try {
+            $entreMedias();
+        } finally {
+            // Suelta la barrera también si la señal falla: el trabajador no se queda colgado.
+            $apoyo->select('SELECT pg_advisory_unlock(?)', [self::BARRIER]);
+        }
         $salida = $this->collect($p);
 
         $this->assertSame(0, $salida['inTransaction'], 'el trabajador, sin transacción que lo envuelva (como una petición)');
         $this->assertNotNull($salida['barrierAt'], 'el trabajador pasó por la barrera');
         $this->assertLessThan($salida['updateAt'], $salida['barrierAt'], 'la barrera, después de comprobar y ANTES del UPDATE');
-        $r = $salida['claim'];
-        $this->assertFalse($r['replayed']);
-        $this->assertSame(self::CLAIMER, (int) $apoyo->table('outreach_jobs')->where('id', $trabajo['id'])->value('assisted_claimed_by_admin_id'), 'la reclamación queda escrita y confirmada: no se deshace nada');
-        if ($motivo === null) {
-            $this->assertSame([['kind' => 'member', 'id' => $persona['member']], true, null], [$r['job']['person'], is_string($r['job']['script']), $r['job']['contactWithheld']], 'sin señal, el 201 lleva el contacto');
-        } else {
-            $this->assertSame([null, null, $motivo], [$r['job']['person'], $r['job']['script'], $r['job']['contactWithheld']], "{$senal}: el 201 ya no lleva ni el enlace ni el guion");
-        }
-        $this->assertStringNotContainsString('3001234567', json_encode($salida));
+
+        return $salida;
     }
 
     // ── El trabajador ───────────────────────────────────────────────────────

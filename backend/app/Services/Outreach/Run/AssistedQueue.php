@@ -74,7 +74,9 @@ use Illuminate\Support\Str;
  * su reclamante registre el resultado, pero sin `person` ni `script` y con
  * `contactWithheld` = el motivo (solo lo ve quien lo reclamó). La reclamación
  * lo vuelve a mirar TODO después de escribir (R3-2): lo que llegue entre la
- * comprobación y el `UPDATE` ya no entrega el contacto en el 201. No se escribe
+ * comprobación y el `UPDATE` ya no entrega el contacto en el 201; y si lo que
+ * llega es el cierre de la inscripción, 409 `enrollment_closed`, como la
+ * repetición (m-1 de `informe-security-bandeja-r3.md`). No se escribe
  * nada: el trabajo y la inscripción siguen como estaban hasta el resultado o
  * el fin de la ventana. `human_requested` no se mira aquí (L9-66: una derivada
  * a persona sigue viva en la bandeja). Los frenos ajenos al H9 (cerrojo de
@@ -256,7 +258,9 @@ final class AssistedQueue
      * el contacto retenido si ahora hay un motivo (I-1). Si cualquier motivo
      * llega entre la comprobación y la escritura (un freno, m-2; una pausa de
      * la estrategia o un «no contactar», R3-2), la fila ya reclamada vuelve
-     * sin contacto (`contactWithheld` = el motivo); no se deshace nada.
+     * sin contacto (`contactWithheld` = el motivo); si lo que llega es el
+     * cierre de su inscripción, 409 `enrollment_closed`, como la repetición
+     * (m-1 de `informe-security-bandeja-r3.md`). No se deshace nada.
      *
      * @return array{job: array<string, mixed>, replayed: bool}
      */
@@ -297,6 +301,13 @@ final class AssistedQueue
         // m-2 y R3-2: TODO otra vez tras escribir, con lecturas nuevas y en el mismo orden (frenos, cadena, foto y libro). Lo que llegue
         // entre la comprobación y el UPDATE (un freno, una pausa, un «no contactar») retiene el contacto ya en esta respuesta.
         $reclamado = $this->assistedJob($jobUuid);
+        // m-1 de `informe-security-bandeja-r3.md`: antes, el trabajo y su inscripción, con lo MISMO que respondería la repetición. Una
+        // inscripción que se cierra entre la comprobación y el UPDATE no entrega el contacto ni una vez (409 `enrollment_closed`, con la
+        // reclamación ya escrita: no se deshace nada). `started` es final y la base no lo deja cambiar; mirarlo no cuesta una consulta.
+        if ((string) $reclamado->status !== 'started') {
+            throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
+        }
+        $this->requireOpenEnrollment((int) $reclamado->enrollment_id);
         $this->guiones = [];
         $motivo = $this->withholdReasons([$reclamado], $ahora, $this->openBrakes(), $this->runningParts([(int) $reclamado->strategy_id]))[(int) $reclamado->id] ?? null;
 
