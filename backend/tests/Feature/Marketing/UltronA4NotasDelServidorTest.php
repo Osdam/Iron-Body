@@ -47,6 +47,9 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *    (`discarded_draft_check`: `plans_overview/mixed`, `length_over_cap` y
  *    251). Si el servidor lo aceptaba, lo dice; sin versión del Studio, la
  *    fila no lleva la clave.
+ *  - (3) `decide` da, junto a cada marcador de `plans_overview.plans`, los
+ *    beneficios de SU plan (los de `active_plans`, con su mismo filtro): el
+ *    tercero, los del Élite (id 8), no los del Plan Valera (id 3).
  */
 class UltronA4NotasDelServidorTest extends TestCase
 {
@@ -271,6 +274,60 @@ class UltronA4NotasDelServidorTest extends TestCase
         $this->assertSame('SAFE_CURATED_REPLY', $fila->metadata['fallback_mode']);
         $this->assertArrayNotHasKey('discarded_draft_check', $fila->metadata);
         $this->assertSame(UltronReplyOrigin::SERVER_UNKNOWN, UltronReplyOrigin::classify($fila->metadata)['server_verdict'], 'sin dato, como una fila de antes');
+    }
+
+    // ── (3) Los beneficios de cada plan junto a su marcador ─────────────────
+
+    /**
+     * Los beneficios de producción de los tres planes de la lista (leídos por
+     * el lead en solo lectura el 22-11, `plans.benefits`): el Valera y el
+     * Mensual comparten los primeros; el Élite tiene otros.
+     */
+    private const BENEFICIOS_DE_PRODUCCION = [
+        3 => ['Acceso ilimitado al gimnasio', 'Zona de pesas y maquinaria', 'Asesoría semi personalizada con entrenador de planta', 'Seguimiento en ejecución de ejercicios', 'Valoración inicial'],
+        4 => ['Acceso ilimitado al gimnasio', 'Zona de pesas y maquinaria', 'Asesoría semi personalizada con entrenador de planta', 'Seguimiento en ejecución de ejercicios'],
+        8 => ['Acceso total al gimnasio', 'Acceso completo a IRONBODY WORKOUT', 'Sesiones funcionales por agenda', 'Entrenamiento intensivo y dinámico', 'Rutinas guiadas por entrenadores', 'Seguimiento continuo durante todo el proceso'],
+    ];
+
+    /**
+     * CORRECCIÓN (3): `PLAN_3` es una POSICIÓN (aquí, el Élite, id 8), pero
+     * `active_plans` y la memoria hablan del «plan 3» (el Valera). En la prueba
+     * real el modelo le pegó al `{{PLAN_3}}` los beneficios del Valera. Ahora
+     * cada elemento de `plans_overview.plans` lleva los beneficios de SU plan:
+     * los mismos, con el mismo filtro, que su entrada de `active_plans` (sin la
+     * clave si no tiene ninguno), y sin ninguna cifra. Sin versión del Studio no
+     * hay lista (como hoy).
+     */
+    public function test_decide_da_junto_a_cada_marcador_los_beneficios_de_su_plan(): void
+    {
+        foreach (self::BENEFICIOS_DE_PRODUCCION as $id => $beneficios) {
+            Plan::query()->whereKey($id)->update(['benefits' => json_encode($beneficios)]);
+        }
+        $this->publica('profesional', 200);
+        $decide = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO));
+        $planes = $decide['context']['commercial_turn_policy']['plans_overview']['plans'];
+
+        $this->assertSame([[3, '{{PLAN_1}}'], [4, '{{PLAN_2}}'], [8, '{{PLAN_3}}']], array_map(fn (array $p) => [$p['plan_id'], $p['marker']], $planes));
+        $this->assertSame(self::BENEFICIOS_DE_PRODUCCION[8], $planes[2]['benefits'], 'el tercero, los del Élite (id 8)');
+        $this->assertNotContains('Acceso ilimitado al gimnasio', $planes[2]['benefits'], 'no los del plan id 3');
+        $this->assertSame(self::BENEFICIOS_DE_PRODUCCION[3], $planes[0]['benefits']);
+        $activos = array_column($decide['context']['active_plans'], null, 'id');
+        foreach ($planes as $p) {
+            $this->assertSame($activos[$p['plan_id']]['benefits'], $p['benefits'], 'los mismos que en active_plans: '.$p['marker']);
+        }
+        $this->assertDoesNotMatchRegularExpression('/\d{2,3}[.,]?\d{3}|\$/', json_encode($decide['context']['commercial_turn_policy'], JSON_UNESCAPED_UNICODE), 'ninguna cifra de dinero');
+
+        // Un plan sin beneficios: sin la clave, igual que en `active_plans`.
+        $this->nuevaConversacion();
+        Plan::query()->whereKey(4)->update(['benefits' => json_encode([])]);
+        $decide = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO));
+        $this->assertArrayNotHasKey('benefits', $decide['context']['commercial_turn_policy']['plans_overview']['plans'][1]);
+        $this->assertArrayNotHasKey('benefits', array_column($decide['context']['active_plans'], null, 'id')[4]);
+
+        // Legacy (sin negociar): ni lista ni beneficios en la política.
+        $this->nuevaConversacion();
+        $decide = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO), false);
+        $this->assertArrayNotHasKey('plans_overview', $decide['context']['commercial_turn_policy']);
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
