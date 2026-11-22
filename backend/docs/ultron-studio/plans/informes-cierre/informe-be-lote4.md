@@ -71,13 +71,62 @@ Lista exactamente `backend/app/Observers/Commercial/ComplaintCommercialEmitter.p
 - **Con qué frecuencia** se dan I-1 y el tope de NB3 en producción.
 
 ## Lo que seguridad debe mirar primero
-1. **B1 vive en el controlador.** `resolveComplaint()` recibe un `adminId`, no la cuenta: otro llamador futuro se saltaría la llave. Hoy el único es la ruta [L].
+1. **B1 vive en el controlador.** `resolveComplaint()` recibe un `adminId`, no la cuenta: otro llamador futuro se saltaría la llave. Hoy el único es la ruta [L]. **Cerrado en la última tanda (punto 5).**
 2. **NB2 es opcional**: sin el campo, la ventana de NB2 queda como antes. Además, `ai_actions[].id` es un id interno nuevo en la respuesta.
-3. **I-1 y la siembra** de `canaryMember()`. I-1 no cubre la cobranza por WhatsApp: con la autorización de C9 perdida (el número cambió) no retiene. La decisión del lead nombra solo la comercial.
+3. **I-1 y la siembra** de `canaryMember()`. I-1 no cubre la cobranza por WhatsApp: con la autorización de C9 perdida (el número cambió) no retiene. La decisión del lead nombra solo la comercial. **La cobranza, cerrada en la última tanda (punto 4).**
 4. **El bloqueo `admins … FOR UPDATE` de NB3**: es breve, pero toca la tabla de cuentas.
 5. **El falso positivo de NB6**: «Si no quiere, responda BAJA» se rechaza (el normalizador no ve la coma). Falla del lado seguro.
 
 ## Hallazgos fuera de alcance (sin tocar)
 - **`AdminUserPasswordTest.php:353`** crea un disparador con sintaxis de SQLite. En PG da error de sintaxis: 150 pruebas, 1 error en `tests/Feature/Access`. Ese fichero no está en el diff del lote.
 - **NB5 sigue igual**, como pide el encargo: la comprobación de repetición de `clientRequestId` va antes del bloqueo de la cuenta.
-- **`AssistedQueueLadderParityTest` clasifica `no_whatsapp_identity` como `policy_unknown`**, y eso solo es cierto en la finalidad comercial. En servicio y cobranza no retiene, como dice el contrato.
+- **`AssistedQueueLadderParityTest` clasifica `no_whatsapp_identity` como `policy_unknown`**, y eso solo es cierto en la finalidad comercial. En servicio y cobranza no retiene, como dice el contrato. (Desde la última tanda, también en la cobranza: solo el servicio no retiene.)
+
+## Última tanda (22-11-2026): lo de database-specialist y los tres cabos
+De `80657d66` (copia de `informe-db-cierre.md`) a `a48a239b`. Cada prueba nueva cae con el código de antes [C], salvo las carreras de §B.3, que vigilan garantías que ya existían: esas las hice caer con mutaciones. Líneas: SQLite / PG 14.
+1. **N-B1, el índice** (`14cad6a9`). En `2026_11_22_100001_…:415`, `ocon_revoked_phone_idx (phone_ref) WHERE kind = 'revoked' AND channel = 'whatsapp'`: parcial, no único e igual en los dos motores. El `CAST(? AS CHAR(64))` de `OutreachConsentFacts.php:391` no cambia.
+   - `OutreachConsentsSchemaTest:110-129` (+`:724`): la definición exacta, y que es el ÚNICO parcial, con su WHERE y no único («sin parciales» pasa a «uno, éste»). OK (21, 253, 4 saltadas) / OK (21, 378).
+   - **Planes** [C] (25 334 filas como el informe, en una base de ensayo y una transacción deshecha; 0 filas después, base borrada). No son mediciones.
+     - Una persona: de Seq Scan, 7,0 ms, a `Index Scan using ocon_revoked_phone_idx`, 0,07 ms.
+     - Tanda de 500 personas y 613 números (113 coincidencias): el lector la parte en 2 sentencias (tope de 1000). Las dos usan el índice (Nested Loop): 10,8 y 0,7 ms, frente a 17,4 y 7,4 ms con Seq Scan + Hash.
+     - Si coinciden los 500 números, el tramo grande prefiere Seq Scan + Hash por coste: 11,1 ms, frente a 10,7 ms sin índice.
+2. **§B.3, las carreras** (`2e4729d3`), en `OutreachConsentsApiTest`: `:702` (vista desde el hermano, también con una confirmación en vuelo de una petición antigua), `:730` (dos retiradas en vuelo, con número y sin él) y `:761` (CACHE 1, y los ids en el orden A, B, A, B).
+   - Mutaciones: sin la regla de los hermanos caen `:702` y `:730`; si la confirmación cuenta en su propio id, cae `:702`; con CACHE 20 cae `:761` (sin la aserción del catálogo, por el orden: 1, 21, 2). OK (24, 399, 6 saltadas) / OK (24, 750).
+3. **N-B3, el cerrojo** (`3aeefc9e`). En `ops/supresion-1581.sql:981` (cabecera en `:108`), `LOCK TABLE … IN SHARE MODE` con `:dry 0`, antes de la primera lectura del libro. En seco no se toma. SHARE exige UPDATE, DELETE o TRUNCATE: lo toma el dueño (`SET LOCAL ROLE :owner`) [L].
+   - `OutreachConsentSuppression1581Test:234`: con el guion de antes, la fila en vuelo queda `m:7101`, con su número. PG OK (1, 409); siguen en verde Commercial (1, 379), Voice (1, 1137) y PersonalDataGuard (4, 1676).
+4. **I-1 para la cobranza** (`83c48957`). La escalera ya la niega (`PolicyLadder.php:241-245`; `LeadFacts.php:253` la deja siempre en false). Ahora la bandeja también: `AssistedQueue.php:143` y `:610`. El servicio no cambia.
+   - `H9AssistedEligibilityTest:631`: autorización del libro por el servicio real; al cambiar el número, `policy_unknown`.
+   - `AssistedQueueOptedOutTest:98…`: 1 expectativa cambia y hay 7 casos nuevos. m-1, `:122` y `:190`: la tabla por finalidad, atada a la constante.
+   - Bandeja: (163, 1423, 4 saltadas) / (148, 1343).
+5. **B1 en el servicio** (`37abfbaa`). En `MarketingStaffReviewService.php:82-85`, antes de la transacción, la llave de la cuenta del `adminId`; sin ella, `StaffReviewComplaintException` 403 `forbidden`. La firma y la ruta no cambian.
+   - `H9ComplaintDismissAuthorityTest:297`. Quejas e InboxTest: (100, 880, 1 saltada) / (100, 883).
+6. **Contrato** (`a48a239b`): C9 §7 (`:1742`; C-B3 en `:1746` y N-B2 en `:1747`), la bandeja (`:650`, `:669` y la tabla) y Q1-8 B1 (`:1768`).
+
+**Baterías finales** [C]:
+- La lista pedida, 51 ficheros: consentimiento 8, quejas 6, bandeja 7, permisos y rutas 27, InboxTest y `tests/Feature/Outreach/Schema`.
+  - SQLite OK (919, 10 074, 147 saltadas) · PG (919, 12 021): 1 error, el conocido de `AdminUserPasswordTest:353`. Las 3 deprecaciones de PHPUnit salen de los docblocks de `AdminRoutesSecurityTest`, que no es del lote.
+- SQLite: `tests/Unit/Outreach` OK (1064, 53 431) y `tests/Feature/Outreach` OK (833, 45 775, 180 saltadas). Pint en verde.
+- Guardas (16 ficheros): 141 pruebas y 1 fallo, la puerta de diff.
+
+**La puerta de diff lista 10 ficheros:**
+- Los 3 autorizados: `ComplaintCommercialEmitter.php`, `MarketingAiActionCommercialObserver.php` y `CommercialVocabulary.php`.
+- Siete de `app/Services/Marketing/Ultron/`: `UltronCommitService`, `UltronDecideService`, `UltronDraftCheck`, `UltronDraftDefects`, `UltronPlansOverview`, `UltronRegenerationNotes` y `UltronReplyOrigin`.
+- **Esos siete no son del lote:** ninguno de sus commits los toca (`git log 272faaa2..HEAD`). `origin/main` avanzó hoy a las 11:10 con `cierre/a4-notas` (`f1fe6cac`), y la puerta compara `origin/main` con el árbol. No fusioné ni rebasé nada.
+
+**Fuera de `app/` y `tests/`, todo el lote** (desde `272faaa2`, la base de la integración):
+- **Migración:** `2026_11_22_100001_create_outreach_consents_table.php` (nueva; condiciones C-B1 y C-B2).
+- **Rutas:** `routes/commercial-automation.php` (nueva: 5 rutas de autorizaciones y `POST complaints`). En `bootstrap/app.php`, solo su registro.
+- **Configuración:** `config/outreach_consents.php` (nueva) y, en `config/outreach.php`, `complaints.per_account_per_day`.
+- **Variables de entorno** (`.env.example`): `COMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY` y `OUTREACH_CONSENT_LEGAL_{COMMERCIAL,COLLECTIONS,SERVICE}_{VERSION,TEXT}`. Vacías, dan 20 quejas al día y «sin texto legal».
+- **Operación:** `docs/ultron-studio/ops/supresion-1581.sql`, más 10 documentos.
+
+**Lo que NO verifiqué:**
+- Producción y el CRM.
+- N-B3 con el escritor real de la palabra de baja, que no existe: lo reproduje con un INSERT desde otra conexión.
+- Los planes con la intercalación y el volumen de producción.
+- Las carreras como `iron_app`: corrieron como dueño. Los ciclos que esos mismos ficheros hacen como la aplicación siguen en verde.
+
+**Fuera de alcance (sin tocar):**
+- `ops/h9-schema-check.sql:185` comprueba `ocon_subject_idx` pero no el índice nuevo: es de quien lleve el despliegue.
+- El servicio no registra el intento sin llave: el controlador sí, con `commercial.complaint.dismiss_forbidden`. Un llamador futuro debería registrarlo en su capa.
+- Este árbol no tiene `.env`: `artisan` arranca con `APP_ENV=production`, y las migraciones se niegan, como deben. Para los planes usé `APP_ENV=testing` y una base `ultron_studio_*` desechable.
