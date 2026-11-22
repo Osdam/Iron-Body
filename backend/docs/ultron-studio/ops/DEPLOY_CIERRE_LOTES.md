@@ -1,13 +1,13 @@
 # Despliegue por lotes del cierre de ULTRON STUDIO (`deploy-cierre-lote.sh`)
 
-**Fecha:** 22-11-2026. **Autor:** `devops`. **Estado:** lote 2 **DESPLEGADO** en producción (`fddd3450`, 14:58 UTC, sin desvíos: `evidencia-h9/2026-11-22/05-lote-2-despliegue.txt`); lotes 3, 4 y 5 **PREPARADOS Y ENSAYADOS EN LOCAL, NO EJECUTADOS**. Sin `ssh` ni push. Cada lote se despliega con la orden del lead, y el **lote 3 solo con la autorización específica del propietario**.
-**Guion:** `ops/deploy-cierre-lote.sh`, con las correcciones de la revisión independiente (`plans/informes-cierre/informe-reviewer-guion.md`: C1–C3, m1–m9) · **huella sha256 `7c7298d8b19d3cc595acbbd8689f9990ca5c991fb976c07d966f121141bebacb`** (la que desplegó el lote 2 era `6911f61a…`). **Declaraciones:** `ops/cierre-lotes/lote-{2,3,4,5}/`. **Banco:** `ops/banco-cierre/`.
+**Fecha:** 22-11-2026. **Autor:** `devops`. **Estado:** lote 2 **DESPLEGADO** en producción (`fddd3450`, 14:58 UTC, sin desvíos: `evidencia-h9/2026-11-22/05-lote-2-despliegue.txt`); lotes 3, 4 y 5 **PREPARADOS Y ENSAYADOS EN LOCAL, NO EJECUTADOS**; **PT-19 (§5 ter) preparado y ensayado en local, NO ejecutado** (`evidencia-h9/2026-11-22/11-ensayo-pt19-y-regresion-lote5.txt`). Sin `ssh` ni push. Cada lote se despliega con la orden del lead, y el **lote 3 solo con la autorización específica del propietario**.
+**Guion:** `ops/deploy-cierre-lote.sh`, con las correcciones de la revisión independiente (`plans/informes-cierre/informe-reviewer-guion.md`: C1–C3, m1–m9) y la enmienda de PT-19 (`--bootstrap` y `--marcador`; sin ellas, todo igual) · **huella sha256 `ca03c1b5d5ec0c5d46918a91d37c188f09dd070093e5af3ad553cd16380503be`** (antes de la enmienda, `7c7298d8…`; la que desplegó el lote 2, `6911f61a…`). **Declaraciones:** `ops/cierre-lotes/lote-{2,3,4,5}/` y `ops/cierre-lotes/pt-19/`. **Banco:** `ops/banco-cierre/`.
 **Marcas:** **[C]** comprobado (ensayo o lectura del código) · **[L]** leído en un documento o una memoria · **[S]** supuesto, sin verificar.
 
 ## 0. En cinco líneas
 
 1. **Lote 1** fue por `hotfix-backend.sh`; **lote 2**, por este guion (desplegado). Quedan el **3** (voz y telefonía), el **4** (consentimiento y quejas) y el **5** (laboratorio frente al motor): uno a la vez, cada uno con su `P` = lo que sirva producción en ese momento.
-2. El guion **no despliega nada que el lote no declare** (migraciones, configuración, rutas, programador y, ahora, filas que no puede haber); lo no declarado **aborta sin tocar nada**.
+2. El guion **no despliega nada que el lote no declare** (migraciones, configuración, rutas, programador, filas que no puede haber y, para PT-19, `bootstrap/app.php` por su huella con un marcador sin credenciales); lo no declarado **aborta sin tocar nada**.
 3. Orden: previas → respaldo → **en el orden del lote** migraciones (rol dueño, una a una) y código (`merge --ff-only`) → cachés como `www-data` → `queue:restart` → posteriores. **Solo dentro de `tmux` o `screen`** (C2).
 4. Si una comprobación posterior falla, **vuelve atrás solo** (código 4). **Un `production.ERROR` ajeno al diff ya no**: es un **DESVÍO** (código 3) con la clase y el fichero:línea de cada error, y decide el lead (C1).
 5. Ensayado en local con artisan y PostgreSQL 14 de verdad [C]: los tres lotes con las puntas de hoy, de punta a punta y con vuelta atrás, y un caso por cada corrección (§8). Lo que solo existe en el servidor, en el §9.
@@ -34,7 +34,7 @@ N=$(git rev-parse --short=8 origin/main)
 git merge-base --is-ancestor "$P" "$N" && echo "avance rápido"
 git log --oneline "$P..$N"                                                # ¿solo lo del lote (y documentación)?
 git diff --name-only --no-renames "$P" "$N" | grep -vE '^backend/(app|tests|docs)/'   # tiene que ser lo del §4, §5 o §5 bis
-git show "$N:backend/docs/ultron-studio/ops/deploy-cierre-lote.sh" | shasum -a 256     # 7c7298d8… si N trae esta rama sin más cambios
+git show "$N:backend/docs/ultron-studio/ops/deploy-cierre-lote.sh" | shasum -a 256     # ca03c1b5… si N trae cierre/ops-pt19 sin más cambios en el guion
 # Subir el guion y las declaraciones DEL COMMIT QUE SE DESPLIEGA, y la lista (como en el lote 2)
 git show "$N:backend/docs/ultron-studio/ops/deploy-cierre-lote.sh" \
   | ssh ironbody-vps 'umask 077; cat > /root/deploy-cierre-lote.sh && chmod 700 /root/deploy-cierre-lote.sh && sha256sum /root/deploy-cierre-lote.sh'
@@ -48,7 +48,7 @@ En el servidor: `tmux new -s lote$L` (o `tmux attach`), y ahí, primero `--solo-
 
 ## 3. Lote 2: gobierno, motores y aviso de pagos — DESPLEGADO (22-11-2026, `45b53023 → fddd3450`)
 
-71 ficheros, la migración `2026_11_22_100001_allow_classifier_budget_scope` en 24,9 ms, 14 de 14 workers con pid nuevo, 0 errores, vigilancia de 15 min limpia [C, evidencia `05-lote-2-despliegue.txt`]. Vuelta atrás, si hiciera falta: `bash /root/deploy-cierre-lote.sh 45b53023 fddd3450 /root/cierre-lote-2/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261122-145816`. **Ya con el guion nuevo** (lo que hay en `/root` es el de `6911f61a…`): subir antes el de `7c7298d8…`, que lee el mismo respaldo (mismos ficheros; [C] por lectura, no ensayado con ese respaldo); con el fichero de entorno cambiado desde las 14:58, regenera la caché de configuración en vez de reponerla (C3).
+71 ficheros, la migración `2026_11_22_100001_allow_classifier_budget_scope` en 24,9 ms, 14 de 14 workers con pid nuevo, 0 errores, vigilancia de 15 min limpia [C, evidencia `05-lote-2-despliegue.txt`]. Vuelta atrás, si hiciera falta: `bash /root/deploy-cierre-lote.sh 45b53023 fddd3450 /root/cierre-lote-2/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261122-145816`. **Ya con el guion nuevo** (lo que hay en `/root` es el de `6911f61a…`): subir antes el de la cabecera (`ca03c1b5…`; con un respaldo sin `decl/marcador` su vuelta es la de `7c7298d8…`), que lee el mismo respaldo (mismos ficheros; [C] por lectura, no ensayado con ese respaldo); con el fichero de entorno cambiado desde las 14:58, regenera la caché de configuración en vez de reponerla (C3).
 
 ## 4. Lote 3: voz y telefonía
 
@@ -114,6 +114,62 @@ bash /root/deploy-cierre-lote.sh $P $N /root/cierre-lote-5/lista.txt \
 | Vuelta atrás | Cachés y código; **la columna se queda**, con su fila en `migrations` (`SE CONSERVA el esquema de: …`): el código previo no la ve. Repetir el lote después lo trata como reanudación (`ya registrada`) [C]. **No deshace** las ejecuciones del motor que se hayan lanzado: su `results_hash` cuenta `engine` y el código previo no podría verificarlas [L, informe-db-cierre A.1] |
 | Después | **La puerta de publicar de la versión en canario se lee igual que antes**: con la sesión de superadmin del smoke, `GET /api/admin/ultron-studio/versions/39cfae9f-19a1-44bd-8d8e-f9f3327fed81/publication-preview` antes y después, y el bloque `labGate` (`mode`, `ok`, `latest`, `runUuid`, `verdictId`, `promptVersion`) idéntico [S: la ruta y la forma, de la rama; no lo pude llamar sin credenciales]; y `publication-check` con salida 0 y la misma huella `26d57565…` |
 
+## 5 ter. PT-19: la puerta del secreto interno antes que el limitador
+
+**Qué es** [L, `plans/informes-cierre/informe-backend-pt19-puertas-internas.md` e `informe-apisec-pt19.md`]: **un fichero de producto**, `backend/bootstrap/app.php` (+16 líneas: `prependToPriorityList(before: ThrottleRequests, prepend: VerifyInternalAutomationSignature)`), sobre el código de producción (`f1fe6cac`). Sin secreto, las 21 rutas de `api/internal/` responden 401 **sin descontar** del cupo global de n8n y **sin** `X-RateLimit-*`; con el secreto, el mismo tope y el mismo 429 de siempre. Seguridad de API: APTO, 0 bloqueantes; su NB-4 es esta vía. Sin migraciones, rutas, configuración, programador ni dependencias.
+
+**Por qué necesita banderas propias** [C]: `bootstrap/app.php` solo pasaba por este guion para montar un fichero de rutas (`--rutas`), y `hotfix-backend.sh` rechaza todo `backend/bootstrap/*`. Los dos siguen igual. Esta vía es **`--bootstrap=<sha256>`**: el guion exige que `backend/bootstrap/app.php` en `N` sea, byte a byte, el que se revisó (su huella entera). Va con **`--marcador`**, porque ninguna caché contiene ese fichero y lo único que prueba que el servidor lo sirve es la respuesta. Sin las dos banderas, el mismo diff **sigue abortando** (ensayado: §8).
+
+**Alcance** [C]: la unidad es `origin/main` de hoy (`bfe61ba6`) más la fusión de `cierre/puertas-internas` (`c78e248e`). `origin/main` es antecesor de la rama, así que la fusión tiene el árbol de `c78e248e`. Frente a `f1fe6cac` son **46 ficheros**: `backend/bootstrap/app.php` (M), `backend/tests/Feature/Marketing/PuertasInternasSecretoAntesDelCupoTest.php` (A) y 44 de `backend/docs/`. La lista entera, para comparar, está en `cierre-lotes/pt-19/lista-referencia.txt`. **`N` tiene que traer también `cierre/ops-pt19`**, porque el guion enmendado se sube desde `N`. Eso suma solo ficheros de `backend/docs/`: el guion, esta ficha, la declaración, la evidencia y `MATRIZ_CIERRE_V2.md` de la rama principal, sin choques con `cierre/puertas-internas`. **Fuera de `docs/` tienen que salir exactamente esos dos.** El paso 0 lo dice así: `… 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · N de docs · 0 otros`.
+
+**Declaraciones** (`cierre-lotes/pt-19/`):
+- **`--bootstrap=d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710`**: el sha256 de `backend/bootstrap/app.php` en `5cd201eb` (el que revisó seguridad y pasó la batería completa), igual en `c78e248e`. El de producción hoy, `f1fe6cac`, es `294e57ab…387c`. **Se copia de esta ficha y no se recalcula desde `N`**, porque entonces la comprobación no comprobaría nada.
+- **`--marcador=marcador.txt`**: `GET api/internal/marketing/ai/doctor 401 x-ratelimit-limit presente ausente`. Con el previo, el 401 lleva `X-RateLimit-Limit` (evidencia `10-…`, [3]); con el nuevo, no. El guion solo mira el código y si la cabecera está, nunca su valor.
+- Ni `--migraciones`, ni `--config`, ni `--rutas` (no van juntas con `--bootstrap`), ni `--programador`, ni `--sin-filas`.
+
+**Órdenes.** Preparación, en el Mac (§2 con estos nombres):
+
+```bash
+git fetch -q origin
+P=$(ssh ironbody-vps 'git -C /var/www/api rev-parse --short=8 HEAD')        # f1fe6cac si no se ha desplegado nada más
+N=$(git rev-parse --short=8 origin/main)                                     # con cierre/puertas-internas y cierre/ops-pt19
+git merge-base --is-ancestor "$P" "$N" && echo "avance rápido"
+git diff --name-only --no-renames "$P" "$N" | grep -v '^backend/docs/'       # EXACTAMENTE: bootstrap/app.php y la prueba
+git show "$N:backend/bootstrap/app.php" | shasum -a 256                     # d8e9cd27…cb710; si no, PARAR (no es lo revisado)
+git show "$N:backend/docs/ultron-studio/ops/deploy-cierre-lote.sh" | shasum -a 256   # la huella del guion de la cabecera
+git show "$N:backend/docs/ultron-studio/ops/deploy-cierre-lote.sh" \
+  | ssh ironbody-vps 'umask 077; cat > /root/deploy-cierre-lote.sh && chmod 700 /root/deploy-cierre-lote.sh && sha256sum /root/deploy-cierre-lote.sh'
+git diff --name-only --no-renames "$P" "$N" | ssh ironbody-vps "umask 077; mkdir -p /root/cierre-pt19 && cat > /root/cierre-pt19/lista.txt && sha256sum /root/cierre-pt19/lista.txt"
+git show "$N:backend/docs/ultron-studio/ops/cierre-lotes/pt-19/marcador.txt" | ssh ironbody-vps 'umask 077; cat > /root/cierre-pt19/marcador.txt'
+```
+
+En el servidor, dentro de `tmux new -s pt19`:
+
+```bash
+H=d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710
+bash /root/deploy-cierre-lote.sh $P $N /root/cierre-pt19/lista.txt --bootstrap=$H --marcador=/root/cierre-pt19/marcador.txt --solo-comprobar
+bash /root/deploy-cierre-lote.sh $P $N /root/cierre-pt19/lista.txt --bootstrap=$H --marcador=/root/cierre-pt19/marcador.txt   # con la orden
+# vuelta atrás (la imprime el guion al terminar):
+bash /root/deploy-cierre-lote.sh $P $N /root/cierre-pt19/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-<fecha UTC>
+```
+
+Comprobación a mano, desde fuera y sin credenciales. Cuenta las cabeceras `x-ratelimit-*` sin imprimir su valor:
+
+```bash
+curl -s -o /dev/null -D - -H 'Accept: application/json' https://api.ironbodyneiva.cloud/api/internal/marketing/ai/doctor \
+  | tr -d '\r' | awk 'substr($0,1,5)=="HTTP/"{print "estado", $2} tolower($0) ~ /^x-ratelimit-/{n++} END{print "x-ratelimit-*:", n+0}'
+# antes: «estado 401» y «x-ratelimit-*: 2» · después: «estado 401» y «x-ratelimit-*: 0»
+```
+
+| Qué | Detalle |
+|---|---|
+| Impacto | **Sin corte** [S: no se recarga ni reinicia el FPM; el cambio entra cuando OPcache revalida, en `revalidate_freq` s]. n8n con el secreto: el mismo recorrido, el mismo tope y el mismo 429 [L, apisec §2 b]. Sin el secreto: 401 sin contar y sin `X-RateLimit-*`. De las 1 046 rutas, solo cambian de orden las 21 de `api/internal/` [L, apisec §1]. El `queue:restart` del paso 3 reinicia los 14 workers, como en todos los lotes. El cambio no les afecta: el núcleo de consola no usa esa lista [L, apisec §2 c]. **Lo que se pierde a propósito (NB-2):** la aplicación ya no frena los intentos con un secreto equivocado; quedan nginx (30 por segundo y por IP) y el `access.log` |
+| Marcador | Paso 0: `401 presente` (gasta 1 de los 120 por minuto del asesor). Paso 4: `401 ausente` antes de `revalidate_freq` + 30 s (32 s por defecto); si no llega, **vuelta atrás automática (4)**. Vuelta atrás: `401 presente` otra vez; si no, **PARAR (5)**. Cada lectura hecha con el previo gasta 1 del cupo: el guion para en cuanto cuadra (como mucho ~7 lecturas a 5 s) |
+| OPcache | **El paso 0 ya aborta si el FPM no revalida** (`opcache.validate_timestamps=0` en `/etc/php/*/fpm/`: comprobación anterior, ensayada en N7a). Con `--marcador` aborta también si `revalidate_freq` no es un número de como mucho 300 s (N7b). Lo que el paso 0 no ve, como un `php_admin_value[opcache.validate_timestamps]` en un pool, lo caza el marcador: vuelta atrás automática (N9). **Esta vía no recarga el FPM.** Si hiciera falta, es otra orden con su autorización |
+| Bloqueos | **Ninguno**: ni migraciones, ni rutas, ni configuración. No se regenera ninguna caché. El paso 4 exige `route:list` sin ninguna diferencia y avisa si la caché de configuración no es la del respaldo |
+| Vuelta atrás | Código (`checkout --detach P`) y cachés del respaldo (iguales), `queue:restart`, y el marcador otra vez en `presente`. **No hay datos que deshacer**: el cambio no escribe nada. Con el previo vuelve el defecto: un anónimo puede volver a gastar el cupo de n8n |
+| Después (una persona, 15 min, §7) | **El siguiente turno real del asesor de WhatsApp** responde como siempre (`decide`/`commit` sin 429) y salen las **notificaciones a socios** (`internal/automation`). En el registro de ejecuciones de n8n, ninguna llamada a `/api/internal/` con 401, 403 o 429 nueva. En `access.log`, las llamadas de n8n a `/api/internal/` con los códigos de siempre. `production.ERROR` nuevos: 0. La comprobación a mano de arriba da `x-ratelimit-*: 0` |
+
 ## 6. Si no termina en verde
 
 | Salida | Qué significa | Qué hacer |
@@ -155,6 +211,23 @@ Banco en el scratchpad (nada en el repo): `banco-cierre/montar.sh <banco> fddd34
 | m4 · m5 · m8 · m9 | caché del envoltorio en 600 (antes 644) · lanzado con umask 077, 0 ficheros ilegibles · vuelta de un lote de ficheros nuevos, 0 · worker lento: 13 → 14 de 14 y dos lecturas `[14 0]` |
 | `--sin-filas` con una fila `running` | ABORTA, 1 |
 
+**PT-19 y la regresión, con el guion enmendado** (`ca03c1b5…`; 22-11-2026, 23:06–23:12 UTC; `evidencia-h9/2026-11-22/11-ensayo-pt19-y-regresion-lote5.txt`). Previo `f1fe6cac` y `N` = `f1fe6cac` + `cierre/puertas-internas` (`c78e248e`), el mismo árbol que `origin/main` + esa rama: 46 ficheros. La base `ultron_studio_ops2_pt19a` se borró al terminar. Al banco se le puso un **secreto interno sintético** (sin él la puerta da 503), que no aparece en ningún registro.
+
+| Caso | Resultado |
+|---|---|
+| PT-19: `--solo-comprobar`, despliegue, `--vuelta-atras` | 0 · 0 (`1 de bootstrap · 1 de tests · 44 de docs · 0 otros`; la huella `= la declarada`; el marcador `401 presente` → **`401 ausente` a la 3.ª lectura**: las dos primeras aún veían el fichero viejo, por la revalidación de OPcache del servidor del banco, `revalidate_freq=2`) · 0 (el marcador vuelve a `401 presente`) |
+| N1 · marcador que no cumple en el paso 0 (el banco sin secreto: 503) | ABORTA, 1 (`[503 presente]`, no `[401 presente]`) |
+| N2 · el diff de PT-19 sin `--bootstrap` / N3 · con `--rutas` (la vía de NB-4) | ABORTA, 1 (`no va --rutas`) / ABORTA, 1 (`añade código que no es el montaje…: «$middleware->prependToPriorityList(»`), las dos como antes de la enmienda |
+| N4 · `--bootstrap` con la huella equivocada (la del `app.php` de producción) | ABORTA, 1 (`tiene sha256 d8e9cd27…, no la declarada 294e57ab…`) |
+| N5 · 16 cifras / sin `--marcador` / sin `--bootstrap` / con `--rutas` / en la vuelta | 2 en los cinco, sin tocar nada |
+| N6 · marcador declarado al revés | ABORTA, 1 (`[401 presente]`, no `[401 ausente]`) |
+| N7 · `validate_timestamps=0` en `etc-php/*/fpm/` / `revalidate_freq=900` | ABORTA, 1 (la comprobación de antes) / ABORTA, 1 (la nueva) |
+| N8 · marcador mal declarado que no cambia (`content-type`) | VUELTA ATRÁS AUTOMÁTICA, 4; el marcador vuelve a `presente` |
+| N9 · el servidor **no revalida** el PHP (OPcache con `validate_timestamps=0` solo en ese proceso: el paso 0 no lo ve) | el marcador sigue `401 presente` 32 s → **VUELTA ATRÁS AUTOMÁTICA, 4**, producción en `f1fe6cac` |
+| N10 · `--bootstrap` en el lote 5, cuyo diff no trae `app.php` | ABORTA, 1 (`la ficha no es de este diff`) |
+| **Regresión del lote 5** (`fbd5010f` + `72e76551`, como el lead a las 16:27) | 0 · 0 · 0; normalizado (rutas del banco, horas, `N` y fusiones del banco, milisegundos), **idéntico** a `ensayo-lead-lote5.out` salvo la línea añadida que dice qué guion se ejecutó |
+| **Regresión del lote 4** (`f7f00fdc` + `72e76551`, como el lead a las 16:25; la vía `--rutas` + montaje en `app.php`, la rama del `case` que toca la enmienda) | 0 · 0 · 0; normalizado, **idéntico** a `ensayo-lead-lote4.out` salvo esa misma línea |
+
 ## 9. Lo que NO se puede comprobar en local, y cómo lo ve el lead con `--solo-comprobar`
 
 - **bash 5 y glibc (m2)**: en el lote 3, `migración … transicion voice_calls vc_status_forward ambiguous>failed_to_start · esquema [1 true voice_forbid 6 false] = antes` y no «transicion exige…».
@@ -164,10 +237,12 @@ Banco en el scratchpad (nada en el repo): `banco-cierre/montar.sh <banco> fddd34
 - **supervisor, FPM, `sudo -u www-data`, GNU `stat`/`install`**: `workers 14 RUNNING`, `cachés …: www-data 600`, OPcache sin `validate_timestamps=0`.
 - **El envoltorio, el esquema y los privilegios reales**: `= la copia versionada (sha256 8ecb1479…)`; cada migración `= antes`; `pendientes … = las declaradas`; lote 4, privilegios por defecto sin `REFERENCES` ni `TRIGGER`; lote 5, `sin filas vivas … 0`.
 - **Las banderas del entorno real**: las nuevas, `ausente`; `lab_gate texto:required`.
+- **PT-19, lo que solo tiene el servidor**: que la respuesta real, a través de nginx y HTTP/2, lleve hoy `x-ratelimit-limit` (la evidencia `10-…` [3] dice que sí); el `revalidate_freq` real del FPM y si hay un `php_admin_value` de OPcache en el pool, que el paso 0 no lee (si lo hay, el marcador lo caza y vuelve atrás); mawk en el analizador del marcador. Este último se comprueba solo: exige `presente` en el paso 0 y `ausente` en el 4, así que un analizador que leyera siempre lo mismo no deja pasar nada. En el `--solo-comprobar` tiene que salir `marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · … antes de <revalidate_freq + 30> s`. Y el tráfico real de n8n: lo mira una persona (§5 ter, «Después»).
 
 ## 10. Riesgos y deuda
 
 - **Las ramas se mueven**: la lista se rehace SIEMPRE con el `P` y el `N` de ese momento; las declaraciones, si cambian migraciones, `config/`, `routes/` o los estados vivos del laboratorio (lo detalla `plans/informes-cierre/informe-ops-lotes-2.md`).
 - **El envoltorio** sigue vaciando la caché antes de migrar y su `chmod 600` de root sigue un enlace (H-5): la propuesta del H7 (`ironbody-migrate-propuesta.sh`) lo corrige y no está instalada: para security.
 - **C1 decide por la traza**: un error causado por el despliegue que solo pase por `vendor/` sale «ajeno» → DESVÍO (3), no vuelta atrás; por eso el 3 exige mirar las entradas.
+- **PT-19**: `hotfix-backend.sh` **sigue rechazando** todo `backend/bootstrap/*`, a propósito: PT-19 va solo por este guion. Cada lectura del marcador con el previo gasta 1 de los 120 por minuto del asesor (en el paso 0, 1; tras la vuelta, 1; si el FPM tarda, hasta ~7 en el paso 4). La comprobación de OPcache del paso 0 solo lee líneas `opcache.*=` de `/etc/php/*/fpm/`: no ve un `php_admin_value[...]` en un pool ni `opcache.preload`. Es anterior a la enmienda y no se toca; en los lotes con `--marcador` lo cubre el marcador.
 - `shellcheck`, sin pasar (no está instalado). Ningún secreto expuesto ni que rotar: los registros del ensayo no llevan la clave de la aplicación ni la del dueño del banco.

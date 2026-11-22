@@ -8,7 +8,8 @@
 # Uso (servidor, root; la lista y las declaraciones las sube el lead desde el Mac: DEPLOY_CIERRE_LOTES.md §2):
 #   bash /root/deploy-cierre-lote.sh <commit que sirve producción> <commit nuevo = origin/main> <lista>
 #        [--migraciones=<fichero> --orden=migracion-primero|codigo-primero] [--config=<fichero>] [--rutas=<fichero>]
-#        [--programador=<fichero>] [--sin-filas=<fichero>] [--solo-comprobar] [--sin-tmux]
+#        [--programador=<fichero>] [--sin-filas=<fichero>] [--bootstrap=<sha256> --marcador=<fichero>] [--solo-comprobar]
+#        [--sin-tmux]
 #   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo> [--sin-tmux]
 # El despliegue y la vuelta atrás se niegan a correr fuera de tmux o screen (C2: un corte de ssh deja el guion a medias y
 # sin la línea PARAR); --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige.
@@ -33,6 +34,12 @@
 #                  «ausente <texto>» / «presente <texto>».
 #   --sin-filas    «tabla columna valor[,valor…]»: el paso 0, y otra vez justo antes del primer cambio, exigen que no
 #                  haya ninguna fila con esos valores (lote 5: ninguna ejecución del laboratorio en curso).
+#   --bootstrap    (no es un fichero) la huella sha256 ENTERA (64 cifras hexadecimales) de backend/bootstrap/app.php en el
+#                  commit nuevo, la del fichero revisado que da la ficha (PT-19). Con ella, y solo con ella, app.php puede
+#                  cambiar en algo que no sea montar rutas; sin ella, todo como antes. Exige --marcador; no va con --rutas.
+#   --marcador     UNA línea «GET api/<ruta> <código> <cabecera> <en el previo> <en el nuevo>» (presente | ausente, uno
+#                  de cada): un GET sin credenciales cuya respuesta distingue el código previo del nuevo. Lo único que
+#                  imprime de la respuesta es el código y si la cabecera está; nunca su valor. Solo con --bootstrap.
 # Los commits, en hexadecimal (7 a 40 cifras): se resuelven y se comparan enteros.
 #
 # 0. Comprobaciones previas (si una falla: «ABORTA (no se ha tocado nada)», código 1; con --solo-comprobar termina aquí):
@@ -40,11 +47,12 @@
 #    desciende del previo; ningún commit `outreach(sends-open):` ni `voice(calls-open):`; las dos constantes cerradas en
 #    los dos commits y sus ficheros sin tocar; el diff (--no-renames) coincide EXACTAMENTE con la lista; migraciones solo
 #    las declaradas y AÑADIDAS; backend/config solo con --config; backend/routes solo con --rutas (console.php, con
-#    --programador); de bootstrap solo app.php, con --rutas y únicamente para montar un fichero de rutas nuevo; nada de
-#    composer ni vendor. En el servidor: los workers esperados en RUNNING y ninguno en BACKOFF/FATAL; las cachés de rutas
-#    y de configuración, ficheros normales de www-data en 600; OPcache revalidando; las migraciones pendientes frente a
-#    origin/main son EXACTAMENTE las declaradas (y ninguna del previo); el esquema de partida de cada una; route:list y
-#    schedule:list legibles; sin credenciales, admin/voice/status → 401.
+#    --programador); de bootstrap solo app.php, con --rutas y únicamente para montar un fichero de rutas nuevo, o con
+#    --bootstrap y exactamente la huella declarada; nada de composer ni vendor. En el servidor: los workers esperados en
+#    RUNNING y ninguno en BACKOFF/FATAL; las cachés de rutas y de configuración, ficheros normales de www-data en 600;
+#    OPcache revalidando; las migraciones pendientes frente a origin/main son EXACTAMENTE las declaradas (y ninguna del
+#    previo); el esquema de partida de cada una; route:list y schedule:list legibles; sin credenciales, admin/voice/status
+#    → 401; con --marcador, el marcador en su estado del previo y opcache.revalidate_freq un número de como mucho 300 s.
 # 1. Respaldo en /var/backups/ironbody/cierre-lote-<fecha UTC> (700 de root; ficheros 600 de root): los commits, la lista y
 #    las declaraciones, las cachés (la de configuración lleva secretos: nunca se imprime), route:list, schedule:list,
 #    supervisor, las migraciones registradas, el esquema (solo estructura) de cada tabla que tocan las migraciones y la
@@ -58,8 +66,10 @@
 #    RUNNING.
 # 4. Comprobaciones posteriores (si una falla: VUELTA ATRÁS AUTOMÁTICA, código 4): HEAD = nuevo y árbol limpio; www-data
 #    lee lo nuevo; los mismos workers en RUNNING (si alguno tarda en coger pid nuevo, hasta 300 s más y otras dos
-#    lecturas); admin/voice/status sin token → 401; migrate:status sin pendientes; el esquema de después de cada
-#    migración (una tabla nueva, con los privilegios de la aplicación uno a uno); schedule:list y route:list con
+#    lecturas); admin/voice/status sin token → 401; con --marcador, el marcador en su estado del nuevo antes de
+#    revalidate_freq + 30 s (si no, el servidor no sirve el código nuevo: vuelta atrás); migrate:status sin pendientes;
+#    el esquema de después de cada migración (una tabla nueva, con los privilegios de la aplicación uno a uno);
+#    schedule:list y route:list con
 #    exactamente la diferencia declarada (ninguna si no se declara); las banderas declaradas con su valor en la caché de
 #    configuración; las cachés, de www-data en 600. Y las entradas production.ERROR nuevas DESDE EL PRIMER CAMBIO (sin
 #    las de un 55P03 reintentado), cada una con su clase y su fichero:línea de la aplicación (nunca el mensaje): si
@@ -72,7 +82,8 @@
 #    definición del respaldo (si alguna fila no la cumple, la base se niega y el CHECK ancho se queda), un disparador
 #    vuelve a la definición del respaldo, una tabla nueva se borra solo vacía y sin dependencias (con sus funciones
 #    propias); y en la misma transacción se quita su fila de migrations. Nunca migrate:rollback. Después queue:restart,
-#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo y 401. En la vuelta MANUAL, si el
+#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo, 401 y, si el lote declaró
+#    --marcador, el marcador otra vez en su estado del previo (si no: PARAR). En la vuelta MANUAL, si el
 #    fichero de entorno es posterior al respaldo (solo su fecha, por stat), la caché de configuración no se repone: se
 #    regenera con config:cache como www-data (umask 077) con el código previo, y se dice (C3).
 #    NO deshace: los datos que escribió el código nuevo; una migración «conservar», o cuya vuelta la base rechaza (queda
@@ -120,7 +131,7 @@ RE_SENDS='^outreach\(sends-open\):'
 RE_CALLS='^voice\(calls-open\):'
 DIR_MIG=backend/database/migrations
 MIG_VERSIONADO=backend/docs/iron-ia/ops/ironbody-migrate
-DECLS="migraciones config rutas programador sin_filas"
+DECLS="migraciones config rutas programador sin_filas marcador"
 # m2 (rev-guion): ninguna expresión de [[ =~ ]] lleva barras invertidas. Escrita en la línea, bash 5 entrega a regcomp
 # lo citado con una barra delante («\>»), y en glibc «\>» es «fin de palabra», no «>» (en el bash 3.2 del Mac, sí): la
 # marca «desde>hasta» no casaría nunca. Cada expresión va en una variable, sin citar al usarla (llega tal cual a
@@ -136,9 +147,11 @@ RE_CONFIG='^[a-z0-9_]+([.][a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+([.][0-9]+
 RE_RUTA='^[+-][A-Z|]+ [^ ]+( @[^ ]+)?$'
 RE_PROG='^([+-].+|(ausente|presente) .+)$'
 RE_SIN_FILAS='^[a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,30}(,[a-z_][a-z0-9_]{0,30})*$'
+RE_SHA256='^[0-9a-f]{64}$'
+RE_MARCADOR='^GET api/[a-z0-9_-]+(/[a-z0-9_-]+)* [1-5][0-9][0-9] [a-z0-9][a-z0-9-]{0,63} (presente|ausente) (presente|ausente)$'
 
 uso() {
-  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--solo-comprobar] [--sin-tmux]"
+  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--bootstrap=<sha256> --marcador=<f>] [--solo-comprobar] [--sin-tmux]"
   echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo> [--sin-tmux]"
   echo "     Despliegue y vuelta atrás, solo dentro de tmux o screen (un corte de ssh los dejaría a medias sin aviso);"
   echo "     --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige."
@@ -148,14 +161,18 @@ uso() {
 [ "$#" -ge 3 ] || { uso; echo "no se ha tocado nada"; exit 2; }
 PREVIO=$1; NUEVO=$2; LISTA=$3; shift 3
 MODO=despliegue; BK=""; ORDEN=""; SIN_TMUX=0
-F_migraciones=""; F_config=""; F_rutas=""; F_programador=""; F_sin_filas=""
+F_migraciones=""; F_config=""; F_rutas=""; F_programador=""; F_sin_filas=""; F_marcador=""; BOOT_SHA=""
 for a in "$@"; do
   case "$a" in
     --solo-comprobar) [ "$MODO" = despliegue ] || { uso; echo "--solo-comprobar y --vuelta-atras no van juntos; no se ha tocado nada"; exit 2; }; MODO=comprobar ;;
     --vuelta-atras=?*) [ "$MODO" = despliegue ] || { uso; echo "--vuelta-atras va sola; no se ha tocado nada"; exit 2; }; MODO=vuelta; BK=${a#--vuelta-atras=} ;;
     --orden=migracion-primero|--orden=codigo-primero) [ -z "$ORDEN" ] || { echo "--orden repetido; no se ha tocado nada"; exit 2; }; ORDEN=${a#--orden=} ;;
     --sin-tmux) SIN_TMUX=1 ;;
-    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*|--sin-filas=?*)
+    --bootstrap=?*)
+      [ -z "$BOOT_SHA" ] || { echo "--bootstrap repetido; no se ha tocado nada"; exit 2; }
+      BOOT_SHA=${a#--bootstrap=}
+      [[ "$BOOT_SHA" =~ $RE_SHA256 ]] || { echo "--bootstrap lleva la huella sha256 ENTERA de backend/bootstrap/app.php en el commit nuevo (64 cifras hexadecimales en minúsculas, la de la ficha; nada de prefijos); no se ha tocado nada"; exit 2; } ;;
+    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*|--sin-filas=?*|--marcador=?*)
       k=${a%%=*}; k=${k#--}; k=${k//-/_}; v=${a#*=}
       eval "[ -z \"\$F_$k\" ]" || { echo "--$k repetido; no se ha tocado nada"; exit 2; }
       case "$v" in /*) ;; *) v="$PWD/$v" ;; esac
@@ -167,10 +184,16 @@ done
 [[ "$PREVIO" =~ $RE_COMMIT ]] && [[ "$NUEVO" =~ $RE_COMMIT ]] || { echo "los commits van en hexadecimal, de 7 a 40 cifras (git rev-parse --short=8 …); no se ha tocado nada"; exit 2; }
 case "$LISTA" in /*) ;; *) LISTA="$PWD/$LISTA" ;; esac
 if [ "$MODO" = vuelta ]; then
-  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador$F_sin_filas" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
+  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador$F_sin_filas$F_marcador$BOOT_SHA" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
 else
   if [ -n "$F_migraciones" ]; then [ -n "$ORDEN" ] || { echo "--migraciones exige --orden=migracion-primero|codigo-primero (la ficha del lote lo dice); no se ha tocado nada"; exit 2; }
   else [ -z "$ORDEN" ] || { echo "--orden solo va con --migraciones; no se ha tocado nada"; exit 2; }; fi
+  # PT-19: un cambio de bootstrap/app.php no deja rastro en ninguna caché; lo único que prueba que el servidor lo sirve
+  # es el marcador. Por eso van juntos. Y no con --rutas: el montaje de rutas tiene su propia comprobación y no se mezcla.
+  if [ -n "$BOOT_SHA$F_marcador" ]; then
+    { [ -n "$BOOT_SHA" ] && [ -n "$F_marcador" ]; } || { echo "--bootstrap y --marcador van juntos (sin marcador no hay forma de ver que el servidor sirve el bootstrap/app.php nuevo); no se ha tocado nada"; exit 2; }
+    [ -z "$F_rutas" ] || { echo "--bootstrap no va con --rutas (un montaje de rutas nuevo va por su comprobación propia, sin --bootstrap); no se ha tocado nada"; exit 2; }
+  fi
 fi
 # C2 (rev-guion): un corte de ssh (SIGHUP) mata el tee del registro y la trampa ya no puede decir PARAR: el guion queda a
 # medias sin aviso (si cae dentro de ironbody-migrate, sin caché de configuración). El guion no puede protegerse solo de
@@ -261,6 +284,19 @@ valida_sin_filas() { # <fichero> → 0 si cada línea es «tabla columna valor[,
   done < <(decl "$1")
   [ "$n" -gt 0 ] || { echo "el fichero de --sin-filas no declara ninguna"; return 1; }
 }
+# --marcador (PT-19): exactamente una línea; deja MC_RUTA (bajo /api, sin «api/»), MC_CODIGO, MC_CAB, MC_ANTES y
+# MC_DESPUES. Un marcador que no distingue el previo del nuevo no marca nada: se rechaza.
+lee_marcador() { # <fichero> → 0 y las variables; el motivo si no vale
+  local l n=0 met ruta
+  while IFS= read -r l; do
+    n=$((n + 1))
+    [[ "$l" =~ $RE_MARCADOR ]] || { echo "línea de --marcador no válida: «$l» (GET api/<ruta> <código> <cabecera en minúsculas> <presente|ausente en el previo> <presente|ausente en el nuevo>)"; return 1; }
+    read -r met ruta MC_CODIGO MC_CAB MC_ANTES MC_DESPUES <<< "$l"
+    MC_RUTA=${ruta#api/}
+  done < <(decl "$1")
+  [ "$n" = 1 ] || { echo "el fichero de --marcador declara $n marcadores (exactamente uno)"; return 1; }
+  [ "$MC_ANTES" != "$MC_DESPUES" ] || { echo "el marcador no distingue el previo del nuevo (la cabecera $MC_CAB, $MC_ANTES en los dos)"; return 1; }
+}
 # Las filas «vivas» que el lote exige que no haya (p. ej. ejecuciones del laboratorio en curso): una línea «tabla columna
 # [valores] n» por declaración; 0 si todas dan 0. Solo SELECT, con identificadores y valores ya validados.
 filas_vivas() { # <fichero --sin-filas>
@@ -309,6 +345,44 @@ http() { # <ruta bajo /api> → código HTTP de un GET sin credenciales (000 si 
   echo "$c"
 }
 http_espera() { local i c=000; for i in 1 2 3; do c=$(http "$2"); [ "$c" = "$1" ] && break; [ "$i" = 3 ] || sleep 3; done; echo "$c"; }
+# El marcador (PT-19): un GET sin credenciales; de la respuesta solo se mira el código (el de la última línea de estado)
+# y si trae la cabecera declarada (sin mayúsculas); nunca se imprime una cabecera ni su valor. «000 ausente» si no contesta.
+marcador_lee() { # <ruta bajo /api> <cabecera> → «código presente|ausente»
+  local h
+  h=$(curl -s --max-time 20 -o /dev/null -D - -H 'Accept: application/json' "$API/$1" 2>/dev/null) || h=""
+  printf '%s\n' "$h" | tr -d '\r' | awk -v cab="$2" '
+    substr($0, 1, 5) == "HTTP/" { c = $2; v = "ausente"; next }
+    { i = index($0, ":"); if (i > 1 && tolower(substr($0, 1, i - 1)) == cab) v = "presente" }
+    END { if (c !~ /^[0-9][0-9][0-9]$/) c = "000"; print c " " (v == "" ? "ausente" : v) }'
+}
+# Lee el marcador hasta verlo en el estado pedido o agotar el plazo (cada 5 s). Deja en stdout «código estado lecturas».
+# Cada lectura en el estado del PREVIO gasta 1 del cupo que ese previo cuenta (PT-19: 1 de 120 por minuto del asesor);
+# por eso se para en cuanto cuadra.
+marcador_espera() { # <presente|ausente> <plazo en s>
+  local hasta n=0 r
+  hasta=$(( $(date +%s) + $2 ))
+  while :; do
+    n=$((n + 1))
+    r=$(marcador_lee "$MC_RUTA" "$MC_CAB")
+    if [ "$r" = "$MC_CODIGO $1" ] || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $n"; return 0; fi
+    sleep 5
+  done
+}
+# Cuánto esperar a que el FPM vea un PHP nuevo sin recargarlo: opcache.revalidate_freq (el mayor de los de
+# $FPM_ETC/*/fpm/; 2 s si no se fija) + 30 s. Si no es un número, o pasa de 300 s, no se sabe esperar: 1.
+plazo_marcador() {
+  local v m=2 x
+  v=$(grep -rhE '^[[:space:]]*opcache\.revalidate_freq[[:space:]]*=' "$FPM_ETC"/*/fpm/ 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*//; s/[[:space:]]*(;.*)?$//' || true)
+  while IFS= read -r x; do
+    [ -n "$x" ] || continue
+    case "$x" in *[!0-9]*) return 1 ;; esac
+    [ "${#x}" -le 6 ] || return 1
+    x=$((10#$x))
+    [ "$x" -le "$m" ] || m=$x
+  done <<< "$v"
+  [ "$m" -le 300 ] || return 1
+  echo $((m + 30))
+}
 lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$f $(wc -l < "$f" | tr -d ' ')"; done; return 0; }
 # C1 (rev-guion): las entradas $NIVEL_ERROR nuevas, una línea «tipo<TAB>quién<TAB>dónde<TAB>del diff» por entrada: tipo
 # excepcion (quién = su clase) o registro (un Log::error sin excepción; quién = la clave del mensaje); dónde = el primer
@@ -724,6 +798,12 @@ vuelta_atras_ejecuta() {
       [ "$c" = 404 ] || ok=0
     done < <(gets_nuevas "$BK/decl/rutas")
   fi
+  # PT-19: con el código previo, el marcador vuelve a su estado del previo (si no, el servidor sigue con el nuevo: PARAR).
+  if [ -s "$BK/decl/marcador" ]; then
+    c=$(marcador_espera "$MC_ANTES" "$PLAZO_MARC")
+    echo "      marcador GET api/$MC_RUTA sin token → ${c% *} tras ${c##* } lectura(s) (esperado $MC_CODIGO $MC_ANTES: el servidor vuelve a servir el bootstrap/app.php previo)"
+    [ "${c% *}" = "$MC_CODIGO $MC_ANTES" ] || ok=0
+  fi
   if [ "$VA_REGENERA" = 1 ]; then
     cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" || { echo "   ✗ la caché de rutas no es la del respaldo"; ok=0; }
     echo "   e. caché de rutas = la del respaldo · caché de configuración REGENERADA (el fichero de entorno es posterior al respaldo), de $WWW en 600"
@@ -772,11 +852,16 @@ if [ "$MODO" = vuelta ]; then
   case "$P" in "$PREVIO"*) ;; *) echo "el respaldo es del commit previo $P, no de $PREVIO; no se ha tocado nada"; exit 2 ;; esac
   case "$N" in "$NUEVO"*) ;; *) echo "el respaldo es del commit nuevo $N, no de $NUEVO; no se ha tocado nada"; exit 2 ;; esac
   if [ -s "$BK/decl/migraciones" ]; then m=$(lee_migraciones "$BK/decl/migraciones") || { echo "las migraciones del respaldo no se leen: $m; no se ha tocado nada"; exit 2; }; lee_migraciones "$BK/decl/migraciones" > /dev/null; fi
+  if [ -s "$BK/decl/marcador" ]; then
+    m=$(lee_marcador "$BK/decl/marcador") || { echo "el marcador del respaldo no se lee: $m; no se ha tocado nada"; exit 2; }; lee_marcador "$BK/decl/marcador" > /dev/null
+    PLAZO_MARC=$(plazo_marcador) || PLAZO_MARC=330
+  fi
   LOG="$BK/vuelta-atras-$(date -u +%Y%m%d-%H%M%S).log"
   ( umask 077; : > "$LOG" ) || { echo "no se pudo crear $LOG; no se ha tocado nada"; exit 2; }
   exec > >(tee -a "$LOG") 2>&1
   echo "== deploy-cierre-lote.sh · VUELTA ATRÁS · $(date -u +%Y-%m-%dT%H:%M:%SZ) · de $(corto "$N") a $(corto "$P") · orden del lote: $(cat "$BK/orden.txt") · $NM migración(es) declarada(s) · respaldo $BK · registro $LOG"
   [ "$SIN_TMUX" = 0 ] || echo "   AVISO: --sin-tmux: fuera de tmux o screen, a sabiendas; si se corta la sesión, DEPLOY_CIERRE_LOTES.md §6"
+  [ ! -s "$BK/decl/marcador" ] || echo "   el lote entró con --bootstrap (sha256 $(cut -c1-16 "$BK/decl/bootstrap" 2>/dev/null || echo ?)…): bootstrap/app.php vuelve con el código y lo comprueba el marcador GET api/$MC_RUTA ($MC_CODIGO, $MC_CAB $MC_ANTES; plazo $PLAZO_MARC s)"
   RUN0=$(workers_esperados)
   ETAPA=vuelta
   if vuelta_atras_ejecuta; then
@@ -796,6 +881,8 @@ if [ -n "$F_config" ]; then m=$(valida_config "$F_config") || aborta "--config: 
 if [ -n "$F_rutas" ]; then m=$(valida_rutas "$F_rutas") || aborta "--rutas: $m"; fi
 if [ -n "$F_programador" ]; then m=$(valida_programador "$F_programador") || aborta "--programador: $m"; fi
 if [ -n "$F_sin_filas" ]; then m=$(valida_sin_filas "$F_sin_filas") || aborta "--sin-filas: $m"; fi
+if [ -n "$F_marcador" ]; then m=$(lee_marcador "$F_marcador") || aborta "--marcador: $m"; lee_marcador "$F_marcador" > /dev/null; fi
+[ -z "$BOOT_SHA" ] || say "   declaraciones de PT-19: bootstrap/app.php con huella ${BOOT_SHA:0:16}… (--bootstrap) · marcador $F_marcador: GET api/$MC_RUTA → $MC_CODIGO, $MC_CAB $MC_ANTES en el previo y $MC_DESPUES en el nuevo"
 g rev-parse --is-inside-work-tree > /dev/null 2>&1 || aborta "$APP no es un checkout de git"
 say "0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):"
 P=$(g rev-parse -q --verify "${PREVIO}^{commit}" 2>/dev/null) || aborta "el commit previo $PREVIO no existe en $APP"
@@ -830,7 +917,7 @@ fi
 NF_TOTAL=$(cuenta_lineas "$DIFF_ORD")
 # Las zonas: cada una solo con su declaración.
 ESTADOS=$(g diff --name-status --no-renames "$P" "$N")
-RUTAS_NUEVAS=""; HAY_CONFIG=0; HAY_RUTAS=0; HAY_CONSOLA=0; HAY_BOOT=0
+RUTAS_NUEVAS=""; HAY_CONFIG=0; HAY_RUTAS=0; HAY_CONSOLA=0; HAY_BOOT=0; BOOT_DECL=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   case "$f" in
@@ -846,7 +933,10 @@ while IFS= read -r f; do
     backend/routes/console.php) [ -n "$F_programador" ] || aborta "el diff trae $f y no va --programador: el programador cambia y hay que declarar cómo"; HAY_CONSOLA=1 ;;
     backend/routes/*) [ -n "$F_rutas" ] || aborta "el diff trae $f y no va --rutas: las rutas HTTP necesitan route:cache y la diferencia declarada"; HAY_RUTAS=1
       [ "$(printf '%s\n' "$ESTADOS" | awk -F '\t' -v f="$f" '$2 == f {print $1}')" = A ] && RUTAS_NUEVAS="$RUTAS_NUEVAS ${f#backend/}" ;;
-    backend/bootstrap/app.php) [ -n "$F_rutas" ] || aborta "el diff trae $f y no va --rutas: bootstrap/app.php solo cambia aquí para montar un fichero de rutas nuevo"; HAY_BOOT=1 ;;
+    backend/bootstrap/app.php)
+      # Con --bootstrap, por su huella (abajo); sin ella, como siempre: solo con --rutas y solo para montar rutas.
+      if [ -n "$BOOT_SHA" ]; then BOOT_DECL=1
+      else [ -n "$F_rutas" ] || aborta "el diff trae $f y no va --rutas: bootstrap/app.php solo cambia aquí para montar un fichero de rutas nuevo (o con --bootstrap=<su huella> y --marcador, si su ficha lo declara)"; HAY_BOOT=1; fi ;;
     backend/bootstrap/*) aborta "el diff trae $f: el arranque de la aplicación (bootstrap/) no va por este guion (salvo app.php para montar rutas)" ;;
   esac
 done <<< "$CAMBIADOS"
@@ -874,9 +964,19 @@ if [ "$HAY_BOOT" = 1 ]; then
   done <<< "$ANADIDAS"
   [ "$ng" -gt 0 ] && [ "$nm" = "$ng" ] && [ "$np" = "$ng" ] || aborta "backend/bootstrap/app.php: el montaje no está completo (middleware $nm · prefix $np · group $ng)"
 fi
+# --bootstrap (PT-19): bootstrap/app.php del commit nuevo tiene que ser, byte a byte, el que se revisó y se probó: su
+# sha256 entero, el de la ficha. Cualquier otro contenido aborta, y declarar la huella sin que el diff traiga app.php,
+# también (una declaración que no se usa es una ficha que no corresponde a este diff).
+if [ -n "$BOOT_SHA" ]; then
+  [ "$BOOT_DECL" = 1 ] || aborta "--bootstrap declara la huella de backend/bootstrap/app.php y el diff no trae ese fichero: la ficha no es de este diff"
+  g cat-file -e "$N:backend/bootstrap/app.php" 2>/dev/null || aborta "backend/bootstrap/app.php no existe en $(corto "$N") (el diff lo borra): no es un cambio que --bootstrap admita"
+  H_BOOT=$(g show "$N:backend/bootstrap/app.php" | sha256sum | cut -d ' ' -f 1)
+  [ "$H_BOOT" = "$BOOT_SHA" ] || aborta "backend/bootstrap/app.php en $(corto "$N") tiene sha256 ${H_BOOT:0:16}…, no la declarada ${BOOT_SHA:0:16}…: no es el fichero que se revisó (la huella de la ficha manda; no se recalcula aquí)"
+fi
 cuenta() { printf '%s\n' "$DIFF_ORD" | grep -cE "$1" || true; }
 say "   producción $(corto "$P") limpia · origin/main $(corto "$N") · $K commit(s) · $NF_TOTAL ficheros = la lista: $(cuenta '^backend/app/') de backend/app · $(cuenta '^backend/config/') de config · $(cuenta '^backend/routes/') de routes · $(cuenta "^$DIR_MIG/") migración(es) · $(cuenta '^backend/bootstrap/') de bootstrap · $(cuenta '^backend/tests/') de tests · $(cuenta '^backend/docs/') de docs · $(cuenta '^(backend/(app|config|routes|database|bootstrap|tests|docs)/)' | awk -v t="$NF_TOTAL" '{print t - $1}') otros"
 say "   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config $([ "$HAY_CONFIG" = 1 ] && echo "con --config" || echo "sin cambios") · rutas HTTP $([ "$HAY_RUTAS$HAY_BOOT" != 00 ] && echo "con --rutas${RUTAS_NUEVAS:+ (fichero nuevo:$RUTAS_NUEVAS, montado en bootstrap/app.php)}" || echo "sin cambios") · programador $([ "$HAY_CONSOLA" = 1 ] && echo "con --programador" || echo "sin cambios en routes/console.php")"
+[ -z "$BOOT_SHA" ] || say "   bootstrap/app.php: sha256 en $(corto "$N") = la declarada con --bootstrap (${BOOT_SHA:0:16}…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador"
 say "   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en $(corto "$P") y en $(corto "$N"); los dos ficheros sin cambios"
 while IFS= read -r l; do if [ -n "$l" ]; then say "      ${l:0:8} $(printf '%s' "${l#* }" | cut -c1-110)"; fi; done <<< "$(printf '%s\n' "$COMMITS" | sed -n 1,12p)"
 [ "$K" -le 12 ] || say "      … y $((K - 12)) commit(s) más"
@@ -972,6 +1072,14 @@ C_VOZ0=$(http admin/voice/status)
 [ "$C_VOZ0" = 401 ] || aborta "GET admin/voice/status sin token → $C_VOZ0 (esperado 401): sin esa referencia no se puede verificar nada después"
 LOG_ANTES=$(lineas_log)
 say "   sin credenciales: admin/voice/status → $C_VOZ0"
+# PT-19: el marcador tiene que estar en su estado del PREVIO (si ya está en el del nuevo, o da otro código, no se sabe
+# qué sirve producción). Y hace falta saber cuánto esperar a que el FPM vea el fichero nuevo: revalidate_freq + 30 s.
+if [ -n "$F_marcador" ]; then
+  PLAZO_MARC=$(plazo_marcador) || aborta "con --marcador, opcache.revalidate_freq del FPM tiene que ser un número de como mucho 300 s (hoy: ${OPC:-sin líneas}): sin él no se sabe cuánto esperar a que el FPM vea el bootstrap/app.php nuevo; recargar el FPM es otra orden"
+  MARC0=$(marcador_espera "$MC_ANTES" 10)
+  [ "${MARC0% *}" = "$MC_CODIGO $MC_ANTES" ] || aborta "el marcador GET api/$MC_RUTA sin credenciales da [${MARC0% *}] y no el estado del previo declarado [$MC_CODIGO $MC_ANTES]: o producción ya sirve otro código, o el marcador no es el de la ficha; aclararlo antes"
+  say "   marcador sin credenciales: GET api/$MC_RUTA → $MC_CODIGO, $MC_CAB $MC_ANTES (= el previo; ${MARC0##* } lectura(s)) · tras el código nuevo tiene que dar $MC_CAB $MC_DESPUES antes de $PLAZO_MARC s (revalidate_freq + 30 s)"
+fi
 if [ "$NM" -gt 0 ] && [ "$ORDEN" = migracion-primero ]; then PLAN="migraciones → código → cachés"; elif [ "$NM" -gt 0 ]; then PLAN="código → migraciones → cachés"; else PLAN="código → cachés"; fi
 say "   plan: respaldo → $PLAN ($([ "$HAY_CONFIG" = 1 ] || [ -n "$F_config" ] && echo "config:cache" || echo "sin config:cache")$([ -n "$F_rutas" ] && echo " · route:cache" || echo " · sin route:cache")) → queue:restart → comprobaciones posteriores"
 if [ "$MODO" = comprobar ]; then
@@ -999,6 +1107,7 @@ exec > >(tee -a "$LOG") 2>&1
   && install -m 600 -o "$ROOT_U" -g "$ROOT_G" "$LISTA" "$BK/lista.txt" \
   && mkdir "$BK/decl" "$BK/bootstrap-cache" "$BK/esquema" \
   && for d in $DECLS; do eval "f=\$F_$d"; if [ -n "$f" ]; then install -m 600 -o "$ROOT_U" -g "$ROOT_G" "$f" "$BK/decl/$d" || exit 1; fi; done \
+  && { [ -z "$BOOT_SHA" ] || printf '%s\n' "$BOOT_SHA" > "$BK/decl/bootstrap"; } \
   && install -m 600 -o "$ROOT_U" -g "$ROOT_G" "$APP/backend/$CACHE_RUTAS" "$BK/bootstrap-cache/routes-v7.php" \
   && install -m 600 -o "$ROOT_U" -g "$ROOT_G" "$APP/backend/$CACHE_CONFIG" "$BK/bootstrap-cache/config.php" \
   && printf '%s\n' "$RUTAS0_JSON" > "$BK/rutas-antes.json" \
@@ -1147,6 +1256,14 @@ legibles "$P" "$N" > /dev/null || falla "${LEGIBLES#* } ficheros del merge no lo
 C_VOZ1=$(http_espera 401 admin/voice/status)
 echo "4. sin credenciales: admin/voice/status → $C_VOZ1 (esperado 401)"
 [ "$C_VOZ1" = 401 ] || falla "admin/voice/status sin token respondió $C_VOZ1"
+# PT-19: el marcador en su estado del NUEVO. Si no llega en el plazo, el servidor no sirve el bootstrap/app.php nuevo
+# (OPcache que no revalida por una vía que el paso 0 no ve, como un php_admin_value del pool) o el nuevo responde otra
+# cosa: en los dos casos, vuelta atrás. Recargar el FPM no es de este guion.
+if [ -n "$F_marcador" ]; then
+  MARC1=$(marcador_espera "$MC_DESPUES" "$PLAZO_MARC")
+  echo "   marcador sin credenciales: GET api/$MC_RUTA → ${MARC1% *} tras ${MARC1##* } lectura(s) (esperado $MC_CODIGO $MC_DESPUES: el servidor sirve el bootstrap/app.php nuevo)"
+  [ "${MARC1% *}" = "$MC_CODIGO $MC_DESPUES" ] || falla "el marcador GET api/$MC_RUTA da [${MARC1% *}] tras $PLAZO_MARC s, no [$MC_CODIGO $MC_DESPUES]: el servidor no sirve el bootstrap/app.php nuevo, o el nuevo responde otra cosa"
+fi
 for f in "$CACHE_RUTAS" "$CACHE_CONFIG"; do cache_ok "$f" || falla "$f no es un fichero normal de $WWW en 600"; done
 NR1=0; for ((i = 0; i < NM; i++)); do registrada "${M_NOM[$i]}" && NR1=$((NR1 + 1)); done
 if sin_pendientes "$(artisan migrate:status --pending --no-ansi 2>&1)"; then NP1="ninguna pendiente"; else NP1="[$ST_RESUMEN]"; fi
