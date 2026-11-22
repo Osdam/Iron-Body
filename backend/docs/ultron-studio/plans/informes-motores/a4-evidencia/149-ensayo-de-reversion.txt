@@ -1,0 +1,33 @@
+DESPLIEGUE DEL SERVIDOR · 2. ENSAYO DE REVERSIÓN EN EL SERVIDOR REAL 66b14467 → e861e2c8 · 03:17:08 a 03:17:44 UTC · código de salida 0
+lead · producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · despliegue autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6)
+
+Es la primera vez que la vuelta atrás del servidor se ejecuta en el servidor real (antes, solo en simulación).
+
+== deploy-a4-regenerar-backend.sh · VUELTA ATRÁS · 2026-11-22T03:17:10Z · de 66b14467 a e861e2c8 · respaldo /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613 · registro /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613/vuelta-atras-20261122-031710.log
+   a. caché de rutas: la del respaldo, byte a byte (escrita por www-data; root no escribe en bootstrap/cache)
+   b. código: HEAD=e861e2c8 (checkout --detach con umask 022) · www-data lee los 49 ficheros del diff
+   c. route:list: 1045 → 1045 rutas · puertas [decide=ok check=ausente commit=ok incidents=ok] · middleware [api,automation.internal,throttle:internal-marketing-ai] · diferencia [ninguna] (la de antes)
+   d. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   e. sin credenciales: ai/check → 404 (esperado 404) · ai/decide → 401 (esperado 401)
+VUELTA ATRÁS HECHA: producción en e861e2c8, con la caché de rutas de antes (sin ai/check)
+
+── Salud, comprobada aparte por el lead (solo lectura) ──
+hora (UTC): 03:18:18
+commit servido: e861e2c8 · cambios con seguimiento: 0
+procesos en segundo plano (supervisor):      14 RUNNING 
+   el más antiguo arrancó hace: uptime 0:01:07 · el más reciente: uptime 0:01:05
+servicio ironbody-billing-worker: active · en marcha desde Sun 2026-11-22 03:17:17 UTC
+servicio php8.3-fpm: active · en marcha desde Fri 2026-10-16 20:14:02 UTC
+servicio nginx: active · en marcha desde Sat 2026-11-21 06:52:38 UTC
+servicio postgresql: active · en marcha desde Fri 2026-10-16 20:14:04 UTC
+n8n: n8n-n8n-1 Up 5 weeks;n8n-postgres-1 Up 5 weeks;
+caché de rutas: www-data 600 · sha256 821a6091c99a · la del respaldo: 821a6091c99a
+caché de configuración: www-data 600 · igual que la del respaldo: sí
+production.ERROR en el log de hoy: 3250 · en los últimos 10 minutos: 0
+peticiones a la API en el access.log, últimas 3000 líneas, por clase de respuesta:      29 2xx       2 3xx      18 4xx 
+   5xx en las últimas 3000 líneas: 0
+   GET /up → 200
+   POST /api/internal/marketing/ai/decide → 401
+   POST /api/internal/marketing/ai/check → 404
+trabajos fallidos en los últimos 15 minutos | 0
+cerrojo: salientes a no canarias en la última hora | 0

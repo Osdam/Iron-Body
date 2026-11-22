@@ -1,0 +1,161 @@
+TRAS EL DESPLIEGUE · PRUEBAS SOBRE LO DESPLEGADO (todas de solo lectura)
+lead · producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · despliegue autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6)
+
+── 1. La sonda de reglas sobre el código YA desplegado (PHP a secas, como www-data). Huella en local sobre el mismo código: 60412b9d7d60f2a4 ──
+PCRE 10.39 2021-10-29 · PHP 8.3.31
+red de marcadores: 13 de 20 formas no salen (esperado: 13) · mal clasificadas: ninguna
+clases del commit cargadas: 50
+expresiones regulares en esas clases: 213 · no compilan: 0
+avisos de PHP: 0
+borrador 0                                                                     7a01950b24
+borrador 1                                                                     7379d63d76
+borrador 2                                                                     8252a7787e
+borrador 3                                                                     1ef927e62b
+borrador 4                                                                     1bf2f151a8
+borrador 5                                                                     32b931a11e
+borrador 6                                                                     3898335984
+borrador 7                                                                     ea1bead3b6
+borrador 8                                                                     6f06bb21da
+borrador 9                                                                     4096b99c4d
+borrador 10                                                                    ed8bc5e27c
+borrador 11                                                                    1c37c85519
+borrador 12                                                                    cd9c3aedba
+entrante · ¿Qué planes tienen?                                              da214e1ce0
+entrante · ¿Qué planes tienen y cuánto cuestan?                            6962e36611
+entrante · ¿Qué planes tienen y cuánto cuesta la mensualidad?              6962e36611
+entrante · ¿Cuáles son los precios?                                         6962e36611
+entrante · ¿Qué precios manejan?                                            6962e36611
+entrante · Info de precios                                                    6962e36611
+entrante · Las tarifas                                                        da214e1ce0
+entrante · ¿Cuánto valen las membresías?                                   6962e36611
+entrante · ¿Tienen planes?                                                   da214e1ce0
+entrante · Precios?                                                           6962e36611
+entrante · ¿Planes?                                                          da214e1ce0
+entrante · ¿Y los planes?                                                    da214e1ce0
+entrante · Hola, precios por favor                                            6962e36611
+entrante · Buenas tardes, planes y precios                                    6962e36611
+entrante · Info planes                                                        da214e1ce0
+entrante · Mándame la lista de planes                                        da214e1ce0
+entrante · Quiero conocer los planes y sus precios                            6962e36611
+entrante · ¿Cuánto cuesta el Mensual y qué otros hay?                      6962e36611
+entrante · ¿Cuánto cuesta el Mensual?                                       418fd736de
+entrante · ¿Cuánto cuesta la mensualidad?                                   418fd736de
+entrante · ¿Cuánto cuesta?                                                  418fd736de
+entrante · Precios del mensual                                                418fd736de
+entrante · Precio?                                                            418fd736de
+entrante · ¿Qué planes tienen para estudiantes?                             248f05eca1
+entrante · ¿Qué planes tienen de un mes?                                    248f05eca1
+entrante · ¿Qué opciones de pago tienen?                                    248f05eca1
+entrante · ¿Qué opciones de horario hay?                                    248f05eca1
+entrante · No me interesan los planes, gracias                                248f05eca1
+entrante · Quiero hablar con un asesor sobre los planes                       248f05eca1
+entrante · ¿Cuál de los planes me recomienda para bajar de peso?            248f05eca1
+entrante · Ya vi los planes, ¿cuál me recomiendas?                          248f05eca1
+entrante · Tengo una lesión de rodilla, ¿qué planes tienen?                248f05eca1
+entrante · ¿Cuál es el horario y cuánto cuestan los planes?                418fd736de
+entrante · Quiero ir el sábado a las 10 de la mañana. ¿Qué planes tienen? 248f05eca1
+entrante · ¿Qué planes tienen y cómo se paga?                              248f05eca1
+entrante · ¿Qué clases tienen y qué planes manejan?                        248f05eca1
+entrante · Ya pagué uno de los planes y no me llega nada                     248f05eca1
+entrante · Dejen de mandarme los planes                                       248f05eca1
+entrante · Me gustaron los planes                                             248f05eca1
+entrante · Los planes que vi ayer                                             248f05eca1
+entrante · Hola                                                               248f05eca1
+entrante · Quiero bajar de peso                                               248f05eca1
+oferta · ¿Quiere que le pase la app para descargarla?                        11fbf144bc
+oferta · ¿Quiere que le cuente cómo empezar?                                fc9ff8e3e2
+oferta · ¿Le gustaría que le envíe el enlace de pago?                      125f4397df
+oferta · ¿Desea agendar una visita de cortesía?                             752ee43496
+oferta · ¿Sabe qué quiere decir el enlace de pago?                          95cb9b4f84
+oferta · ¿El equipo desea revisar su caso?                                   95cb9b4f84
+oferta · ¿Quieres que te pase la app para descargarla?                       2d4f0dedf5
+oferta · ¿Le parece si le cuento los planes?                                 11fbf144bc
+laravel 0                                                                      760b1f22d5
+laravel 1                                                                      83b1982090
+laravel 2                                                                      2a796ff456
+laravel 3                                                                      f88cff9069
+lista 0                                                                        40e6d369b9
+lista 1                                                                        1ae41f34ea
+lista 2                                                                        de606503d5
+lista 3                                                                        93c8770d21
+lista 4                                                                        cd015f50f0
+lista 5                                                                        862a72291a
+lista 6                                                                        1469d81a8e
+lista 7                                                                        22cb49f980
+lista 8                                                                        cc8fe4c808
+beneficio 0                                                                    4f53cda18c
+beneficio 1                                                                    6e6cef71f8
+beneficio 2                                                                    4f53cda18c
+beneficio 3                                                                    4f53cda18c
+beneficio 4                                                                    4f53cda18c
+beneficio 5                                                                    4f53cda18c
+marcadores                                                                     bda971129a
+notas                                                                          184d565b53
+origen                                                                         da9675e988
+marcador 0                                                                     369ea20e56
+marcador 1                                                                     d0b95c644e
+marcador 2                                                                     674738d02e
+marcador 3                                                                     da9a565acf
+marcador 4                                                                     2a9b920178
+marcador 5                                                                     700d28287c
+marcador 6                                                                     9e2abafdd4
+marcador 7                                                                     271eba6524
+marcador 8                                                                     972e2b8a50
+marcador 9                                                                     cfb219f0e2
+marcador 10                                                                    6d172a2e61
+marcador 11                                                                    e494c11c66
+marcador 12                                                                    eb3c4ac4ef
+marcador 13                                                                    1ca0f4b7aa
+marcador 14                                                                    7139cd8cbc
+marcador 15                                                                    1d8888a5a2
+marcador 16                                                                    1b30a1f224
+marcador 17                                                                    764bd16764
+marcador 18                                                                    3dbccf2fbb
+marcador 19                                                                    f1a3b397e9
+casos: 105 · preg_last_error=0
+HUELLA 60412b9d7d60f2a4
+salida: 0
+
+── 2. Las guardas estáticas en origin/main (66b14467), árbol limpio de la batería: la puerta de diff vuelve a verde sin haberse tocado ──
+Time: 00:14.685, Memory: 139.67 MB
+OK (141 tests, 182975 assertions)
+
+── 3. Humo de la puerta nueva ai/check por HTTP real (nginx y FPM), con un token inválido; el secreto se lee de la configuración dentro del proceso y no se imprime ──
+{"check_con_la_credencial_y_un_token_invalido":{"status":422,"ok":false,"code":"invalid_token","claves":["ok","code"]},"check_sin_credenciales":401,"check_con_otra_credencial":401,"cerrojo_canario":882,"compilador":4}
+quedan en /tmp: 0
+
+── 4. ultron:origin-report en producción (orden nueva), conversaciones canarias ──
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde el principio · hasta ahora · conversaciones: 2
+  Respuestas enviadas: 90 (con traza de regeneración: 0)
+  Escrito por la IA: 68 de 90 (75,6 %) · objetivo 90 %: NO
+    al primer intento: 58 (64,4 %) · regeneradas: 10 (11,1 %) · intento sin dato: 4 (4,4 %)
+    Recortadas (sin su pregunta final): 1
+    Texto del servidor en el camino del modelo (no cuenta como IA): 4 (visit_hour: 4)
+    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 72 de 89 (80,9 %)
+  Reescrituras: 23 (revisor: 23)
+  Respaldos: 18 de 90 (20,0 %)
+    el revisor rechazó todos los intentos: 12
+    la rendición: 2 (machine_reply_unauthorized_handoff: 1, unsupported_future_action_promise: 1)
+    la política del commit: 3 (policy_greeting_sells: 2, policy_active_goal_lost: 1)
+    el último recurso: 1
+  Latencia del entrante al saliente: p50 11 s · p95 18 s · máx 28 s (n = 90)
+  Llamadas al modelo por turno: media 3,5 · máx 5 (n = 84) · comprobaciones del servidor por turno: sin dato
+  Tokens: sin dato (n8n no los entrega todavía)
+  Reintentos del job: 0 de 90 turnos con evento (máx. intentos 1)
+  Fuera del reparto: no_reply/skipped: 3
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 0.
+
+── 5. ultron:prompt-trace --last=3: lo que el motor ofrece ahora a la canaria ──
+ULTRON · prompts del motor (solo lectura)
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo compiler_changed
+
++-------------------+------------------+--------------------------+--------------------+---------+
+| Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado  |
++-------------------+------------------+--------------------------+--------------------+---------+
+| 2026-11-18T22:46Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
+| 2026-11-18T22:47Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
+| 2026-11-20T00:11Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
++-------------------+------------------+--------------------------+--------------------+---------+

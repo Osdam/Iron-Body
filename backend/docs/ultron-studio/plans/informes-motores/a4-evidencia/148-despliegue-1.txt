@@ -1,0 +1,85 @@
+DESPLIEGUE DEL SERVIDOR · 1. PRIMER DESPLIEGUE e861e2c8 → 66b14467 · 03:16:10 a 03:16:53 UTC · código de salida 0
+lead · producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · despliegue autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6)
+
+== deploy-a4-regenerar-backend.sh · 2026-11-22T03:16:11Z · modo despliegue · PREVIO=e861e2c8 · NUEVO=66b14467 · lista /root/a4-regenerar-lista.txt
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción e861e2c8 limpia · origin/main 66b14467 · 34 commit(s) · 267 ficheros = la lista: 26 de backend/app · 1 de backend/routes (marketing.php) · 43 de backend/tests · 174 de backend/docs · 23 otros
+   ni migraciones, ni backend/config, ni composer, ni bootstrap; de backend/routes solo marketing.php: + «Route::post('ai/check', [UltronController::class, 'check']);» y, aparte, solo comentarios
+   las cuatro puertas declaradas una vez en el marketing.php nuevo (decide, check, commit, ultron/incidents)
+   constante de llamadas (VoiceCallPolicy): cerrada · de envíos (OutreachSendGate): cerrada · los dos ficheros sin cambios
+      66b14467 docs(ultron-studio): gate 4-H CERRADO: el propietario autoriza el despliegue canario con ensayo de reversión 
+      5ea6840c docs(ultron-studio): gate 4-H: el cierre en SÍ o NO que pidió el propietario y qué toca el ensayo de revers
+      4e040e22 docs(ultron-studio): gate 4-H: las cuatro confirmaciones que pidió el propietario antes de autorizar el despl
+      c6f09585 docs(ultron-studio): la línea base no lleva ninguno de los tres textos del servidor sin marca; la versión en
+      39857725 docs(ultron-studio): la red de marcadores, pasada por el PCRE del servidor; cifras de la Enmienda A4-3 contras
+      1af82b4a docs(ultron-studio): Enmienda A4-3 del H5, gate 4-H abierto y L9-124: «regenerar antes de sustituir», verifi
+      0400b267 fix(ultron): regenerar antes de sustituir, ronda única de correcciones tras las revisiones (cierre V2, aparta
+      e7611629 docs(ultron-studio): la regla de beneficios, probada contra el catálogo real de producción: 0 falsos positiv
+      808a0b81 docs(ultron-studio): revisión final de «regenerar antes de sustituir»: APROBADO CON CONDICIONES, sin bloque
+      062132a2 docs(ultron-studio): la sonda del motor, ampliada a «regenerar antes de sustituir», da la misma huella en pr
+      cd431e20 feat(ultron): regenerar antes de sustituir, ola 5: el flujo de n8n S2, generado desde el repositorio y comprob
+      5bd37990 docs(ultron-studio): revisión de seguridad del lado servidor de «regenerar antes de sustituir»: APTO CON CO
+      ab64134a feat(ultron): regenerar antes de sustituir, olas 4b y 6: las reglas de política corregibles van a reescritura
+      05f7109c ops(ultron-studio): guion de despliegue del backend para «regenerar antes de sustituir» (ruta nueva + route:
+      d8ff1c19 docs(ultron-studio): las herramientas del lead, al repositorio (la carpeta temporal se purga)
+      22e069fd docs(ultron-studio): punto de control para retomar «regenerar antes de sustituir» y los encargos de cada ola
+      d63fbd50 feat(ultron): regenerar antes de sustituir, ola 4: la puerta de solo lectura `ai/check`, el presupuesto de ree
+      ee8e0df0 feat(ultron): regenerar antes de sustituir, ola 3: la lista de planes la redacta el modelo y el servidor pone 
+      2d3d02ba feat(ultron): regenerar antes de sustituir, olas 1 y 2: las piezas puras de la reescritura guiada y el parche 
+      97b59195 docs(ultron-studio): plan del arquitecto para «regenerar antes de sustituir» (cierre V2, apartado 4) y decis
+      a6e2ccdf docs(ultron-studio): matriz: las horas reales del gate 4-G (04:30 y 04:36 UTC)
+      69c3299e docs(ultron-studio): gate 4-G cerrado con la decisión del propietario: construir primero «regenerar antes de
+      931be75c docs(ultron-studio): gate 4-G sigue abierto: el propietario pide aclarar la arquitectura de respuestas antes d
+      e9b1dd52 docs(ultron-studio): Enmienda A4-2 del H5, gate 4-G abierto y L9-123: el tono y la lista de planes, verificado
+      a6e2005b fix(ultron): con «profesional», el borrador que tutea se descarta siempre; solo se recorta si lleva los enla
+      3eca6206 fix(ultron): la lista de planes solo sale cuando se piden los planes, y el recorte por tuteo no deja respuesta
+      6c2f12d0 docs(ultron-studio): revisiones de seguridad y final del tono y el panorama (apartado 4): apto con condiciones
+      adb25f6d feat(ultron): compilador 4: con «profesional» el revisor falla el tuteo, y las frases prohibidas mandan sobr
+      8e710104 feat(ultron): el tono publicado se comprueba en el commit y los respaldos salen de usted; la pregunta por «lo
+      bc5167cb docs(ultron-studio): cierre V2, apartado 4: la ruta real de los datos comerciales de ULTRON, medida en producc
+      60cbde68 docs(ultron-studio): cierre V2, apartado 4: plan del arquitecto para el resto (el tono, el panorama de planes 
+      938c6180 docs(ultron-studio): cierre V2, apartado 4: segunda prueba real superada para los dos bloqueantes (H4-1, H4-2 
+      43266f0c docs(ultron-studio): matriz V2: gate 4-D cerrado y verificado (versión 2 publicada en canario), gate 4-E abie
+      82dddf78 docs(ultron-studio): matriz V2: gate 4-C cerrado y verificado (versión 2 aprobada y veredicto «Aprobada»), 
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600
+   route:list: 1045 rutas · [decide=ok check=ausente commit=ok incidents=ok] · middleware [api,automation.internal,throttle:internal-marketing-ai]
+   sin credenciales: POST ai/decide → 401 · POST ai/check → 404 (todavía no existe) · OPcache del FPM: sin líneas (validate_timestamps = 1 y revalidate_freq = 2, los valores por defecto)
+1. respaldo /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613 (700 de root; ficheros 600 de root): commit previo y nuevo, lista, caché de rutas (sha256 821a6091c99a…), caché de configuración (lleva secretos: no se imprime), route:list y supervisor de antes, el guion y SHA256SUMS
+2. código: HEAD=66b14467 (merge --ff-only, umask 022) · www-data lee los 267 ficheros del merge; los de app y rutas:
+   root 644 backend/app/Console/Commands/Marketing/UltronOriginReport.php
+   root 644 backend/app/Console/Commands/Marketing/UltronPromptsN8n.php
+   root 644 backend/app/Http/Controllers/Api/Internal/UltronController.php
+   root 644 backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+   root 644 backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
+   root 644 backend/app/Services/Marketing/Ultron/CriticContract.php
+   root 644 backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+   root 644 backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+   root 644 backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php
+   root 644 backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php
+   root 644 backend/app/Services/Marketing/Ultron/StrategyContract.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronBenefitAttribution.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronCommitService.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDecideService.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDecideToken.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDraftCheck.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDraftDefects.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDraftPlaceholders.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronPlansOverview.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronRegenerationTrace.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronTurnPolicyReader.php
+   root 644 backend/routes/marketing.php
+3. caché de rutas: www-data 600 (route:cache como www-data, umask 077) · route:list: 1045 → 1046 rutas · puertas [decide=ok check=ok commit=ok incidents=ok] · middleware [api,automation.internal,throttle:internal-marketing-ai] · diferencia [+POST api/internal/marketing/ai/check]
+4. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+5. sin credenciales: POST ai/check 404 → 401 (esperado 401) · ai/decide → 401 · ai/commit → 401 · ai/ultron/incidents → 401 · admin/voice/status → 401 (todas 401)
+6. production.ERROR nuevos en laravel*.log desde el inicio: 0
+   producción sirve 66b14467 · respaldo /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613 · registro /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · production.ERROR nuevos · 5xx de /api/internal/marketing/ai/ en el access.log · failed_jobs · el primer turno canario (DEPLOY_A4_REGENERAR.md §5)
+   vuelta atrás: bash /root/deploy-a4-regenerar-backend.sh e861e2c8 66b14467 /root/a4-regenerar-lista.txt --vuelta-atras=/var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613
+   a mano (lo mismo): [ "$(git -C /var/www/api rev-parse HEAD)" = 66b14467191b905bbce4b81a5822035b49a9d250 ] && ( cd /var/www/api && umask 022 && git checkout -q --detach e861e2c8b2fe904499c99ab83c3a077d081994f8 ) && cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; cat > bootstrap/cache/routes-v7.php.a4-vuelta && mv -f bootstrap/cache/routes-v7.php.a4-vuelta bootstrap/cache/routes-v7.php' < /var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031613/bootstrap-cache/routes-v7.php && sudo -u www-data php artisan queue:restart
+     (o, en vez de la caché del respaldo: sudo -u www-data sh -c 'umask 077; php artisan route:cache -q'; después stat -c '%U %a' bootstrap/cache/routes-v7.php → www-data 600)
+CORRECCIÓN CON RUTA NUEVA DESPLEGADA SIN DESVÍOS
