@@ -117,10 +117,20 @@ final class UltronPromptsN8nFlow
     /**
      * El código del nodo «Elegir Prompts», con la base embebida.
      *
+     * `$flowRev` es la revisión que el selector declara en `ultron_prompts`
+     * (y el commit sella como `prompts.flow_rev`). Por defecto la de S1, así
+     * que S1 sale byte a byte igual; S2 («regenerar antes de sustituir»,
+     * {@see UltronRegenN8nFlow}) es el mismo selector con `FLOW_REV = "S2"`.
+     * Tiene la forma que admite el commit (`[A-Za-z0-9_.:-]`, ≤ 32).
+     *
      * @throws UltronPromptException si la base no se puede cargar
+     * @throws RuntimeException si la revisión no tiene esa forma
      */
-    public static function selectorCode(): string
+    public static function selectorCode(string $flowRev = self::FLOW_REV): string
     {
+        if (preg_match('/\A[A-Za-z0-9_.:-]{1,32}\z/', $flowRev) !== 1) {
+            throw new RuntimeException('La revisión del flujo no es un código corto: '.json_encode($flowRev));
+        }
         $roles = UltronPromptBase::roles();
         $legacy = [];
         foreach (UltronPromptBase::ROLES as $rol) {
@@ -129,7 +139,7 @@ final class UltronPromptsN8nFlow
 
         return strtr(self::SELECTOR_TEMPLATE, [
             '%%CONTRACT%%' => self::js(UltronPromptBase::CONTRACT),
-            '%%FLOW_REV%%' => self::js(self::FLOW_REV),
+            '%%FLOW_REV%%' => self::js($flowRev),
             '%%ROLES%%' => self::js(UltronPromptBase::ROLES),
             '%%LEGACY%%' => implode(",\n", $legacy),
             '%%LEGACY_HASH%%' => self::js(UltronPromptBase::LEGACY_BUNDLE_HASH),

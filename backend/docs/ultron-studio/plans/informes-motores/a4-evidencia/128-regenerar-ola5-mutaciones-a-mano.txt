@@ -1,0 +1,30 @@
+# 128 · Ola 5: siete mutaciones a mano, fuera de la prueba PHP (cada una sobre una copia de flujo-s2.json; el del repositorio no se toca)
+# 2026-11-22T00:53:14Z · node <scratchpad>/mutar.cjs n8n/flujos/ultron-studio-s2/flujo-s2.json n8n/flujos/ultron-studio-s2 <scratchpad>/mutado.json
+
+MUERE  quién pidió: server↔critic: 6 ✗  — Preparar Commit = preparar-commit.js generado | recorrido «Studio, el servidor pide 1» | recorrido «Studio, dos reescrituras del servidor»
+MUERE  Decidir Intento 3 siempre sí: 23 ✗  — «Decidir Intento 3» = decidir-intento-3.js generado | Decidir Intento 3, el revisor 2 aprueba: no y la entrada tal cual | Decidir Intento 3, el revisor 2 aprueba (lo que no corrió es undefined): no y la entra
+MUERE  la nota del servidor sin notas: 5 ✗  — «Nota del Servidor 1» = nota-del-servidor.js generado | Nota del Servidor 1: la forma del revisor con la nota y los issues del servidor (by: s | recorrido «Studio, el servidor pide 1»
+MUERE  ¿Reescribir 1? con las salidas cambiadas: 18 ✗  — las de S1 con los cambios de §5.1 (Composer, Composer Reintento y Critic Comercial 2)  | recorrido «Studio, pasa» | recorrido «Studio, el servidor pide 1»
+MUERE  sin tiempo máximo: 1 ✗  — Comprobar Borrador 1: tiempo máximo de 3 s, respuesta entera y sin convertir los 4xx/5
+MUERE  Composer Reintento 2 con el borrador rechazado equivocado: 5 ✗  — «Composer Reintento 2»: rejected_draft lee de «Composer Reintento» (una vez) | recorrido «Studio, dos reescrituras del servidor» | recorrido «Studio, el revisor y después el servidor»
+MUERE  el tercer borrador vuelve al primero si falla: 19 ✗  — Preparar Commit: el de S1 + el tercer borrador + el bloque regeneration, y nada más | Preparar Commit = preparar-commit.js generado | sin oferta (decide-legacy.json, con reintento): la MISMA salida que S1 y sin bloque
+
+# El guion de las mutaciones:
+const fs = require('fs'); const { execFileSync } = require('child_process');
+const [,, base, gen, out] = process.argv;
+const M = {
+  'quién pidió: server↔critic': f => { const n = f.nodes.find(x => x.name === 'Preparar Commit'); n.parameters.jsCode = n.parameters.jsCode.replace('return { by: "server"', 'return { by: "critic"'); },
+  'Decidir Intento 3 siempre sí': f => { const n = f.nodes.find(x => x.name === 'Decidir Intento 3'); n.parameters.jsCode = n.parameters.jsCode.replace('let intento3 = false;', 'let intento3 = true;').replace('} catch (e) { intento3 = false; }', '} catch (e) { intento3 = true; }').replace('intento3 = !!c && c.may_rewrite === true && c.error === false;', 'intento3 = true;'); },
+  'la nota del servidor sin notas': f => { const n = f.nodes.find(x => x.name === 'Nota del Servidor 1'); n.parameters.jsCode = n.parameters.jsCode.replace('notes: typeof c.notes === "string" ? c.notes : ""', 'notes: ""'); },
+  '¿Reescribir 1? con las salidas cambiadas': f => { const c = f.connections['¿Reescribir 1?'].main; f.connections['¿Reescribir 1?'].main = [c[1], c[0]]; },
+  'sin tiempo máximo': f => { delete f.nodes.find(x => x.name === 'Comprobar Borrador 1').parameters.options.timeout; },
+  'Composer Reintento 2 con el borrador rechazado equivocado': f => { const n = f.nodes.find(x => x.name === 'Composer Reintento 2'); n.parameters.responses.values[1].content = n.parameters.responses.values[1].content.replace('$("Composer Reintento").first().json.output[0].content[0].text.reply_draft', '$("Composer").first().json.output[0].content[0].text.reply_draft'); },
+  'el tercer borrador vuelve al primero si falla': f => { const n = f.nodes.find(x => x.name === 'Preparar Commit'); n.parameters.jsCode = n.parameters.jsCode.replace('} catch (e) { /* no corrio: se queda el borrador de antes */ }', '} catch (e) { intento = 1; draft = prim.reply_draft; }'); },
+};
+for (const [nombre, muta] of Object.entries(M)) {
+  const f = JSON.parse(fs.readFileSync(base, 'utf8')); muta(f); fs.writeFileSync(out, JSON.stringify(f));
+  let salida = '', rc = 0;
+  try { salida = execFileSync('node', ['backend/docs/ultron-studio/ops/motores/verificar-flujo.cjs', '--rev=S2', out, '--generado=' + gen], { encoding: 'utf8' }); } catch (e) { salida = e.stdout; rc = e.status; }
+  const x = salida.split('\n').filter(l => l.startsWith('  ✗'));
+  console.log(`${rc === 1 ? 'MUERE ' : 'VIVE  '} ${nombre}: ${x.length} ✗  — ${x.slice(0, 3).map(l => l.slice(4, 90)).join(' | ')}`);
+}

@@ -1,0 +1,15 @@
+{
+    "body": {
+        "ok": true,
+        "contract": "ultron-regen/1",
+        "mode": "studio",
+        "attempt": 1,
+        "rewrite": "true",
+        "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia."
+    },
+    "headers": {
+        "content-type": "application/json"
+    },
+    "statusCode": 200,
+    "statusMessage": "OK"
+}

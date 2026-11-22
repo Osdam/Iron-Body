@@ -1,0 +1,7 @@
+{
+    "error": {
+        "message": "timeout of 3000ms exceeded",
+        "name": "AxiosError",
+        "code": "ECONNABORTED"
+    }
+}

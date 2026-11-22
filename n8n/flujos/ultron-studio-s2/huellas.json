@@ -1,0 +1,115 @@
+{
+    "flowRev": "S2",
+    "name": "Iron Body - ULTRON - Commercial Advisor (Studio S2)",
+    "from": {
+        "flowRev": "S1",
+        "workflowId": "YspRwsXnqt33NouP",
+        "sourceVersionId": "29de5119-2e5a-4bc8-a479-60f4fe37c5b3"
+    },
+    "contract": "ultron-regen/1",
+    "maxDrafts": 3,
+    "maxChecks": 2,
+    "checkTimeoutMs": 3000,
+    "checkRetries": 0,
+    "nodes": {
+        "total": 39,
+        "s1": 25,
+        "new": 14,
+        "withCredentials": 12,
+        "newNames": [
+            "¿Comprobar 1?",
+            "Comprobar Borrador 1",
+            "Leer Comprobación 1",
+            "¿Reescribir 1?",
+            "Nota del Servidor 1",
+            "¿Comprobar 2?",
+            "Comprobar Borrador 2",
+            "Leer Comprobación 2",
+            "¿Reescribir 2?",
+            "Nota del Servidor 2",
+            "Decidir Intento 3",
+            "¿Intento 3?",
+            "Composer Reintento 2",
+            "Critic Comercial 3"
+        ]
+    },
+    "connections": {
+        "sources": 33,
+        "links": 45
+    },
+    "selector": {
+        "name": "Elegir Prompts",
+        "id": "5e1ec7a0-0001-4c0d-9a5e-000000000051",
+        "flowRev": "S2",
+        "jsCodeSha256": "2aa62c3f3dcf1624c56d0e42781e8afd0f19ea77167fd583d8ad523f813997c5",
+        "jsCodeBytes": 118831
+    },
+    "preparaCommitJsCodeSha256": "8258faaefe8e7df2ed497dc0d7d935e1438f6992ec27b81be312c6a3ef76c109",
+    "code": {
+        "Leer Comprobación 1": {
+            "file": "leer-comprobacion-1.js",
+            "sha256": "b34438a011038155c5d40607c717b5634c87ec3ed509908d4611c49c30abd605",
+            "bytes": 3353
+        },
+        "Leer Comprobación 2": {
+            "file": "leer-comprobacion-2.js",
+            "sha256": "31dc4a9eb753a434715bd9003bdb48df02283b272bf196275cc27247dcbe8bb1",
+            "bytes": 3363
+        },
+        "Nota del Servidor 1": {
+            "file": "nota-del-servidor.js",
+            "sha256": "dea0ed184c9f5550cc05f995e8d2ea7082dad7f804c335a1343bc59a1db3c247",
+            "bytes": 903
+        },
+        "Nota del Servidor 2": {
+            "file": "nota-del-servidor.js",
+            "sha256": "dea0ed184c9f5550cc05f995e8d2ea7082dad7f804c335a1343bc59a1db3c247",
+            "bytes": 903
+        },
+        "Decidir Intento 3": {
+            "file": "decidir-intento-3.js",
+            "sha256": "133872f4b7e062fd89d1a93fe7efdf554db278547125e6de811133647c2aca59",
+            "bytes": 1640
+        }
+    },
+    "check": {
+        "url": "https://api.ironbodyneiva.cloud/api/internal/marketing/ai/check",
+        "jsonBody": {
+            "Comprobar Borrador 1": "={{ JSON.stringify({ conversation_id: $(\"Normalizar Evento\").first().json.conversation_id, message_id: $(\"Normalizar Evento\").first().json.message_id, decide_token: $(\"Pedir Contexto al CRM\").first().json.decide_token, attempt: 1, draft: { reply_draft: $(\"Composer\").first().json.output[0].content[0].text.reply_draft, intent: $(\"Validar Estrategia\").first().json.strategy.intent, recommended_plan_id: $(\"Validar Estrategia\").first().json.strategy.recommended_plan_id === undefined ? null : $(\"Validar Estrategia\").first().json.strategy.recommended_plan_id, tools_requested: $(\"Validar Estrategia\").first().json.strategy.tools_requested } }) }}",
+            "Comprobar Borrador 2": "={{ JSON.stringify({ conversation_id: $(\"Normalizar Evento\").first().json.conversation_id, message_id: $(\"Normalizar Evento\").first().json.message_id, decide_token: $(\"Pedir Contexto al CRM\").first().json.decide_token, attempt: 2, draft: { reply_draft: $(\"Composer Reintento\").first().json.output[0].content[0].text.reply_draft, intent: $(\"Validar Estrategia\").first().json.strategy.intent, recommended_plan_id: $(\"Validar Estrategia\").first().json.strategy.recommended_plan_id === undefined ? null : $(\"Validar Estrategia\").first().json.strategy.recommended_plan_id, tools_requested: $(\"Validar Estrategia\").first().json.strategy.tools_requested } }) }}"
+        }
+    },
+    "systemContent": {
+        "Strategist": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.strategist }}",
+        "Composer": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer }}",
+        "Critic Comercial": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic }}",
+        "Composer Reintento": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer_retry }}",
+        "Critic Comercial 2": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic_retry }}",
+        "Composer Reintento 2": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer_retry }}",
+        "Critic Comercial 3": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic_retry }}"
+    },
+    "userContentSha256": {
+        "Strategist": "07aa382c922c41a2a2b7f497b1c81bfb18a2f318521fce6d532cc786e20c0411",
+        "Composer": "dec722e2ac88314792c4340dade87ae8056f35f94e9b864eda888fdab3720e92",
+        "Critic Comercial": "eb8195f5394c3edff1eefd78721404774b52001d4192c4a88b5965597f3547b1",
+        "Composer Reintento": "3553c4e81ef9a836c5b7f42b35f62a728b0286456fbeb6ec35f22369f3c65e25",
+        "Critic Comercial 2": "daae1b54b95e1933d7b290d4247f0df510f30242ab5f7d70199f2c46eb351219",
+        "Composer Reintento 2": "6e09009231588c9d708d5532f4776e515a98febfadc64c0c6d0e0e73d4e0551e",
+        "Critic Comercial 3": "daae1b54b95e1933d7b290d4247f0df510f30242ab5f7d70199f2c46eb351219"
+    },
+    "vocabulary": {
+        "codes": [
+            "register_tuteo",
+            "length_over_cap",
+            "plans_overview",
+            "benefit_misattributed",
+            "policy_greeting_sells",
+            "policy_active_goal_lost",
+            "policy_wrong_first_plan",
+            "policy_answer_without_fact",
+            "policy_general_info_only_discovery",
+            "policy_memory_turn_sells"
+        ],
+        "dimensions": 22
+    }
+}

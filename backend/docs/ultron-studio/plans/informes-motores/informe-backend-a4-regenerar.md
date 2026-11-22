@@ -1059,3 +1059,198 @@ Ninguna: ni migraciones, ni `config/`, ni rutas, ni variables de entorno. El com
 3. **La línea base, corregida.** Leído en producción el 21-11 (solo conteos): de las 71 respuestas que la consulta contó como del modelo, 4 eran la hora de la visita. Lo que escribió el modelo fueron **67 de 88 (76,1 %)**, no 71 (80,7 %). El fixture de la línea base de `UltronOriginReportCommandTest` ya lo refleja.
 4. Tras estos cambios: dirigidas del motor, de la puerta y del informe, **1 862 en verde** (1 omitida, la que solo corre en PostgreSQL); `pint`, passed.
 
+
+---
+
+## 7. Ola 5
+
+21-11-2026 · rama `feat/ultron-studio-h9`, HEAD `ab64134a` (olas 1 a 4b y 6 confirmadas) · **sin commit**: todo está en el árbol de trabajo, nada desplegado, sin producción y **sin n8n** (ni MCP, ni API, ni su base, ni importar, ni publicar).
+Guía: el encargo del lead (`encargos-regenerar/encargo-be-r5.md`) y `plan-arquitecto-a4-regenerar.md` §1 (H2 a H6, H8, H13), §3 P-2 y P-6, §4, §5 entero, §6 «Ola 5», §8 y §13 (L-6). El contrato es el implementado (§4 y §5 de este informe): `defects` hasta 8, diez códigos (los cuatro de §4.4 y los seis de la política) y `regeneration.rewrites.*.codes` hasta 8. **Donde el plan y lo implementado difieren, manda lo implementado** (y no hubo que tocar el servidor: el contrato cuadra).
+
+### 7.0 Resumen
+
+- **S2 generado desde el repositorio:** `UltronRegenN8nFlow::build(S1)` (pura) da **39 nodos** (los 25 de S1 + los 14 de §5.2), **12 con credencial**, **33 orígenes y 45 enlaces** (S1: 25 nodos, 8 con credencial, 19 orígenes y 26 enlaces). Desenrollado: **ningún bucle** fuera del ciclo de la rendición de S1. El límite de tres redacciones está en la forma del grafo: en los **17 caminos** de Composer a Preparar Commit hay como mucho 3 redactores, 3 revisores y 2 comprobaciones **[C]**.
+- **S1, byte a byte igual** **[C]**: los nueve ficheros de `n8n/flujos/ultron-studio-s1/`, con la orden sin `--rev` y con `--rev=S1`, tienen los sha256 de HEAD (escritos a mano en la prueba). `git status` limpio en esa carpeta.
+- **Los 25 de S1 en S2, idénticos** salvo el `jsCode` de Preparar Commit (dos anclas) y `FLOW_REV = "S2"` en el selector: posiciones, credenciales, `values[1]`, opciones y reintentos incluidos **[C]**.
+- **Sin la oferta** (`decide` sin `regeneration` de `ultron-regen/1`: Legacy, un servidor anterior o un contrato desconocido), el recorrido ejecutado nodo a nodo da **las mismas llamadas al modelo, los mismos datos enviados (`values[0]` y `values[1]` evaluados), ninguna llamada a `ai/check` y la misma salida de Preparar Commit que S1**, sin bloque; solo cambia `prompts.flow_rev` (S1 → S2) **[C, simulado]**.
+- **El comprobador** `verificar-flujo.cjs --rev=S2` (apartados A a J): **OK, 226 comprobaciones** sobre lo generado (127); el modo S1, sin cambios: **OK, 121** (126). Falla en modo S2 sobre S1, y con las **10 mutaciones** de la prueba y las **7 a mano** (128).
+- **Números:** rojo antes (122): 25 pruebas, 20 errores y 3 fallos; dirigidas en verde (123): **905 pruebas**; Marketing entero (124): **6 802 en verde** (1 omitida, solo PostgreSQL); guardas (125): **141, con la roja esperada** (la puerta de diff del H9); `pint`: `passed` (129).
+- **El procedimiento de importación** (`ops/motores/n8n-copia-s2/LEEME.md` e `importar-s2.sh`): **ESCRITO Y SIN EJECUTAR**. Solo se ha comprobado su sintaxis (`bash -n`, que no ejecuta) y, en local con Node, el control del fichero que el guion hace dentro del contenedor.
+
+### 7.1 Ficheros tocados
+
+| Fichero | Cambio | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php` | **nuevo** | El generador S2, puro: `build(S1)` → `{flow, hashes, code, fixtures}`; `commitCode()` (las dos anclas), `checkBody(k)`, `readCode(k)`, `noteCode()`, `thirdCode()`, `fixtures()`; ids y posiciones fijos; el vocabulario del servidor (`UltronRegenerationNotes::CODES`, `CriticContract::DIMENSIONS`, los topes) embebido desde las constantes PHP. Se niega (`RuntimeException`) si S1 no es el que se genera hoy |
+| `app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php` | +12/−2 | `selectorCode(string $flowRev = self::FLOW_REV)`: el valor por defecto deja S1 igual; una revisión que no tiene la forma que admite el commit (`[A-Za-z0-9_.:-]`, ≤ 32) lanza |
+| `app/Console/Commands/Marketing/UltronPromptsN8n.php` | +191/−13 | `--rev=S1\|S2` (por defecto S1) y `--out` según la revisión; `generaS1()` es el código de siempre, sin una línea cambiada salvo la escritura (extraída a `escribe()`); `generaS2()` y `leemeS2()`. Una revisión desconocida no escribe nada |
+| `n8n/flujos/ultron-studio-s2/` (17 ficheros) | **nuevos, generados** | `flujo-s2.json`, `preparar-commit.js`, `leer-comprobacion-1.js`, `leer-comprobacion-2.js`, `nota-del-servidor.js`, `decidir-intento-3.js`, `huellas.json`, `LEEME.md` y `fixtures/`: `decide-studio.json`, `decide-legacy.json`, `check-pasa.json`, `check-reescribe.json`, `check-legacy.json`, `check-404.json`, `check-422.json`, `check-error-de-red.json` y `check-mal-formada.json` |
+| `docs/ultron-studio/ops/motores/verificar-flujo-s2.cjs` | **nuevo** | El comprobador S2 (§7.4), con un simulador de recorridos |
+| `docs/ultron-studio/ops/motores/verificar-flujo.cjs` | +16 | `--rev=S2` delega en el hermano; `--rev=S1` o sin `--rev`, lo de siempre; otra revisión, código 2 |
+| `docs/ultron-studio/ops/motores/n8n-copia-s2/LEEME.md` e `importar-s2.sh` | **nuevos** | El procedimiento: preparar el fichero, importar la copia INACTIVA, comprobador, ensayo con datos fijados, cambio de S1 a S2 y vuelta atrás. **Sin ejecutar** |
+| `tests/Feature/Marketing/UltronPromptsN8nS2CommandTest.php` | **nuevo** | 14 métodos, 23 pruebas con el proveedor de las 10 mutaciones (§7.5) |
+| `tests/Unit/Marketing/Ultron/UltronCatalogStaticGuardsTest.php` | +10/−4 | Mira también `n8n/flujos/ultron-studio-s2/*.js` y exige los cinco `.js` de S2 en la lista. Sin excepciones nuevas: ningún `.js` de S2 nombra un plan, un precio o un beneficio |
+| `docs/…/a4-evidencia/122a`, `122` a `129`, `123a` y `124a` | nuevos | Salidas (§7.7) |
+
+**Sin tocar:** el servidor de las olas anteriores (`UltronDraftCheck`, el controlador, el commit, `decide`, las rutas), `config/`, las migraciones, los prompts base, el compilador, el CRM, los ficheros de `n8n/flujos/ultron-studio-s1/` (regenerados idénticos) y `ultron:canary-report`.
+
+### 7.2 El flujo
+
+```
+Composer → ¿Comprobar 1? ─no (sin oferta)→ Critic Comercial
+             └sí→ Comprobar Borrador 1 → Leer Comprobación 1 → ¿Reescribir 1? ─no→ Critic Comercial
+                                                                 └sí→ Nota del Servidor 1 → Composer Reintento
+Critic Comercial → Critic aprueba? ─sí→ Preparar Commit · ─no→ Composer Reintento        (S1)
+Composer Reintento → ¿Comprobar 2? ─no (sin oferta)→ Critic Comercial 2
+             └sí→ Comprobar Borrador 2 → Leer Comprobación 2 → ¿Reescribir 2? ─no→ Critic Comercial 2
+                                                                 └sí→ Nota del Servidor 2 → Composer Reintento 2
+Critic Comercial 2 → Decidir Intento 3 → ¿Intento 3? ─no→ Preparar Commit
+                                           └sí→ Composer Reintento 2 → Critic Comercial 3 → Preparar Commit
+```
+
+| Nodo | Tipo | Lo que hace (tal como quedó) |
+|---|---|---|
+| ¿Comprobar 1? / 2? | IF 2.3 (la forma de `Rendirse?`) | La expresión de §5.2, literal: solo nombra «Pedir Contexto al CRM» |
+| Comprobar Borrador 1 / 2 | HTTP 4.4 | Los parámetros y la credencial de `decide` (**por referencia**: id y nombre de «IRON BODY Internal API»), URL `…/ai/check`, `timeout: 3000`, **sin** `retryOnFail` ni `maxTries`, `fullResponse` + `neverError`, `onError: continueRegularOutput`. Cuerpo: `conversation_id` y `message_id` de «Normalizar Evento», `decide_token` de `decide`, `attempt` 1 o 2, y `draft` = el borrador del redactor k más `intent`, `recommended_plan_id` (`undefined` → `null`, como Preparar Commit) y `tools_requested` de la estrategia |
+| Leer Comprobación 1 / 2 | Code | El objeto del redactor k + `ultron_check = {rewrite, may_rewrite, error, codes, issues, notes}`. **Solo un 200 con la forma entera del contrato y el `attempt` k** cuenta; reescribir exige además `mode: studio`, `may_rewrite`, `defects ≠ []` y una nota. Lo demás (404, 422, 5xx, red, otra forma, un `rewrite: true` incoherente) es `error: true` y no reescribir. Códigos e issues, filtrados al vocabulario del servidor y sin repetir; la nota, a 500 |
+| ¿Reescribir 1? / 2? | IF 2.3 | `$json.ultron_check ? $json.ultron_check.rewrite === true : false` |
+| Nota del Servidor 1 / 2 | Code (el mismo) | La forma del revisor: `{output:[{content:[{text:{verdict:"fail", score:null, issues, notes, hard_fail:null, by:"server", codes}}]}]}` |
+| Decidir Intento 3 | Code | La entrada de Critic 2 tal cual + `ultron_intento3 = (verdict === "fail" \|\| hard_fail) && Leer 2 corrió con may_rewrite y sin error`; nunca lanza |
+| ¿Intento 3? | IF 2.3 | `$json.ultron_intento3 === true` |
+| Composer Reintento 2 | OpenAI 2.3 | Copia exacta de Composer Reintento; `rejected_draft` de «Composer Reintento». Sistema: `roles.composer_retry` (ningún rol nuevo) |
+| Critic Comercial 3 | OpenAI 2.3 | Copia exacta de Critic Comercial 2 |
+
+**Preparar Commit**, dos anclas (el resto es el de S1, comprobado revirtiéndolas):
+- (i) el tercer borrador, en su propio `try`, detrás del de S1: si «Composer Reintento 2» no corrió o no trae texto, se queda el que había (nunca vuelve al primero);
+- (ii) el bloque `regeneration`, solo con `ctx.regeneration.contract === "ultron-regen/1"`, dentro de un `try`: `{contract, drafts, critics, checks, check_errors, rewrites:[{by, codes, issues}], tokens}`. Solo se manda si cuadra (rangos y `rewrites = drafts − 1`): fuera de rango el commit daría un 422 y la traza llevaría el turno a la rendición.
+
+### 7.3 Los recorridos y sus llamadas
+
+Ejecutados con el simulador del comprobador (§7.4 I) con los IF y los Code tal como están en el flujo; el Strategist corre antes en todos. Comprobaciones = llamadas a `ai/check`.
+
+| Caso | Nodos de modelo (además del Strategist) | Llamadas al modelo | Comprobaciones | Preparar Commit |
+|---|---|---|---|---|
+| Legacy, pasa | Composer, Critic | 3 | 0 | `attempt` 1, sin bloque, = S1 |
+| Legacy, el revisor falla | Composer, Critic, Composer Reintento, Critic 2 | 5 | 0 | `attempt` 2, sin bloque, = S1 (también si Critic 2 vuelve a fallar: no hay tercero) |
+| Studio, pasa | Composer, Critic | 3 | 1 | `drafts` 1, `critics` 1, `checks` 1 |
+| Studio, el servidor pide 1 | Composer, Composer Reintento, Critic 2 | 4 | 2 | `drafts` 2, `critics` 1, `rewrites` [server: `register_tuteo`, `length_over_cap`] |
+| Studio, el revisor pide 1 | Composer, Critic, Composer Reintento, Critic 2 | 5 | 2 | `drafts` 2, `critics` 2, `rewrites` [critic, con sus issues] |
+| Studio, dos reescrituras | servidor + servidor: Composer, CR, CR 2, Critic 3 (5) · revisor + servidor: + Critic (6) · servidor + revisor: Composer, CR, Critic 2, CR 2, Critic 3 (6) · **revisor + revisor: Composer, Critic, CR, Critic 2, CR 2, Critic 3 (7, el peor caso)** | 5 a 7 | 2 | `drafts` 3, `attempt` 3 y el texto del tercer borrador; si Critic 3 también falla, no hay cuarto |
+| Studio, el servidor caído (404, 422, red, mal formada) en la comprobación 1 | Composer, Critic | 3 | 1 | `check_errors` 1, el camino de hoy |
+| Studio, caído en las dos, el revisor falla dos veces | Composer, Critic, CR, Critic 2 | 5 | 2 | `check_errors` 2, **sin tercer borrador** |
+| Studio, la comprobación contesta `legacy` · sin presupuesto en la 2 · el servidor pide 1 y la 2 cae | como «el revisor falla» o «el servidor pide 1» | 4 o 5 | 2 | **sin tercer borrador** |
+
+En los casos con reescritura, el simulador comprueba además **lo que recibe el redactor**: `rejected_draft` = el borrador anterior, y `critic_issues`/`critic_notes` = los del servidor (su nota literal) o los del revisor que la pidió. Cada recorrido se ejecuta dos veces: con lo que no corrió **lanzando** al leerlo y **devolviendo `undefined`** (§7.6).
+
+### 7.4 El comprobador (`verificar-flujo.cjs --rev=S2`, en `verificar-flujo-s2.cjs`)
+
+Sin red y sin tocar n8n; 0 si todo cuadra, 1 ante una diferencia, 2 si no lee las entradas. Recibe el export (`flujo-s2.json` o lo que exporte n8n), `--s1` (por defecto el del repositorio) y `--generado` (los `.js` y los fixtures). Lo ejecuta la prueba PHP, como el de S1.
+
+| Apartado | Qué comprueba | Comprobaciones (127) |
+|---|---|---|
+| A | La base (sus cinco sha256 y la huella Legacy, como hoy); el S1 de referencia, con sus 25 nodos y las huellas de S1; **el vocabulario del servidor leído del PHP** (`CODES`, `DIMENSIONS` y los topes, resolviendo `self::`, `CommercialTurnPolicy::` y `...self::`), no copiado | 9 |
+| B | Los 25 de S1 + los 14, ni uno más; sin repetidos; 39 nodos y 12 con credencial; ninguno desactivado | 4 |
+| C | Cada nodo de S1, igual a S1 salvo el `jsCode` de Preparar Commit y `FLOW_REV` (una sola constante, `"S2"`); la posición no cuenta, como en el comprobador de S1 (la prueba PHP sí exige la misma posición en lo generado) | 26 |
+| D | Los IF: la forma exacta del de S1 con su expresión. La comprobación: POST a `…/ai/check`, la credencial de `decide` por referencia, sin cabeceras ni parámetros propios, **sin reintentos**, **3 s**, `fullResponse` + `neverError`, `continueRegularOutput` y el cuerpo exacto. Los Code: v2, sin credenciales, = los `.js` generados. Las dos copias de OpenAI = sus originales salvo nombre, id, posición y `rejected_draft`. Preparar Commit = el de S1 con sus dos anclas (revirtiéndolas sale el de S1) y = el generado. El vocabulario de los Code = el del PHP. Ningún secreto ni `$env` en los nodos nuevos | 59 |
+| E | Las conexiones: las de S1 con sus tres cambios (Composer, Composer Reintento y Critic Comercial 2) y las de los 14 | 1 |
+| F | El selector en `vm`: sin oferta, la base y la huella Legacy con `flowRev S2`; con `decide-studio.json`, `studio` con la huella del fixture; con `decide-legacy.json`, `offered_prompts_off`; lo mismo que el de S1 salvo `flow_rev` | 5 |
+| G | Preparar Commit en `vm` **junto al de S1**: sin oferta (tres contextos × sin reintento, con reintento aprobado y con reintento que vuelve a fallar × lanzando o `undefined`), la MISMA salida y sin bloque (18 casos); con oferta, la de S1 + un bloque válido; **una lectura que lanza dentro del bloque → sin bloque y la misma salida**; el tercer borrador y el tercero sin texto (se queda el segundo); los tokens (sin el `usage` de un nodo que corrió, fuera de rango o negativos → `null`) | 23 |
+| H | Los Code en `vm` con los siete fixtures y doce variantes, para los dos «Leer Comprobación»: solo un 200 bien formado reescribe; el intento ajeno, el `200` en texto, un HTML, un 500, la incoherencia, otro contrato o `legacy` con `rewrite: true` no; el vocabulario filtrado y la nota a 500; sin ítem de entrada no lanza. Las dos «Nota del Servidor» (la forma del revisor; vacía con una entrada rara). «Decidir Intento 3» en ocho casos y dos modos. Preparar Commit con la salida de «Decidir Intento 3» = con la del revisor (S1) | 62 |
+| I | Sin bucles fuera del ciclo de la rendición (que es el de S1); en los 17 caminos, ≤ 3 redactores y ≤ 3 revisores, ≤ 2 comprobaciones, el último borrador lo juzga un revisor, el tercero no se comprueba, la salida «sí» de ¿Comprobar k? pasa por Comprobar Borrador k y la «no» va directa al revisor de S1; los 14 alcanzables. Y **22 recorridos** ejecutados nodo a nodo (§7.3), con el bloque esperado, el cuerpo de cada comprobación, lo que recibe cada redactor y, sin oferta, la comparación entera con S1 | 35 |
+| J | El cuerpo de cada comprobación, evaluado: exactamente `conversation_id`, `message_id`, `decide_token`, `attempt`, `draft{reply_draft, intent, recommended_plan_id, tools_requested}`, con los valores de los nodos que tocan (y el plan `undefined` → `null`) | 2 |
+
+**Las mutaciones** (cada una, sobre una copia de `flujo-s2.json`; el comprobador sale con 1):
+
+| Mutación | En la prueba | La mata |
+|---|---|---|
+| Un redactor de más (Composer Reintento 3 antes del 2) | sí | I (4 redactores), B |
+| Un IF que salta la comprobación (¿Comprobar 1? sí → Critic) | sí | I (la salida «sí» no pasa por la comprobación), E, recorridos |
+| El `values[1]` de Critic Comercial tocado | sí | C, y los recorridos sin oferta (datos distintos de S1) |
+| Una clave de más en el cuerpo de la comprobación (`phone`) | sí | J, D |
+| Preparar Commit sin el `try` del bloque | sí | G (la lectura que lanza), D |
+| Un bucle (Critic 3 → Composer Reintento 2) | sí | I (bucle), recorridos (un nodo dos veces) |
+| La comprobación con reintentos | sí | D |
+| Un 404 que pide reescribir (el «fallback silencioso») | sí | H |
+| El tercer borrador sin revisor | sí | I |
+| Legacy que pregunta al servidor (¿Comprobar 1? = `true`) | sí | recorrido «Legacy, pasa» (llamada a `ai/check` no prevista), D |
+| Quién pidió: `server` ↔ `critic` | a mano (128) | recorridos (6 ✗) |
+| Decidir Intento 3 siempre sí | a mano | H, recorridos (23 ✗) |
+| La nota del servidor sin texto | a mano | H, recorridos |
+| ¿Reescribir 1? con las salidas cambiadas | a mano | E, recorridos (18 ✗) |
+| Sin tiempo máximo | a mano | D |
+| Composer Reintento 2 con el `rejected_draft` del primero | a mano | D, recorridos |
+| El tercer borrador vuelve al primero si falla | a mano | D, G (sin oferta ya no es S1: 19 ✗) |
+
+### 7.5 Las pruebas (`UltronPromptsN8nS2CommandTest`)
+
+| Prueba | Qué fija |
+|---|---|
+| `genera_los_ficheros_de_s2_de_forma_determinista` | Los 17 ficheros, dos veces, el mismo sha256 |
+| `lo_que_hay_en_el_repositorio_es_lo_que_genera_hoy` | `n8n/flujos/ultron-studio-s2/` = lo generado, ni uno de más ni de menos |
+| `s1_sale_byte_a_byte_igual_que_antes` | Sin `--rev`, con `--rev=S1` y en el repositorio: los nueve sha256 de HEAD, a mano; `selectorCode()` = `selectorCode('S1')`; el de S2 solo cambia la constante |
+| `una_revision_del_selector_que_no_es_un_codigo_corto_no_se_genera` | Vacía, con espacio, con comillas, de 33 |
+| `s2_son_los_25_de_s1_mas_los_14_con_su_forma` | En PHP: el orden de los nodos, sus tipos y versiones, 12 credenciales, los 25 idénticos (posición incluida), la comprobación (URL, credencial de `decide`, 3 s, sin reintentos, `continueRegularOutput`, cuerpo), las dos copias de OpenAI y sus roles, los `{}` y `id`/`active`/`versionId` = `null`/`false`/`null` |
+| `los_fixtures_de_la_comprobacion_son_los_del_endpoint_real` | `check-pasa` y `check-reescribe` = **byte a byte** las respuestas reales del endpoint de la ola 4 (evidencia 111); las claves de los demás; `decide` con y sin `regeneration` |
+| `sin_secretos_en_lo_generado` | Ni `Bearer`, ni `Authorization`, ni `sk-`, ni `password`, ni `$env`, ni `require(`; credenciales solo como `{id, name}`; sin cabeceras a mano; el token de los fixtures es sintético |
+| `el_comprobador_pasa_sobre_lo_generado_en_los_dos_modos` | S1 → OK; S2 → OK sin ✗, con los apartados A a J y los recorridos del plan; también sobre el repositorio |
+| `el_comprobador_en_modo_s2_falla_sobre_s1` | `✗ son los 25 de S1 + los 14 nuevos` |
+| `una_revision_desconocida_del_comprobador_no_comprueba_nada` | `--rev=S3` → código 2 |
+| `el_comprobador_mata_cada_mutacion` (×10) | Las diez de la tabla de §7.4, cada una con su ✗ |
+| `un_s1_que_no_es_el_generado_no_genera_s2` | Ocho S1 que no valen (sin selector, selector ya S2, sin el bloque `prompts`, sin el ancla del borrador, con un nodo de S2, el Composer que no va al revisor, `decide` sin credencial o con otra URL) |
+| `un_respaldo_que_no_es_29de5119_no_genera_s2` y `una_revision_desconocida_no_genera_nada` | La orden falla y no escribe nada |
+
+### 7.6 Decisiones mías (el plan o el encargo no las fijan)
+
+1. **Dos ficheros para «Leer Comprobación»** (`leer-comprobacion-1.js` y `-2.js`) en lugar del `leer-comprobacion.js` del encargo: el código lleva su `K` y su redactor como constantes. La alternativa (un solo código que deduce K de qué nodos corrieron, como hace Preparar Commit con «Composer Reintento») depende justo de lo que el ensayo con datos fijados puede falsear (§7.8). «Nota del Servidor» sí es un solo código.
+2. **`drafts` = redactores que corrieron**, no el intento elegido. Coinciden siempre salvo si un redactor no trae texto: entonces `consistent` sale `false` en el servidor, que es la señal correcta.
+3. **`tokens`: solo si TODOS los nodos de OpenAI que corrieron (con el Strategist) entregan `usage.input_tokens/output_tokens` enteros**; si falta uno, `null` (una suma a medias diría menos de lo que costó); por encima de 2 000 000, `null`.
+4. **El vocabulario del servidor se embebe al generar** (`CODES`, `DIMENSIONS`, topes): un código o un issue que no son de él no viajan, porque el commit rechazaría la traza con un 422 y mandaría el turno a la rendición. Si el servidor amplía su vocabulario, hay que regenerar (lo dice `lo_que_hay_en_el_repositorio…`); mientras tanto, lo nuevo se filtra, no rompe.
+5. **El bloque solo sale si cuadra** (rangos y `rewrites = drafts − 1`); si no, sin bloque. Es traza.
+6. **«Leer Comprobación» trata un `rewrite: true` incoherente** (sin presupuesto, sin defectos, sin nota, en `legacy`) **como error**, no como «pasa»; y exige `attempt === K`.
+7. **«Decidir Intento 3» pide `verdict === "fail"`** (o un fallo duro), no `!== "pass"`: un revisor sin veredicto no abre un tercer borrador; sigue el camino de hoy (Preparar Commit lo trata como en S1).
+8. **¿Reescribir k? defensivo** (`$json.ultron_check ? … : false`), en vez de `$json.ultron_check.rewrite` a secas.
+9. **Los IF nuevos copian la forma de `Rendirse?`** y la comprobación copia los parámetros y la credencial de `decide` (las dos URL, constantes; S2 no se genera si `decide` no es la de siempre).
+10. **`flujo-s2.json` sin `id` ni `versionId` y con `active: false`**: importarlo tal cual no pisa ningún flujo. (`flujo-s1.json` lleva el id del flujo de siempre: el lead lo cambió a mano al importar S1; aquí ya no hace falta.)
+11. **Los fixtures de `decide` de S2** son los de S1 más `source` y un `context` mínimo (lo que leen Preparar Commit y los `values[1]` en el ensayo) y, en el de Studio, `regeneration`. Los de `ai/check` son exactamente la lista del encargo; «sin presupuesto» y el resto de variantes viven en el comprobador.
+12. **El comprobador S2 es un hermano** (`verificar-flujo-s2.cjs`) y `verificar-flujo.cjs --rev=S2` lo llama: el modo S1 no cambia ni una comprobación. Usa `process.exitCode` y no `process.exit()`: en macOS la escritura a una tubería es asíncrona y `process.exit()` puede cortar la salida (el de S1 no lo necesita: su salida es corta).
+13. **Con el servidor caído se pregunta igual en la comprobación 2** (otros 3 s como mucho): es el diseño del plan (¿Comprobar 2? solo mira la oferta). Saltarla exigiría que un IF leyera un nodo que en Legacy no corre. Peor caso: +6 s.
+14. **El presupuesto de tiempo es del servidor**: si la comprobación 2 concede a los 24 s y el revisor 2 tarda, el tercer borrador sale pasados los 25 s. El tope estructural (3) se mantiene; es un caso de la ola 7 (§6 del plan).
+
+### 7.7 Números
+
+| # | Qué | Resultado |
+|---|---|---|
+| 122a | Primera versión de las pruebas, con `app/` = HEAD | 25 pruebas, 20 errores, 2 fallos, **y una que pasaba sin poder fallar**: `fail()` dentro de un `try` que captura `RuntimeException` (la excepción de PHPUnit lo es). Corregido antes de escribir nada (helper `lanza()`, sin `fail()` dentro) |
+| 122 | Las pruebas nuevas (versión final) y la guarda ampliada, con `app/` = HEAD | **ROJO:** 25 pruebas, 20 errores, 3 fallos (pasan las dos de la guarda que no dependen de S2) |
+| 123a | Las nuevas, la guarda, `UltronPromptsN8nCommandTest` y `tests/Unit/Marketing/Ultron/Prompts`, antes de añadir `los_fixtures_de_la_comprobacion_son_los_del_endpoint_real` | OK (904 pruebas, 21 553 aserciones) |
+| 123 | Las mismas, con el árbol final (esa prueba incluida; antes, comprobado que muere si el fixture se aparta un segundo del real) | **OK (905 pruebas, 21 565 aserciones)**, sin avisos |
+| 124a | `tests/Feature/Marketing tests/Unit/Marketing`, lanzada antes de añadir esa prueba | OK (6 801 pruebas, 59 645 aserciones), 1 omitida (solo PostgreSQL) |
+| 124 | La misma, con el árbol final | **OK (6 802 pruebas, 59 657 aserciones)**, 1 omitida (solo PostgreSQL): las 6 779 de antes + las 23 nuevas |
+| 125 | Guardas: los 16 ficheros (`*Isolation*`, `*ReadOnly*`, `*StaticGuards*`, `SecretExposure*`) | 141 pruebas, 182 818 aserciones, **1 fallo esperado**: `OutreachIsolationTest::test_la_puerta_de_diff…` |
+| 126 | `verificar-flujo.cjs` (S1) sobre el S1 del repositorio | **OK (121 comprobaciones)**, las mismas que antes |
+| 127 | `verificar-flujo.cjs --rev=S2` sobre el S2 del repositorio | **OK (226 comprobaciones)** |
+| 128 | Siete mutaciones a mano | 7 de 7 mueren |
+| 129 | `vendor/bin/pint --test` sobre los 5 PHP tocados o nuevos | `passed` (antes, `pint` solo cambió dos `use`) |
+
+**La puerta de diff del H9** nombra ahora **24** ficheros: los **23** que ya nombraba con HEAD frente a `origin/main` y uno de esta ola, `app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php` (`selectorCode()`). Su segunda aserción (ficheros nuevos sin seguimiento en las zonas protegidas), que no llega a ejecutarse porque falla la primera, nombrará además `UltronRegenN8nFlow.php`. La orden (`app/Console/Commands/Marketing/`), el comprobador y `n8n/` no son zonas de la puerta. Todo va a la Enmienda A4-3.
+
+### 7.8 Lo que NO se pudo comprobar sin un n8n real, y cómo se comprobará
+
+- **[S] Si el nodo de OpenAI 2.3 entrega `usage`** y dónde (`json.usage.input_tokens/output_tokens`, que es lo que lee Preparar Commit). Con datos fijados no se sabe (los fija uno). **Se verá en el primer turno canario real con S2 y la versión 3**: `metadata.regeneration.tokens` con números o `null` (`ultron:origin-report`, línea «Tokens»). Si sale `null` siempre, el informe de costo queda sin dato, pero nada se rompe.
+- **[S] Leer un nodo que no corrió.** En S1 ya se usa que `$('Nodo').first()` lanza (lo dice el comentario de «Clasificar Fallo del Commit»). Todo lo nuevo que mira un nodo que puede no haber corrido es Code con `try` y funciona igual si devuelve `undefined`: **el simulador ejecuta cada recorrido de las dos maneras**. Los IF solo miran «Pedir Contexto al CRM» (siempre corrió) o el `$json` que acaba de calcular un Code. **En el ensayo:** el recorrido «Legacy, el revisor falla» hace correr «Decidir Intento 3» sin «Leer Comprobación 2»: tiene que dar `false`.
+- **[S] La trampa de los datos fijados:** en una ejecución manual, n8n puede devolver los datos fijados de un nodo que no corrió (`getPinDataIfManualExecution`). Afectaría al ensayo (no a producción) y también a S1. **Regla del ensayo** (`n8n-copia-s2/LEEME.md`, paso 4): fijar solo los nodos de OpenAI que el recorrido ejecuta, y una ejecución que lo comprueba.
+- **[S] La forma de lo que deja el nodo HTTP** con `fullResponse` (`{body, headers, statusCode, statusMessage}`, `statusCode` como número) y ante un tiempo agotado con `continueRegularOutput` (`{error:{…}}`, `fixtures/check-error-de-red.json`). Cualquier otra forma acaba en «no reescribir»: el riesgo es perder una reescritura, no romper un turno. El ensayo no lo puede ver (las comprobaciones se fijan siempre: cero llamadas a Laravel). **Se verá en el primer turno canario:** con el servidor sano, `check_errors = 0` y, si el servidor pidió reescribir, `rewrites` con `by: server`; un `check_errors` distinto de 0 con el servidor sano diría que la forma real no es la supuesta.
+- **[S] Un error al evaluar el cuerpo** (si `text` no viniera parseado) se trataría como error del nodo y `continueRegularOutput` lo pasaría a «no reescribir»; no lo he visto en n8n. El mismo acceso sin protección está ya en el `values[1]` de Composer Reintento de S1.
+- **Los 3 s frente a la latencia real** de `ai/check` (6 a 12 `select`, §5.8): `ultron.check.result` en el log y la latencia de `ultron:origin-report`.
+- **Que el importador conserve los 39 nodos** (con nombres con «¿» y «ó») y sus referencias: lo dicen los pasos 2 y 3 del procedimiento (el guion y el comprobador sobre lo exportado de la base de n8n).
+- **El ensayo con datos fijados**, recorrido a recorrido, con lo que tiene que dar Preparar Commit en cada uno: la tabla del paso 4 de `n8n-copia-s2/LEEME.md`. Lo hace el lead o `devops` con el MCP, en su momento.
+
+### 7.9 Para los siguientes
+
+- **`security` / `api-security-specialist`:** la credencial de la comprobación es la de `decide`, por referencia; el cuerpo lleva el borrador y los ids, nada de la persona más allá del borrador; la nota del servidor viaja al modelo tal cual (textos fijos, ≤ 500); `flujo-s2.json` no lleva secretos ni `$env` (prueba y apartado D).
+- **`tester` (casos límite que conozco desde dentro):** el presupuesto agotado entre la comprobación 2 y el revisor 2 (decisión 14); el servidor caído en las dos comprobaciones (+6 s, simulado); un redactor sin texto (`consistent: false`); un nodo de OpenAI sin `usage` (tokens `null`); la trampa de los datos fijados en el ensayo.
+- **`devops` / el lead:** `importar-s2.sh` está sin ejecutar; necesita `docker`, el contenedor `n8n-n8n-1` con `node` y `n8n-postgres-1`, como el de S1. Aborta antes de importar si el fichero no es el S2 preparado (id, inactivo, 39 nodos, 12 credenciales, selector y Preparar Commit con los sha256 de `huellas.json`, comprobación a 3 s sin reintentos).
+
+### 7.10 Variables, migraciones y configuración
+
+Ninguna: ni migraciones, ni `config/`, ni rutas, ni variables de entorno. La orden gana `--rev` (por defecto S1, como hoy).

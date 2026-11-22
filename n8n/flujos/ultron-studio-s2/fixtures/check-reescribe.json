@@ -1,0 +1,38 @@
+{
+    "body": {
+        "ok": true,
+        "contract": "ultron-regen/1",
+        "mode": "studio",
+        "attempt": 1,
+        "pass": false,
+        "defects": [
+            {
+                "code": "register_tuteo",
+                "detail": null,
+                "issue": "naturalness"
+            },
+            {
+                "code": "length_over_cap",
+                "detail": null,
+                "issue": "progressive_disclosure"
+            }
+        ],
+        "issues": [
+            "naturalness",
+            "progressive_disclosure"
+        ],
+        "notes": "REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia. DEMASIADO LARGO: el borrador mide 241 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta a lo que pregunto la persona, sin relleno, y como mucho una pregunta corta al final. Cada marcador cuenta como el texto que lo sustituye.",
+        "may_rewrite": true,
+        "rewrite": true,
+        "budget": {
+            "max_drafts": 3,
+            "elapsed_s": 9,
+            "reason": null
+        }
+    },
+    "headers": {
+        "content-type": "application/json"
+    },
+    "statusCode": 200,
+    "statusMessage": "OK"
+}

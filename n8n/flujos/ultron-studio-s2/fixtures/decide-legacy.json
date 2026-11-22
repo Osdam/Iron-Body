@@ -1,0 +1,51 @@
+{
+    "ok": true,
+    "commercial_phase": "NEW_LEAD",
+    "allowed_transitions": [
+        "NEW_LEAD",
+        "GOAL_DISCOVERY"
+    ],
+    "allowed_tools": [
+        "staff_review"
+    ],
+    "decide_token": "sintetico.no-firmado",
+    "superseded": false,
+    "studio_prompts": {
+        "contract": "ultron-prompts/1",
+        "mode": "legacy",
+        "reason": "prompts_off",
+        "base": "n8n-29de5119",
+        "compiler": 4,
+        "bundle_hash": null,
+        "version": null,
+        "content_hash": null,
+        "entry": null,
+        "seq": null,
+        "roles": null
+    },
+    "source": {
+        "source_type": "inbound_message",
+        "source_event_id": 22,
+        "idempotency_key": "wamid.sintetico"
+    },
+    "context": {
+        "default_plan_id": 3,
+        "active_plans": [
+            {
+                "id": 3
+            }
+        ],
+        "commercial_turn_policy": {
+            "intent": "general_info",
+            "active_goal": null,
+            "resume_goal_after_answer": false,
+            "price_verification": null,
+            "reception_mode": false,
+            "memory_mode": false,
+            "greet_required": false
+        },
+        "strategy_hints": {
+            "suggested_question": null
+        }
+    }
+}

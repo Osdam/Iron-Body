@@ -1,0 +1,24 @@
+{
+    "body": {
+        "ok": true,
+        "contract": "ultron-regen/1",
+        "mode": "legacy",
+        "attempt": 1,
+        "pass": true,
+        "defects": [],
+        "issues": [],
+        "notes": "",
+        "may_rewrite": false,
+        "rewrite": false,
+        "budget": {
+            "max_drafts": 2,
+            "elapsed_s": null,
+            "reason": "legacy"
+        }
+    },
+    "headers": {
+        "content-type": "application/json"
+    },
+    "statusCode": 200,
+    "statusMessage": "OK"
+}

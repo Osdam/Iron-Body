@@ -1,0 +1,11 @@
+{
+    "body": {
+        "ok": false,
+        "code": "invalid_token"
+    },
+    "headers": {
+        "content-type": "application/json"
+    },
+    "statusCode": 422,
+    "statusMessage": "Unprocessable Content"
+}

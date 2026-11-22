@@ -12,8 +12,9 @@ use PHPUnit\Framework\TestCase;
  * Falla si un nombre de plan, una cifra de precio (o de precio original) o un
  * beneficio del catálogo aparece en:
  *  - los prompts base (`resources/ultron-prompts/`, todo el texto);
- *  - lo que se ejecuta en n8n (`n8n/flujos/ultron-studio-s1/*.js`, todo el
- *    texto: comentarios incluidos, es lo más estricto y hoy no estorba);
+ *  - lo que se ejecuta en n8n (`n8n/flujos/ultron-studio-s1/*.js` y, desde la
+ *    ola 5 de «regenerar antes de sustituir», `n8n/flujos/ultron-studio-s2/*.js`;
+ *    todo el texto: comentarios incluidos, es lo más estricto y hoy no estorba);
  *  - el código de `app/Services/Marketing/Ultron/` que NO es comentario (el
  *    mismo quitador que las guardas del laboratorio: `token_get_all` sin
  *    `T_COMMENT` ni `T_DOC_COMMENT`; las cadenas y las expresiones regulares
@@ -95,6 +96,9 @@ class UltronCatalogStaticGuardsTest extends TestCase
         $this->assertContains('backend/resources/ultron-prompts/n8n-29de5119/composer.txt', $ficheros);
         $this->assertContains('n8n/flujos/ultron-studio-s1/elegir-prompts.js', $ficheros);
         $this->assertContains('n8n/flujos/ultron-studio-s1/preparar-commit.js', $ficheros);
+        foreach (['preparar-commit.js', 'leer-comprobacion-1.js', 'leer-comprobacion-2.js', 'nota-del-servidor.js', 'decidir-intento-3.js'] as $s2) {
+            $this->assertContains('n8n/flujos/ultron-studio-s2/'.$s2, $ficheros, 'los Code de S2 también');
+        }
         $this->assertContains('backend/app/Services/Marketing/Ultron/UltronCommitService.php', $ficheros);
         $this->assertContains('backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php', $ficheros);
         $this->assertGreaterThanOrEqual(5, count(array_filter($ficheros, fn (string $f) => str_starts_with($f, 'backend/resources/ultron-prompts/'))));
@@ -133,8 +137,10 @@ class UltronCatalogStaticGuardsTest extends TestCase
         foreach (glob($backend.'/resources/ultron-prompts/*/*.txt') ?: [] as $f) {
             $out['backend/resources/ultron-prompts/'.basename(dirname($f)).'/'.basename($f)] = (string) file_get_contents($f);
         }
-        foreach (glob($repo.'/n8n/flujos/ultron-studio-s1/*.js') ?: [] as $f) {
-            $out['n8n/flujos/ultron-studio-s1/'.basename($f)] = (string) file_get_contents($f);
+        foreach (['ultron-studio-s1', 'ultron-studio-s2'] as $flujo) {
+            foreach (glob($repo.'/n8n/flujos/'.$flujo.'/*.js') ?: [] as $f) {
+                $out['n8n/flujos/'.$flujo.'/'.basename($f)] = (string) file_get_contents($f);
+            }
         }
         $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($backend.'/app/Services/Marketing/Ultron', \FilesystemIterator::SKIP_DOTS));
         foreach ($it as $f) {

@@ -1,0 +1,24 @@
+{
+    "body": {
+        "ok": true,
+        "contract": "ultron-regen/1",
+        "mode": "studio",
+        "attempt": 1,
+        "pass": true,
+        "defects": [],
+        "issues": [],
+        "notes": "",
+        "may_rewrite": true,
+        "rewrite": false,
+        "budget": {
+            "max_drafts": 3,
+            "elapsed_s": 7,
+            "reason": null
+        }
+    },
+    "headers": {
+        "content-type": "application/json"
+    },
+    "statusCode": 200,
+    "statusMessage": "OK"
+}

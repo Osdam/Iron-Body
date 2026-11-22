@@ -1,0 +1,143 @@
+# 126 · Ola 5: el comprobador en modo S1 (sin --rev), sobre el S1 del repositorio: lo de siempre
+# 2026-11-22T00:53:13Z · node backend/docs/ultron-studio/ops/motores/verificar-flujo.cjs n8n/flujos/ultron-studio-s1/flujo-s1.json
+
+Comprobando n8n/flujos/ultron-studio-s1/flujo-s1.json
+  contra el respaldo n8n/respaldos/20261111-ultron-29de5119/ultron-commercial-advisor.json
+
+A. Base del repositorio
+  ✓ base strategist: sha256 = UltronPromptBase::SHA256
+  ✓ base composer: sha256 = UltronPromptBase::SHA256
+  ✓ base critic: sha256 = UltronPromptBase::SHA256
+  ✓ base composer_retry: sha256 = UltronPromptBase::SHA256
+  ✓ base critic_retry: sha256 = UltronPromptBase::SHA256
+  ✓ huella Legacy (Node) = UltronPromptBase::LEGACY_BUNDLE_HASH
+  ✓ el respaldo es 29de5119 con la base en sus cinco nodos
+
+B. Nodos
+  ✓ son los 24 del respaldo + «Elegir Prompts»
+  ✓ sin nombres repetidos
+
+C. Los nodos del respaldo, sin cambios fuera de §B.7
+  ✓ «Entrada ULTRON» igual al respaldo
+  ✓ «Normalizar Evento» igual al respaldo
+  ✓ «Pedir Contexto al CRM» igual al respaldo
+  ✓ «Mensaje superado?» igual al respaldo
+  ✓ «Responder: superado» igual al respaldo
+  ✓ «Strategist» igual al respaldo
+  ✓ «Validar Estrategia» igual al respaldo
+  ✓ «Composer» igual al respaldo
+  ✓ «Critic Comercial» igual al respaldo
+  ✓ «Critic aprueba?» igual al respaldo
+  ✓ «Preparar Commit» igual al respaldo
+  ✓ «Ejecutar en el CRM» igual al respaldo
+  ✓ «Responder al CRM» igual al respaldo
+  ✓ «Composer Reintento» igual al respaldo
+  ✓ «Critic Comercial 2» igual al respaldo
+  ✓ «Sticky Note 482083eb» igual al respaldo
+  ✓ «Sticky Note 9f896939» igual al respaldo
+  ✓ «Commit OK?» igual al respaldo
+  ✓ «Clasificar Fallo del Commit» igual al respaldo
+  ✓ «Rendirse?» igual al respaldo
+  ✓ «Preparar Rendicion» igual al respaldo
+  ✓ «Rendicion Minima» igual al respaldo
+  ✓ «Responder: sin rendicion» igual al respaldo
+  ✓ «Responder: sin contexto» igual al respaldo
+
+D. Parámetros de §B.7
+  ✓ Strategist: sistema = ={{ $('Elegir Prompts').first().json.ultron_prompts.roles.strategist }}
+  ✓ Strategist: values[1] intacto (sha256 07aa382c922c…)
+  ✓ Composer: sistema = ={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer }}
+  ✓ Composer: values[1] intacto (sha256 dec722e2ac88…)
+  ✓ Critic Comercial: sistema = ={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic }}
+  ✓ Critic Comercial: values[1] intacto (sha256 eb8195f5394c…)
+  ✓ Composer Reintento: sistema = ={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer_retry }}
+  ✓ Composer Reintento: values[1] intacto (sha256 3553c4e81ef9…)
+  ✓ Critic Comercial 2: sistema = ={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic_retry }}
+  ✓ Critic Comercial 2: values[1] intacto (sha256 daae1b54b95e…)
+  ✓ Pedir Contexto al CRM: jsonBody negocia el contrato
+  ✓ «Elegir Prompts» es un Code v2
+  ✓ «Elegir Prompts» en JavaScript, una vez para todos los ítems, sin otros parámetros
+  ✓ «Elegir Prompts» sin credenciales, activo y sin manejo de error propio
+  ✓ Preparar Commit: el código de 29de5119 + el bloque prompts y nada más
+
+E. Conexiones
+  ✓ las del respaldo con Mensaje superado?[1] → «Elegir Prompts» → Strategist
+
+F. El selector, ejecutado en vm
+  ✓ sin oferta: legacy con motivo absent
+  ✓ sin oferta: roles = la base byte a byte
+  ✓ sin oferta: huella observada = Legacy
+  ✓ sin oferta: sin studio_prompts y el resto de decide intacto
+  ✓ studio sintético (crypto de Node): usa los roles ofrecidos
+  ✓ studio sintético: huella JS = huella de Node
+  ✓ studio sintético: sin studio_prompts y el resto intacto
+  ✓ SHA-256 del selector = el de Node en 64 longitudes consecutivas
+  ✓ fixture PHP presente (n8n/flujos/ultron-studio-s1/fixtures/decide-studio.json)
+  ✓ fixture PHP (profesional + 200): studio con la huella calculada en PHP (E3)
+  ✓ fixture PHP: la huella PHP = la de Node
+  ✓ un rol alterado en tránsito: legacy con motivo hash_mismatch
+  ✓ un rol alterado en tránsito: roles = la base byte a byte
+  ✓ un rol alterado en tránsito: huella observada = Legacy
+  ✓ un rol alterado en tránsito: sin studio_prompts y el resto de decide intacto
+  ✓ falta un rol: legacy con motivo shape
+  ✓ falta un rol: roles = la base byte a byte
+  ✓ falta un rol: huella observada = Legacy
+  ✓ falta un rol: sin studio_prompts y el resto de decide intacto
+  ✓ sobra un rol: legacy con motivo shape
+  ✓ sobra un rol: roles = la base byte a byte
+  ✓ sobra un rol: huella observada = Legacy
+  ✓ sobra un rol: sin studio_prompts y el resto de decide intacto
+  ✓ roles como lista: legacy con motivo shape
+  ✓ roles como lista: roles = la base byte a byte
+  ✓ roles como lista: huella observada = Legacy
+  ✓ roles como lista: sin studio_prompts y el resto de decide intacto
+  ✓ un rol enorme: legacy con motivo size
+  ✓ un rol enorme: roles = la base byte a byte
+  ✓ un rol enorme: huella observada = Legacy
+  ✓ un rol enorme: sin studio_prompts y el resto de decide intacto
+  ✓ un rol vacío: legacy con motivo size
+  ✓ un rol vacío: roles = la base byte a byte
+  ✓ un rol vacío: huella observada = Legacy
+  ✓ un rol vacío: sin studio_prompts y el resto de decide intacto
+  ✓ un rol que no es texto: legacy con motivo size
+  ✓ un rol que no es texto: roles = la base byte a byte
+  ✓ un rol que no es texto: huella observada = Legacy
+  ✓ un rol que no es texto: sin studio_prompts y el resto de decide intacto
+  ✓ fixture PHP con frases presente (n8n/flujos/ultron-studio-s1/fixtures/decide-studio-frases.json)
+  ✓ fixture PHP con frases de reglas S-NNN: studio con la huella calculada en PHP
+  ✓ fixture PHP con frases: la huella PHP = la de Node
+  ✓ fixture PHP con frases: una línea de frases en Composer, Reintento y los dos Critic, ninguna en el Strategist
+  ✓ fixture PHP con frases: va pegada a su ancla (FORMA: y la lista de planes del motor en los Composer, naturalness: en los Critic)
+  ✓ fixture PHP con frases: los demás bytes son los de la oferta sin frases (profesional + 200)
+  ✓ una frase alterada en tránsito: legacy con motivo hash_mismatch
+  ✓ una frase alterada en tránsito: roles = la base byte a byte
+  ✓ una frase alterada en tránsito: huella observada = Legacy
+  ✓ una frase alterada en tránsito: sin studio_prompts y el resto de decide intacto
+  ✓ contrato desconocido: legacy con motivo contract_unknown
+  ✓ contrato desconocido: roles = la base byte a byte
+  ✓ contrato desconocido: huella observada = Legacy
+  ✓ contrato desconocido: sin studio_prompts y el resto de decide intacto
+  ✓ oferta legacy: legacy con motivo offered_prompts_off
+  ✓ oferta legacy: roles = la base byte a byte
+  ✓ oferta legacy: huella observada = Legacy
+  ✓ oferta legacy: sin studio_prompts y el resto de decide intacto
+  ✓ oferta legacy con un motivo raro: legacy con motivo offered_a_b_c
+  ✓ oferta legacy con un motivo raro: roles = la base byte a byte
+  ✓ oferta legacy con un motivo raro: huella observada = Legacy
+  ✓ oferta legacy con un motivo raro: sin studio_prompts y el resto de decide intacto
+  ✓ una excepción leyendo la oferta: legacy, selector_error, sin huella
+
+G. Preparar Commit, ejecutado en vm
+  ✓ sin negociación: la misma salida que 29de5119 y sin bloque
+  ✓ negociado, studio/null: la misma salida + un bloque prompts válido
+  ✓ negociado, legacy/hash_mismatch: la misma salida + un bloque prompts válido
+  ✓ negociado, legacy/selector_error: la misma salida + un bloque prompts válido
+  ✓ negociado pero sin poder leer el selector: sin bloque, misma salida
+  ✓ sin negociación (con reintento): la misma salida que 29de5119 y sin bloque
+  ✓ negociado (con reintento), studio/null: la misma salida + un bloque prompts válido
+  ✓ negociado (con reintento), legacy/hash_mismatch: la misma salida + un bloque prompts válido
+  ✓ negociado (con reintento), legacy/selector_error: la misma salida + un bloque prompts válido
+  ✓ negociado (con reintento) pero sin poder leer el selector: sin bloque, misma salida
+
+OK (121 comprobaciones)
+# código de salida: 0

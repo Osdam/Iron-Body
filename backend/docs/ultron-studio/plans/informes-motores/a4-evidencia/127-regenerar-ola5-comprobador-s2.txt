@@ -1,0 +1,255 @@
+# 127 · Ola 5: el comprobador en modo S2 sobre el S2 del repositorio (A a J; los recorridos con los IF y los Code reales)
+# 2026-11-22T00:53:14Z · node backend/docs/ultron-studio/ops/motores/verificar-flujo.cjs --rev=S2 n8n/flujos/ultron-studio-s2/flujo-s2.json
+
+Comprobando (S2) n8n/flujos/ultron-studio-s2/flujo-s2.json
+  contra S1 n8n/flujos/ultron-studio-s1/flujo-s1.json
+  y lo generado en n8n/flujos/ultron-studio-s2
+
+A. Base del repositorio, S1 de referencia y vocabulario del servidor
+  ✓ base strategist: sha256 = UltronPromptBase::SHA256
+  ✓ base composer: sha256 = UltronPromptBase::SHA256
+  ✓ base critic: sha256 = UltronPromptBase::SHA256
+  ✓ base composer_retry: sha256 = UltronPromptBase::SHA256
+  ✓ base critic_retry: sha256 = UltronPromptBase::SHA256
+  ✓ huella Legacy (Node) = UltronPromptBase::LEGACY_BUNDLE_HASH
+  ✓ S1 de referencia: sus 25 nodos
+  ✓ S1 de referencia: el selector y Preparar Commit son los de las huellas de S1
+  ✓ vocabulario del servidor leído del PHP (códigos, dimensiones y topes)
+
+B. Nodos
+  ✓ son los 25 de S1 + los 14 nuevos
+  ✓ sin nombres repetidos
+  ✓ 39 nodos, 12 con credencial (8 de S1, 2 comprobaciones y 2 de OpenAI)
+  ✓ ningún nodo desactivado
+
+C. Los 25 nodos de S1, sin cambios (salvo el jsCode de Preparar Commit y el FLOW_REV del selector)
+  ✓ «Entrada ULTRON» igual a S1
+  ✓ «Normalizar Evento» igual a S1
+  ✓ «Pedir Contexto al CRM» igual a S1
+  ✓ «Mensaje superado?» igual a S1
+  ✓ «Responder: superado» igual a S1
+  ✓ «Strategist» igual a S1
+  ✓ «Validar Estrategia» igual a S1
+  ✓ «Composer» igual a S1
+  ✓ «Critic Comercial» igual a S1
+  ✓ «Critic aprueba?» igual a S1
+  ✓ «Preparar Commit» igual a S1
+  ✓ «Ejecutar en el CRM» igual a S1
+  ✓ «Responder al CRM» igual a S1
+  ✓ «Composer Reintento» igual a S1
+  ✓ «Critic Comercial 2» igual a S1
+  ✓ «Sticky Note 482083eb» igual a S1
+  ✓ «Sticky Note 9f896939» igual a S1
+  ✓ «Commit OK?» igual a S1
+  ✓ «Clasificar Fallo del Commit» igual a S1
+  ✓ «Rendirse?» igual a S1
+  ✓ «Preparar Rendicion» igual a S1
+  ✓ «Rendicion Minima» igual a S1
+  ✓ «Responder: sin rendicion» igual a S1
+  ✓ «Responder: sin contexto» igual a S1
+  ✓ «Elegir Prompts» igual a S1
+  ✓ «Elegir Prompts»: una sola constante FLOW_REV, y es "S2"
+
+D. Los parámetros de los nuevos y de Preparar Commit
+  ✓ «¿Comprobar 1?» es un IF 2.3
+  ✓ «¿Comprobar 1?»: la forma del IF de S1 con su expresión ($('Pedir Contexto al CRM').first().json.regeneration ? $…)
+  ✓ «¿Comprobar 1?»: sin credenciales, sin reintentos y sin manejo de error propio
+  ✓ «¿Reescribir 1?» es un IF 2.3
+  ✓ «¿Reescribir 1?»: la forma del IF de S1 con su expresión ($json.ultron_check ? $json.ultron_check.rewrite === true…)
+  ✓ «¿Reescribir 1?»: sin credenciales, sin reintentos y sin manejo de error propio
+  ✓ «¿Comprobar 2?» es un IF 2.3
+  ✓ «¿Comprobar 2?»: la forma del IF de S1 con su expresión ($('Pedir Contexto al CRM').first().json.regeneration ? $…)
+  ✓ «¿Comprobar 2?»: sin credenciales, sin reintentos y sin manejo de error propio
+  ✓ «¿Reescribir 2?» es un IF 2.3
+  ✓ «¿Reescribir 2?»: la forma del IF de S1 con su expresión ($json.ultron_check ? $json.ultron_check.rewrite === true…)
+  ✓ «¿Reescribir 2?»: sin credenciales, sin reintentos y sin manejo de error propio
+  ✓ «¿Intento 3?» es un IF 2.3
+  ✓ «¿Intento 3?»: la forma del IF de S1 con su expresión ($json.ultron_intento3 === true }}…)
+  ✓ «¿Intento 3?»: sin credenciales, sin reintentos y sin manejo de error propio
+  ✓ «Comprobar Borrador 1» es un HTTP Request 4.4
+  ✓ Comprobar Borrador 1: POST a https://api.ironbodyneiva.cloud/api/internal/marketing/ai/check
+  ✓ Comprobar Borrador 1: la credencial de «Pedir Contexto al CRM», por referencia (sin secreto)
+  ✓ Comprobar Borrador 1: sin cabeceras, consulta ni parámetros propios
+  ✓ Comprobar Borrador 1: sin reintentos
+  ✓ Comprobar Borrador 1: tiempo máximo de 3 s, respuesta entera y sin convertir los 4xx/5xx en error
+  ✓ Comprobar Borrador 1: un fallo de red no corta el flujo (continueRegularOutput)
+  ✓ Comprobar Borrador 1: el cuerpo es el de §4.1
+  ✓ «Comprobar Borrador 2» es un HTTP Request 4.4
+  ✓ Comprobar Borrador 2: POST a https://api.ironbodyneiva.cloud/api/internal/marketing/ai/check
+  ✓ Comprobar Borrador 2: la credencial de «Pedir Contexto al CRM», por referencia (sin secreto)
+  ✓ Comprobar Borrador 2: sin cabeceras, consulta ni parámetros propios
+  ✓ Comprobar Borrador 2: sin reintentos
+  ✓ Comprobar Borrador 2: tiempo máximo de 3 s, respuesta entera y sin convertir los 4xx/5xx en error
+  ✓ Comprobar Borrador 2: un fallo de red no corta el flujo (continueRegularOutput)
+  ✓ Comprobar Borrador 2: el cuerpo es el de §4.1
+  ✓ «Leer Comprobación 1» es un Code v2 en JavaScript, sin otros parámetros
+  ✓ «Leer Comprobación 1» sin credenciales, activo y sin manejo de error propio
+  ✓ «Leer Comprobación 1» = leer-comprobacion-1.js generado
+  ✓ «Leer Comprobación 2» es un Code v2 en JavaScript, sin otros parámetros
+  ✓ «Leer Comprobación 2» sin credenciales, activo y sin manejo de error propio
+  ✓ «Leer Comprobación 2» = leer-comprobacion-2.js generado
+  ✓ «Nota del Servidor 1» es un Code v2 en JavaScript, sin otros parámetros
+  ✓ «Nota del Servidor 1» sin credenciales, activo y sin manejo de error propio
+  ✓ «Nota del Servidor 1» = nota-del-servidor.js generado
+  ✓ «Nota del Servidor 2» es un Code v2 en JavaScript, sin otros parámetros
+  ✓ «Nota del Servidor 2» sin credenciales, activo y sin manejo de error propio
+  ✓ «Nota del Servidor 2» = nota-del-servidor.js generado
+  ✓ «Decidir Intento 3» es un Code v2 en JavaScript, sin otros parámetros
+  ✓ «Decidir Intento 3» sin credenciales, activo y sin manejo de error propio
+  ✓ «Decidir Intento 3» = decidir-intento-3.js generado
+  ✓ «Composer Reintento 2» existe y es un nodo de OpenAI 2.3
+  ✓ «Composer Reintento 2»: rejected_draft lee de «Composer Reintento» (una vez)
+  ✓ «Composer Reintento 2» = «Composer Reintento» salvo nombre, id, posición y rejected_draft (modelo, opciones, reintentos, credencial y rol)
+  ✓ «Composer Reintento 2»: id propio
+  ✓ «Critic Comercial 3» existe y es un nodo de OpenAI 2.3
+  ✓ «Critic Comercial 3» = «Critic Comercial 2» salvo nombre, id, posición (modelo, opciones, reintentos, credencial y rol)
+  ✓ «Critic Comercial 3»: id propio
+  ✓ Preparar Commit: el de S1 + el tercer borrador + el bloque regeneration, y nada más
+  ✓ Preparar Commit = preparar-commit.js generado
+  ✓ «Leer Comprobación 1»: el vocabulario es el del servidor (10 códigos, 22 dimensiones)
+  ✓ «Leer Comprobación 2»: el vocabulario es el del servidor (10 códigos, 22 dimensiones)
+  ✓ «Preparar Commit»: el vocabulario es el del servidor (10 códigos, 22 dimensiones)
+  ✓ ningún secreto ni variable de entorno en los nodos nuevos
+
+E. Conexiones
+  ✓ las de S1 con los cambios de §5.1 (Composer, Composer Reintento y Critic Comercial 2) y las de los 14
+
+F. El selector, ejecutado en vm
+  ✓ fixtures de decide presentes (studio con regeneration, legacy sin él)
+  ✓ sin oferta de prompts: legacy, la base byte a byte, la huella Legacy y flowRev S2
+  ✓ decide-studio.json: studio con la huella del fixture y flowRev S2
+  ✓ decide-legacy.json: legacy ofrecido (offered_prompts_off) y flowRev S2
+  ✓ el selector de S2 da lo mismo que el de S1 salvo flow_rev
+
+G. Preparar Commit, ejecutado en vm junto al de S1 con los mismos datos
+  ✓ sin oferta (decide-legacy.json): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (decide-legacy.json, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (decide-legacy.json, con reintento): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (decide-legacy.json, con reintento, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (decide-legacy.json, con reintento que vuelve a fallar): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (decide-legacy.json, con reintento que vuelve a fallar, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration)): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration), lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration), con reintento): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration), con reintento, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration), con reintento que vuelve a fallar): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (Studio de un servidor anterior (sin regeneration), con reintento que vuelve a fallar, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato, con reintento): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato, con reintento, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato, con reintento que vuelve a fallar): la MISMA salida que S1 y sin bloque
+  ✓ sin oferta (regeneration con otro contrato, con reintento que vuelve a fallar, lo que no corrió es undefined): la MISMA salida que S1 y sin bloque
+  ✓ con oferta, primer borrador aprobado: la misma salida que S1 + un bloque válido (1 borrador, 1 revisor, 1 comprobación)
+  ✓ una lectura que lanza dentro del bloque: sin bloque y la misma salida
+  ✓ el tercer borrador: intento 3 con su texto
+  ✓ el tercer borrador sin texto: se queda el segundo (no vuelve al primero)
+  ✓ los tokens: sin el usage de un nodo que corrió, null; fuera de rango, null
+
+H. Los Code nuevos, ejecutados en vm con los fixtures de ai/check
+  ✓ los siete fixtures de ai/check presentes
+  ✓ Leer Comprobación 1 con check-pasa.json: pasa, sin reescribir
+  ✓ Leer Comprobación 1 con check-reescribe.json: reescribir con los códigos, los issues y la nota del servidor
+  ✓ Leer Comprobación 1 con check-legacy.json: legacy: ni reescribir ni error
+  ✓ Leer Comprobación 1 con check-404.json: no reescribir (error)
+  ✓ Leer Comprobación 1 con check-422.json: no reescribir (error)
+  ✓ Leer Comprobación 1 con check-error-de-red.json: no reescribir (error)
+  ✓ Leer Comprobación 1 con check-mal-formada.json: no reescribir (error)
+  ✓ Leer Comprobación 1 con sin presupuesto (time_budget): los defectos, sin reescribir ni error
+  ✓ Leer Comprobación 1 con el intento que no es el suyo: no reescribir (error)
+  ✓ Leer Comprobación 1 con el cuerpo como texto JSON: lo lee igual
+  ✓ Leer Comprobación 1 con un 200 en HTML: no reescribir (error)
+  ✓ Leer Comprobación 1 con el código como texto "200": no reescribir (error)
+  ✓ Leer Comprobación 1 con un 500: no reescribir (error)
+  ✓ Leer Comprobación 1 con rewrite sin defectos: no reescribir (error)
+  ✓ Leer Comprobación 1 con rewrite sin presupuesto: no reescribir (error)
+  ✓ Leer Comprobación 1 con rewrite sin nota: no reescribir (error)
+  ✓ Leer Comprobación 1 con rewrite en legacy: no reescribir (error)
+  ✓ Leer Comprobación 1 con otro contrato: no reescribir (error)
+  ✓ Leer Comprobación 1 con códigos e issues fuera del vocabulario, repetidos, y una nota enorme: solo el vocabulario, sin repetir, y la nota a 500
+  ✓ Leer Comprobación 1: si $input no tiene ítem, no reescribir (error) y no lanza
+  ✓ Leer Comprobación 2 con check-pasa.json: pasa, sin reescribir
+  ✓ Leer Comprobación 2 con check-reescribe.json: reescribir con los códigos, los issues y la nota del servidor
+  ✓ Leer Comprobación 2 con check-legacy.json: legacy: ni reescribir ni error
+  ✓ Leer Comprobación 2 con check-404.json: no reescribir (error)
+  ✓ Leer Comprobación 2 con check-422.json: no reescribir (error)
+  ✓ Leer Comprobación 2 con check-error-de-red.json: no reescribir (error)
+  ✓ Leer Comprobación 2 con check-mal-formada.json: no reescribir (error)
+  ✓ Leer Comprobación 2 con sin presupuesto (time_budget): los defectos, sin reescribir ni error
+  ✓ Leer Comprobación 2 con el intento que no es el suyo: no reescribir (error)
+  ✓ Leer Comprobación 2 con el cuerpo como texto JSON: lo lee igual
+  ✓ Leer Comprobación 2 con un 200 en HTML: no reescribir (error)
+  ✓ Leer Comprobación 2 con el código como texto "200": no reescribir (error)
+  ✓ Leer Comprobación 2 con un 500: no reescribir (error)
+  ✓ Leer Comprobación 2 con rewrite sin defectos: no reescribir (error)
+  ✓ Leer Comprobación 2 con rewrite sin presupuesto: no reescribir (error)
+  ✓ Leer Comprobación 2 con rewrite sin nota: no reescribir (error)
+  ✓ Leer Comprobación 2 con rewrite en legacy: no reescribir (error)
+  ✓ Leer Comprobación 2 con otro contrato: no reescribir (error)
+  ✓ Leer Comprobación 2 con códigos e issues fuera del vocabulario, repetidos, y una nota enorme: solo el vocabulario, sin repetir, y la nota a 500
+  ✓ Leer Comprobación 2: si $input no tiene ítem, no reescribir (error) y no lanza
+  ✓ Nota del Servidor 1: la forma del revisor con la nota y los issues del servidor (by: server)
+  ✓ Nota del Servidor 1 con una entrada sin ultron_check: la forma, vacía, y no lanza
+  ✓ Nota del Servidor 2: la forma del revisor con la nota y los issues del servidor (by: server)
+  ✓ Nota del Servidor 2 con una entrada sin ultron_check: la forma, vacía, y no lanza
+  ✓ Decidir Intento 3, el revisor 2 rechaza y queda presupuesto: tercer borrador y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza y queda presupuesto (lo que no corrió es undefined): tercer borrador y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 aprueba: no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 aprueba (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 aprueba con un fallo duro: tercer borrador y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 aprueba con un fallo duro (lo que no corrió es undefined): tercer borrador y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza sin la comprobación 2 (Legacy): no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza sin la comprobación 2 (Legacy) (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza y la comprobación 2 dio error: no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza y la comprobación 2 dio error (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza sin presupuesto: no y la entrada tal cual
+  ✓ Decidir Intento 3, el revisor 2 rechaza sin presupuesto (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Decidir Intento 3, un veredicto ilegible: no y la entrada tal cual
+  ✓ Decidir Intento 3, un veredicto ilegible (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Decidir Intento 3, un veredicto sin verdict: no y la entrada tal cual
+  ✓ Decidir Intento 3, un veredicto sin verdict (lo que no corrió es undefined): no y la entrada tal cual
+  ✓ Preparar Commit con la salida de Decidir Intento 3 da lo mismo que con la del revisor 2 (S1)
+
+I. El grafo y los recorridos
+  ✓ sin bucles fuera del ciclo de la rendición
+  ✓ el ciclo de la rendición es el de S1
+  ✓ hay caminos de Composer a Preparar Commit (17)
+  ✓ ningún camino de Composer a Preparar Commit pasa por más de 3 redactores ni de 3 revisores
+  ✓ ningún camino llama a ai/check más de 2 veces
+  ✓ todo borrador lo juzga un revisor antes de Preparar Commit
+  ✓ el tercer borrador no se comprueba
+  ✓ con la oferta, la salida «sí» de ¿Comprobar 1? pasa siempre por Comprobar Borrador 1
+  ✓ sin la oferta, la salida «no» de ¿Comprobar 1? va directa al revisor de S1
+  ✓ con la oferta, la salida «sí» de ¿Comprobar 2? pasa siempre por Comprobar Borrador 2
+  ✓ sin la oferta, la salida «no» de ¿Comprobar 2? va directa al revisor de S1
+  ✓ los 14 nuevos están en algún camino de Composer a Preparar Commit
+  ✓ los recorridos se pueden preparar (fixtures presentes)
+  ✓ recorrido «Legacy, pasa»
+  ✓ recorrido «Legacy, el revisor falla»
+  ✓ recorrido «Legacy, el revisor falla dos veces (sin tercer borrador)»
+  ✓ recorrido «servidor anterior (Studio sin regeneration), el revisor falla dos veces»
+  ✓ recorrido «regeneration con otro contrato, el revisor falla»
+  ✓ recorrido «Studio, pasa»
+  ✓ recorrido «Studio, el servidor pide 1»
+  ✓ recorrido «Studio, el revisor pide 1»
+  ✓ recorrido «Studio, dos reescrituras del servidor»
+  ✓ recorrido «Studio, el revisor y después el servidor»
+  ✓ recorrido «Studio, el servidor y después el revisor»
+  ✓ recorrido «Studio, dos reescrituras del revisor (peor caso)»
+  ✓ recorrido «Studio, el tercer borrador también lo rechaza el revisor (no hay cuarto)»
+  ✓ recorrido «Studio, check-404.json en la comprobación 1»
+  ✓ recorrido «Studio, check-422.json en la comprobación 1»
+  ✓ recorrido «Studio, check-error-de-red.json en la comprobación 1»
+  ✓ recorrido «Studio, check-mal-formada.json en la comprobación 1»
+  ✓ recorrido «Studio, el servidor caído en las dos comprobaciones (camino de hoy, sin tercer borrador)»
+  ✓ recorrido «Studio, la comprobación contesta legacy (sin tercer borrador)»
+  ✓ recorrido «Studio, sin presupuesto en la comprobación 2 (sin tercer borrador)»
+  ✓ recorrido «Studio, el servidor pide 1 y la comprobación 2 cae (sin tercer borrador)»
+  ✓ recorrido «Studio, un nodo de OpenAI sin usage (tokens null)»
+
+J. El cuerpo de la comprobación
+  ✓ Comprobar Borrador 1: el cuerpo lleva solo las claves del contrato
+  ✓ Comprobar Borrador 2: el cuerpo lleva solo las claves del contrato
+
+OK (226 comprobaciones)
+# código de salida: 0

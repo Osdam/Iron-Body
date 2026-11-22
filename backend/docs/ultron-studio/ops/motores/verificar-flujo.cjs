@@ -9,6 +9,11 @@
  * Sin red y sin tocar n8n. Sale con 0 solo si TODO cuadra; con 1 ante cualquier
  * diferencia (y la lista de diferencias); con 2 si no puede leer las entradas.
  *
+ * Con `--rev=S2` comprueba el flujo S2 («regenerar antes de sustituir», ola 5;
+ * plan `plan-arquitecto-a4-regenerar.md` §5.4): lo hace su hermano
+ * `verificar-flujo-s2.cjs` (apartados A a J), con las mismas salidas. Sin
+ * `--rev`, o con `--rev=S1`, lo de siempre, sin un cambio.
+ *
  * Lo que comprueba:
  *   A. La base del repositorio: sus cinco sha256 y la huella Legacy son los de
  *      UltronPromptBase.php (calculados aquí con el crypto de Node).
@@ -40,6 +45,17 @@
  *      contrato del commit; si leer el selector falla, sin bloque.
  */
 'use strict';
+
+// Modo S2 («regenerar antes de sustituir», ola 5): lo comprueba `verificar-flujo-s2.cjs`.
+const REV = (process.argv.slice(2).find(x => x.startsWith('--rev=')) || '--rev=S1').slice('--rev='.length);
+if (REV === 'S2') {
+  require('./verificar-flujo-s2.cjs').main(process.argv.slice(2).filter(x => !x.startsWith('--rev=')));
+  return;
+}
+if (REV !== 'S1') {
+  console.error(`--rev tiene que ser S1 o S2; no ${JSON.stringify(REV)}.`);
+  process.exit(2);
+}
 
 const fs = require('fs');
 const path = require('path');
