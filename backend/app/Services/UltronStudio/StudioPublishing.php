@@ -94,7 +94,6 @@ final class StudioPublishing
         return self::flagEnabled() && self::engineScope() !== self::SCOPE_OFF;
     }
 
-    /** `required` o `waived` (§A13): cualquier otra cosa es `required`. */
     /**
      * DE QUÉ LABORATORIO CUENTA EL VEREDICTO PARA LA PUERTA (apartado 5 del
      * cierre, B8; `ULTRON_STUDIO_PUBLISH_LAB_SOURCE`): `simulation` (el de
@@ -115,6 +114,7 @@ final class StudioPublishing
         return self::labSource() === StudioLabRuns::FIDELITY_MODE_ENGINE ? StudioLabEngineFlow::promptVersion() : StudioLabPrompts::PROMPT_VERSION;
     }
 
+    /** `required` o `waived` (§A13): cualquier otra cosa es `required`. */
     public static function labGateMode(): string
     {
         return config('ultron_studio.publishing.lab_gate') === StudioPublicationDeclaration::LAB_WAIVED

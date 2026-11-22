@@ -34,7 +34,8 @@ class UltronStudioLabEngineColumnTest extends TestCase
 
     private const MIGRATION = '2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases.php';
 
-    private const APP_ROLE = 'ultron_studio_lab_app_prueba';
+    /** El rol de la aplicación de ESTA ejecución (PostgreSQL), con un nombre que no se repite. */
+    private string $appRole = '';
 
     public function test_la_columna_existe_es_nula_y_una_simulacion_la_deja_nula(): void
     {
@@ -133,9 +134,13 @@ class UltronStudioLabEngineColumnTest extends TestCase
 
             return;
         }
-        DB::statement('DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = \''.self::APP_ROLE.'\') THEN CREATE ROLE '.self::APP_ROLE.' NOLOGIN NOSUPERUSER NOINHERIT; END IF; END $$');
-        DB::statement('GRANT USAGE ON SCHEMA public TO '.self::APP_ROLE);
-        DB::statement('GRANT SELECT, INSERT, UPDATE, DELETE ON ultron_studio_lab_run_cases, ultron_studio_lab_runs TO '.self::APP_ROLE);
+        // Un rol PROPIO de esta ejecución (nunca uno que ya exista, con atributos que no se saben), creado
+        // aquí y retirado aquí. CREATE ROLE es transaccional: si la prueba cae a medias, se va con la
+        // transacción de RefreshDatabase.
+        $this->appRole = 'ultron_studio_lab_app_'.bin2hex(random_bytes(6));
+        DB::statement('CREATE ROLE '.$this->appRole.' NOLOGIN NOSUPERUSER NOINHERIT');
+        DB::statement('GRANT USAGE ON SCHEMA public TO '.$this->appRole);
+        DB::statement('GRANT SELECT, INSERT, UPDATE, DELETE ON ultron_studio_lab_run_cases, ultron_studio_lab_runs TO '.$this->appRole);
 
         [$estado] = $this->asApp(fn () => DB::table('ultron_studio_lab_run_cases')->where('id', $caso->id)->update(['engine' => json_encode(['path' => ['strategist']])]));
         $this->assertNull($estado, 'viva, la escribe');
@@ -144,6 +149,10 @@ class UltronStudioLabEngineColumnTest extends TestCase
         [$estado, $mensaje] = $this->asApp(fn () => DB::table('ultron_studio_lab_run_cases')->where('id', $caso->id)->update(['engine' => json_encode(['path' => []])]));
         $this->assertSame('P0001', $estado);
         $this->assertStringContainsString('ultron_studio_lab: un caso terminado', $mensaje);
+
+        DB::statement('DROP OWNED BY '.$this->appRole);
+        DB::statement('DROP ROLE '.$this->appRole);
+        $this->assertSame(0, (int) DB::scalar('SELECT count(*) FROM pg_roles WHERE rolname = ?', [$this->appRole]), 'el rol de la prueba se retira');
     }
 
     // ── Andamio ─────────────────────────────────────────────────────────────
@@ -187,8 +196,8 @@ class UltronStudioLabEngineColumnTest extends TestCase
         $deshacer = new RuntimeException('deshecho');
         try {
             DB::transaction(function () use ($fn, $deshacer): void {
-                DB::statement('SET LOCAL ROLE '.self::APP_ROLE);
-                $this->assertSame(self::APP_ROLE, DB::scalar('SELECT current_user'));
+                DB::statement('SET LOCAL ROLE '.$this->appRole);
+                $this->assertSame($this->appRole, DB::scalar('SELECT current_user'));
                 $fn();
 
                 throw $deshacer;
