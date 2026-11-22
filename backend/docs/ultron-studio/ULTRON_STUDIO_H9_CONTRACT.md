@@ -667,6 +667,45 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
   Los cuatro códigos nuevos son `template_not_approved`, `subject_minor`, `rne_check_missing` y `canary_scope_mismatch`. Son aditivos: el CRM trata un motivo desconocido como «no contactes», y los textos que le faltan son C-1 de `informe-security-bandeja-r3.md`.
 
   La página se llena por detrás de lo retenido. Lo vencido, lo frenado y lo de una parte que no está en marcha, sin reclamar, se descarta en SQL. Lo de la persona va por tandas de 50, con una foto y una consulta de supresión por tanda, y un tope de 200 filas leídas. `meta.withheld` dice cuántos sin reclamar y no vencidos no se ofrecen, sin decir de quién: los frenados y los de estrategia parada, de forma exacta; lo de la persona, como cota inferior. `meta.scanCapped` (L9-118) dice si la lectura llegó al tope sin llenar la página. En `all` no sale lo reclamado por OTRA persona y ya vencido (L9-118).
+  **La bandeja frente a la escalera (m-1 de `informe-reviewer-bandeja.md`, 22-11-2026).** Cada motivo de `PolicyLadder::REASON_ORDER`, nivel por nivel, y lo que hace la bandeja con un trabajo que ya salió. Lo fija `tests/Unit/Outreach/Run/AssistedQueueLadderParityTest.php`: si la escalera gana, pierde o cambia de nivel un motivo, la prueba cae hasta que se clasifique allí y aquí.
+
+  | Nivel | Motivo de la escalera | La bandeja |
+  |---|---|---|
+  | N1 | `no_consent_for_purpose_channel` | Retiene. Por voz, `opted_out` si consta la revocación y si no `policy_unknown` (R3-1). Por WhatsApp comercial, `policy_unknown` (I-1). Por WhatsApp de servicio y de cobranza, no (la ventana de 24 h) |
+  | N1 | `consent_denied` (también la retirada del libro de C9, C-1), `do_not_contact`, `do_not_contact_sibling`, `commercial_opt_out` (comercial), `voice_excluded` (voz) | `opted_out`; si no se puede comprobar, `policy_unknown` |
+  | N1 | `rne_check_missing` (voz) · `subject_minor` · `unknown_subject` | `rne_check_missing` (o `policy_unknown`) · `subject_minor` · `policy_unknown` |
+  | N1 | `calendar_outside_legal_hours`, `calendar_sunday`, `calendar_holiday`, `daily_contact_limit`, `weekly_contact_limit`, `min_hours_between_contacts`, `cross_channel_week_rule`, `collections_channel_week_rule` | `excluido:al_salir` |
+  | N2 | `master_flag_off` | Toda la ruta responde 409 `outreach_disabled` |
+  | N2 | `mode_off`, `outreach_brake_global`, `outreach_brake_channel`, `outreach_brake_strategy` | `brake` (F-1) |
+  | N2 | `global_suppression` | `opted_out` (o `policy_unknown`) |
+  | N2 | `ultron_abort_latch`, `marketing_agent_paused`, `voice_braked`, `legacy_autonomy_on`, `legacy_followups_active` | `excluido:D-3` |
+  | N2 | `human_in_control` | `excluido:es_una_persona` |
+  | N3 | `studio_reference_invalid` | `strategy_stopped` (m-2) |
+  | N3 | `canary_only_declared` | `canary_scope_mismatch` (o `policy_unknown`) (F-2) |
+  | N3 | `catalog_incompatible`, `payment_links_disabled`, `template_violates_restriction` | `excluido:al_salir` |
+  | N4 | `channel_disabled` | `brake` (F-1) |
+  | N4 | `template_not_approved` | `template_not_approved` (F-3) |
+  | N4 | `no_whatsapp_identity` · `no_voice_contact` | `policy_unknown`: sin identidad no hay consentimiento concedido (I-1, por WhatsApp comercial; R3-1 y R3-3, por voz) |
+  | N4 | `template_category_mismatch`, `budget_zero`, `assisted_capacity_reached` | `excluido:al_salir` |
+  | N4 | `sends_disabled_in_code`, `channel_not_live`, `voice_policy:*`, `budget_exhausted`, `channel_daily_cap` | `excluido:solo_automaticos` |
+  | N5 | `strategy_not_published`, `strategy_paused`, `chain_unreadable` | `strategy_stopped` |
+  | N5 | `canary_scope_mismatch` | `canary_scope_mismatch` (o `policy_unknown`) (F-2) |
+  | N5 | `calendar_outside_own_hours`, `outside_strategy_schedule`, `max_touches_reached`, `strategy_daily_cap`, `enrollment_window_over`, `cooldown_active`, `step_guard_false` | `excluido:al_salir` |
+  | N6 | `complaint_recent` | `complaint_recent`; sin datos de eventos, `complaint_unknown` (M-5) |
+  | N6 | `success_reached`, `context_changed`, `collections_overdue_blocks_commercial` | `excluido:F-4` |
+  | N6 | `human_requested_recently` | `excluido:L9-66` |
+  | N6 | `purpose_conflict_today`, `lower_priority` | `excluido:al_salir` |
+  | N7 | `callback_scheduled`, `enrollment_window_over` | `excluido:al_salir` |
+
+  Las decisiones por las que la bandeja no vuelve a mirar un motivo:
+  - `excluido:al_salir`: lo decidió la escalera al salir (horario, frecuencia, cupos, ventana, enfriamiento, guarda y el contenido sellado de la versión). No es una petición de la persona, y el plazo del trabajo lo acota `expired`.
+  - `excluido:solo_automaticos`: solo lo evalúa un canal automático (la constante de envío, el presupuesto en dólares, la política de voz del H8). Un asistido nunca lo recibe: el canal `assisted` está implementado (`OutreachSendGate::LIVE_CHANNELS`) y no gasta.
+  - `excluido:es_una_persona`: el asistido ya es una persona; la toma humana de la conversación no lo para.
+  - `excluido:D-3`: los frenos ajenos al H9 no retienen la bandeja (D9-14; pendiente del propietario).
+  - `excluido:F-4`: el contexto de N6 no se reevalúa mientras la inscripción espera el resultado asistido (nota de diseño de `informe-be-bandeja-r3.md` §6).
+  - `excluido:L9-66`: `human_requested` no retira nada; solo la palabra de baja, por la supresión del libro (`opted_out`).
+
+  `expired` es el único motivo de la bandeja que no viene de la escalera: es el borde del despachador.
 - La política aplicó horario, frecuencia y consentimiento **del medio** (WhatsApp o voz). La persona sigue siendo responsable del contacto real.
 - Es el primer valor sin envío automático.
 
