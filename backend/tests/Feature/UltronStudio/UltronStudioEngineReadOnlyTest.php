@@ -109,7 +109,17 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
         'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        // PT-14 (cambio de requisito del propietario; diseño `plans/informes-cierre/diseno-arq-pt14.md` D15): la
+        // publicación de la voz LEE el texto comercial de los planes (`Plan`), y nada más del motor. Ver abajo.
+        'StudioVoicePublications.php', 'StudioVoicePublishing.php',
     ];
+
+    /**
+     * PT-14: lo único de `Plan` que nombra la publicación de la voz, todo de
+     * LECTURA: la captura del catálogo (con sus autores), su huella, su
+     * formato y la lectura estricta del publicado.
+     */
+    private const VOICE_PLAN_READS = '/^Plan::(?:(?:commercialCatalogSnapshot|commercialCatalog|commercialCatalogHash|readCommercialCatalog)\(|COMMERCIAL_CATALOG_FORMAT\b)/';
 
     /** Enmienda M-1 (M1-6): lo único del motor que el Studio importa para los prompts. */
     private const PROMPT_COMPILER_CLASSES = [
@@ -243,6 +253,26 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             }
         }
         $this->assertSame([], $this->configWrites($publicacion));
+
+        // PT-14 (D15): la publicación de la voz nombra del motor SOLO `Plan`, y
+        // de él solo lo que LEE el texto comercial (VOICE_PLAN_READS). Ninguna
+        // sentencia que lo nombre escribe.
+        foreach (['StudioVoicePublishing.php', 'StudioVoicePublications.php'] as $fichero) {
+            $ruta = app_path('Services/UltronStudio/'.$fichero);
+            $this->assertSame(['App\\Models\\Plan'], array_values(array_unique($this->engineReferences($ruta))), "{$fichero} solo nombra del motor Plan.");
+            $tokens = $this->tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                if ($t[0] === T_STRING && $t[1] === 'Plan') {
+                    $uso = 'Plan'.($tokens[$i + 1][1] ?? '').($tokens[$i + 2][1] ?? '').($tokens[$i + 3][1] ?? '');
+                    $this->assertMatchesRegularExpression(self::VOICE_PLAN_READS, $uso, "{$fichero} usa de Plan algo que no es leer el catálogo: {$uso}");
+                }
+            }
+            foreach ($this->statementsNaming($ruta, 'Plan') as $sentencia) {
+                foreach (self::WRITE_CALLS as $metodo) {
+                    $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "{$fichero} escribe con Plan: {$sentencia}");
+                }
+            }
+        }
 
         // Los recuentos del canario: ni una escritura, la única fachada es el
         // acta (`Artisan::call` del comando de lectura), y nada de configuración.
@@ -766,7 +796,9 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->walk('POST', "voice/profiles/{$otro}/reject", $root, ['note' => 'Rechazado en el recorrido'])->assertOk();
         // La versión del recorrido cambia parámetros que la voz no compila: 200 o el 422 del compilador, sin red.
         $this->walk('POST', 'voice/compile-preview', $ana, ['versionUuid' => $version, 'profileUuid' => $perfil]);
-        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64)])
+        // PT-14 (cambio de requisito del propietario, diseño §5 B): publicar lleva también la huella del catálogo que se vio.
+        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64),
+            'expectedCatalogHash' => str_repeat('0', 64)])
             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
         $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64), 'expectedSpecHash' => str_repeat('0', 64)])
             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');

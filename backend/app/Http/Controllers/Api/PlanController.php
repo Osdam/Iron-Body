@@ -16,7 +16,9 @@ use App\Services\Membership\PlanArchive;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\RealtimeEvents;
+use App\Support\Access\AdminActor;
 use App\Support\Access\CrmPermission;
+use App\Support\Access\PlanCommercialText;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +52,8 @@ class PlanController extends Controller
     {
         $data = $request->validate(['archived' => ['sometimes', 'string', 'in:exclude,only,include']]);
         $admin = $this->adminViewer($request);
+        // La llave del texto comercial, UNA vez por petición (no por fila).
+        $puedeTexto = PlanCommercialText::allowedFor($admin);
 
         // `access` va junto a las columnas: son las reglas ya normalizadas, que
         // es lo que el CRM pinta. Sin esto cada pantalla tendría que volver a
@@ -57,9 +61,9 @@ class PlanController extends Controller
         return Plan::query()
             ->when(($data['archived'] ?? 'include') === 'exclude', fn ($q) => $q->notArchived())
             ->when(($data['archived'] ?? 'include') === 'only', fn ($q) => $q->archived())
-            ->when($admin, fn ($q) => $q->with('archiver:id,name'))
+            ->when($admin !== null, fn ($q) => $q->with('archiver:id,name'))
             ->paginate($this->resolvePerPage($request))
-            ->through(fn (Plan $plan): array => $this->payload($plan, $admin));
+            ->through(fn (Plan $plan): array => $this->payload($plan, $admin, $puedeTexto));
     }
 
     /**
@@ -69,10 +73,16 @@ class PlanController extends Controller
      * Quién lo archivó y por qué solo van con sesión de administrador: el
      * listado es público. Sin ella las dos claves llegan, en null.
      *
+     * `commercial_text_locked` (PT-14): si el editor bloquea el nombre y los
+     * beneficios a quien mira ({@see PlanCommercialText::locked()}); null sin
+     * sesión de administrador. El autor (`commercial_text_by`) no sale nunca.
+     *
+     * @param  bool|null  $puedeTexto  la llave de quien mira, si ya se resolvió (el listado)
      * @return array<string, mixed>
      */
-    private function payload(Plan $plan, bool $admin = true): array
+    private function payload(Plan $plan, ?Admin $viewer, ?bool $puedeTexto = null): array
     {
+        $admin = $viewer !== null;
         if ($admin && $plan->archived_by !== null && ! $plan->relationLoaded('archiver')) {
             $plan->load('archiver:id,name');
         }
@@ -88,6 +98,7 @@ class PlanController extends Controller
             'is_archived' => $plan->isArchived(),
             'archived_by_name' => $admin ? $plan->archiver?->name : null,
             'archive_reason' => $admin ? $plan->archive_reason : null,
+            'commercial_text_locked' => PlanCommercialText::locked($puedeTexto ?? PlanCommercialText::allowedFor($viewer), $plan),
         ]);
     }
 
@@ -95,15 +106,16 @@ class PlanController extends Controller
      * ¿Lo pide una persona del CRM que puede ver planes? En las rutas con
      * `auth.admin` ya está resuelta; en las públicas se mira la credencial sin
      * exigirla (y sin tocar la sesión). El token compartido no es nadie.
+     * Devuelve esa persona, o null.
      */
-    private function adminViewer(Request $request): bool
+    private function adminViewer(Request $request): ?Admin
     {
         $admin = $request->attributes->get('auth_admin');
         if (! $admin instanceof Admin && is_string($token = $request->bearerToken()) && $token !== '') {
             $admin = app(AdminSessionService::class)->resolveByToken($token)?->admin;
         }
 
-        return $admin instanceof Admin && $admin->isActive() && CrmPermission::allows($admin, 'plans.view');
+        return $admin instanceof Admin && $admin->isActive() && CrmPermission::allows($admin, 'plans.view') ? $admin : null;
     }
 
     /**
@@ -201,7 +213,17 @@ class PlanController extends Controller
         $data = $this->validatedData($request, false);
 
         $plan = DB::transaction(function () use ($request, $data): Plan {
-            $plan = Plan::create($data);
+            // PT-14: un texto nuevo; quien lo escribe queda como autor.
+            $plan = new Plan($data);
+            $plan->forceFill(['commercial_text_by' => AdminActor::id($request)])->save();
+            // ¿Entra en la venta? Lo dice la base con su definición SQL, con los
+            // valores por defecto de la columna: un alta que no manda `sellable`
+            // (el duplicado del CRM) nace a la venta. Si pide la llave y no se
+            // tiene, el throw deshace el alta.
+            $vendible = Plan::query()->whereKey($plan->getKey())->sellable()->exists();
+            if (($motivo = PlanCommercialText::reasonFor(null, false, $plan->commercialText(), $vendible)) !== null) {
+                PlanCommercialText::assertAllowed($request, $motivo);
+            }
 
             app(AuditTrail::class)->record($request, [
                 'action' => 'create', 'module' => 'Planes', 'entity' => 'plan',
@@ -215,7 +237,7 @@ class PlanController extends Controller
             return $plan;
         });
 
-        return response()->json($this->payload($plan), 201);
+        return response()->json($this->payload($plan, AdminActor::from($request)), 201);
     }
 
     public function update(Request $request, Plan $plan)
@@ -242,13 +264,26 @@ class PlanController extends Controller
             }
 
             $previoPlan = $plan->getOriginal();
-            $plan->update($data);
+            // PT-14: el texto comercial y si se vende, antes y después de esta
+            // escritura (sin guardar todavía). El throw deshace la transacción.
+            $textoAntes = $plan->commercialText();
+            $vendibleAntes = $plan->isSellable();
+            $plan->fill($data);
+            $textoDespues = $plan->commercialText();
+            $vendibleDespues = $plan->isSellable();
+            if (($motivo = PlanCommercialText::reasonFor($textoAntes, $vendibleAntes, $textoDespues, $vendibleDespues)) !== null) {
+                PlanCommercialText::assertAllowed($request, $motivo);
+            }
+            if (PlanCommercialText::authorChanges($textoAntes, $vendibleAntes, $textoDespues, $vendibleDespues)) {
+                $plan->forceFill(['commercial_text_by' => AdminActor::id($request)]);
+            }
+            $plan->save();
 
             app(AuditTrail::class)->record($request, [
                 'action' => 'update', 'module' => 'Planes', 'entity' => 'plan',
                 'entity_id' => $plan->id, 'target_name' => $plan->name,
                 'summary' => "Modificó el plan {$plan->name}",
-                'changes' => app(AuditTrail::class)->changesOf(
+                'changes' => PlanCommercialText::withoutAuthor(app(AuditTrail::class)->changesOf(
                     $plan,
                     $previoPlan,
                     // Un cambio de precio o de vigencia sin el antes y el después
@@ -256,7 +291,7 @@ class PlanController extends Controller
                     // dónde se vende, tampoco: abrir o cerrar un canal es precio.
                     ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app',
                         'sellable', 'counter_sellable'],
-                ),
+                )),
                 'metadata' => $this->eventMetadata($plan, 'plan.updated') + ['price' => (string) $plan->price],
             ]);
 
@@ -271,7 +306,7 @@ class PlanController extends Controller
             return $plan;
         });
 
-        return response()->json($this->payload($plan));
+        return response()->json($this->payload($plan, AdminActor::from($request)));
     }
 
     /**
@@ -390,7 +425,7 @@ class PlanController extends Controller
         return response()->json([
             'ok' => true,
             'already' => $r['already'],
-            'plan' => $this->payload($r['plan']->refresh()),
+            'plan' => $this->payload($r['plan']->refresh(), AdminActor::from($request)),
             ...$archive->effects($r['plan']),
         ]);
     }
@@ -416,7 +451,7 @@ class PlanController extends Controller
         return response()->json([
             'ok' => true,
             'already' => $r['already'],
-            'plan' => $this->payload($r['plan']->refresh()),
+            'plan' => $this->payload($r['plan']->refresh(), AdminActor::from($request)),
         ]);
     }
 

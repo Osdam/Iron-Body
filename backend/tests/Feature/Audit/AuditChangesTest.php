@@ -122,7 +122,10 @@ class AuditChangesTest extends TestCase
         // un falso positivo del diff.
         $plan = $this->plan(['benefits' => 'Acceso libre']);
 
-        $this->patchJson("/api/plans/{$plan->id}", ['benefits' => ''], $this->admin())->assertOk();
+        // PT-14 (cambio de requisito del propietario): los beneficios de un plan que se ofrece fuera solo los cambia
+        // quien tiene «Nombre y beneficios», por defecto Super Admin. Lo que se prueba aquí es la traza, no la llave:
+        // el actor es quien puede hacerlo (al Administrador le da 403: PlanCommercialTextPermissionTest).
+        $this->patchJson("/api/plans/{$plan->id}", ['benefits' => ''], $this->adminHeaders())->assertOk();
 
         $this->assertContains('benefits', $this->camposDe('plan'));
         $this->assertNull($plan->fresh()->benefits);
@@ -333,7 +336,10 @@ class AuditChangesTest extends TestCase
             'benefits' => 'Acceso libre',
             'active' => true,
             'features' => array_reverse($completo, true),
-        ], $this->admin())->assertOk();
+            // PT-14 (cambio de requisito del propietario): pasar el precio de 0 a 1 pone el plan a la venta y pide
+            // «Nombre y beneficios», por defecto de Super Admin. Lo que se prueba es la traza: el actor es quien puede
+            // hacerlo, y la traza sigue siendo de un solo campo (el autor del texto no entra en `changes`).
+        ], $this->adminHeaders())->assertOk();
 
         $this->assertSame(
             [['field' => 'price', 'from' => '0', 'to' => '1']],

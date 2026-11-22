@@ -3,6 +3,7 @@
 namespace Tests\Feature\Telephony\Support;
 
 use App\Models\Admin;
+use App\Models\Plan;
 use App\Models\Voice\VoiceCall;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
@@ -128,10 +129,11 @@ trait VoiceFixtures
      *
      * @param  array<string, mixed>  $agent  huellas que la prueba fija, `row` (vuelta atrás) o `transfer_destination_hashes` (la columna tal cual)
      * @param  list<array{0: string, 1: string}>  $transfers  los destinos compilados en el agente (alias, E.164), como los escribe S8 al desplegar (E5-1)
+     * @param  array<string, mixed>|null  $evidence  la `evidence` de la entrada (PT-14: `{catalog: …}`, {@see voiceCatalogEvidence()}); null = anterior a PT-14
      * @return array{seq: int, agentRowId: int, projectionHash: string, payloadHash: string, specHash: string, versionUuid: string, profileUuid: string}
      */
     protected function publishVoice(string $providerAgentId = self::SEALED_AGENT, string $part = VoicePublishedConfig::PART_CANARY, array $agent = [],
-        array $transfers = []): array
+        array $transfers = [], ?array $evidence = null): array
     {
         $n = ++$this->voiceSeq;
         if (isset($agent['row'])) {
@@ -194,11 +196,30 @@ trait VoiceFixtures
             'uuid' => (string) Str::uuid(), 'seq' => $seq, 'client_request_id' => (string) Str::uuid(), 'action' => $part === 'rest' ? 'promote' : 'publish', 'scope' => $part,
             'previous_publication_id' => $cabeza?->id, 'prev_hash' => $cabeza === null ? self::GENESIS : (string) $cabeza->effective_hash,
             'restores_publication_id' => null, 'agent_id' => $agente, 'effective_json' => $mensaje, 'effective_hash' => hash('sha256', $mensaje),
-            'signature' => VoicePublishedConfig::signatureFor($mensaje), 'lab_gate' => '{"mode":"required"}', 'evidence' => null, 'reason' => null,
+            'signature' => VoicePublishedConfig::signatureFor($mensaje), 'lab_gate' => '{"mode":"required"}',
+            'evidence' => $evidence === null ? null : json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), 'reason' => null,
             'actor_admin_id' => 2, 'actor_name' => 'Beto', 'actor_role' => 'Super Admin', 'created_at' => now(),
         ]);
 
         return ['seq' => $seq, 'agentRowId' => $agente, 'projectionHash' => $proyeccion, 'payloadHash' => $carga, 'specHash' => $spec, 'versionUuid' => $versionUuid, 'profileUuid' => $perfilUuid];
+    }
+
+    /**
+     * PT-14 · B: la `evidence` de una publicación con su catálogo de planes
+     * (`ultron-voice-catalog/1`), como la escribe el Studio al publicar: el
+     * catálogo de AHORA (`Plan::commercialCatalogSnapshot()`) o la lista dada,
+     * con su huella y sus autores.
+     *
+     * @param  list<array{id: int, name: string, benefits: list<string>}>|null  $plans
+     * @return array{catalog: array{format: string, hash: string, plans: list<array<string, mixed>>, authors: list<array{planId: int, by: int|null}>}}
+     */
+    protected function voiceCatalogEvidence(?array $plans = null): array
+    {
+        $captura = Plan::commercialCatalogSnapshot();
+        $planes = $plans ?? $captura['plans'];
+        $autores = $plans === null ? $captura['authors'] : array_map(static fn (array $p): array => ['planId' => $p['id'], 'by' => null], $plans);
+
+        return ['catalog' => ['format' => Plan::COMMERCIAL_CATALOG_FORMAT, 'hash' => Plan::commercialCatalogHash($planes), 'plans' => $planes, 'authors' => $autores]];
     }
 
     // ── Canarios (la API del H6) ────────────────────────────────────────────

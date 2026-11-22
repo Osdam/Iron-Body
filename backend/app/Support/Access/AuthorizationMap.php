@@ -1048,6 +1048,10 @@ final class AuthorizationMap
         // (`POST strategies/versions/{uuid}/simulations`, `ultron.strategies_edit`);
         // el controlador exige además esta llave cuando `sample` es `real`.
         'commercial_automation.simulate_real',
+        // PT-14: el nombre y los beneficios de un plan que se ofrece fuera, y
+        // ponerlo a la venta. Va en el mismo PUT que el precio: lo decide
+        // PlanController (y PlanArchive al reactivar) con PlanCommercialText.
+        'plans.commercial_text',
     ];
 
     /**

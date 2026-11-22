@@ -114,7 +114,10 @@ class UltronStudioVoiceOutboundOnlyTest extends TestCase
         // La respuesta, la entrada (en su `evidence`, que no se firma) y su DTO.
         $this->assertSame(['action' => 'assigned', 'outcome' => 'not_applicable_outbound_only', 'reason' => null], $r->json('data.number'));
         $fila = StudioVoicePublication::query()->sole();
-        $this->assertSame(['number' => ['action' => 'assigned', 'outcome' => 'not_applicable_outbound_only']], $fila->evidence);
+        // PT-14 (cambio de requisito del propietario, diseño §3 D5): la `evidence` de `publish` lleva además el catálogo
+        // de planes capturado (lo fija UltronStudioVoiceCatalogTest); lo del número, igual que antes.
+        $this->assertSame(['number', 'catalog'], array_keys($fila->evidence));
+        $this->assertSame(['action' => 'assigned', 'outcome' => 'not_applicable_outbound_only'], $fila->evidence['number']);
         $this->assertSame(['action' => 'assigned', 'outcome' => 'not_applicable_outbound_only'], $r->json('data.entries.0.number'));
         $this->assertNull($r->json('data.entries.0.evidence'), 'la evidencia de promover no se mezcla con el número');
         $this->assertArrayNotHasKey('evidence', json_decode($fila->effective_json, true), 'lo firmado sigue siendo E1-4');
@@ -140,7 +143,9 @@ class UltronStudioVoiceOutboundOnlyTest extends TestCase
         $r = $this->publishVoice($this->pablo, $v, $p)->assertCreated();
         $this->assertSame(['assign', self::NUMBER_ID, 'agent_h8s_0001'], end($this->fake->calls));
         $this->assertSame(['action' => 'assigned', 'outcome' => 'assigned', 'reason' => null], $r->json('data.number'));
-        $this->assertSame(['number' => ['action' => 'assigned', 'outcome' => 'assigned']], StudioVoicePublication::query()->sole()->evidence);
+        // PT-14: con el catálogo capturado al lado (ver la prueba anterior).
+        $this->assertSame(['number', 'catalog'], array_keys(StudioVoicePublication::query()->sole()->evidence));
+        $this->assertSame(['action' => 'assigned', 'outcome' => 'assigned'], StudioVoicePublication::query()->sole()->evidence['number']);
         $this->assertSame('assigned', StudioAuditEvent::query()->where('event', 'voice_publication.published')->sole()->diff['number']);
     }
 

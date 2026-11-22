@@ -2,6 +2,7 @@
 
 namespace App\Services\UltronStudio;
 
+use App\Models\Plan;
 use App\Models\UltronStudio\StudioVoiceAgent;
 use App\Models\UltronStudio\StudioVoicePublication;
 use App\Services\Telephony\VoicePublishedConfig;
@@ -426,9 +427,36 @@ final class StudioVoicePublications
     // ── Lo que se enseña ────────────────────────────────────────────────────
 
     /**
+     * PT-14: el catálogo de planes PUBLICADO de un agente: el de la `evidence`
+     * de su entrada `publish` (la de menor `seq`; una vuelta atrás o una
+     * promoción no lo repiten), leído estricto con la misma lectura que la
+     * telefonía ({@see Plan::readCommercialCatalog()}). null si no lo tiene
+     * (anterior a PT-14) o no verifica.
+     *
+     * @return array{hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null}>}|null
+     */
+    public static function catalogOf(StudioVoiceAgent|int $agent): ?array
+    {
+        $evidencia = StudioVoicePublication::query()
+            ->where('agent_id', $agent instanceof StudioVoiceAgent ? (int) $agent->id : $agent)
+            ->where('action', StudioVoicePublication::ACTION_PUBLISH)
+            ->orderBy('seq')
+            ->value('evidence');
+        // `value()` no pasa por el cast del modelo: llega el JSON en texto.
+        $e = is_string($evidencia) ? json_decode($evidencia, true, 16) : $evidencia;
+
+        return is_array($e) ? Plan::readCommercialCatalog($e['catalog'] ?? null) : null;
+    }
+
+    /**
      * El estado de la cadena: la cabeza y lo vigente de cada parte, cada una
      * verificada (`verified`). Una parte apagada lleva su entrada y ningún
      * agente; una parte sin entradas, null.
+     *
+     * PT-14 (D12): cada parte con agente lleva `catalog`: la huella y el número
+     * de planes de su catálogo PUBLICADO y su deriva frente al vigente
+     * ({@see StudioVoiceDrift::catalogVerdict()}), sin red y sin echar el freno;
+     * null sin agente. El catálogo vigente se lee UNA vez por petición.
      *
      * @param  Closure(string):string|null  $signer
      * @return array{head:array<string,mixed>|null,canary:array<string,mixed>|null,rest:array<string,mixed>|null,verified:bool}
@@ -438,6 +466,7 @@ final class StudioVoicePublications
         $cabeza = self::head();
         $partes = [];
         $todo = true;
+        $vigente = null;
         foreach (StudioVoicePublication::SCOPES as $parte) {
             $fila = self::current($parte);
             if ($fila === null) {
@@ -447,11 +476,23 @@ final class StudioVoicePublications
             }
             $resultado = self::verifyRow($fila, $signer);
             $todo = $todo && $resultado === self::VERIFY_OK;
+            $catalogo = null;
+            if ($fila->agent_id !== null) {
+                $vigente ??= Plan::commercialCatalog();
+                $publicado = self::catalogOf((int) $fila->agent_id);
+                $catalogo = [
+                    'hash' => $publicado['hash'] ?? null,
+                    'shortHash' => $publicado === null ? null : substr($publicado['hash'], 0, 8),
+                    'plans' => $publicado === null ? null : count($publicado['plans']),
+                    'drift' => StudioVoiceDrift::catalogVerdict($publicado['plans'] ?? null, $vigente),
+                ];
+            }
             $partes[$parte] = [
                 'entry' => self::entryDto($fila),
                 'agent' => $fila->agent === null ? null : self::agentDto($fila->agent),
                 'serving' => $fila->agent !== null,
                 'verified' => $resultado,
+                'catalog' => $catalogo,
             ];
         }
 
@@ -494,7 +535,10 @@ final class StudioVoicePublications
      * huella), sin ids internos y sin el id del proveedor en claro. `number`
      * (S8-d): en una entrada `publish`, lo que pasó con el número al publicar
      * (`{action, outcome}`, p. ej. `not_applicable_outbound_only` con un número
-     * solo saliente); null en las demás y en las anteriores a S8-d.
+     * solo saliente); null en las demás y en las anteriores a S8-d. `catalog`
+     * (PT-14): en una `publish`, la huella del catálogo de planes que capturó y
+     * cuántos planes (`{hash, shortHash, plans}`); nunca la lista ni sus
+     * autores. null en las demás y si no lo lleva o no verifica.
      *
      * @return array<string, mixed>
      */
@@ -502,6 +546,7 @@ final class StudioVoicePublications
     {
         $modo = is_array($p->lab_gate) ? ($p->lab_gate['mode'] ?? null) : null;
         $numero = $p->action === StudioVoicePublication::ACTION_PUBLISH && is_array($p->evidence) && is_array($p->evidence['number'] ?? null) ? $p->evidence['number'] : null;
+        $catalogo = $p->action === StudioVoicePublication::ACTION_PUBLISH && is_array($p->evidence) ? Plan::readCommercialCatalog($p->evidence['catalog'] ?? null) : null;
 
         return [
             'uuid' => (string) $p->uuid,
@@ -516,6 +561,7 @@ final class StudioVoicePublications
                 'action' => is_string($numero['action'] ?? null) ? $numero['action'] : null,
                 'outcome' => is_string($numero['outcome'] ?? null) ? $numero['outcome'] : null,
             ],
+            'catalog' => $catalogo === null ? null : ['hash' => $catalogo['hash'], 'shortHash' => substr($catalogo['hash'], 0, 8), 'plans' => count($catalogo['plans'])],
             'actor' => ['name' => (string) $p->actor_name, 'role' => $p->actor_role],
             'reason' => $p->reason,
             'at' => $p->created_at?->toIso8601String(),

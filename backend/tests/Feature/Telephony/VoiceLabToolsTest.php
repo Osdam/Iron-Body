@@ -193,6 +193,10 @@ class VoiceLabToolsTest extends TestCase
     public function test_los_datos_son_los_mismos_que_recibe_una_llamada_real(): void
     {
         $d = $this->openLab();
+        // PT-14 (cambio de requisito del propietario; Enmienda 21 de E18-8): la llamada dice el catálogo PUBLICADO de su
+        // agente y el laboratorio, el que capturaría publicar ahora. Son los mismos datos cuando la voz se publicó con
+        // el catálogo de ahora, que es lo que se publica aquí; si cambia después, ver test_el_laboratorio_sigue_leyendo_en_vivo.
+        $this->publishVoice(evidence: $this->voiceCatalogEvidence());
         $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
         foreach (['consultar_planes', 'consultar_horarios'] as $herramienta) {
             $deLaLlamada = $this->rawPost('/api/voice/tools/'.$herramienta, '{"conversation_id":"conv_h8fx_0031"}', $this->auth())->assertOk()->json();
@@ -210,6 +214,8 @@ class VoiceLabToolsTest extends TestCase
     {
         Plan::query()->where('name', 'Mensual')->update(['benefits' => json_encode(['["Acceso ilimitado al gimnasio"', 'Primer mes gratis', '"Clases grupales"]'])]);
         $d = $this->openLab();
+        // PT-14 (cambio de requisito del propietario; Enmienda 21 de E18-8): la llamada, con la voz publicada con el catálogo de ahora.
+        $this->publishVoice(evidence: $this->voiceCatalogEvidence());
         $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
         $lineas = [];
         Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$lineas): void {
@@ -225,6 +231,29 @@ class VoiceLabToolsTest extends TestCase
         $this->assertSame(VoiceTools::BENEFITS_NOTE, $delLaboratorio['nota']);
         $this->assertSame([[1, 0, false], [1, 0, true]], array_map(static fn (array $c): array => [$c['benefits_withheld'] ?? null, $c['benefits_omitted'] ?? null, $c['lab'] ?? false], $lineas),
             'el recuento, en la línea de la llamada y en la del laboratorio');
+    }
+
+    /**
+     * PT-14 (D9; Enmienda 21 de E18-8): el laboratorio prueba una compilación que aún no se ha publicado, así que lee
+     * el catálogo VIGENTE (lo que capturaría publicarla ahora), con o sin una publicación: no el publicado. La llamada,
+     * en cambio, dice lo publicado ∩ lo vigente.
+     */
+    public function test_el_laboratorio_sigue_leyendo_en_vivo(): void
+    {
+        $d = $this->openLab();
+        $vivo = [['nombre' => 'Mensual', 'condiciones' => '30 días de vigencia', 'precio' => '$ 89.000']];
+        $this->assertSame($vivo, $this->tool('consultar_planes', $d['uuid'])->assertOk()->json('planes'), 'sin ninguna publicación: los vendibles de ahora');
+
+        $this->publishVoice(evidence: $this->voiceCatalogEvidence());
+        Plan::query()->where('name', 'Mensual')->update(['name' => 'Mensual Plus']);
+        Plan::query()->create(['name' => 'Trimestral', 'price' => 239900, 'duration_days' => 90, 'active' => true, 'sellable' => true, 'sort_order' => 2]);
+        $this->assertSame(['Mensual Plus', 'Trimestral'], array_column($this->tool('consultar_planes', $d['uuid'])->assertOk()->json('planes'), 'nombre'),
+            'con una publicación: los vigentes, también el renombrado y el nuevo');
+
+        $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
+        $this->assertSame(['planes' => [], 'nota' => VoiceTools::NO_DELIVERABLE_PLANS_NOTE], array_diff_key(
+            $this->rawPost('/api/voice/tools/consultar_planes', '{"conversation_id":"conv_h8fx_0031"}', $this->auth())->assertOk()->json(), ['ok' => 1, 'verdict' => 1]),
+            'la llamada, no: ninguno de los dos estaba aprobado con ese nombre');
     }
 
     public function test_terminada_fallida_caducada_inexistente_o_de_otro_uuid_la_negativa_es_identica_y_sin_datos(): void

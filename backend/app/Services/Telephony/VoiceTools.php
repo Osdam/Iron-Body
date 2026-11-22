@@ -39,7 +39,9 @@ use Illuminate\Support\Facades\Log;
  * lo reconozca, un cuerpo de una conversación WEB (sin `call_sid`) que la
  * telefonía no conoce y cuyo `call_ref` es el uuid de una sesión del
  * laboratorio ABIERTA y vigente recibe las dos herramientas de SOLO LECTURA
- * ({@see LAB_TOOLS}), con los mismos datos que una llamada ({@see lab()}).
+ * ({@see LAB_TOOLS}), con los datos que capturaría publicar ahora
+ * (Enmienda 21: el catálogo VIGENTE, {@see lab()}); una llamada recibe los del
+ * catálogo PUBLICADO de su agente (PT-14, {@see plans()}).
  * Todo lo demás, la negativa de siempre (`call_not_found`).
  */
 final class VoiceTools
@@ -138,6 +140,13 @@ final class VoiceTools
      */
     private const BENEFIT_CONTROL = '/[\p{Cc}\p{Cf}\p{Co}\x{115F}\x{1160}\x{3164}\x{FFA0}\x{2028}\x{2029}]/u';
 
+    /**
+     * PT-14 (Enmienda 21, E18-8): el centinela del laboratorio hablado para
+     * {@see plans()}: el catálogo VIGENTE, el que capturaría publicar ahora.
+     * Una llamada pasa siempre una lista (la publicada, o `[]` sin catálogo).
+     */
+    private const LIVE = null;
+
     /** @return array{http: int, body: array<string, mixed>} */
     public function handle(string $tool, string $rawBody): array
     {
@@ -185,7 +194,9 @@ final class VoiceTools
 
             $cuenta = [];
             $respuesta = match ($tool) {
-                VoiceAgentSpec::TOOL_CONSULTAR_PLANES => self::plans($cuenta),
+                // PT-14 (D7, D8): lo publicado del agente que SELLÓ la llamada. Sin parte, ilegible, sin catálogo o de
+                // otro agente: `[]`, ningún plan aprobado (fallo cerrado).
+                VoiceAgentSpec::TOOL_CONSULTAR_PLANES => self::plans($cuenta, VoicePublishedConfig::partForCall($llamada)?->commercialCatalog ?? []),
                 VoiceAgentSpec::TOOL_CONSULTAR_HORARIOS => self::hours(),
                 VoiceAgentSpec::TOOL_SOLICITAR_HUMANO => self::human($llamada),
                 VoiceAgentSpec::TOOL_NO_VOLVER_A_LLAMAR => self::optOut($llamada),
@@ -340,11 +351,14 @@ final class VoiceTools
         };
     }
 
-    /** @return array{http: int, body: array<string, mixed>} E18-8: la respuesta de una sesión del laboratorio, los mismos datos que en una llamada */
+    /**
+     * @return array{http: int, body: array<string, mixed>} E18-8 (Enmienda 21): la respuesta de una sesión del
+     *                                                      laboratorio, con el catálogo VIGENTE (lo que capturaría publicar ahora; D9)
+     */
     private static function labAnswer(string $tool): array
     {
         $cuenta = [];
-        $respuesta = $tool === VoiceAgentSpec::TOOL_CONSULTAR_PLANES ? self::plans($cuenta) : self::hours();
+        $respuesta = $tool === VoiceAgentSpec::TOOL_CONSULTAR_PLANES ? self::plans($cuenta, self::LIVE) : self::hours();
         Log::channel('voice')->info('voice.tool', ['tool' => $tool, 'verdict' => self::VERDICT_OK, 'lab' => true] + self::countsForLog($cuenta));
 
         return ['http' => 200, 'body' => ['ok' => true, 'verdict' => self::VERDICT_OK] + $respuesta];
@@ -382,24 +396,44 @@ final class VoiceTools
      * topes), solo si alguno no se entregó; y con `plansWithheld` (C-1 ii: los
      * planes cuyo NOMBRE la guarda vigila, que no se entregan), solo si hay.
      *
+     * PT-14 (D7, D13): en una llamada, LO PUBLICADO ∩ LO VIGENTE. Con el
+     * catálogo que se aprobó al publicar (`$published`, indexado por id): un
+     * plan que no estaba, o cuyo nombre ya no es el publicado, no se entrega
+     * (`plansUnpublished`), antes de la guarda del nombre; de sus beneficios,
+     * solo los actuales que estaban publicados (`benefitsUnpublished`, en
+     * {@see benefitsOf()}). El precio y las condiciones, los de ahora. Encima,
+     * todas las guardas de siempre. `[]` (sin catálogo) no entrega ninguno;
+     * {@see LIVE} (el laboratorio) lee el catálogo vigente, como antes.
+     *
      * @param  array<string, int>  $cuenta
+     * @param  list<array{id: int, name: string, benefits: list<string>}>|null  $published  lo publicado, o {@see LIVE}
      * @return array<string, mixed>
      */
-    private static function plans(array &$cuenta = []): array
+    private static function plans(array &$cuenta, ?array $published): array
     {
         $cuenta = [];
-        $planes = Plan::query()->sellable()->orderBy('sort_order')->orderBy('duration_days')->limit(20)
+        $planes = Plan::query()->commercialCatalog()
             ->get(['id', 'name', 'price', 'duration_days', 'benefit_only', 'benefits']);
         if ($planes->isEmpty()) {
             return ['planes' => [], 'nota' => 'No hay planes vendibles en el catálogo: no des precios y ofrece que una persona le escriba.'];
         }
 
+        $publicados = $published === self::LIVE ? null : array_column($published, null, 'id');
         $filas = [];
         $aptos = [];
         $retenidos = 0;
         $omitidos = 0;
         $planesRetenidos = 0;
+        $planesSinPublicar = 0;
+        $beneficiosSinPublicar = 0;
         foreach ($planes as $p) {
+            $publicado = $publicados === null ? null : ($publicados[(int) $p->id] ?? null);
+            if ($publicados !== null && ($publicado === null || $p->commercialText()['name'] !== $publicado['name'])) {
+                // PT-14: no estaba en lo aprobado, o su nombre ya no es el aprobado. Ni el nombre viejo ni el nuevo, ni su precio.
+                $planesSinPublicar++;
+
+                continue;
+            }
             // C-1 (ii) (revisión de security del 22-11-2026): el NOMBRE también lo teclea el CRM (255 caracteres) y Sofía
             // lo lee tal cual. Un nombre al que la guarda posterior daría algún código («Promo 2x1», un teléfono…) no se
             // entrega: el plan entero fuera, con su precio, y se cuenta (`plansWithheld`).
@@ -414,18 +448,19 @@ final class VoiceTools
                 'condiciones' => ((int) $p->duration_days).' días de vigencia'.($p->benefit_only ? ', se compra encima de una membresía' : ''),
                 'precio' => self::price((float) $p->price),
             ];
-            $delPlan = self::benefitsOf($p);
+            $delPlan = self::benefitsOf($p, $publicado['benefits'] ?? null);
             $aptos[$i] = $delPlan['deliverable'];
             $retenidos += $delPlan['withheld'];
             $omitidos += $delPlan['omitted'];
+            $beneficiosSinPublicar += $delPlan['unpublished'];
         }
         if ($filas === []) {
-            // Todos los vendibles con un nombre retenido: ningún plan que leer. Sin precios, y que una persona le escriba.
-            $cuenta = ['plansWithheld' => $planesRetenidos];
+            // Ningún vendible que leer (todos con un nombre retenido o sin publicar). Sin precios, y que una persona le escriba.
+            $cuenta = array_filter(['plansWithheld' => $planesRetenidos, 'plansUnpublished' => $planesSinPublicar]);
 
             return ['planes' => [], 'nota' => self::NO_DELIVERABLE_PLANS_NOTE];
         }
-        $conNota = array_filter($aptos) !== [] || $retenidos + $omitidos > 0;
+        $conNota = array_filter($aptos) !== [] || $retenidos + $omitidos + $beneficiosSinPublicar > 0;
         $cuerpo = ['planes' => $filas] + ($conNota ? ['nota' => self::BENEFITS_NOTE] : []);
 
         // El reparto por turnos dentro del tope, con el coste EXACTO de cada beneficio en `json_encode` (la clave la paga el primero).
@@ -453,6 +488,12 @@ final class VoiceTools
         }
         if ($planesRetenidos > 0) {
             $cuenta['plansWithheld'] = $planesRetenidos;
+        }
+        if ($planesSinPublicar > 0) {
+            $cuenta['plansUnpublished'] = $planesSinPublicar;
+        }
+        if ($beneficiosSinPublicar > 0) {
+            $cuenta['benefitsUnpublished'] = $beneficiosSinPublicar;
         }
 
         return $cuerpo;
@@ -482,13 +523,20 @@ final class VoiceTools
      * {@see MAX_BENEFITS_PER_PLAN} y se examinan
      * {@see MAX_BENEFITS_EXAMINED}; el resto, omitido.
      *
-     * @return array{deliverable: list<string>, withheld: int, omitted: int}
+     * PT-14 (D7): con la lista PUBLICADA de ese plan (`$published`), un
+     * beneficio de ahora que no está en ella, comparado exacto tal como lo da
+     * `benefitsArray()`, no se entrega y se cuenta (`unpublished`), antes de
+     * limpiarlo. null (el laboratorio) no filtra.
+     *
+     * @param  list<string>|null  $published
+     * @return array{deliverable: list<string>, withheld: int, omitted: int, unpublished: int}
      */
-    private static function benefitsOf(Plan $plan): array
+    private static function benefitsOf(Plan $plan, ?array $published): array
     {
         $aptos = [];
         $retenidos = 0;
         $omitidos = 0;
+        $sinPublicar = 0;
         try {
             $lista = $plan->benefitsArray();
         } catch (ErrorException $e) {
@@ -498,11 +546,16 @@ final class VoiceTools
             // retenido) y la herramienta sigue; la línea, sin texto, dice qué plan arreglar en el CRM.
             Log::channel('voice')->warning('voice.tool.benefits_unreadable', ['plan_id' => (int) $plan->id, 'error_class' => $e::class]);
 
-            return ['deliverable' => [], 'withheld' => 1, 'omitted' => 0];
+            return ['deliverable' => [], 'withheld' => 1, 'omitted' => 0, 'unpublished' => 0];
         }
         foreach (array_values($lista) as $n => $crudo) {
             if ($n >= self::MAX_BENEFITS_EXAMINED || count($aptos) >= self::MAX_BENEFITS_PER_PLAN) {
                 $omitidos++;
+
+                continue;
+            }
+            if ($published !== null && ! in_array((string) $crudo, $published, true)) {
+                $sinPublicar++;
 
                 continue;
             }
@@ -528,7 +581,7 @@ final class VoiceTools
             $aptos[] = $texto;
         }
 
-        return ['deliverable' => $aptos, 'withheld' => $retenidos, 'omitted' => $omitidos];
+        return ['deliverable' => $aptos, 'withheld' => $retenidos, 'omitted' => $omitidos, 'unpublished' => $sinPublicar];
     }
 
     /**
@@ -565,7 +618,8 @@ final class VoiceTools
     private static function countsForLog(array $cuenta): array
     {
         $out = [];
-        foreach (['benefitsWithheld' => 'benefits_withheld', 'benefitsOmitted' => 'benefits_omitted', 'plansWithheld' => 'plans_withheld'] as $clave => $enLaLinea) {
+        foreach (['benefitsWithheld' => 'benefits_withheld', 'benefitsOmitted' => 'benefits_omitted', 'plansWithheld' => 'plans_withheld',
+            'plansUnpublished' => 'plans_unpublished', 'benefitsUnpublished' => 'benefits_unpublished'] as $clave => $enLaLinea) {
             if (isset($cuenta[$clave])) {
                 $out[$enLaLinea] = $cuenta[$clave];
             }

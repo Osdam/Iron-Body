@@ -34,6 +34,12 @@ use Tests\TestCase;
  *    habría echado.
  *  - LOS TOPES: por plan, por texto y por bytes (los 8 192 de `result_value`
  *    que la guarda lee para tapar los precios), repartidos por turnos.
+ *
+ * PT-14 (cambio de requisito del propietario, diseño §7): una llamada dice el
+ * catálogo PUBLICADO de su agente ∩ el vigente. Estas pruebas miden la guarda y
+ * los topes sobre lo que se entrega, así que la llamada va sellada a una voz
+ * publicada con el catálogo que siembra cada prueba ({@see consultarPlanes()});
+ * lo publicado frente a lo vigente lo fija VoiceToolsPublishedCatalogTest.
  */
 class VoiceToolsBenefitsTest extends TestCase
 {
@@ -176,6 +182,8 @@ class VoiceToolsBenefitsTest extends TestCase
         for ($i = 1; $i <= 20; $i++) {
             $this->plan("Plan número {$i} con nombre largo de catálogo", 100000 + $i, $i, json_encode(array_map(static fn (int $n): string => $texto($i, $n), range(1, 6))));
         }
+        // PT-14: la voz, publicada con el catálogo sembrado (ver la cabecera).
+        $this->publishVoice(evidence: $this->voiceCatalogEvidence());
         $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
         $r = $this->rawPost('/api/voice/tools/consultar_planes', '{"conversation_id":"conv_h8fx_0031"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])
             ->assertOk()->assertJson(['ok' => true, 'verdict' => 'ok']);
@@ -241,7 +249,13 @@ class VoiceToolsBenefitsTest extends TestCase
 
         // Todos los vendibles con un nombre retenido.
         Plan::query()->where('name', 'Plan Valera')->update(['name' => 'Plan Valera gratis']);
-        $this->assertSame(['planes' => [], 'nota' => VoiceTools::NO_DELIVERABLE_PLANS_NOTE], $this->consultarPlanes());
+        // PT-14: renombrarlo después de publicar lo deja fuera hasta volver a publicar (VoiceToolsPublishedCatalogTest).
+        // Lo que se prueba aquí es la guarda del nombre: se vuelve a publicar con el catálogo de ahora (otro agente) y
+        // se pregunta desde una llamada sellada a esa publicación.
+        $this->publishVoice('agent_h8fx_canary_0004', evidence: $this->voiceCatalogEvidence());
+        $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0035', 'provider_call_sid' => 'CA000000000000000000000000a800005f',
+            'voice_publication_seq' => 2, 'provider_agent_id' => 'agent_h8fx_canary_0004', 'remote' => '+573000000035']);
+        $this->assertSame(['planes' => [], 'nota' => VoiceTools::NO_DELIVERABLE_PLANS_NOTE], $this->consultarPlanes('conv_h8fx_0035'));
         $this->assertSame(['plansWithheld' => 2], VoiceCallEvent::query()->where('kind', 'tool_call')->orderByDesc('id')->first()?->codes);
     }
 
@@ -319,13 +333,19 @@ class VoiceToolsBenefitsTest extends TestCase
         }
     }
 
-    /** @return array<string, mixed> el cuerpo de `consultar_planes` en una saliente contestada, sin `ok` ni `verdict` */
-    private function consultarPlanes(): array
+    /**
+     * El cuerpo de `consultar_planes` en una saliente contestada, sin `ok` ni `verdict`. La primera vez, PT-14: publica
+     * la voz con el catálogo que sembró la prueba (el agente sellado de la llamada) y crea la llamada.
+     *
+     * @return array<string, mixed>
+     */
+    private function consultarPlanes(string $conversacion = 'conv_h8fx_0031'): array
     {
         if (! VoiceCall::query()->where('provider_conversation_id', 'conv_h8fx_0031')->exists()) {
+            $this->publishVoice(evidence: $this->voiceCatalogEvidence());
             $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
         }
-        $r = $this->rawPost('/api/voice/tools/consultar_planes', '{"conversation_id":"conv_h8fx_0031"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])
+        $r = $this->rawPost('/api/voice/tools/consultar_planes', (string) json_encode(['conversation_id' => $conversacion]), ['Authorization' => 'Bearer '.self::TOOL_SECRET])
             ->assertOk()->assertJson(['ok' => true, 'verdict' => 'ok'])->json();
         unset($r['ok'], $r['verdict']);
 
