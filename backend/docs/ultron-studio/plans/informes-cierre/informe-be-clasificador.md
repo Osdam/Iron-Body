@@ -1,6 +1,6 @@
 # Informe backend · el clasificador de respuestas (AI9)
 
-Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migración), `db237c18` (clasificador e integración con W9), `70950447` (transporte). Hay dos pasos que tienen que hacer otros: **la migración** (§5) y **el enlace del transporte** (§6). Sin ellos, el clasificador existe pero no llama a nadie. **Ronda 2 (§12):** el lead aceptó la migración y autorizó el enlace, la prueba de esquema, `.env.example` y la enmienda del contrato; todo hecho. En producción la migración sigue pendiente del rol dueño.
+Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migración), `db237c18` (clasificador e integración con W9), `70950447` (transporte). Hay dos pasos que tienen que hacer otros: **la migración** (§5) y **el enlace del transporte** (§6). Sin ellos, el clasificador existe pero no llama a nadie. **Ronda 2 (§12):** el lead aceptó la migración y autorizó el enlace, la prueba de esquema, `.env.example` y la enmienda del contrato; todo hecho. En producción la migración sigue pendiente del rol dueño. **Ronda 3 (§13):** cerrados M1 a M5 y el aviso de C4 de security, con pruebas y mutaciones; sin migración ni tabla nueva.
 
 ## 1. Diseño corto
 
@@ -196,3 +196,193 @@ PostgreSQL 14
 - `ReplyClassifierStaticGuardsTest`: `OK (6 tests, 253 assertions)`.
 
 **Fuera de alcance.** `AppServiceProvider.php` ya no pasaba Pint en `HEAD` (los mismos cuatro fixers): no lo reformateé. Mis dos `use` van en su orden.
+
+## 13. Ronda 3 (tras security, 22-11-2026)
+
+Cierra M1 a M5 y el aviso de C4 de `informe-security-ai9.md`. C1, C2, C3 y C5 son decisiones del propietario o de operación: no se tocaron. Un commit por punto, más `02a34145`, que corrige el de M4 (ver 2). Ni migración ni tabla nueva. Las rutas son de `backend/`.
+
+| Punto | Commit |
+|---|---|
+| M3 · la guarda | `8b84a991` |
+| M4 · la clave | `329a3fd5` y `02a34145` |
+| M5 · los registros | `ac4adf34` |
+| M2 · el tope por pasada | `df24487e` |
+| C4 · el fallo sostenido | `d1a14539` |
+| M1 · el enmascarado | `9bec91cd` |
+| `.env.example` y contrato | `7974c43a` y `b778a9b2` |
+
+### 1. M3 · La guarda es una barrera
+
+Fichero: `tests/Feature/Outreach/Guards/ReplyClassifierStaticGuardsTest.php`.
+
+- **Implementadores (`:112`).** Los nombres se resuelven como los resuelve PHP, con `declarations()` (`:517`) e `imports()` (`:453`): el espacio del fichero, los `use` con alias y en grupo, el nombre completo y `namespace\`. Así se ven igual que el directo:
+  - un `implements` con alias;
+  - el de una clase anónima;
+  - el de una subinterfaz, y el de una clase que hereda de otra que lo implementa.
+
+  Además, el puerto no puede tener subinterfaces y nadie le hace `class_alias`.
+- **Otro camino de red (`:213`, prueba nueva).**
+  - Listas cerradas: importaciones (`:64`), funciones (`:76`), métodos (`:79`) y clases con `::` (`:82`).
+  - Prohibido: `new`, nombres completos fuera de los `use`, `eval`/`include`, la consola, concatenar, interpolar y heredoc.
+  - Los caminos de red de PHP (`:85`: `curl_*`, `file_get_contents`, `fopen`, `fsockopen`, `stream_socket_client`, sockets, procesos…) no se pueden llamar ni nombrar en un texto.
+  - Ningún literal lleva un trozo de URL (`:88`) salvo la URL oficial: una constante de un literal, usada una vez en `->post(self::URL, …)`.
+- **`:175`.** Además, `Http::withToken(` y `->post(` una vez cada uno.
+- **16 mutaciones.** Cada una da verde con la guarda de antes (copiada de `2d18313f`) y rojo con esta:
+  - alias, subinterfaz con implementador, subinterfaz sola, anónima con alias y `class_alias`;
+  - `new \GuzzleHttp\Client`, `curl_*`, `file_get_contents`, `fopen`, `fsockopen` y `stream_socket_client`;
+  - URL con `sprintf`, URL concatenada y un trozo de URL en un literal;
+  - un middleware que reescribe la petición y `curl_exec` llamado por su nombre.
+
+  Los caminos de red iban en métodos que nadie llama: ninguna prueba hizo red.
+- **A §9.1:** no hace falta `AI9_TRANSPORT` en `OutreachStaticGuardsTest`. Security lo dijo, y esta guarda ya cubre el hueco.
+
+### 2. M4 · Ninguna otra clave de OpenAI vale
+
+- **Qué hay en `config/`:**
+  - `OPENAI_API_KEY`, en `services.openai.api_key` y en `iron_crm.api_key`. El laboratorio guarda además su huella en `forbidden_key_sha256`, que no es una clave.
+  - `ULTRON_STUDIO_LAB_OPENAI_API_KEY`, en `ultron_studio.lab.openai.api_key`.
+- **No las comparo:**
+  - `MARKETING_HERMES_API_KEY`, que es la clave del servidor Hermes local (127.0.0.1) y no de OpenAI;
+  - las credenciales de OpenAI de n8n, que no están en la configuración de Laravel.
+- **El adaptador** (`app/Services/ReplyClassification/OpenAiReplyClassifierTransport.php`):
+  - `:67`: `FOREIGN_KEYS`, las dos rutas de `OPENAI_API_KEY`;
+  - `:70`: `FOREIGN_KEY_HASHES`;
+  - `:73`: `configured()` solo compara huellas con `hash_equals`. Devuelve un booleano y no puede registrar nada: `Log` no está en su lista cerrada de importaciones (M3).
+- **La clave del laboratorio, por su huella** (`config/outreach.php:155`). La primera versión (`329a3fd5`) leía `'ultron_studio.lab.openai.api_key'`, y `UltronEngineIsolationTest` la puso en rojo en el paquete de guardas, porque fuera del Studio nadie nombra su configuración. La guarda no se tocó. `02a34145` sigue la pauta del propio laboratorio con la compartida (`forbidden_key_sha256`): `classifier.foreign_key_sha256` se calcula desde el entorno y la caché de configuración lleva la huella, nunca la clave.
+- **Pruebas:**
+  - `tests/Feature/Outreach/AI9/OpenAiReplyClassifierTransportTest.php:125`: una negativa por ruta, también con espacios. Sin petición y sin devolver la clave; con otra distinta, vale.
+  - `:148`: la del laboratorio de punta a punta desde el entorno; la configuración solo lleva su huella.
+  - Guarda `:292`: el clasificador entero, encendido, no reserva ni llama con ninguna de las tres.
+  - Guarda `:320`: con un centinela en cada variable de clave de OpenAI, cada clave de `config/` queda cubierta por su ruta o por su huella, y la lista no lleva nada más.
+- **5 mutaciones, rojas:**
+  - solo la compartida;
+  - sin comparar las huellas;
+  - la configuración sin la huella del laboratorio;
+  - otra ruta que lee `OPENAI_API_KEY`;
+  - una variable nueva de clave.
+
+### 3. M5 · Al descartar, el motivo y nada más
+
+- **Código.** `app/Services/Outreach/Run/Classifier/ReplyClassifier.php:166`: `label` y `confidence` solo van en `outreach.classifier.recorded`, que es lo que ya guarda la fila del libro.
+- **Pruebas** (`tests/Feature/Outreach/AI9/ReplyClassifierEndToEndTest.php`):
+  - `:279`: cuatro descartes (bajo el umbral, sin freno, fuera del esquema y un fallo del proveedor), con la lista cerrada de claves `cost_micros`, `job`, `latency_ms`, `model`, `prompt_ref`, `reason` y `version`, y sin el texto;
+  - `:299`: el registrado sí lleva la etiqueta y la confianza.
+- **Mutación.** Volver a poner la etiqueta antes de descartar tumba los dos casos en los que ya se conoce.
+
+### 4. M2 · El tope por pasada
+
+- **Configuración:**
+  - `config/outreach.php:148`: `classifier.max_per_pass` (`COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS`), de 0 a 40, 10 por defecto.
+  - `OutreachConfig.php:200` es su lector; `:234` lo pone en el estado (`maxPerPass`); y `:235` hace que `effective` exija que sea mayor que 0.
+- **Por qué 10:**
+  - La pasada corre cada minuto, en el proceso del programador y antes del despacho, y cada llamada espera como mucho su tiempo máximo.
+  - Con 10 y 5 s, son ≤ 50 s aunque todas agoten el tiempo, y caben en el minuto.
+  - El máximo, 40 y 10 s, da ≤ 400 s, lejos de los 10 min de `withoutOverlapping`.
+- **Código:**
+  - `WhatsappTemplateOutcomes.php:104`: las plazas se reponen al empezar la pasada.
+  - `:222`: la plaza se toma al encolar, también lo que espera a un COMMIT.
+  - `:255`: `takeClassifierSlot()`, con el porqué.
+  - `:130`: el registro `outreach.classifier.pass_cap`, porque la pasada no deja fila.
+- **Decisión: lo que pasa del tope queda `replied` como hoy y NO se clasifica después.** Es lo único que no puede duplicar llamadas ni perder la idempotencia:
+  - La única puerta sigue siendo ganar la inserción de ese `replied` (una vez por respuesta, también con dos procesos), y la pasada siguiente lo ve duplicado.
+  - Dejarlo para después pediría una de dos cosas:
+    - retrasar el `replied`, con riesgo: el canal de voz por estrategia solo mira las bajas (`VoiceStrategyChannel.php:107`), no una respuesta pendiente como el de WhatsApp (`reply_pending`, `WhatsappTemplateChannel.php:161-162`), así que podría abrir un contacto que hoy no ocurre;
+    - una marca duradera de «falta clasificar», que es migración, y con ella un descarte o un fallo podrían volver a llamar.
+  - Se pierde el freno de la IA de esas respuestas (falla cerrado), y queda contado en `classifier.skipped.pass_cap`.
+- **Pruebas** (`ReplyClassifierEndToEndTest.php`):
+  - `:421`: cinco respuestas con tope 2. Dos llamadas, las de los trabajos más antiguos, y tres `pass_cap`; las cinco quedan derivadas; la pasada siguiente, con 40 plazas, no llama.
+  - `:452`: la plaza dentro de la transacción de quien llama; con tope 0, `effective` es false.
+- **2 mutaciones, rojas.**
+
+### 5. C4 · Un fallo sostenido se ve
+
+- **La racha** (`app/Services/Outreach/Run/Classifier/ReplyClassifierHealth.php`, nuevo):
+  - `:45`, `failed()`: cuenta las llamadas SEGUIDAS sin salida usable, con la última clase y su instante.
+  - `:52`, `answered()`: una salida que se lee la vuelve a 0 y conserva la clase.
+  - `:58`, `read()`.
+  - Solo códigos y cifras, y nunca lanza.
+  - Se engancha en `ReplyClassifier.php:152`, `:159` y `:164`; lo que no llama no la toca.
+- **Qué cuenta como fallo.** Todas las clases del transporte y la salida fuera del esquema, no solo `auth`, `quota` y `rate_limited`. Cualquier fallo sostenido pierde los frenos sin que se vea; el ejemplo de C4 es un modelo de razonamiento que da `incomplete` el 100 % de las veces. Como una salida usable la vuelve a 0, un corte suelto no se acumula. Si el lead quiere solo esas tres, es una línea en `failed()`.
+- **Dónde vive: en la caché de la aplicación** (`:36`, con caducidad de 7 días en `:39`). No hace falta tabla:
+  - la pasada de W9 no deja fila en `outreach_runs`;
+  - `outreach_budget_counters` no tiene dónde ponerla;
+  - una columna nueva sería migración.
+
+  La caché ya es la pauta para contadores de aviso (`OtpCostGuard`, `EmitElectronicInvoiceJob`, la deriva de la voz). Ningún guion `*.sh` del repositorio la vacía (busqué `cache:clear` y `optimize:clear`). Límites, ninguno de los cuales cambia lo que protege:
+  - si se vacía, la racha vuelve a 0;
+  - dos pasadas a la vez pueden perder una suma.
+- **El estado.** `OutreachReadModels.php:56`: `classifierSetup.providerFailures`.
+- **El monitor** (`OutreachMonitor.php`):
+  - `:77` y `:220`: `checkClassifier()`, cuando la racha llega a `monitor.classifier_failures` (`config/outreach.php:87`, `OutreachConfig.php:367`, 5 por defecto, como la muestra mínima) y el clasificador está `effective`.
+  - Abre un incidente con el `IncidentRecorder` de los frenos (`:229`): fuente `outreach`, tipo `outreach_classifier` (`:46`), una sola huella (suma ocurrencias mientras sigue) y gravedad media. El registrador la sube a alta a las 10 ocurrencias, unos 100 min.
+  - **Sin freno.** La evidencia lleva solo códigos y cifras: racha, clase, instante, umbral y modelo.
+- **Pruebas** (`tests/Feature/Outreach/AI9/ReplyClassifierHealthTest.php`):
+  - `:89`: `auth`, `rate_limited`, una clase desconocida, una salida fuera del esquema y `quota` dan racha 5, en el estado y sin datos de nadie;
+  - `:108`: una salida bajo el umbral la corta;
+  - `:117`: `budget_exhausted` no la toca;
+  - `:133`: el incidente sin freno, sin el texto ni la persona, que suma a los 10 min;
+  - `:163`: por debajo del umbral, apagado, sin cupo o en sombra, no avisa;
+  - `:190`: con la caché caída, la clasificación sigue igual.
+- **4 mutaciones, rojas.**
+
+### 6. M1 · El enmascarado
+
+- **Código** (`app/Services/Outreach/Run/Classifier/ReplyTextMask.php`):
+  - `:53`: el correo con espacios o con «arroba» (y «punto»), solo si acaba en un dominio de primer nivel de la lista de `:43`;
+  - `:56`: un dominio con ruta y sin esquema, con el primer nivel en minúsculas;
+  - `:58`: `@usuario`.
+- **Marcas.** Se reutilizan `[correo]` y `[enlace]`: las instrucciones fijas solo nombran tres, y una cuarta cambiaría la huella y la versión del prompt. La huella fijada sigue en verde.
+- **Pruebas** (`tests/Unit/Outreach/Run/ReplyClassifierPureTest.php`):
+  - `:79`: nueve casos nuevos;
+  - `:109`: once frases corrientes en español que no cambian (horas, precios, «80.000/mes», «una arroba de papa», «hola @ todos. bien», «punto.», «y/o», abreviaturas, una dirección);
+  - `:114`: un texto largo y malicioso, en menos de 1 s.
+- **2 mutaciones, rojas.**
+- **Siguen pasando sin ocultar** (limitación conocida): los nombres, las direcciones y las cifras escritas con letras.
+
+### 7. `.env.example` y contrato
+
+- **`.env.example`:**
+  - `:491`: `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS=`, vacía, que vale 10;
+  - `:499`: `COMMERCIAL_AUTOMATION_MONITOR_CLASSIFIER_FAILURES=5`, entre los opcionales del monitor;
+  - el comentario de la clave nombra las dos que no valen.
+
+  Evaluado `config/outreach.php` con esas variables: el clasificador queda apagado y en cero (sin cupo, sin techo, sin modelo, sin clave), con tope 10 y umbral 5.
+- **«Enmienda AI9»** (`docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md`): `:1652` (M1), `:1655` (M4), `:1664` (M3), `:1669` (M2), `:1677` (C4) y `:1699` (M5), además del estado, las variables y C1, C2, C3 y C5 como pendientes del propietario.
+
+### Para el CRM
+
+- `config.classifierSetup.maxPerPass`: entero de 0 a 40.
+- `config.classifierSetup.providerFailures`: {`consecutive` (entero ≥ 0), `lastClass` (una de `ReplyClassifierTransport::ERRORS`, `unknown` o null), `lastAt` (`Y-m-d\TH:i:s\Z` o null), `alertAfter` (entero de 1 a 1000)}.
+- `config.classifierSetup.effective` también es false con `maxPerPass` 0.
+- La salida JSON de `outreach:whatsapp-outcomes` puede llevar `classifier.skipped.pass_cap`, y la del monitor `checks.classifier` {`flagged`, `consecutive`, `lastClass`}.
+- IRON GUARD tiene un tipo nuevo de incidente: `outreach_classifier`, fuente `outreach`. No miré si el panel de incidentes del CRM necesita un texto para él.
+- Ningún fixture compartido (`tests/fixtures/outreach/**`) cambia.
+
+### Pruebas de la ronda 3 (línea final)
+
+**SQLite**
+- `tests/Feature/Outreach`: `Tests: 780, Assertions: 45817, Skipped: 167.` Las omitidas son de solo PostgreSQL.
+- `tests/Unit/Outreach`: `OK (1069 tests, 53517 assertions)`.
+- Paquete de guardas estáticas: `OK (149 tests, 186056 assertions)`. La primera pasada dio 1 fallo, el de `UltronEngineIsolationTest` de §13.2, corregido en `02a34145`.
+
+**PostgreSQL 14** (`ultron_studio_cierre_motores`)
+- `tests/Feature/Outreach/AI9`: `OK (77 tests, 595 assertions)`.
+- `tests/Feature/Outreach/Schema`: `Tests: 320, Assertions: 2092, Skipped: 1.` La omitida ya lo estaba.
+- `OutreachIsolationTest`: `OK (5 tests, 2614 assertions)`.
+- Además: `ReplyClassifierStaticGuardsTest` `OK (8 tests, 2813 assertions)`, `H9MonitorThresholdsTest` `OK (3 tests, 94 assertions)`, `OutreachApiTest` `OK (7 tests, 137 assertions)` y `tests/Feature/Outreach/W9` `Tests: 50, Assertions: 1728, Skipped: 1.`
+- Al terminar, la base de prueba tiene 0 resultados, 0 contadores y 0 incidentes.
+
+Las salidas de las mutaciones y los guiones que las aplican están fuera del repositorio: `mutaciones*.txt` y `mutar*.py`, en `/private/tmp/claude-501/-Users-alejodev-Documents-Dev-IRON-BODY--worktrees-ultron-h8-Iron-Body-backend-docs-ultron-studio/42afaca8-82e4-4787-b725-5fccecbccddc/scratchpad/m3/`. Cada guion deja el árbol como estaba, y `git status` lo comprobó tras cada tanda.
+
+### Lo que no verifiqué
+
+- **La red y el modelo real.** Sin llamadas a OpenAI, como se pidió: siguen abiertas las comprobaciones de C4 con el modelo real.
+- **Producción.** No miré el `CACHE_STORE` de producción. `.env.example` dice `database`; si fuera `array`, la racha no pasaría del proceso del programador al del monitor ni al de la web.
+- **La batería completa.** No la corrí.
+- **El CRM.** No miré cómo pinta el panel de incidentes del CRM el tipo nuevo.
+
+### Fuera de alcance (hallazgos)
+
+- **Una `exception` sostenida no cuenta en la racha.** Por ejemplo, PostgreSQL sin la migración, donde la reserva viola el CHECK. La racha mide el proveedor; la excepción queda como `outreach.classifier.failed` (aviso). Si se quiere contar, es una línea en el `catch` de `classifyReply()`.
+- **El orden `->once()->with()` del espía de `Log`.** Otras pruebas del repositorio lo usan (por ejemplo `H9AssistedConditionsTest.php:243`), y así se cuentan todas las llamadas al método, no solo las que encajan. Pasan porque hay una sola, pero es frágil; las mías van en `->with()->once()`. No las toqué.
+- **El despacho espera a la pasada de W9.** Con el tope al máximo (40 × 10 s), el despacho de ese minuto espera, porque van en el mismo proceso del programador; el freno se mira al despachar. Pasar a `runInBackground` es una decisión de devops.
