@@ -339,6 +339,10 @@ class OutreachConsentsApiTest extends TestCase
         $this->postJson(self::BASE.'consents', $cuerpo, $this->cuenta('Ana', self::ALL))->assertOk()->assertJsonPath('meta.replayed', true)
             ->assertJsonPath('data.uuid', $uno->json('data.uuid'));
         $this->postJson(self::BASE.'consents', ['evidence' => 'Otra evidencia distinta'] + $cuerpo, $this->cuenta('Ana', self::ALL))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        // M-2: con otro texto legal (otra huella u otra versión) es otra petición; la misma huella en mayúsculas es la misma.
+        $this->postJson(self::BASE.'consents', ['legalHash' => hash('sha256', 'Otro texto')] + $cuerpo, $this->cuenta('Ana', self::ALL))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        $this->postJson(self::BASE.'consents', ['legalVersion' => 'c9-whatsapp-comercial/2026-11-22.2'] + $cuerpo, $this->cuenta('Ana', self::ALL))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        $this->postJson(self::BASE.'consents', ['legalHash' => strtoupper($cuerpo['legalHash'])] + $cuerpo, $this->cuenta('Ana', self::ALL))->assertOk()->assertJsonPath('meta.replayed', true);
         $this->postJson(self::BASE.'consents', $cuerpo, $this->cuenta('Caro', self::ALL))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
         // Otra petición nueva de lo mismo, mientras la primera sigue pendiente: 409.
         $this->postJson(self::BASE.'consents', ['clientRequestId' => (string) Str::uuid()] + $cuerpo, $this->cuenta('Caro', self::ALL))->assertStatus(409)

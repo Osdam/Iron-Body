@@ -197,8 +197,10 @@ final class OutreachConsents
         $p = $this->person($access, $in['personType'], $in['personId']);
         $crid = strtolower($in['clientRequestId']);
 
+        // Lo mismo es también el MISMO texto legal (M-2): con otra versión u otra huella es otra petición (409).
         $mismo = static fn (object $f): bool => $f->kind === OutreachConsent::KIND_REQUESTED && (int) $f->recorded_by_admin_id === $access->id()
-            && $f->subject_key === $p['key'] && $f->purpose === $in['purpose'] && $f->source === $in['source'] && $f->evidence === $in['evidence'];
+            && $f->subject_key === $p['key'] && $f->purpose === $in['purpose'] && $f->source === $in['source'] && $f->evidence === $in['evidence']
+            && $f->legal_version === $in['legalVersion'] && trim((string) $f->legal_hash) === strtolower($in['legalHash']);
         $previa = self::byClientRequest($crid);
         if ($previa !== null) {
             return self::replay($previa, $mismo, $this->currentPhoneRef($p['subject']), $legal);
