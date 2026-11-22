@@ -32,7 +32,7 @@
 
 ## A. Las autorizaciones escritas
 
-Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa. La referencia (por ejemplo `AUT-VOZ-1`) es la que se cita **literalmente** en el commit y en `--autorizacion=`.
+Hacen falta **cuatro** (A0 a A3). Cada una se pide y se guarda **antes** del paso que la usa. La referencia (por ejemplo `AUT-VOZ-1`) es la que se cita **literalmente** en el commit y en `--autorizacion=`.
 
 *(E20) A0–A3 son las mismas cuatro, con las mismas referencias, alcance y condiciones. Solo cambia, en A0 y A3, la cláusula del ORIGEN, que decía «no es el de WhatsApp …5483» y que la decisión del propietario invierte; A0 nombra además la declaración de la identidad compartida, que el mando exige citar.*
 
