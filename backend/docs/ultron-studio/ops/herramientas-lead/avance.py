@@ -79,7 +79,7 @@ APARTADOS = {
         ("Voz por estrategia en canario real", 10, 0.00, "depende del apartado 7", "o"),
     ]),
     9: (0.60, [
-        ("Seguridad R3 de la bandeja (R3-1 a R3-3, F-1 a F-3, m-1 y m-2)", 60, 0.40, "implementado y revisado por seguridad", "c"),
+        ("Seguridad R3 de la bandeja (R3-1 a R3-3, F-1 a F-3, m-1 y m-2)", 60, 0.70, "desplegado y verificado en producción el 22-11 (lote 1, 45b53023)", "c"),
         ("CRM: los once motivos y el aviso del reclamo", 15, 0.40, "implementado", "c"),
         ("Decisión D-3 (frenos ajenos)", 5, 0.00, "decisión del propietario", "o"),
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
@@ -101,7 +101,7 @@ APARTADOS = {
     ]),
     12: (0.45, [
         ("Análisis de los tres asuntos, contrastado con producción", 20, 1.00, "0 pagos aprobados sin activar", "t"),
-        ("Aviso automático de pago aprobado sin membresía", 40, 0.06, "en curso (be-aviso-pagos)", "c"),
+        ("Aviso automático de pago aprobado sin membresía", 40, 0.30, "implementado y probado en los dos motores (apagado por su bandera); falta la revisión final", "c"),
         ("Corrección del cobro manual con IVA adicional", 25, 0.00, "decisión del propietario (núcleo de pagos)", "c"),
         ("Decisión sobre el activador de membresías", 15, 0.00, "recomendado no tocar; lo decide el propietario", "o"),
     ]),
@@ -112,7 +112,7 @@ APARTADOS = {
         ("Reimportar el número en ElevenLabs con clave restringida y rotar el token maestro", 20, 0.00, "", "o"),
     ]),
     14: (0.00, [
-        ("Batería completa sobre la integración final", 15, 0.00, "ensayo en curso sobre tres ramas", "t"),
+        ("Batería completa sobre la integración final", 15, 0.00, "ensayo sobre tres ramas: 19 205 pruebas, 0 regresiones; falta la integración final", "t"),
         ("Recorridos de extremo a extremo simulados sobre la integración", 25, 0.00, "", "t"),
         ("Pruebas canarias reales de los cinco recorridos", 45, 0.00, "", "o"),
         ("Matriz final de aceptación", 15, 0.00, "", "o"),
