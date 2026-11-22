@@ -110,9 +110,15 @@ class UltronCheckEndpointTest extends TestCase
 
     // ── Las notas de §7.2, LITERALES (copiadas a mano del plan) ─────────────
 
-    private const N_P1 = 'FALTA LA LISTA DE PLANES: la persona pidio los planes o los precios en general. Nombra al menos dos planes de commercial_turn_policy.plans_overview, en su orden, escribiendo solo sus marcadores PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves; el backend pone el nombre y el precio. Sin PLAN_NAME ni PLAN_PRICE.';
+    /*
+     * 22-11-2026 (corrección (1) del turno 2 de la tercera prueba real): con
+     * la lista y el tope (aquí, siempre 200), N-P1, N-P2 y N-L salen en su
+     * variante con el esqueleto y el presupuesto de la lista; con este
+     * catálogo, los marcadores ocupan 25 + 26 + 20 = 71 y quedan 89 de 160.
+     */
+    private const N_P1 = 'FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.';
 
-    private const N_P2 = 'MARCADORES MEZCLADOS: con la lista de planes usa solo PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves, cada uno una sola vez, sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION.';
+    private const N_P2 = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160.';
 
     private const N_P3 = 'NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio.';
 
@@ -124,7 +130,7 @@ class UltronCheckEndpointTest extends TestCase
 
     private const N_R_TE = 'REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia.';
 
-    private const N_L = 'DEMASIADO LARGO: el borrador mide %d caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta a lo que pregunto la persona, sin relleno, y como mucho una pregunta corta al final. Cada marcador cuenta como el texto que lo sustituye.';
+    private const N_L = 'DEMASIADO LARGO: mide %d caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.';
 
     private const N_B = 'BENEFICIO DE OTRO PLAN: el borrador atribuye a PLAN_1 un beneficio que en active_plans es de otro plan ("Entrenador personal dedicado"). A cada plan, solo los benefits de su plan_id.';
 

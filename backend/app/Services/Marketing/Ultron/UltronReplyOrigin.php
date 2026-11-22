@@ -16,7 +16,9 @@ namespace App\Services\Marketing\Ultron;
  *  1. con la clave `fallback_mode` → RESPALDO del servidor: el revisor rechazó
  *     todos los intentos (`critic.verdict = fail`), la rendición (`recovery`:
  *     el commit rechazó el turno o el revisor no contestó) o, sin ninguna de
- *     las dos, sin causa conocida;
+ *     las dos, sin causa conocida; con el rechazo del revisor, además, si el
+ *     servidor habría aceptado ese borrador (`server_verdict`, con sus códigos;
+ *     desde el 22-11, `metadata.discarded_draft_check`; antes, sin dato);
  *  2. si no, con `policy_violations` no vacía Y `policy_discarded_draft` →
  *     RESPALDO de la política del commit (con los códigos de las violaciones);
  *  3. si no, el MODELO; recortado si la longitud (o, desde H4-9, el registro)
@@ -85,6 +87,23 @@ final class UltronReplyOrigin
 
     public const REASONS = [self::REASON_CRITIC, self::REASON_RECOVERY, self::REASON_POLICY, self::REASON_LAST_RESORT, self::REASON_UNKNOWN];
 
+    /*
+     * Con `critic_rejected` (corrección (1b) del turno 2 de la tercera prueba
+     * real, 22-11-2026): ¿lo habría dejado salir el servidor? Desde el 22-11
+     * la fila lo dice en `metadata.discarded_draft_check` (lo que la
+     * comprobación `ai/check` le encuentra al borrador que rechazó el
+     * revisor): sin defectos, lo rechazó SOLO el revisor; con alguno, el
+     * revisor y el servidor tampoco lo habría aceptado. Las filas de antes, o
+     * una forma que no es la suya, sin dato: no se adivina.
+     */
+    public const SERVER_WOULD_ACCEPT = 'server_would_accept';
+
+    public const SERVER_WOULD_REJECT = 'server_would_reject';
+
+    public const SERVER_UNKNOWN = 'unknown';
+
+    public const SERVER_VERDICTS = [self::SERVER_WOULD_ACCEPT, self::SERVER_WOULD_REJECT, self::SERVER_UNKNOWN];
+
     /** Quién pidió una reescritura. */
     public const BY_SERVER = 'server';
 
@@ -130,7 +149,7 @@ final class UltronReplyOrigin
     /**
      * @param  array<string,mixed>  $metadata  `marketing_ai_actions.metadata`
      * @param  string  $actionType  `marketing_ai_actions.action_type`
-     * @return array{origin:string,attempt:?string,drafts:?int,critics:?int,checks:?int,rewrites:list<array{by:string,codes:list<string>,issues:list<string>}>,fallback_reason:?string,policy_codes:list<string>,recovery_reason:?string,trimmed:bool,server_text:?string,traced:bool,tokens:?array{input:?int,output:?int}}
+     * @return array{origin:string,attempt:?string,drafts:?int,critics:?int,checks:?int,rewrites:list<array{by:string,codes:list<string>,issues:list<string>}>,fallback_reason:?string,policy_codes:list<string>,recovery_reason:?string,server_verdict:?string,server_codes:list<string>,trimmed:bool,server_text:?string,traced:bool,tokens:?array{input:?int,output:?int}}
      */
     public static function classify(array $metadata, string $actionType = 'reply'): array
     {
@@ -156,6 +175,7 @@ final class UltronReplyOrigin
             $violaciones !== [] && array_key_exists('policy_discarded_draft', $metadata) => [self::FALLBACK, self::REASON_POLICY],
             default => [self::MODEL, null],
         };
+        $comprobacion = $reason === self::REASON_CRITIC ? self::comprobacionDelDescartado($metadata['discarded_draft_check'] ?? null) : null;
 
         return [
             'origin' => $origin,
@@ -171,6 +191,12 @@ final class UltronReplyOrigin
             'fallback_reason' => $reason,
             'policy_codes' => $reason === self::REASON_POLICY ? self::codigos($violaciones) : [],
             'recovery_reason' => $reason === self::REASON_RECOVERY ? self::conForma($metadata['recovery']['reason'] ?? null, self::ETIQUETA) : null,
+            'server_verdict' => $reason !== self::REASON_CRITIC ? null : match (true) {
+                $comprobacion === null => self::SERVER_UNKNOWN,
+                $comprobacion['pass'] => self::SERVER_WOULD_ACCEPT,
+                default => self::SERVER_WOULD_REJECT,
+            },
+            'server_codes' => $comprobacion['codes'] ?? [],
             'trimmed' => $origin === self::MODEL && (($metadata['length']['action'] ?? null) === 'trimmed' || ($metadata['register']['action'] ?? null) === 'trimmed'),
             'server_text' => $origin === self::MODEL ? self::textoDelServidor($metadata) : null,
             'traced' => $traza !== null,
@@ -255,6 +281,37 @@ final class UltronReplyOrigin
         $by = $drafts <= UltronDraftCheck::LEGACY_MAX_DRAFTS ? self::BY_CRITIC : self::BY_UNKNOWN;
 
         return array_fill(0, $drafts - 1, ['by' => $by, 'codes' => [], 'issues' => []]);
+    }
+
+    /**
+     * `metadata.discarded_draft_check` (corrección (1b)): `pass` y los códigos
+     * que la comprobación le encontró al borrador que rechazó el revisor, solo
+     * los del vocabulario cerrado (`código`, o `plans_overview/detalle`), sin
+     * repetir. Null si no viene o no tiene su forma, o si dice que pasa y trae
+     * códigos: sin dato, no se adivina.
+     *
+     * @return array{pass:bool,codes:list<string>}|null
+     */
+    private static function comprobacionDelDescartado(mixed $valor): ?array
+    {
+        if (! is_array($valor) || ! is_bool($valor['pass'] ?? null) || ! is_array($valor['codes'] ?? null) || ! array_is_list($valor['codes'])) {
+            return null;
+        }
+        $codigos = [];
+        foreach ($valor['codes'] as $c) {
+            [$codigo, $detalle] = is_string($c) ? array_pad(explode('/', $c, 2), 2, null) : [null, null];
+            $delVocabulario = $codigo === UltronRegenerationNotes::PLANS_OVERVIEW
+                ? in_array($detalle, UltronRegenerationNotes::DETAILS, true)
+                : $detalle === null && in_array($codigo, UltronRegenerationNotes::CODES, true);
+            if ($delVocabulario && ! in_array($c, $codigos, true)) {
+                $codigos[] = $c;
+            }
+        }
+        if ($valor['pass'] && $valor['codes'] !== []) {
+            return null;
+        }
+
+        return ['pass' => $valor['pass'], 'codes' => $codigos];
     }
 
     /** @return list<string> */

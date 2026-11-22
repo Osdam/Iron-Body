@@ -279,8 +279,10 @@ class UltronDecideService
      * con un solo marcador de precio (se resuelve contra un plan). Aquí el
      * servidor ELIGE los planes, con la misma selección que la lista fija
      * ({@see UltronPlansOverview::select()}), y se los da al modelo con sus
-     * marcadores `{{PLAN_1}}`…`{{PLAN_3}}`, el id, el nombre y la duración,
-     * SIN PRECIO: el nombre ya viaja en `active_plans`, no hay exposición
+     * marcadores `{{PLAN_1}}`…`{{PLAN_3}}`, el id, el nombre, la duración y
+     * los beneficios (22-11-2026, corrección (3): junto a su marcador, para
+     * que el modelo no tenga que pasar de la posición al id), SIN PRECIO: el
+     * nombre y los beneficios ya viajan en `active_plans`, no hay exposición
      * nueva. Los id, en orden, van firmados en el token (`po`): el commit
      * sustituye cada marcador por el plan de esa posición, así que el modelo
      * solo puede nombrar planes que eligió el servidor.
