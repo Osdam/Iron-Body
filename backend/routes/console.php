@@ -228,6 +228,21 @@ if ((bool) config('wompi.recurring.enabled', false)) {
         ->onOneServer();
 }
 
+// ── Pagos: aviso de «cobrado sin servicio» (aprobados sin su membresía) ────────
+// SOLO AVISO: lee, abre el incidente crítico de IRON GUARD y deja un Log::error;
+// no activa nada ni escribe en pagos ni en socios. Bandera PROPIA, independiente
+// de IRON_GUARD_ENABLED: solo se agenda con PAYMENTS_UNACTIVATED_CHECK_ENABLED=true
+// (y la orden la revalida en cada pasada). Cada 30 minutos y no cada hora: la
+// ventana de agrupación de IncidentRecorder es de 60 minutos por defecto, y una
+// pasada cada 60 caería justo en el borde (unas veces sumaría al incidente y
+// otras lo «reabriría» desde cero). Diez minutos de cerrojo, no las 24 h por defecto.
+if ((bool) config('observability.approved_unactivated.enabled', false)) {
+    Schedule::command('payments:approved-unactivated-check')
+        ->everyThirtyMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+}
+
 // ── Factus: reconciliación de comprobantes + reintento de errores técnicos ────
 // INERTE por defecto: solo se agenda si FACTUS_ENABLED=true (y la reconciliación
 // activa). Los jobs además revalidan el flag en runtime, así que un cambio de
