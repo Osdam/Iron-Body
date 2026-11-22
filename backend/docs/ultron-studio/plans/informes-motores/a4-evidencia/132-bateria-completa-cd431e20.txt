@@ -1,0 +1,124 @@
+BATERÍA COMPLETA DEL BACKEND · árbol limpio (_worktrees/ultron-suite) · commit cd431e20 (regenerar antes de sustituir: todo el código, antes de la ronda de correcciones) · 22-11-2026 UTC
+
+........................................................... 18762 / 18943 ( 99%)
+........................................................... 18821 / 18943 ( 99%)
+........................................................... 18880 / 18943 ( 99%)
+........................................................... 18939 / 18943 ( 99%)
+....                                                        18943 / 18943 (100%)
+
+Time: 21:06.481, Memory: 1.97 GB
+
+There were 3 failures:
+
+1) Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+Expected response status code [201] but received 422.
+Failed asserting that 422 is identical to 201.
+
+The following errors occurred during the last request:
+
+{
+    "message": "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason.",
+    "errors": {
+        "amount": [
+            "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason."
+        ]
+    }
+}
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:26
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/tests/Feature/Billing/PricingV2SalesAndPaymentsTest.php:212
+
+2) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+La puerta de diff del H9 no está vacía frente a origin/main (ULTRON Legacy, n8n, OTP o motor comercial tocados):
+backend/app/Http/Controllers/Api/Internal/UltronController.php
+backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
+backend/app/Services/Marketing/Ultron/CriticContract.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php
+backend/app/Services/Marketing/Ultron/StrategyContract.php
+backend/app/Services/Marketing/Ultron/UltronBenefitAttribution.php
+backend/app/Services/Marketing/Ultron/UltronCommitService.php
+backend/app/Services/Marketing/Ultron/UltronDecideService.php
+backend/app/Services/Marketing/Ultron/UltronDecideToken.php
+backend/app/Services/Marketing/Ultron/UltronDraftCheck.php
+backend/app/Services/Marketing/Ultron/UltronDraftDefects.php
+backend/app/Services/Marketing/Ultron/UltronDraftPlaceholders.php
+backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
+backend/app/Services/Marketing/Ultron/UltronPlansOverview.php
+backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php
+backend/app/Services/Marketing/Ultron/UltronRegenerationTrace.php
+backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
+backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php
+backend/app/Services/Marketing/Ultron/UltronTurnPolicyReader.php
+backend/routes/marketing.php
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-''
++'backend/app/Http/Controllers/Api/Internal/UltronController.php
++backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
++backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
++backend/app/Services/Marketing/Ultron/CriticContract.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php
++backend/app/Services/Marketing/Ultron/StrategyContract.php
++backend/app/Services/Marketing/Ultron/UltronBenefitAttribution.php
++backend/app/Services/Marketing/Ultron/UltronCommitService.php
++backend/app/Services/Marketing/Ultron/UltronDecideService.php
++backend/app/Services/Marketing/Ultron/UltronDecideToken.php
++backend/app/Services/Marketing/Ultron/UltronDraftCheck.php
++backend/app/Services/Marketing/Ultron/UltronDraftDefects.php
++backend/app/Services/Marketing/Ultron/UltronDraftPlaceholders.php
++backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
++backend/app/Services/Marketing/Ultron/UltronPlansOverview.php
++backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php
++backend/app/Services/Marketing/Ultron/UltronRegenerationTrace.php
++backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
++backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
++backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php
++backend/app/Services/Marketing/Ultron/UltronTurnPolicyReader.php
++backend/routes/marketing.php'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/tests/Feature/UltronStudio/OutreachIsolationTest.php:374
+
+3) Tests\Feature\UltronStudio\UltronStudioIntegrationsProbeTest::test_el_enfriamiento_reutiliza_la_ultima_sin_red_ni_evento_y_el_reintento_devuelve_la_suya
+Expected response status code [200] but received 201.
+Failed asserting that 201 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsProbeTest.php:129
+
+FAILURES!
+Tests: 18943, Assertions: 490915, Failures: 3, PHPUnit Deprecations: 8, Skipped: 668.
+
+── rastro ───────────────────────────────────────────────
+  xml: storage/test-results/junit-20261122T010733Z.xml
+  log: storage/test-results/suite-20261122T010733Z.txt
+  fallos (3):
+    · Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+    · Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+    · Tests\Feature\UltronStudio\UltronStudioIntegrationsProbeTest::test_el_enfriamiento_reutiliza_la_ultima_sin_red_ni_evento_y_el_reintento_devuelve_la_suya
+
+  línea base: 1 tolerados
+  REGRESIONES: 2
+    + Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+    + Tests\Feature\UltronStudio\UltronStudioIntegrationsProbeTest::test_el_enfriamiento_reutiliza_la_ultima_sin_red_ni_evento_y_el_reintento_devuelve_la_suya
+código de salida: 1
+fin 20:28:42
+
+LECTURA DEL LEAD (21-11-2026, 20:35 en Bogotá)
+- 18 943 pruebas, 490 915 aserciones, 3 rojas.
+- Dos son las esperadas: la de la línea base (PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote) y la puerta de diff del H9, que lista los ficheros de producto de la rama hasta que suba a origin/main.
+- La tercera NO es de este cambio: UltronStudioIntegrationsProbeTest::test_el_enfriamiento_reutiliza_la_ultima… esperaba un 200 (reutiliza la última sonda dentro del enfriamiento) y recibió un 201. Depende del reloj. Repetida tres veces aislada en el mismo árbol y commit: OK (8 pruebas, 107 aserciones) las tres. El diff de la rama no toca `app/Services/UltronStudio` ni esa prueba. Corrió con el Mac cargado (el revisor ejecutaba PHPUnit a la vez en su copia): falso rojo por carga, como otras veces.
+- La batería se repite sobre el commit final, tras la ronda de correcciones, sin ningún otro PHPUnit en marcha.
