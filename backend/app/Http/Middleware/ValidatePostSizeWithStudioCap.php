@@ -45,15 +45,19 @@ use Illuminate\Http\Request;
  * una prueba), también sin sesión: el tamaño se mira antes que la credencial.
  * El tope de la ruta se queda como segunda capa.
  *
- * Fuera de `/api/admin/ultron-studio` no cambia nada: es `ValidatePostSize`.
+ * Cubre también `/api/admin/commercial-automation` (las autorizaciones de
+ * contacto de C9; M-3 de su revisión de API): su tope de ruta es más estricto
+ * (16 KB) y sigue siendo la segunda capa; este corta antes de los globales lo
+ * que pase de 64 KB. Fuera de esos dos prefijos no cambia nada: es
+ * `ValidatePostSize`.
  */
 class ValidatePostSizeWithStudioCap extends ValidatePostSize
 {
     /** El tope del Studio, en bytes: el mismo que el de su grupo de rutas (una prueba los ata). */
     public const STUDIO_MAX_BYTES = 65536;
 
-    /** Las rutas del Studio: todo lo que cuelga de su prefijo, exista la ruta o no. */
-    public const STUDIO_PATHS = ['api/admin/ultron-studio', 'api/admin/ultron-studio/*'];
+    /** Las rutas del Studio (y las de la automatización comercial): todo lo que cuelga de su prefijo, exista la ruta o no. */
+    public const STUDIO_PATHS = ['api/admin/ultron-studio', 'api/admin/ultron-studio/*', 'api/admin/commercial-automation', 'api/admin/commercial-automation/*'];
 
     /**
      * @param  Request  $request

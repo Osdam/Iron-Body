@@ -4,6 +4,7 @@ namespace Tests\Feature\Outreach\Run;
 
 use App\Http\Controllers\Crm\CommercialAutomation\OutreachConsentController;
 use App\Http\Middleware\LimitRequestBodySize;
+use App\Http\Middleware\ValidatePostSizeWithStudioCap;
 use App\Models\Admin;
 use App\Models\AdminRole;
 use App\Models\MemberTrainerAssignment;
@@ -19,6 +20,7 @@ use App\Support\Access\PermissionCatalog;
 use App\Support\Access\RolePermissionPolicy;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -125,6 +127,44 @@ class OutreachConsentsApiTest extends TestCase
             $this->assertContains(str_starts_with($clave, 'GET') ? 'throttle:ultron-studio-read' : 'throttle:ultron-studio-write', $mw, $clave);
         }
         $this->assertSame('uuid', array_key_first($registradas['POST api/admin/commercial-automation/consents/{uuid}/confirm']->wheres));
+    }
+
+    /**
+     * M-3 · El tope temprano de cuerpo (B7-d, `ValidatePostSizeWithStudioCap`)
+     * cubre también este prefijo: un cuerpo enorme SIN SESIÓN se corta con 413
+     * antes de que `TrimStrings` recorra un solo texto (antes: 401 después de
+     * recorrerlo entero). El tope de la ruta (16 KB) sigue siendo la segunda capa.
+     */
+    public function test_un_cuerpo_enorme_sin_sesion_se_corta_antes_de_recorrerlo(): void
+    {
+        $recorte = new class extends TrimStrings
+        {
+            public int $textos = 0;
+
+            protected function transform($key, $value)
+            {
+                $this->textos++;
+
+                return parent::transform($key, $value);
+            }
+        };
+        $this->app->instance(TrimStrings::class, $recorte);
+        $cuerpo = '{"evidence":['.implode(',', array_fill(0, 40_000, '" x "')).']}';
+        $this->assertGreaterThan(200_000, strlen($cuerpo));
+        $server = $this->transformHeadersToServerVars(['Accept' => 'application/json', 'Content-Type' => 'application/json']) + ['CONTENT_LENGTH' => (string) strlen($cuerpo)];
+
+        foreach (['consents/revoke', 'consents', 'consents/'.Str::uuid().'/confirm'] as $ruta) {
+            $this->call('POST', self::BASE.$ruta, [], [], [], $server, $cuerpo)->assertStatus(413)
+                ->assertExactJson(['ok' => false, 'code' => 'payload_too_large', 'message' => 'La petición supera el tamaño máximo (64 KB).']);
+        }
+        $this->assertSame(0, $recorte->textos, 'TrimStrings recorrió el cuerpo antes del tope');
+        // Entre 16 y 64 KB lo corta el tope de la ruta (la segunda capa, detrás de la sesión), con su tamaño.
+        $medio = '{"evidence":"'.str_repeat('x', 20_000).'"}';
+        $conSesion = $this->transformHeadersToServerVars($this->cuenta('Ana', self::ALL) + ['Accept' => 'application/json', 'Content-Type' => 'application/json']);
+        $this->call('POST', self::BASE.'consents/revoke', [], [], [], ['CONTENT_LENGTH' => (string) strlen($medio)] + $conSesion, $medio)->assertStatus(413)
+            ->assertJsonPath('message', 'La petición supera el tamaño máximo (16 KB).');
+        $this->assertSame(0, DB::table('outreach_consents')->count());
+        $this->assertTrue(Str::is(ValidatePostSizeWithStudioCap::STUDIO_PATHS, 'api/admin/commercial-automation/consents/revoke'));
     }
 
     public function test_las_dos_llaves_nuevas_estan_en_el_catalogo_solo_para_super_admin_y_fuera_del_token_compartido(): void
