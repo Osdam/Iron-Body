@@ -571,6 +571,11 @@ final class AssistedQueue
      * desactivado, nunca concedido o sin leer), `null`, porque decir «lo pidió» sin saberlo sería falso. Por WhatsApp NO se extiende:
      * `consent.whatsapp.service` depende de la ventana de 24 h y retendría trabajos de servicio válidos; la baja por
      * WhatsApp ya llega como `lead.consent_denied`.
+     *
+     * C-1 de `informe-apisec-consent.md` (Enmienda C9): la RETIRADA del libro de autorizaciones para la finalidad del
+     * trabajo (`c9.whatsapp.<finalidad>.revoked`, la suya o la de otra ficha con uno de sus números) es una petición
+     * de la persona: por WhatsApp retiene con `opted_out`, como la escalera (`denied`). Sin el libro, o vacío, la clave
+     * es `false` y nada cambia.
      */
     private static function optedOut(?SubjectFacts $s, string $purpose, string $medium): ?bool
     {
@@ -587,6 +592,7 @@ final class AssistedQueue
                 $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => $s->policy('voice.consent_revoked') === true ? true : null,
                 default => false,
             },
+            $medium === OutreachCatalog::MEDIUM_WHATSAPP && $s->policy("c9.whatsapp.{$purpose}.revoked") === true,
         ];
         if ($purpose === OutreachCatalog::PURPOSE_COMMERCIAL) {
             $senales[] = $entrada['optOut']['commercial'];

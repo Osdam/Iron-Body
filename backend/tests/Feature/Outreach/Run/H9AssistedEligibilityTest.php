@@ -8,8 +8,11 @@ use App\Models\Member;
 use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\StrategyContent;
 use App\Services\Outreach\Facts\CatalogDomains;
+use App\Services\Outreach\Facts\OutreachConsentFacts;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutcomeRecorder;
+use App\Services\Outreach\Run\OutreachAccess;
+use App\Services\Outreach\Run\OutreachConsents;
 use App\Services\Outreach\Run\OutreachDispatcher;
 use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
@@ -25,6 +28,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Outreach\Run\Support\RunWorld;
@@ -442,6 +446,123 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame('opted_out', $motivo());
 
         $this->assertSame(['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+    }
+
+    // ── C-1 (revisión de API del consentimiento) · La retirada del libro de autorizaciones ──
+
+    /** La retirada por el servicio REAL del libro (`POST consents/revoke`: sin segunda cuenta ni texto legal). */
+    private function revokeInLedger(int $memberId, string $purpose = 'commercial'): void
+    {
+        $r = (new OutreachConsents)->revoke(new OutreachAccess($this->threePeople()['caro']), [
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $memberId, 'purpose' => $purpose,
+            'source' => 'member_request', 'evidence' => 'Pidió en recepción que no le escriban más',
+        ]);
+        $this->assertSame(201, $r['http']);
+    }
+
+    /**
+     * C-1: la persona retira su autorización de WhatsApp (el libro de C9) DESPUÉS de que su asistido salió. La escalera
+     * la niega (`denied`) en la pasada siguiente; la bandeja, en el acto: lo libre no se ofrece ni se reclama y el
+     * reclamante pierde el enlace y el guion (`opted_out`). Antes, el trabajo seguía en la bandeja hasta su plazo.
+     */
+    public function test_c1_una_retirada_del_libro_despues_de_salir_retiene_lo_libre_y_lo_reclamado(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b] = $this->startedFor(['3001234567', '3001234568']);
+        $mio = (string) $a['job']->uuid;
+        $libre = (string) $b['job']->uuid;
+        $cola = new AssistedQueue;
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $a['member']['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'antes: el libre se ofrece');
+
+        foreach ([$a, $b] as $p) {
+            $this->revokeInLedger($p['member']['member']);
+        }
+        $this->assertSame(2, DB::table('outreach_consents')->where('kind', 'revoked')->count());
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'opted_out', '300123456');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
+    }
+
+    /** C-1: cada finalidad por su fila. Retirar la de SERVICIO no retiene un asistido comercial. */
+    public function test_c1_la_retirada_de_otra_finalidad_no_retiene(): void
+    {
+        $gente = $this->threePeople();
+        [$p] = $this->startedFor(['3001234567']);
+        $this->revokeInLedger($p['member']['member'], 'service');
+
+        $r = (new AssistedQueue)->claim($gente['beto'], (string) $p['job']->uuid, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $p['member']['member']], true, null], self::contact($r['job']));
+    }
+
+    /**
+     * C-1 y R3-2: la retirada llega justo DESPUÉS de la última lectura de la comprobación y ANTES del `UPDATE`. La
+     * relectura la ve: la reclamación queda escrita, pero el 201 no lleva ni el enlace ni el guion.
+     */
+    public function test_c1_la_retirada_que_llega_entre_el_reclamo_y_la_relectura_no_entrega_el_contacto(): void
+    {
+        $gente = $this->threePeople();
+        [$p] = $this->startedFor(['3001234567']);
+        $uuid = (string) $p['job']->uuid;
+        $sql = [];
+        $inyectada = null;
+        DB::listen(function ($q) use (&$sql, &$inyectada, $p): void {
+            $sql[] = strtolower($q->sql);
+            if ($inyectada === null && str_contains(strtolower($q->sql), '"detail_code"')) {
+                $inyectada = count($sql) - 1;
+                $this->revokeInLedger($p['member']['member']);
+            }
+        });
+
+        $r = (new AssistedQueue)->claim($gente['beto'], $uuid, (string) Str::uuid());
+        $update = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with(ltrim($q), 'update "outreach_jobs"')));
+        $this->assertNotNull($inyectada, 'la retirada llegó a mitad');
+        $this->assertLessThan($update, $inyectada, 'después de comprobar y ANTES del UPDATE');
+        $this->assertSame([false, [null, false, 'opted_out']], [$r['replayed'], self::contact($r['job'])], 'el 201 ya no lleva el enlace ni el guion');
+        $this->assertSame((int) $gente['beto']->id, (int) DB::table('outreach_jobs')->where('uuid', $uuid)->value('assisted_claimed_by_admin_id'), 'queda reclamado: no se deshace nada');
+        $this->assertSame([null, false, 'opted_out'], self::contact((new AssistedQueue)->queue($gente['beto'], 'mine')[0]));
+        $this->assertStringNotContainsString('3001234567', json_encode($r));
+    }
+
+    /**
+     * C-1, lo que está en producción: con el libro VACÍO y sin la TABLA, la bandeja da lo mismo que antes (se ofrece lo
+     * libre, el reclamante recibe el enlace y el guion, y lo que ya retenía sigue reteniendo con su motivo). Esta prueba
+     * pasa igual con el `AssistedQueue` de antes de C-1: lo comprobé al cerrarlo.
+     */
+    public function test_c1_con_el_libro_vacio_o_sin_la_tabla_la_bandeja_es_la_de_antes(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b, $c] = $this->startedFor(['3001234567', '3001234568', '3001234569']);
+        MarketingLead::query()->findOrFail($c['member']['lead'])->forceFill(['do_not_contact' => true])->save();
+        $this->claimedBy((int) $a['job']->id, $gente['ana']);
+        $vistas = function () use ($gente, $a): array {
+            $cola = new AssistedQueue;
+            $mine = $cola->queue($gente['ana'], 'mine', 50);
+
+            return [
+                'unclaimed' => array_column($cola->queue($gente['beto'], 'unclaimed', 50), 'uuid'),
+                'withheld' => $cola->page($gente['beto'], 'unclaimed', 50)['withheld'],
+                'mine' => self::contact(self::row($mine, (string) $a['job']->uuid)),
+                'all' => array_map(static fn (array $f): array => [$f['uuid'], $f['person'], $f['script'] !== null], $cola->queue($gente['ana'], 'all', 50)),
+            ];
+        };
+        $esperado = [
+            'unclaimed' => [(string) $b['job']->uuid],
+            'withheld' => 1,
+            'mine' => [['kind' => 'member', 'id' => $a['member']['member']], true, null],
+        ];
+
+        $this->assertSame(0, DB::table('outreach_consents')->count(), 'el libro, vacío');
+        $conLibro = $vistas();
+        $this->assertSame($esperado, array_intersect_key($conLibro, $esperado), 'con el libro vacío');
+        Schema::drop('outreach_consents');
+        OutreachConsentFacts::forgetLedger();
+        try {
+            $this->assertSame($conLibro, $vistas(), 'sin la tabla: lo mismo');
+        } finally {
+            OutreachConsentFacts::forgetLedger();
+        }
     }
 
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────
