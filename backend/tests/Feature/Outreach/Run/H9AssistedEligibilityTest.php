@@ -10,6 +10,7 @@ use App\Services\Outreach\Run\OutcomeRecorder;
 use App\Services\Outreach\Run\OutreachDispatcher;
 use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
+use App\Services\Outreach\Run\OutreachPublishedStrategies;
 use App\Services\Outreach\Run\OutreachReplay;
 use App\Services\Telephony\VoiceContacts;
 use App\Support\Privacy\PhoneFingerprint;
@@ -425,7 +426,7 @@ class H9AssistedEligibilityTest extends TestCase
         (new VoiceContacts)->revoke($gente['caro'], $uuidOtro, ['clientRequestId' => (string) Str::uuid(), 'source' => 'written_form', 'evidence' => 'Revoca por escrito']);
         $this->assertSame('opted_out', $motivo());
 
-        $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+        $this->assertSame(['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
     }
 
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────
@@ -603,6 +604,41 @@ class H9AssistedEligibilityTest extends TestCase
         Log::spy();
         $this->assertClaimWithheld($cola, $voz, 'canario de voz revocado');
         Log::shouldHaveReceived('warning')->once()->with('outreach.assisted.claim_withheld', ['job' => $voz, 'reason' => 'canary_scope_mismatch']);
+    }
+
+    // ── F-3 · La plantilla que deja de estar aprobada después de salir ──────
+
+    /**
+     * F-3: retirada la plantilla (APPROVED → RETIRED, la única salida que admiten el modelo y la base,
+     * `TEMPLATE_TRANSITIONS`), su guion no se entrega: lo libre no se ofrece ni se reclama y quien ya lo reclamó lo
+     * pierde, con un motivo propio. El guion no aparece en ninguna respuesta. Va detrás de la estrategia y delante de
+     * lo de la persona.
+     */
+    public function test_f3_la_plantilla_retirada_despues_de_salir_no_entrega_su_guion_y_retiene(): void
+    {
+        $gente = $this->threePeople();
+        [$mio, $libre] = $this->startedFor(['3001234561', '3001234562']);
+        $cola = new AssistedQueue;
+        $antes = $cola->claim($gente['ana'], (string) $mio['job']->uuid, (string) Str::uuid())['job']['script'];
+        $this->assertIsString($antes);
+        $plantilla = (int) $mio['job']->template_version_id;
+        $puente = new OutreachPublishedStrategies;
+        $this->assertSame($antes, $puente->assistedScript($plantilla, (string) $mio['job']->template_hash), 'aprobada y con la huella del sello: el guion');
+        $this->assertNull($puente->assistedScript($plantilla, str_repeat('0', 64)), 'con otra huella, no');
+
+        DB::table('ultron_studio_message_templates')->where('id', $plantilla)->update(['status' => 'RETIRED', 'status_changed_at' => now(), 'updated_at' => now()]);
+        $this->assertNull($puente->assistedScript($plantilla, (string) $mio['job']->template_hash), 'retirada: sin guion');
+        $this->assertNull($puente->assistedScript($plantilla), 'tampoco sin huella');
+
+        $this->assertWithheldEverywhere($cola, (string) $mio['job']->uuid, (string) $libre['job']->uuid, 'template_not_approved', '300123456');
+        $this->assertStringNotContainsString($antes, json_encode([$cola->page($gente['ana'], 'all', 50), $cola->page($gente['beto'], 'all', 50), $cola->show((string) $mio['job']->uuid)]));
+
+        // La prioridad: delante de la persona (un «no contactar» no lo cambia) y detrás de la estrategia parada.
+        MarketingLead::query()->findOrFail($mio['member']['lead'])->forceFill(['do_not_contact' => true])->save();
+        $motivo = fn (): mixed => self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), (string) $mio['job']->uuid))[2];
+        $this->assertSame('template_not_approved', $motivo(), 'template_not_approved > opted_out');
+        $this->pauseStrategy($this->vivo);
+        $this->assertSame('strategy_stopped', $motivo(), 'strategy_stopped > template_not_approved');
     }
 
     // ── m-1 · Ninguna consulta por fila ─────────────────────────────────────

@@ -501,8 +501,8 @@ class H9AssistedOptOutStrategyTest extends TestCase
         $this->signedPublication($this->vivo['strategy'], null, 'resume', ['canary' => $parte, 'rest' => null, 'status' => 'active']);
         $this->assertSame('policy_unknown', self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), $this->uuidOf($sinResolver)))[2], 'sin freno ni pausa: policy_unknown > complaint_unknown > expired');
 
-        // R3-3 añade `subject_minor` y `rne_check_missing`, y F-2 `canary_scope_mismatch`, entre la queja y lo desconocido (su orden lo fija H9AssistedEligibilityTest).
-        $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+        // R3-3 añade `subject_minor` y `rne_check_missing`, y F-2 `canary_scope_mismatch`, entre la queja y lo desconocido; F-3, `template_not_approved` tras la estrategia (su orden lo fija H9AssistedEligibilityTest).
+        $this->assertSame(['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
     }
 
     // ── m-1 · La repetición con la inscripción cerrada ──────────────────────

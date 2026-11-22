@@ -46,6 +46,8 @@ use Illuminate\Support\Str;
  *  - `strategy_stopped`: la (versión, parte) de su inscripción ya no está en
  *    marcha en la cadena: pausada, apagada, revertida, retirada, archivada o
  *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
+ *  - `template_not_approved`: su plantilla ya no está aprobada con la huella
+ *    del sello (retirada después de salir): no hay guion que dar (N4, F-3);
  *  - `opted_out`: una señal de «no contactar» de N1/N2 que se SABE: el
  *    `do_not_contact` (suyo o de un prospecto con su número), el *opt-out*
  *    comercial, el consentimiento del medio denegado, la revocación del de voz
@@ -101,6 +103,9 @@ final class AssistedQueue
 
     public const WITHHELD_STRATEGY_STOPPED = 'strategy_stopped';
 
+    /** F-3: N4 `template_not_approved` (la plantilla del trabajo ya no está aprobada con su huella: no hay guion que dar). */
+    public const WITHHELD_TEMPLATE_NOT_APPROVED = 'template_not_approved';
+
     public const WITHHELD_OPTED_OUT = 'opted_out';
 
     public const WITHHELD_COMPLAINT_RECENT = 'complaint_recent';
@@ -121,7 +126,7 @@ final class AssistedQueue
     public const WITHHELD_EXPIRED = 'expired';
 
     public const WITHHELD_REASONS = [
-        self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
+        self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_TEMPLATE_NOT_APPROVED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
         self::WITHHELD_SUBJECT_MINOR, self::WITHHELD_RNE_CHECK_MISSING, self::WITHHELD_CANARY_SCOPE_MISMATCH,
         self::WITHHELD_POLICY_UNKNOWN, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED,
     ];
@@ -155,6 +160,9 @@ final class AssistedQueue
         private readonly SubjectSuppressions $suppressions = new SubjectSuppressions,
     ) {}
 
+    /** @var array<string, string|null> F-3: el guion de cada (plantilla, huella) leído en ESTA petición ({@see scriptOf()}); cada método público lo vacía. */
+    private array $guiones = [];
+
     /**
      * Los trabajos de la bandeja: `started`, asistidos, en vivo, sin resultado
      * del personal; `mine` = los que reclamó quien mira, `unclaimed` = sin
@@ -182,6 +190,7 @@ final class AssistedQueue
      */
     public function page(Admin $viewer, string $filter = 'all', int $limit = 20): array
     {
+        $this->guiones = [];
         $limite = max(1, min(self::MAX_PAGE, $limit));
         $yo = (int) $viewer->id;
         $ahora = self::now();
@@ -233,6 +242,8 @@ final class AssistedQueue
     /** El detalle de un trabajo de la bandeja (404 si no es asistido en vivo). @return array<string, mixed> */
     public function show(string $jobUuid): array
     {
+        $this->guiones = [];
+
         return $this->dto($this->assistedJob($jobUuid));
     }
 
@@ -254,6 +265,7 @@ final class AssistedQueue
         if (! Str::isUuid($clientRequestId)) {
             throw OutreachException::invalid(['clientRequestId' => ['uuid']]);
         }
+        $this->guiones = [];
         $trabajo = $this->assistedJob($jobUuid);
         if ((string) $trabajo->status !== 'started') {
             throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
@@ -285,6 +297,7 @@ final class AssistedQueue
         // m-2 y R3-2: TODO otra vez tras escribir, con lecturas nuevas y en el mismo orden (frenos, cadena, foto y libro). Lo que llegue
         // entre la comprobación y el UPDATE (un freno, una pausa, un «no contactar») retiene el contacto ya en esta respuesta.
         $reclamado = $this->assistedJob($jobUuid);
+        $this->guiones = [];
         $motivo = $this->withholdReasons([$reclamado], $ahora, $this->openBrakes(), $this->runningParts([(int) $reclamado->strategy_id]))[(int) $reclamado->id] ?? null;
 
         return ['job' => $this->dto($reclamado, (int) $by->id, $motivo), 'replayed' => false];
@@ -425,6 +438,9 @@ final class AssistedQueue
             } elseif (! isset($enMarcha[$parte])) {
                 // N-2: una parte que la cadena no trae en marcha (o que apareció después de leerla): retenida.
                 $motivos[(int) $j->id] = self::WITHHELD_STRATEGY_STOPPED;
+            } elseif ($this->scriptOf($j) === null) {
+                // F-3: la plantilla del trabajo ya no está aprobada con la huella de su sello: no hay guion que dar.
+                $motivos[(int) $j->id] = self::WITHHELD_TEMPLATE_NOT_APPROVED;
             } else {
                 $porPersona[] = $j;
                 // F-2: solo el alcance canario en la parte canario (N5) y en toda versión que lo declare (N3, «solo canario»).
@@ -799,7 +815,6 @@ final class AssistedQueue
         }
         $motivos = $this->reasonsOf(array_map(static fn (array $r): int => (int) $r[0]->id, $rows));
         $contenidos = [];
-        $guiones = [];
         $salida = [];
         foreach ($rows as [$j, $withheld]) {
             $reclamante = $viewerId !== null && $j->assisted_claimed_by_admin_id !== null && (int) $j->assisted_claimed_by_admin_id === $viewerId;
@@ -809,14 +824,7 @@ final class AssistedQueue
             if (! array_key_exists($version, $contenidos)) {
                 $contenidos[$version] = $this->bridge->contentOfVersion($version);
             }
-            $guion = null;
-            if ($contacto && $j->template_version_id !== null) {
-                $plantilla = (int) $j->template_version_id;
-                if (! array_key_exists($plantilla, $guiones)) {
-                    $guiones[$plantilla] = $this->bridge->assistedScript($plantilla);
-                }
-                $guion = $guiones[$plantilla];
-            }
+            $guion = $contacto ? $this->scriptOf($j) : null;
             $salida[] = [
                 'uuid' => (string) $j->uuid,
                 'enrollment' => (string) $j->enrollment_uuid,
@@ -838,6 +846,24 @@ final class AssistedQueue
         }
 
         return $salida;
+    }
+
+    /**
+     * F-3: el guion de la plantilla del trabajo, solo si sigue APROBADA, íntegra y con la huella de su sello
+     * ({@see OutreachPublishedStrategies::assistedScript()}); null en cualquier otro caso, también sin plantilla. Una
+     * lectura por (plantilla, huella) distinta y por petición ({@see $guiones}), no por fila (m-1).
+     */
+    private function scriptOf(object $j): ?string
+    {
+        if ($j->template_version_id === null) {
+            return null;
+        }
+        $clave = (int) $j->template_version_id.':'.strtolower((string) $j->template_hash);
+        if (! array_key_exists($clave, $this->guiones)) {
+            $this->guiones[$clave] = $this->bridge->assistedScript((int) $j->template_version_id, (string) $j->template_hash);
+        }
+
+        return $this->guiones[$clave];
     }
 
     /**
