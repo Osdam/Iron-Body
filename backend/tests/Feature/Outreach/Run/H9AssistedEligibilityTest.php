@@ -762,7 +762,7 @@ class H9AssistedEligibilityTest extends TestCase
      * por Ana a mano (lo que pasó ANTES); el segundo, libre.
      *
      * @param  array<string, mixed>  $live
-     * @return array{0: string, 1: string, 2: array<string, mixed>}  [el reclamado, el libre, el socio del reclamado]
+     * @return array{0: string, 1: string, 2: array<string, mixed>} [el reclamado, el libre, el socio del reclamado]
      */
     private function mineAndFreeIn(array $live, bool $claimByHand = true): array
     {
