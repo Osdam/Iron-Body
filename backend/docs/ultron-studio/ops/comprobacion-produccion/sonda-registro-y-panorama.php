@@ -1,6 +1,7 @@
 <?php
 
-// SONDA DEL MOTOR (lead, 19-11-2026; ampliada el 21-11 a «regenerar antes de sustituir»; cierre V2, apartado 4).
+// SONDA DEL MOTOR (lead, 19-11-2026; ampliada el 21-11 a «regenerar antes de sustituir» y el 22-11 a la red de
+// marcadores; cierre V2, apartado 4).
 //
 // Ejecuta en PHP a secas (sin artisan, sin base de datos, sin red) las clases NUEVAS O CAMBIADAS del commit que se
 // va a desplegar, cargadas desde un directorio aparte ANTES de que el cargador de la aplicación resuelva las que
@@ -213,8 +214,47 @@ $casos['origen'] = [
     $G::classify(['critic' => ['verdict' => 'pass', 'attempt' => 3], 'regeneration' => ['drafts' => 3, 'critics' => 2, 'checks' => 2, 'rewrites' => [['by' => 'server', 'codes' => ['register_tuteo'], 'issues' => ['naturalness']], ['by' => 'critic', 'codes' => [], 'issues' => ['relevance']]]]]),
 ];
 
+// La red de marcadores (ronda de correcciones, C1): lo que tiene forma de marcador no sale por WhatsApp.
+// Las 13 primeras formas tienen que pararse y las 7 últimas tienen que salir (las mismas de
+// `UltronDraftPlaceholdersTest`); se imprime la cuenta para verla también en el servidor.
+$M = $ns.'UltronDraftPlaceholders';
+$formas = [
+    'Tenemos {{PLAN_1}} y otro.',
+    'Tenemos el plan }} de un mes.',
+    'Le dejo {{ la app.',
+    'Claro. Tenemos PLAN_1 y PLAN_2, los dos de un mes. Le dejo la app.',
+    'Claro. Tenemos {PLAN_1} y {PLAN_2}, los dos de un mes.',
+    'Tenemos { PLAN_3 } hoy.',
+    'El plan cuesta PLAN_PRICE al mes.',
+    'El PLAN_NAME es el más pedido.',
+    'Dura PLAN_DURATION.',
+    'Aquí los tiene: APP_LINKS',
+    'Tenemos plan_1 y plan_2.',
+    '¿PLAN_2?',
+    'Tenemos Plan PLAN_PRICE ($65.000 COP).',
+    'Claro. Tenemos Plan Valera ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes. ¿Cuál le interesa más?',
+    'El PLAN DÍA cuesta $10.000 COP.',
+    'El Plan 1 y el Plan 2 son de un mes.',
+    'Horario {lunes a viernes}: de 5:00 a. m. a 10:00 p. m.',
+    'Le mando PLAN_PRICES_X y PLAN_10X por error de copia.',
+    "Android: https://play.google.com/store/apps/details?id=com.ironbody\niPhone: https://apps.apple.com/app/id1",
+    '',
+];
+$paran = 0;
+$malClasificadas = [];
+foreach ($formas as $i => $t) {
+    $para = $M::looksLikeMarker($t);
+    $paran += $para ? 1 : 0;
+    if ($para !== ($i < 13)) {
+        $malClasificadas[] = $i;
+    }
+    $limpio = $M::withoutMarkers($t);
+    $casos["marcador {$i}"] = [$para, $limpio, $M::looksLikeMarker($limpio), $M::nameWithoutBraces($t)];
+}
+
 $j = static fn (mixed $v): string => (string) json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 echo 'PCRE '.PCRE_VERSION.' · PHP '.PHP_VERSION."\n";
+echo 'red de marcadores: '.$paran.' de '.count($formas).' formas no salen (esperado: 13) · mal clasificadas: '.($malClasificadas === [] ? 'ninguna' : implode(',', $malClasificadas))."\n";
 echo 'clases del commit cargadas: '.count($nuevas)."\n";
 echo "expresiones regulares en esas clases: {$expresiones} · no compilan: ".count($rotas)."\n";
 foreach ($rotas as $r) {
@@ -229,4 +269,4 @@ foreach ($casos as $nombre => $r) {
 }
 echo 'casos: '.count($casos).' · preg_last_error='.preg_last_error()."\n";
 echo 'HUELLA '.substr(hash('sha256', $j($casos)), 0, 16)."\n";
-exit($rotas === [] && $avisos === [] ? 0 : 1);
+exit($rotas === [] && $avisos === [] && $malClasificadas === [] ? 0 : 1);
