@@ -53,7 +53,7 @@ APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
         ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.50, "integrado el 22-11 (lote 5, bdb93199): seguridad, base de datos y revisión final sin bloqueantes abiertos (B-1 corregido) y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
-        ("CRM: lanzar y ver una ejecución del motor", 15, 0.00, "espera al backend", "c"),
+        ("CRM: lanzar y ver una ejecución del motor", 15, 0.34, "implementada y probada (1 453 pruebas del Studio en verde y compilación de producción, verificadas por el lead el 22-11); falta su revisión final (PT-10)", "c"),
         ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
     ]),
     6: (0.50, [
