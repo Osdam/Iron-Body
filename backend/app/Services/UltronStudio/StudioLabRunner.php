@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioLabEvent;
 use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
+use Closure;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\TimeoutExceededException;
 use Illuminate\Support\Carbon;
@@ -110,7 +111,14 @@ final class StudioLabRunner
     /** Lo que dice `run.finished` cuando para un paso que falló dos veces antes de reclamar. */
     public const STEP_FAILURE_SUMMARY = 'el paso falló dos veces sin llegar a reclamar un caso';
 
-    public function __construct(private readonly StudioLabEvents $events) {}
+    /** Los milisegundos de un reloj monótono (NB4: el plazo de un caso del motor). */
+    private readonly Closure $clockMs;
+
+    /** @param  (Closure(): int)|null  $clockMs  solo las pruebas lo cambian: por defecto, `hrtime` */
+    public function __construct(private readonly StudioLabEvents $events, ?Closure $clockMs = null)
+    {
+        $this->clockMs = $clockMs ?? static fn (): int => intdiv(hrtime(true), 1_000_000);
+    }
 
     /**
      * Un paso. Devuelve qué pasó (para las pruebas y el registro): `noop`,
@@ -517,6 +525,11 @@ final class StudioLabRunner
      * texto final, el juez del laboratorio y la agregación. Cada llamada se
      * cobra como hoy (por su `usage`, o su tope si no se sabe), con su papel.
      * El bloque `engine` va en la misma liquidación.
+     *
+     * NB4: el caso entero cabe en el job. El recorrido tiene como límite
+     * {@see StudioLabEngineCase::CASE_BUDGET_SECONDS} menos el plazo del juez;
+     * lo que no cabe no se llama y el caso termina `timeout`, cobrando solo
+     * las llamadas hechas (no la reserva entera de un job muerto).
      */
     private function processEngine(StudioLabRun $run, StudioLabRunCase $caso): string
     {
@@ -526,6 +539,9 @@ final class StudioLabRunner
         $precios = ['input' => (int) ($run->prices['input'] ?? 0), 'output' => (int) ($run->prices['output'] ?? 0)];
         $maxJuez = (int) ($run->prices['judgeMaxOutputTokens'] ?? StudioLabConfig::DEFAULT_JUDGE_MAX_OUTPUT_TOKENS);
         $reserva = (int) $caso->reserved_micros;
+        // NB4: el caso entero cabe en el job. El recorrido acaba, como muy tarde, aquí; lo que
+        // queda del plazo es del juez (su tiempo configurado, ≤ 60 s).
+        $limite = ($this->clockMs)() + max(0, StudioLabEngineCase::CASE_BUDGET_SECONDS - StudioLabConfig::current()->timeoutSeconds) * 1000;
 
         if (StudioLabRuns::governedPersonalData((array) ($motor['governed'] ?? [])) !== []) {
             // B1 (defensa, como la del escenario): lo congelado no pasa el filtro de
@@ -548,7 +564,7 @@ final class StudioLabRunner
 
         $cliente = $this->engineClient($run, $target);
         try {
-            $r = app(StudioLabEngineCase::class)->run($paquete, $escenario, $cliente, static fn (): int => intdiv(hrtime(true), 1_000_000));
+            $r = app(StudioLabEngineCase::class)->run($paquete, $escenario, $cliente, $this->clockMs, $limite);
         } catch (InvalidArgumentException) {
             // El filtro de datos personales cambió desde que se creó: no se envía nada.
             $this->settle($run, $caso, self::errorValues(self::CLASS_BLOCKED_INPUT, [], 0, $reserva));

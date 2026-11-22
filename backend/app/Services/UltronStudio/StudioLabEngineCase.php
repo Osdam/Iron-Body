@@ -31,6 +31,25 @@ final class StudioLabEngineCase
     /** Ninguna llamada del recorrido espera más que esto (diseño §6). */
     public const CALL_TIMEOUT_SECONDS = 15;
 
+    /**
+     * NB4 de la revisión de seguridad: lo que puede durar un caso del motor
+     * ENTERO, el juez incluido, desde que el runner lo empieza. El paso tiene
+     * 150 s ({@see StudioLabStepJob::$timeout} y el `--timeout` del worker
+     * `ironbody-lab`); los 10 que sobran son para reclamar, liquidar y encolar
+     * el siguiente. El runner aparta el plazo del juez y le pasa a
+     * {@see run()} el resto como límite del recorrido: con el juez en 60 s,
+     * 80 s, más que el camino más largo que puede recorrer hoy un proveedor
+     * lento (5 llamadas de 15 s: pasados 25 s, la comprobación ya no deja un
+     * tercer borrador). Así el límite no recorta nada de lo que hoy cabe y,
+     * si algo tarda más (la base, un cambio del flujo), el caso termina
+     * `timeout` ANTES de que muera el job: se cobra lo gastado, no la reserva
+     * entera.
+     */
+    public const CASE_BUDGET_SECONDS = 140;
+
+    /** Con menos que esto por delante, el nodo no se llama: no se paga una llamada que no cabe. */
+    public const MIN_CALL_SECONDS = 5;
+
     public const SOURCE = 'engine';
 
     /** Lo que se guarda de cada texto (la columna `reply` admite 2000). */
@@ -64,11 +83,14 @@ final class StudioLabEngineCase
      * @param  array{roles:array<string,string>,sp:array<string,mixed>}  $bundle  {@see StudioPromptBundle::rolesFor()}
      * @param  array<string,mixed>  $scenario  el `scenario_snapshot` del caso
      * @param  callable(): int  $clockMs  los milisegundos de un reloj monótono
+     * @param  int|null  $deadlineMs  NB4: el límite del recorrido en ese reloj (null, sin límite). Cada llamada espera
+     *                                como mucho lo que queda hasta él ({@see callTimeout()}); si ya no cabe ninguna, el
+     *                                nodo no se llama y el caso termina `timeout`
      * @return array{status:string,class:?string,calls:list<array<string,mixed>>,reply:?string,engine:array<string,mixed>|null,findings:list<array<string,mixed>>,turn:array<string,mixed>|null}
      *
      * @throws InvalidArgumentException si el escenario no pasa el filtro de datos personales (no sale nada)
      */
-    public function run(array $bundle, array $scenario, StudioLabEngineModelClient $client, callable $clockMs): array
+    public function run(array $bundle, array $scenario, StudioLabEngineModelClient $client, callable $clockMs, ?int $deadlineMs = null): array
     {
         $ctx = $this->context->build($scenario, $bundle['sp']);
         $inicio = $clockMs();
@@ -76,8 +98,13 @@ final class StudioLabEngineCase
         $respuestas = [];
 
         $recorrido = StudioLabEngineFlow::walk($ctx['decide'], $bundle['roles'], $ctx['inbound'],
-            function (string $nodo, string $sistema, string $usuario) use ($client, &$llamadas): array {
-                $r = $client->completeEngine($nodo, $sistema, $usuario, self::CALL_TIMEOUT_SECONDS);
+            function (string $nodo, string $sistema, string $usuario) use ($client, $clockMs, $deadlineMs, &$llamadas): array {
+                $plazo = self::callTimeout($clockMs(), $deadlineMs);
+                if ($plazo === null) {
+                    // NB4: el caso agotó su plazo. Este nodo no se llama ni se cobra; el recorrido para con `timeout`.
+                    return ['ok' => false, 'class' => StudioLabModelClient::CLASS_TIMEOUT];
+                }
+                $r = $client->completeEngine($nodo, $sistema, $usuario, $plazo);
                 $llamadas[] = ['node' => $nodo, 'role' => self::PATH[$nodo], 'result' => $r, 'inputBytes' => strlen($sistema) + strlen($usuario), 'maxTokens' => StudioLabEngineFlow::NODES[$nodo]['maxTokens']];
                 if (($r['class'] ?? null) !== null || ! is_array($r['output'] ?? null)) {
                     return ['ok' => false, 'class' => $r['class'] ?? StudioLabModelClient::CLASS_INVALID_OUTPUT];
@@ -116,6 +143,22 @@ final class StudioLabEngineCase
             'findings' => self::findings($final, $commit['regeneration'] ?? null),
             'turn' => $ctx['turn'],
         ];
+    }
+
+    /**
+     * NB4: lo que puede esperar la siguiente llamada, en segundos enteros:
+     * {@see CALL_TIMEOUT_SECONDS}, o lo que queda hasta `$deadlineMs` si es
+     * menos. Null si queda menos de {@see MIN_CALL_SECONDS}: la llamada no
+     * cabe. Pura.
+     */
+    public static function callTimeout(int $nowMs, ?int $deadlineMs): ?int
+    {
+        if ($deadlineMs === null) {
+            return self::CALL_TIMEOUT_SECONDS;
+        }
+        $quedan = intdiv(max(0, $deadlineMs - $nowMs), 1000);
+
+        return $quedan < self::MIN_CALL_SECONDS ? null : min(self::CALL_TIMEOUT_SECONDS, $quedan);
     }
 
     /**
