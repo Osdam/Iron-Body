@@ -151,8 +151,12 @@ class VoiceDoctorCommand extends Command
             VoiceProviderState::MARK_INVALID => 'marca ilegible: '.$repite,
             default => 'sin marca: las salientes dicen elevenlabs_unverified ('.$repite.')',
         });
+        // Enmienda del 22-11-2026: el número empresarial como origen de las salientes (`number.sharedWithMessaging`).
+        $c = $t['number']['sharedWithMessaging'];
         $this->line('Número     : '.($t['number']['configured'] ? 'configurado' : 'sin configurar (TWILIO_VOICE_FROM)')
-            .($t['number']['collidesWithMessaging'] ? ' · CHOCA con un número protegido de la mensajería del motor (config/meta.php): la política deniega las salientes por nombre' : '')
+            .($t['number']['collidesWithMessaging'] ? ($c['admitted']
+                ? ' · es el número empresarial de la mensajería del motor, ADMITIDO como origen de las salientes (enmienda del 22-11-2026)'
+                : ' · CHOCA con un número protegido de la mensajería del motor (config/meta.php): la política deniega las salientes por nombre') : '')
             .' · número importado '.$si($t['number']['importedNumberIdConfigured'])
             .($t['number']['inboundCapable'] === false ? ' (solo salientes: VOICE_NUMBER_INBOUND_CAPABLE=false)' : '')
             .' · subcuenta (corte y conciliación) '.$si($t['carrierConfigured']));
@@ -160,6 +164,7 @@ class VoiceDoctorCommand extends Command
         $o = $t['number']['observed'];
         $this->line('Importado  : '.match (true) {
             $o === null => 'sin observar (voice:reconcile --numbers lo compara con TWILIO_VOICE_FROM y con los protegidos de la mensajería)',
+            $o['collides'] === true && $c['admitted'] => 'es el número empresarial de la mensajería y el de TWILIO_VOICE_FROM: identidad compartida admitida, sin freno · '.$o['at'],
             $o['collides'] === true => 'ES UN NÚMERO PROTEGIDO DE LA MENSAJERÍA (freno) · '.$o['at'],
             $o['matchesFrom'] === false => 'NO es el de TWILIO_VOICE_FROM (freno) · '.$o['at'],
             $o['matchesFrom'] === true => 'es el de TWILIO_VOICE_FROM y no es de la mensajería · '.$o['at'],
@@ -176,6 +181,20 @@ class VoiceDoctorCommand extends Command
                 VoiceNumberGuard::CHECK_REASON_UNCOMPARED => 'sin poder comparar el importado con TWILIO_VOICE_FROM',
                 default => 'sin una conciliación de menos de 2 h que cuadre',
             }.')',
+        });
+        // Enmienda del 22-11-2026: si está admitida y, si no, la primera condición que falta (`VoiceNumberGuard::SHARED_REASONS`).
+        $this->line('Compartido : '.match (true) {
+            $c['admitted'] => 'ADMITIDO: el número empresarial es el origen de las salientes (solo salientes y sin agente; enmienda del 22-11-2026)',
+            ! $c['declared'] => 'no declarado (VOICE_NUMBER_SHARED_WITH_MESSAGING): la guarda del número, como siempre',
+            default => 'declarado y NO admitido ('.$c['reason'].': '.match ($c['reason']) {
+                VoiceNumberGuard::SHARED_REASON_NOT_BUSINESS_NUMBER => 'TWILIO_VOICE_FROM no es el número visible de la mensajería; otro protegido no vale',
+                VoiceNumberGuard::SHARED_REASON_INBOUND_CAPABLE_DECLARED => 'falta VOICE_NUMBER_INBOUND_CAPABLE=false',
+                VoiceNumberGuard::SHARED_REASON_INBOUND_ENABLED => 'las entrantes están encendidas: VOICE_INBOUND_ENABLED',
+                VoiceNumberGuard::SHARED_REASON_OBSERVATION_UNVERIFIED => 'sin una conciliación de menos de 2 h que cuadre: voice:reconcile --numbers',
+                VoiceNumberGuard::SHARED_REASON_OBSERVED_INBOUND => 'el proveedor no dice que el importado sea solo saliente',
+                VoiceNumberGuard::SHARED_REASON_OBSERVED_AGENT => 'el importado tiene un agente asignado, o no se sabe',
+                default => 'motivo desconocido',
+            }.'): la guarda del número, como siempre',
         });
         // Auditoría B-T5 (D8-21, decisión f): el último veredicto de la salud del webhook, sin red.
         $wh = $t['webhookHealth'];

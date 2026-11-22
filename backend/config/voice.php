@@ -159,6 +159,14 @@ return [
     // `0`, `off` o `no` explícito dice «solo saliente». No enciende nada.
     'number' => [
         'inbound_capable' => $declarado(env('VOICE_NUMBER_INBOUND_CAPABLE')),
+
+        // Enmienda del 22-11-2026 (protección 6 y D8-5), por decisión expresa del
+        // propietario: ¿es el número empresarial (el visible de la mensajería del
+        // motor) también el ORIGEN de las salientes? APAGADA por defecto (solo
+        // `true`, `1`, `on` o `yes`). Sola no admite nada: la telefonía exige
+        // además las otras seis condiciones (`VoiceNumberGuard::sharedVerdict()`);
+        // con cualquiera sin cumplir, la guarda del número como siempre.
+        'shared_with_messaging' => filter_var(env('VOICE_NUMBER_SHARED_WITH_MESSAGING', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
     // H8, D8-11: entrantes. Apagadas, la iniciación responde caller_authorized = no.

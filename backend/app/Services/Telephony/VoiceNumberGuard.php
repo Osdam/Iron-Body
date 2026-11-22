@@ -36,6 +36,18 @@ use Illuminate\Support\Facades\Cache;
  * `unverified` con su motivo ({@see policyVerdict()}). Así el id se puede
  * cambiar sin invalidar la caché: hasta la siguiente conciliación, la puerta y
  * el job dicen `number_unverified`.
+ *
+ * ENMIENDA DEL 22-11-2026, POR DECISIÓN EXPRESA DEL PROPIETARIO (protección 6 y
+ * D8-5 del contrato H8; texto literal en `MATRIZ_CIERRE_V2.md` §9): el número
+ * empresarial (`WHATSAPP_DISPLAY_PHONE`) puede ser el ORIGEN de las salientes
+ * de voz, solo como identificador de llamada verificado («Outbound Only»), si
+ * se cumplen las siete condiciones de {@see sharedVerdict()} a la vez. Se
+ * calcula SOLO aquí ({@see sharedIdentity()}) y solo apaga el choque que ve la
+ * política ({@see collidesForPolicy()}) y el freno de la conciliación: la
+ * política pura, sus motivos y el HECHO del choque (`collidesWithConfig()`,
+ * el estado y el doctor) no cambian. Con cualquiera sin cumplir, todo como
+ * antes: `voice_number_is_whatsapp` en la puerta y `number_is_messaging` en la
+ * conciliación.
  */
 final class VoiceNumberGuard
 {
@@ -75,6 +87,34 @@ final class VoiceNumberGuard
 
     /** Holgura de relojes hacia delante, como la marca de E4-6. */
     public const FUTURE_SKEW_SECONDS = 300;
+
+    /** Las claves de la observación que lee la puerta (B8-g/B8-h), en su orden; los dos hechos de la enmienda van aparte. */
+    public const OBSERVED_KEYS = ['at', 'phoneNumberId', 'matchesFrom', 'collides'];
+
+    /** Enmienda del 22-11-2026, condición 1: `VOICE_NUMBER_SHARED_WITH_MESSAGING` no está encendida. */
+    public const SHARED_REASON_NOT_DECLARED = 'not_declared';
+
+    /** Condición 2: el número no es exactamente el visible de la mensajería (otro protegido no vale nunca). */
+    public const SHARED_REASON_NOT_BUSINESS_NUMBER = 'not_business_number';
+
+    /** Condición 3: `VOICE_NUMBER_INBOUND_CAPABLE` no está declarada `false` (sin declarar o `true`). */
+    public const SHARED_REASON_INBOUND_CAPABLE_DECLARED = 'inbound_capable_declared';
+
+    /** Condición 4: las entrantes están encendidas (`VOICE_INBOUND_ENABLED`). */
+    public const SHARED_REASON_INBOUND_ENABLED = 'inbound_enabled';
+
+    /** Condición 5: sin una observación verificada (de menos de 2 h, del id configurado y que es `TWILIO_VOICE_FROM`). */
+    public const SHARED_REASON_OBSERVATION_UNVERIFIED = 'observation_unverified';
+
+    /** Condición 6: el proveedor no dice `supports_inbound = false` (true, ausente o ilegible). */
+    public const SHARED_REASON_OBSERVED_INBOUND = 'observed_inbound';
+
+    /** Condición 7: el número tiene un agente asignado en el proveedor (cualquiera, también el publicado), o no se sabe. */
+    public const SHARED_REASON_OBSERVED_AGENT = 'observed_agent';
+
+    /** Los motivos de {@see sharedVerdict()}, en el orden en que se comprueban (cerrado; null = admitida). */
+    public const SHARED_REASONS = [self::SHARED_REASON_NOT_DECLARED, self::SHARED_REASON_NOT_BUSINESS_NUMBER, self::SHARED_REASON_INBOUND_CAPABLE_DECLARED,
+        self::SHARED_REASON_INBOUND_ENABLED, self::SHARED_REASON_OBSERVATION_UNVERIFIED, self::SHARED_REASON_OBSERVED_INBOUND, self::SHARED_REASON_OBSERVED_AGENT];
 
     /** Pura (DF-G10). Sin número de voz no hay con qué chocar: false. */
     public static function collides(?string $voiceFrom, ?string $displayPhone, array|string|null $protectedNumbers): bool
@@ -121,24 +161,78 @@ final class VoiceNumberGuard
     }
 
     /**
+     * Enmienda del 22-11-2026, condición 2: ¿es EXACTAMENTE el número visible de
+     * la mensajería (`WHATSAPP_DISPLAY_PHONE`)? Uno de la lista de protegidos no
+     * cuenta. Con alguno vacío, null (no se sabe: no se admite).
+     */
+    public static function isBusinessNumber(#[\SensitiveParameter] ?string $number): ?bool
+    {
+        $visible = config('meta.whatsapp_display_phone');
+
+        return self::sameNumber($number, is_string($visible) ? $visible : null);
+    }
+
+    /**
      * B8-g (B-1): lo que vio la conciliación del número importado: si es el de
      * `TWILIO_VOICE_FROM` (null si no se pudo comparar) y si choca con la
      * mensajería. Sin el número ni su huella.
+     *
+     * Enmienda del 22-11-2026: y los dos hechos del proveedor que pide la
+     * identidad compartida, `inboundCapable` (`supports_inbound`; null si no lo
+     * dice) y `agentAssigned` (si el número tiene agente). Sus valores por
+     * defecto (null) FALLAN CERRADO: no admiten nada ({@see sharedVerdict()}).
      */
-    public static function rememberObservation(string $phoneNumberId, ?bool $matchesFrom, bool $collides): void
+    public static function rememberObservation(string $phoneNumberId, ?bool $matchesFrom, bool $collides, ?bool $inboundCapable = null, ?bool $agentAssigned = null): void
     {
         Cache::put(self::OBSERVED_CACHE_KEY, ['at' => now()->utc()->format('Y-m-d\TH:i:s\Z'), 'phoneNumberId' => $phoneNumberId,
-            'matchesFrom' => $matchesFrom, 'collides' => $collides], self::OBSERVED_CACHE_SECONDS);
+            'matchesFrom' => $matchesFrom, 'collides' => $collides, 'inboundCapable' => $inboundCapable, 'agentAssigned' => $agentAssigned], self::OBSERVED_CACHE_SECONDS);
     }
 
-    /** @return array{at: string, phoneNumberId: string, matchesFrom: ?bool, collides: bool}|null la última observación, o null si no hay una reciente */
+    /**
+     * La última observación, con la forma de siempre ({@see OBSERVED_KEYS}): los
+     * dos hechos de la enmienda no salen de aquí (los lee solo
+     * {@see sharedIdentity()}), así que la puerta, el estado y el doctor leen
+     * lo mismo que antes.
+     *
+     * @return array{at: string, phoneNumberId: string, matchesFrom: ?bool, collides: bool}|null la última observación, o null si no hay una reciente
+     */
     public static function lastObservation(): ?array
+    {
+        $o = self::storedObservation();
+
+        return $o === null ? null : array_intersect_key($o, array_flip(self::OBSERVED_KEYS));
+    }
+
+    /**
+     * La observación de la caché tal cual, si tiene la forma de B8-g; si no,
+     * null. Una caché de antes de la enmienda (sin `inboundCapable` ni
+     * `agentAssigned`) sigue valiendo para la puerta: los dos hechos que le
+     * faltan los lee {@see providerFacts()} como «no se sabe».
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function storedObservation(): ?array
     {
         $o = Cache::get(self::OBSERVED_CACHE_KEY);
 
         return is_array($o) && is_string($o['at'] ?? null) && preg_match(VoiceProviderState::MARK_PATTERN, $o['at']) === 1
             && is_string($o['phoneNumberId'] ?? null) && is_bool($o['collides'] ?? null)
             && (($o['matchesFrom'] ?? null) === null || is_bool($o['matchesFrom'])) ? $o : null;
+    }
+
+    /**
+     * Enmienda del 22-11-2026: los dos hechos del proveedor de una observación
+     * guardada. Ausentes (caché de antes del despliegue) o con otra forma, null:
+     * no se sabe, y {@see sharedVerdict()} no admite.
+     *
+     * @param  array<string, mixed>|null  $o
+     * @return array{inboundCapable: ?bool, agentAssigned: ?bool}
+     */
+    private static function providerFacts(?array $o): array
+    {
+        $leer = static fn (mixed $v): ?bool => is_bool($v) ? $v : null;
+
+        return ['inboundCapable' => $leer($o['inboundCapable'] ?? null), 'agentAssigned' => $leer($o['agentAssigned'] ?? null)];
     }
 
     /**
@@ -174,8 +268,20 @@ final class VoiceNumberGuard
      */
     public static function policyVerdict(?CarbonInterface $now = null): array
     {
+        return self::verdictOf(self::lastObservation(), $now);
+    }
+
+    /**
+     * {@see policyVerdict()} sobre una observación ya leída: la identidad
+     * compartida lee la caché UNA vez y saca de la misma lectura el veredicto y
+     * los dos hechos del proveedor.
+     *
+     * @param  array<string, mixed>|null  $o
+     * @return array{check: string, reason: ?string}
+     */
+    private static function verdictOf(?array $o, ?CarbonInterface $now): array
+    {
         $sinVigilar = static fn (string $motivo): array => ['check' => OutboundPolicy::NUMBER_UNVERIFIED, 'reason' => $motivo];
-        $o = self::lastObservation();
         if ($o === null) {
             return $sinVigilar(self::CHECK_REASON_NO_OBSERVATION);
         }
@@ -207,10 +313,104 @@ final class VoiceNumberGuard
      * La guarda de la POLÍTICA (D8-5 + B-1): la configuración choca, o el número
      * importado que observó la conciliación choca. Un número importado que la
      * conciliación vio en WhatsApp cuenta aunque `TWILIO_VOICE_FROM` diga otro.
+     *
+     * Enmienda del 22-11-2026: salvo que la identidad compartida esté ADMITIDA
+     * ({@see sharedIdentity()}, las siete condiciones a la vez). Sus dos
+     * llamadores (`OutboundGate`, la puerta de las personas y la de las
+     * estrategias) no cambian.
      */
     public static function collidesForPolicy(): bool
     {
-        return self::collidesWithConfig() || (self::lastObservation()['collides'] ?? false) === true;
+        $o = self::storedObservation();
+
+        return (self::collidesWithConfig() || ($o['collides'] ?? false) === true) && ! self::sharedIdentityOf($o, null)['admitted'];
+    }
+
+    /**
+     * Enmienda del 22-11-2026, PURA: ¿se admite el número empresarial como origen
+     * de las salientes? Solo si se cumplen las siete a la vez, cada una con su
+     * valor EXACTO (cualquier otro, también null o un hecho que falte, no la
+     * cumple). El primer motivo que falla, en el orden de
+     * {@see SHARED_REASONS}; null solo si se admite.
+     *  1. `declared` === true (`VOICE_NUMBER_SHARED_WITH_MESSAGING`);
+     *  2. `businessNumber` === true: es exactamente `WHATSAPP_DISPLAY_PHONE`;
+     *  3. `inboundCapableDeclared` === false (`VOICE_NUMBER_INBOUND_CAPABLE`);
+     *  4. `inboundEnabled` === false (`VOICE_INBOUND_ENABLED`);
+     *  5. `observationVerified` === true: menos de 2 h, del id configurado e
+     *     igual a `TWILIO_VOICE_FROM`;
+     *  6. `observedInboundCapable` === false: lo observado es solo saliente
+     *     (`supports_inbound = false`; ausente o null no vale);
+     *  7. `observedAgentAssigned` === false: sin agente en el número.
+     *
+     * @param  array<string, mixed>  $f
+     * @return array{admitted: bool, reason: ?string}
+     */
+    public static function sharedVerdict(array $f): array
+    {
+        $motivo = match (true) {
+            ($f['declared'] ?? null) !== true => self::SHARED_REASON_NOT_DECLARED,
+            ($f['businessNumber'] ?? null) !== true => self::SHARED_REASON_NOT_BUSINESS_NUMBER,
+            ($f['inboundCapableDeclared'] ?? null) !== false => self::SHARED_REASON_INBOUND_CAPABLE_DECLARED,
+            ($f['inboundEnabled'] ?? null) !== false => self::SHARED_REASON_INBOUND_ENABLED,
+            ($f['observationVerified'] ?? null) !== true => self::SHARED_REASON_OBSERVATION_UNVERIFIED,
+            ($f['observedInboundCapable'] ?? null) !== false => self::SHARED_REASON_OBSERVED_INBOUND,
+            ($f['observedAgentAssigned'] ?? null) !== false => self::SHARED_REASON_OBSERVED_AGENT,
+            default => null,
+        };
+
+        return ['admitted' => $motivo === null, 'reason' => $motivo];
+    }
+
+    /**
+     * Enmienda del 22-11-2026: los tres hechos de la CONFIGURACIÓN para
+     * {@see sharedVerdict()} (condiciones 1, 3 y 4). Los usan la identidad real
+     * y la conciliación, que pone los de su observación recién hecha.
+     *
+     * @return array{declared: bool, inboundCapableDeclared: ?bool, inboundEnabled: bool}
+     */
+    public static function sharedConfigFacts(): array
+    {
+        $declarado = config('voice.number.inbound_capable');
+
+        return [
+            'declared' => config('voice.number.shared_with_messaging') === true,
+            'inboundCapableDeclared' => is_bool($declarado) ? $declarado : null,
+            'inboundEnabled' => config('voice.inbound.enabled') === true,
+        ];
+    }
+
+    /**
+     * Enmienda del 22-11-2026: la identidad compartida con la configuración real
+     * y la última observación (una sola lectura de la caché), para la política
+     * ({@see collidesForPolicy()}), `GET admin/voice/status`
+     * (`number.sharedWithMessaging`) y el doctor. `declared` es la condición 1;
+     * `reason`, el primer motivo de {@see SHARED_REASONS} que falla (null si se
+     * admite).
+     *
+     * @return array{declared: bool, admitted: bool, reason: ?string}
+     */
+    public static function sharedIdentity(?CarbonInterface $now = null): array
+    {
+        return self::sharedIdentityOf(self::storedObservation(), $now);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $o  la observación guardada, tal cual ({@see storedObservation()})
+     * @return array{declared: bool, admitted: bool, reason: ?string}
+     */
+    private static function sharedIdentityOf(?array $o, ?CarbonInterface $now): array
+    {
+        $configuracion = self::sharedConfigFacts();
+        $desde = config('voice.twilio.from');
+        $proveedor = self::providerFacts($o);
+        $veredicto = self::sharedVerdict($configuracion + [
+            'businessNumber' => self::isBusinessNumber(VoicePhone::isE164($desde) ? $desde : null),
+            'observationVerified' => self::verdictOf($o, $now)['check'] === OutboundPolicy::NUMBER_VERIFIED,
+            'observedInboundCapable' => $proveedor['inboundCapable'],
+            'observedAgentAssigned' => $proveedor['agentAssigned'],
+        ]);
+
+        return ['declared' => $configuracion['declared']] + $veredicto;
     }
 
     /** Los dígitos; un nacional de Colombia de 10 dígitos (3… o 60…) gana el 57. */

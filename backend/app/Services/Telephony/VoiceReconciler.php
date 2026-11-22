@@ -656,7 +656,17 @@ final class VoiceReconciler
      * 6); si no, freno. El veredicto (nunca el número) queda en la caché para la
      * política (`VoiceNumberGuard::rememberObservation()`); en seco, no.
      *
-     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, brakeOpened: bool, wouldOpenBrake?: bool}
+     * Enmienda del 22-11-2026 (protección 6 y D8-5, por decisión expresa del
+     * propietario): el número empresarial NO echa el freno `number_is_messaging`
+     * si la identidad compartida se ADMITE con esta misma observación
+     * (`VoiceNumberGuard::sharedVerdict()`: la declaración, que el importado sea
+     * `TWILIO_VOICE_FROM` y el visible de la mensajería, solo saliente declarado
+     * y observado, entrantes apagadas y sin agente); entonces es
+     * `outbound_only`. Con cualquiera sin cumplir, el freno de siempre. El
+     * resumen lo dice en `sharedWithMessaging` (null sin observación) y la caché
+     * guarda también los dos hechos del proveedor (en seco, nada).
+     *
+     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, sharedWithMessaging: array{declared: bool, admitted: bool, reason: ?string}|null, brakeOpened: bool, wouldOpenBrake?: bool}
      */
     public function numbers(VoiceNumberObserver $observer, bool $dryRun = false): array
     {
@@ -670,7 +680,7 @@ final class VoiceReconciler
         $declarado = is_bool($declarado) ? $declarado : null;
         $resumen = ['result' => self::NUMBER_NOT_CONFIGURED, 'observed' => VoiceNumberAssignment::STATE_UNKNOWN, 'expected' => $esperadoEstado,
             'seq' => $parte->seq, 'outcome' => null, 'inboundCapable' => null, 'inboundDeclared' => $declarado,
-            'matchesFrom' => null, 'collidesWithMessaging' => null, 'brakeOpened' => false];
+            'matchesFrom' => null, 'collidesWithMessaging' => null, 'sharedWithMessaging' => null, 'brakeOpened' => false];
         if (! is_string($id) || trim($id) === '') {
             return $resumen;
         }
@@ -693,18 +703,29 @@ final class VoiceReconciler
         $desde = config('voice.twilio.from');
         $coincide = VoiceNumberGuard::sameNumber($o->phoneNumber(), VoicePhone::isE164($desde) ? $desde : null);
         $choca = $o->phoneNumber() !== null && VoiceNumberGuard::collidesWithMessaging($o->phoneNumber());
-        if ($o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED) {
+        $observado = $o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED;
+        // Enmienda del 22-11-2026: la identidad compartida, con ESTA observación (fresca y del id configurado por construcción).
+        $configuracion = VoiceNumberGuard::sharedConfigFacts();
+        $compartida = ['declared' => $configuracion['declared']] + VoiceNumberGuard::sharedVerdict($configuracion + [
+            'businessNumber' => VoiceNumberGuard::isBusinessNumber($o->phoneNumber()),
+            'observationVerified' => $observado && $coincide === true,
+            'observedInboundCapable' => $o->inboundCapable,
+            'observedAgentAssigned' => $observado ? $o->agentId !== null : null,
+        ]);
+        if ($observado) {
             $resumen['matchesFrom'] = $coincide;
             $resumen['collidesWithMessaging'] = $choca;
+            $resumen['sharedWithMessaging'] = $compartida;
             if (! $this->dryRun) {
-                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca);
+                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca, $o->inboundCapable, $o->agentId !== null);
             }
         }
         $identidad = ['where' => 'reconcile', 'part' => self::NUMBER_PART, 'seq' => $parte->seq];
         if ($o->outcome !== VoiceNumberAssignment::OUTCOME_OBSERVED) {
             $resumen['result'] = 'unobserved_'.$o->outcome;
-        } elseif ($choca) {
+        } elseif ($choca && ! $compartida['admitted']) {
             // Protección 6: con el número de WhatsApp no se llama ni se atiende, aunque `TWILIO_VOICE_FROM` diga otro.
+            // Enmienda del 22-11-2026: salvo la identidad compartida admitida, que sigue abajo y acaba en `outbound_only`.
             $resumen['result'] = self::NUMBER_IS_MESSAGING;
             $abre = $this->brake('number_is_messaging', 'number:'.$o->phoneNumberId.':messaging', $identidad, VoiceBrake::observedAfter($observada));
             $resumen['brakeOpened'] = $abre && ! $this->dryRun;

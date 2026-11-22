@@ -70,7 +70,13 @@ class VoiceReconcileCommand extends Command
                     default => $n['result'],
                 }
                     .' · apunta: '.$n['observed'].' · debería: '.$n['expected']
-                    .($n['result'] === VoiceReconciler::NUMBER_OUTBOUND_ONLY ? ' · solo salientes: sin agente, nadie atiende entrantes (no es deriva)' : ''));
+                    .($n['result'] === VoiceReconciler::NUMBER_OUTBOUND_ONLY ? ' · solo salientes: sin agente, nadie atiende entrantes (no es deriva)' : '')
+                    // Enmienda del 22-11-2026: el número empresarial como origen, admitido o con la primera condición que falta.
+                    .match (true) {
+                        ($n['sharedWithMessaging']['admitted'] ?? false) === true => ' · número empresarial de la mensajería ADMITIDO como origen (enmienda del 22-11-2026)',
+                        ($n['sharedWithMessaging']['declared'] ?? false) === true => ' · identidad compartida declarada y NO admitida: '.$n['sharedWithMessaging']['reason'],
+                        default => '',
+                    });
             }
             if ($seco) {
                 $w = $resumen['would'];
