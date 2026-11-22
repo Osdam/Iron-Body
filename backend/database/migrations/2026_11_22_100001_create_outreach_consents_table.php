@@ -392,9 +392,14 @@ return new class extends Migration
             // Una resolución por petición (NULL no choca: las peticiones y las retiradas no llevan).
             $table->unique('request_uuid', 'ocon_request_unique');
             $table->foreign('request_uuid', 'ocon_request_fk')->references('uuid')->on(self::TABLE)->restrictOnDelete();
-            // La lectura de la tanda (C9-2) y la supresión por persona: el último evento por persona, finalidad y canal.
-            $table->index(['subject_key', 'purpose', 'channel', 'id'], 'ocon_subject_idx');
         });
+
+        // La lectura de la tanda (C9-2), la guarda `ocon_grant_not_superseded` y la supresión por persona: el último
+        // evento por persona, finalidad y canal. En PG, CUBRIDOR (INCLUDE): la tanda es un Index Only Scan por clave
+        // (medido en el informe §4: 500 personas sobre 200 000 filas, 9,6 ms frente a 44 ms del índice simple, que el
+        // planificador cambia por un Seq Scan paralelo). SQLite no tiene INCLUDE: el mismo índice, sin las incluidas.
+        DB::statement('CREATE INDEX ocon_subject_idx ON '.self::TABLE.' (subject_key, purpose, channel, id)'
+            .(DB::connection()->getDriverName() === 'pgsql' ? ' INCLUDE (kind, request_uuid, phone_ref)' : ''));
     }
 
     private function upPostgres(): void

@@ -107,10 +107,17 @@ class OutreachConsentsSchemaTest extends TestCase
         $this->assertSame([
             'ocon_client_request_unique' => ['client_request_id', true],
             'ocon_request_unique' => ['request_uuid', true],
-            'ocon_subject_idx' => ['subject_key,purpose,channel,id', false],
+            'ocon_subject_idx' => [$this->isPostgres() ? 'subject_key,purpose,channel,id,kind,request_uuid,phone_ref' : 'subject_key,purpose,channel,id', false],
             'ocon_uuid_unique' => ['uuid', true],
         ], array_diff_key($indices, ['primary' => 1, 'outreach_consents_pkey' => 1]));
         $this->assertSame([], $this->partialPredicates([self::T_CONSENTS]), 'sin índices parciales (un único total no lo rehace SQLite al reconstruir)');
+        // El de la lectura: cubridor en PG (Index Only Scan de la tanda), simple en SQLite (sin INCLUDE).
+        $this->assertSame($this->isPostgres()
+            ? 'CREATE INDEX ocon_subject_idx ON public.outreach_consents USING btree (subject_key, purpose, channel, id) INCLUDE (kind, request_uuid, phone_ref)'
+            : 'CREATE INDEX ocon_subject_idx ON outreach_consents (subject_key, purpose, channel, id)',
+            $this->isPostgres()
+                ? (string) DB::scalar("SELECT indexdef FROM pg_indexes WHERE indexname = 'ocon_subject_idx'")
+                : (string) DB::table('sqlite_master')->where('name', 'ocon_subject_idx')->value('sql'));
 
         $fks = array_map(static fn (array $fk): string => implode(',', $fk['columns']).' → '.$fk['foreign_table'].'.'.implode(',', $fk['foreign_columns']).' '.strtolower((string) $fk['on_delete']),
             Schema::getForeignKeys(self::T_CONSENTS));
