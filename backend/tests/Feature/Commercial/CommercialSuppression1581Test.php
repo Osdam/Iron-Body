@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Commercial;
 
+use App\Observers\Commercial\ComplaintCommercialEmitter;
+use App\Services\Commercial\CommercialEventRecorder;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,9 @@ use Tests\TestCase;
  *     frenos, no hace falta la baja.
  *  6. Un socio sin prospecto, con queja: la escalera ya falla cerrada en N1 sin
  *     prospecto, así que no hace falta la baja.
+ *  7. Q1-8: la queja que registra el personal (`source = staff`) y el descarte de
+ *     una de la IA (`complaint_dismissed`), escritos por el emisor REAL, caen con
+ *     la persona como los demás hechos.
  *
  * Los datos quedan CONFIRMADOS y las tablas, de otro rol: al terminar se marca la
  * base para que la siguiente prueba con RefreshDatabase migre desde cero. Solo
@@ -99,6 +104,7 @@ class CommercialSuppression1581Test extends TestCase
         $this->stepRepeatingFindsNothing();
         $this->stepByLeadReachesItsMemberAndSiblings();
         $this->stepMemberWithoutLeadNeedsNoOptOut();
+        $this->stepStaffComplaintAndDismissalGoWithThePerson();
     }
 
     // ── 0 · en seco ─────────────────────────────────────────────────────────
@@ -250,6 +256,37 @@ class CommercialSuppression1581Test extends TestCase
         $this->assertSame(0, $rc, "6 · un socio sin prospecto no necesita la baja (N1 ya falla cerrado sin prospecto): {$out}");
         $this->assertStringContainsString('la persona: 0 prospecto(s) y su socio', $out);
         $this->assertSame(0, DB::table('commercial_events')->where('id', $this->s['ed1'])->count());
+    }
+
+    // ── 7 · Q1-8: la queja del personal y el descarte ─────────────────────────
+
+    private function stepStaffComplaintAndDismissalGoWithThePerson(): void
+    {
+        config(['commercial.events_enabled' => true, 'commercial.enabled' => false]);
+        $ahora = now();
+        $socio = (int) DB::table('members')->insertGetId([
+            'member_uuid' => (string) Str::uuid(), 'access_hash' => hash('sha256', 'q18'.Str::random(8)), 'full_name' => 'Elena Queja',
+            'document_number' => 'C1581-'.Str::random(8), 'status' => 'active', 'created_at' => $ahora, 'updated_at' => $ahora,
+        ]);
+        $lead = (int) DB::table('marketing_leads')->insertGetId([
+            'channel' => 'whatsapp', 'source' => 'inbound', 'name' => 'Elena Queja', 'status' => 'new', 'member_id' => $socio,
+            'do_not_contact' => true, 'created_at' => $ahora, 'updated_at' => $ahora,
+        ]);
+        $emisor = app(ComplaintCommercialEmitter::class);
+        $this->assertSame('recorded', $emisor->recordStaffComplaint('member', $socio, 'phone', 'billing', 900, (string) Str::uuid(), $ahora));
+        app(CommercialEventRecorder::class)->record('complaint_created', ['lead_id' => $lead, 'member_id' => $socio], ['source' => 'ultron', 'conversation_id' => 77], 'conversation:77:complaint:20261111', $ahora);
+        $this->assertSame(1, $emisor->dismissAiComplaints(77, $lead, null, $ahora->copy()->addMinute(), 900));
+        $suyos = fn (): int => DB::table('commercial_events')->where(fn ($q) => $q->where('member_id', $socio)->orWhere('marketing_lead_id', $lead))->count();
+        $this->assertSame(3, $suyos());
+        $otros = DB::table('commercial_events')->count() - 3;
+
+        [$rc, $out] = $this->runScript('07-queja-personal', $this->params('m:'.$socio, '0'), asOwner: true);
+        $this->assertSame(0, $rc, "7 · {$out}");
+        $this->assertStringContainsString('commercial_events · 3 hecho(s), 2 de ellos freno N6', $out, '7 · las dos quejas son freno; el descarte, no');
+        $this->assertStringContainsString('Comercial · borrado y redactado: {"commercial_events": 3, "marketing_ai_actions": 0}', $out);
+        $this->assertSame(0, $suyos(), '7 · la queja del personal, la de la IA y el descarte, borrados');
+        $this->assertSame($otros, DB::table('commercial_events')->count(), '7 · nada de otra persona');
+        $this->assertStringNotContainsString('Elena', $out);
     }
 
     // ── Preparación ─────────────────────────────────────────────────────────

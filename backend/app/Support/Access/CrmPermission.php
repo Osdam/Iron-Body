@@ -335,6 +335,10 @@ final class CrmPermission
             // los contactos de voz; se reparten a mano (cuatro ojos: hacen falta dos cuentas).
             'commercial_automation.consents_record',
             'commercial_automation.consents_confirm',
+            // Q1-8 (Enmienda Q1-8 del H9): registrar una queja presencial o por teléfono es un dato
+            // personal («esta persona se quejó») y calla el contacto automático 30 días: solo Super
+            // Admin por defecto, como las llaves vecinas; se reparte a mano a quien atiende en recepción.
+            'commercial_automation.complaints_record',
             // Plantillas de WhatsApp de Meta desde el CRM (L9-96, PLANTILLAS_META_PLAN
             // §5.10): enviar crea plantillas reales en la cuenta de WhatsApp del gimnasio
             // (irreversible) y da fe de lo que Meta responde. Solo Super Admin por defecto.

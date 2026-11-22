@@ -4,7 +4,7 @@
     "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (§8 «Simulación» y «Accesibilidad»; L9-25)",
     "generatedBy": "B9-core: DecisionTraceText::export() y DecisionTraceText::explain() sobre decisiones reales de PolicyLadder y ChannelSelector (backend/tests/Unit/Outreach/Core/tools/export-trace-text-cases.php)",
     "readme": "Lo que FE9 espeja. dictionary: textos por código, niveles, veredictos, plantillas y reservas de explain(). text: text(code) en los casos raros (voice_policy:<motivo> usa el texto de voice_policy; un código desconocido es null). explain: explain(ladder, channel) → frases, en ese orden; solo se leen verdict, level, reasons, retryAt, warnings y effect de la escalera, y perChannel y annotations del selector. retryAt se escribe en Bogotá (dd-mm-aaaa y HH:mm). Entradas sintéticas: sin datos de personas.",
-    "catalogVersion": "outreach-catalog/2026-11-11.2",
+    "catalogVersion": "outreach-catalog/2026-11-22.1",
     "dictionaryHash": "178ff1f0fc914274b84a75f55c253a8075cab7e9a060a6a974dc92a0647d66b1",
     "dictionary": {
         "format": "outreach-trace-text/1",

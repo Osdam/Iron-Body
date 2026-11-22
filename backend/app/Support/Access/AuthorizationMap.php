@@ -900,6 +900,9 @@ final class AuthorizationMap
         'POST api/admin/commercial-automation/consents/{uuid}/confirm' => 'commercial_automation.consents_confirm',
         'POST api/admin/commercial-automation/consents/{uuid}/reject' => 'commercial_automation.consents_confirm',
         'POST api/admin/commercial-automation/consents/revoke' => ['commercial_automation.consents_record', 'commercial_automation.consents_confirm'],
+        // Q1-8 (Enmienda Q1-8): registrar una queja presencial o por teléfono (OutreachComplaintController::ROUTES).
+        // Dentro, además, una persona y la llave de VER a la persona.
+        'POST api/admin/commercial-automation/complaints' => 'commercial_automation.complaints_record',
 
         // VOZ Y TELEFONÍA · Hito 8 (D8-22, «API»): el CRM de la telefonía en
         // routes/voice.php. El registro, las métricas y el estado, con

@@ -100,22 +100,23 @@ class SupervisionActivityLabelsTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_los_27_hechos_del_vocabulario_salen_con_su_texto_y_no_con_la_clave(): void
+    public function test_los_28_hechos_del_vocabulario_salen_con_su_texto_y_no_con_la_clave(): void
     {
-        $this->assertCount(27, V::EVENTS, 'si el vocabulario crece, esta prueba exige su etiqueta');
+        // 28 desde Q1-8 (complaint_dismissed, 22-11-2026).
+        $this->assertCount(28, V::EVENTS, 'si el vocabulario crece, esta prueba exige su etiqueta');
         foreach (V::EVENTS as $i => $evento) {
             $this->fact($evento, $i);
         }
 
         $filas = $this->activity()->where('kind', 'fact');
 
-        $this->assertCount(27, $filas);
-        $this->assertSame(V::EVENTS, $filas->sortBy('at')->pluck('action_code')->all(), 'los 27, cada uno una vez');
+        $this->assertCount(28, $filas);
+        $this->assertSame(V::EVENTS, $filas->sortBy('at')->pluck('action_code')->all(), 'los 28, cada uno una vez');
         foreach ($filas as $f) {
             $this->assertHumano($f['action'], "hecho {$f['action_code']}");
             $this->assertSame(['sistema', 'Registrado', 'ok'], [$f['actor'], $f['result'], $f['result_code']]);
         }
-        $this->assertCount(27, $filas->pluck('action')->unique(), 'ningún texto repetido: cada hecho se distingue del otro');
+        $this->assertCount(28, $filas->pluck('action')->unique(), 'ningún texto repetido: cada hecho se distingue del otro');
         $this->assertSame(
             ['La membresía está por vencer', 'Dejó de venir: se detectó inactividad', 'La membresía venció', 'El cliente presentó una queja'],
             array_map(fn (string $e): string => $filas->firstWhere('action_code', $e)['action'], [V::EV_RENEWAL_WINDOW_OPENED, V::EV_INACTIVITY_DETECTED, V::EV_MEMBERSHIP_EXPIRED, V::EV_COMPLAINT_CREATED]),

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Outreach\Run;
 
+use App\Http\Controllers\Crm\CommercialAutomation\OutreachComplaintController;
 use App\Http\Controllers\Crm\CommercialAutomation\OutreachConsentController;
 use App\Http\Middleware\LimitRequestBodySize;
 use App\Models\Admin;
@@ -116,7 +117,8 @@ class OutreachConsentsApiTest extends TestCase
         }
         $mapa = OutreachConsentController::authorizationMap();
         $this->assertSame(array_keys($mapa), array_keys(array_intersect_key($mapa, $registradas)));
-        $this->assertCount(OutreachConsentController::ROUTE_COUNT, $registradas, 'ninguna ruta de más bajo el prefijo');
+        // Q1-8 (Enmienda Q1-8): bajo el mismo prefijo vive también la ruta de registrar una queja (OutreachComplaintsApiTest).
+        $this->assertCount(OutreachConsentController::ROUTE_COUNT + OutreachComplaintController::ROUTE_COUNT, $registradas, 'ninguna ruta de más bajo el prefijo');
         foreach ($mapa as $clave => $llave) {
             $this->assertSame($llave, AuthorizationMap::resolve($registradas[$clave]), $clave);
             $mw = $registradas[$clave]->gatherMiddleware();

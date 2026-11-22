@@ -214,6 +214,24 @@ final class CommercialVocabulary
     public const EV_COMPLAINT_CREATED = 'complaint_created';
 
     /**
+     * Una persona del gimnasio decidió que una queja que marcó la IA no lo era
+     * (Q1-8, al resolver la revisión con `not_a_complaint`). Referencia la queja
+     * por su clave: `complaint_dismissed:<clave de la queja>`. No borra nada: la
+     * queja sigue en la tabla y deja de frenar (N6 `complaint_recent`).
+     */
+    public const EV_COMPLAINT_DISMISSED = 'complaint_dismissed';
+
+    /**
+     * Quién registró una queja (`payload.source` de `complaint_created`). La IA:
+     * `ultron` y `sales_agent`, las únicas que se pueden descartar. Una persona
+     * del gimnasio: `staff` (Q1-8, presencial o por teléfono), que caduca por la
+     * ventana y nunca se descarta.
+     */
+    public const COMPLAINT_SOURCE_STAFF = 'staff';
+
+    public const COMPLAINT_SOURCES_DISMISSABLE = ['sales_agent', 'ultron'];
+
+    /**
      * Señal positiva explícita. Importa porque es el único momento en que pedir
      * un referido no resulta oportunista.
      */
@@ -238,7 +256,7 @@ final class CommercialVocabulary
         self::EV_INACTIVITY_DETECTED, self::EV_RENEWAL_WINDOW_OPENED, self::EV_MEMBERSHIP_EXPIRED,
         self::EV_APPOINTMENT_CREATED, self::EV_APPOINTMENT_COMPLETED,
         self::EV_INVOICE_REQUESTED, self::EV_INVOICE_VALIDATED, self::EV_INVOICE_REJECTED,
-        self::EV_APP_LINKED, self::EV_OBJECTION_RAISED, self::EV_COMPLAINT_CREATED,
+        self::EV_APP_LINKED, self::EV_OBJECTION_RAISED, self::EV_COMPLAINT_CREATED, self::EV_COMPLAINT_DISMISSED,
         self::EV_CUSTOMER_SATISFIED, self::EV_REFERRAL_OPPORTUNITY,
         self::EV_OFFER_REJECTED, self::EV_HUMAN_REQUESTED,
     ];

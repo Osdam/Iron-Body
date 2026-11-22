@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Crm\CommercialAutomation\OutreachComplaintController;
 use App\Http\Controllers\Crm\CommercialAutomation\OutreachConsentController;
 use App\Http\Middleware\LimitRequestBodySize;
 use Illuminate\Support\Facades\Route;
@@ -21,10 +22,17 @@ use Illuminate\Support\Facades\Route;
 | servicio, la llave de VER a la persona. Los cupos son los de la API de la
 | ejecución (`ultron-studio-read`, 120/min, y `ultron-studio-write`, 30/min,
 | por persona). Tope de cuerpo de 16 KB: el más grande no llega a 2 KB.
+|
+| Q1-8 (Enmienda Q1-8): REGISTRAR UNA QUEJA presencial o por teléfono, 1 ruta
+| (OutreachComplaintController::ROUTES), con la llave
+| `commercial_automation.complaints_record` y las mismas cerraduras (una
+| persona, la llave dentro y la de VER a la persona). Escribe el hecho
+| `complaint_created` (source = staff) por ComplaintCommercialEmitter.
 */
 
 Route::prefix('admin/commercial-automation')
     ->middleware(LimitRequestBodySize::class.':'.OutreachConsentController::BODY_LIMIT)
     ->group(function (): void {
         OutreachConsentController::routes();
+        OutreachComplaintController::routes();
     });

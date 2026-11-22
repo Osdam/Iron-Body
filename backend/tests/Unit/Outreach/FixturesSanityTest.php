@@ -248,7 +248,7 @@ class FixturesSanityTest extends TestCase
         }
         $porClave = array_column($cat['events'], null, 'key');
         $this->assertFalse($porClave['human_requested']['triggerable'], 'human_requested solo detiene (D9-3)');
-        $this->assertCount(27, array_filter($cat['events'], fn ($e) => $e['class'] === 'crm_fact'), 'los 27 del vocabulario');
+        $this->assertCount(28, array_filter($cat['events'], fn ($e) => $e['class'] === 'crm_fact'), 'los 28 del vocabulario');
         $this->assertCount(18, $cat['outcomes'], 'D9-10: 18 resultados');
         foreach (self::load('catalog-snapshot.json')['compatibility'] as $c) {
             $this->assertSame($c['expected']['result'] === 'catalog_incompatible' ? 'N3' : null, $c['expected']['level'], "{$c['name']}: catalog_incompatible es de N3 (L9-21)");

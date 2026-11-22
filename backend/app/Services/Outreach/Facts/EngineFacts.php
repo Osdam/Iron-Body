@@ -27,6 +27,14 @@ use Illuminate\Support\Facades\DB;
  *    los eventos de pago (`OutreachCatalog::PAYMENT_EVENTS`, el único atributo
  *    filtrable); de la carga NUNCA salen importes ni referencias.
  *  - LAS TRANSICIONES que prueban los eventos ({@see transitionsFrom()}).
+ *  - LAS QUEJAS DESCARTADAS (Q1-8, Enmienda Q1-8 del contrato): un
+ *    `complaint_created` de la IA (`payload.source` en
+ *    `CommercialVocabulary::COMPLAINT_SOURCES_DISMISSABLE`) que una persona
+ *    descartó (`complaint_dismissed` con su clave, `complaint_dismissed:<clave>`,
+ *    hasta ahora) no sale: no es una queja, ni para N6 ni para las condiciones.
+ *    Todo lo demás sale: la queja del personal (`staff`), la de otra fuente, la
+ *    que no tiene clave o cuya carga no se puede leer, y la descartada después
+ *    de «ahora». Lo que no se puede leer cuenta como queja (falla cerrado).
  *
  * FUENTE SIN DATOS (DF-C4: ausencia no probada no es ausencia): con
  * `COMMERCIAL_EVENTS_ENABLED` apagada (hoy en producción, R9-8) el motor no
@@ -115,19 +123,29 @@ final class EngineFacts
         }
 
         $conPlan = array_intersect($tipos, OutreachCatalog::PAYMENT_EVENTS) !== [];
-        $columnas = ['id', 'event', 'member_id', 'marketing_lead_id', 'occurred_at', ...($conPlan ? ['payload'] : [])];
+        $conQueja = in_array(CommercialVocabulary::EV_COMPLAINT_CREATED, $tipos, true);
+        // Q1-8: con las quejas se leen también sus descartes, en la MISMA consulta (una por fuente y lote).
+        $leidos = $conQueja ? array_values(array_unique([...$tipos, CommercialVocabulary::EV_COMPLAINT_DISMISSED])) : $tipos;
+        $columnas = ['id', 'event', 'member_id', 'marketing_lead_id', 'occurred_at', ...($conPlan || $conQueja ? ['payload'] : []), ...($conQueja ? ['dedupe_key'] : [])];
         $filas = $this->ofPeople(DB::table('commercial_events'), $socios, $leads)
-            ->whereIn('event', $tipos)
+            ->whereIn('event', $leidos)
             ->where('occurred_at', '>=', FactValues::sql(RelativeTime::windowStart($b->now, OutreachCatalog::MAX_WINDOW_DAYS, 'days')))
             ->where('occurred_at', '<=', FactValues::sql($b->now))
             ->orderByDesc('occurred_at')->orderByDesc('id')
             ->get($columnas);
+        $descartadas = $conQueja ? self::dismissedComplaints($filas) : [];
 
         $vistos = [];
         $porTipo = [];
         foreach ($filas as $f) {
+            if (! in_array($f->event, $tipos, true)) {
+                continue; // un descarte que solo se leyó para descontar su queja
+            }
             $cuando = FactValues::instant($f->occurred_at);
             if ($cuando === null) {
+                continue;
+            }
+            if ($descartadas !== [] && $f->event === CommercialVocabulary::EV_COMPLAINT_CREATED && self::dismissed($f, $descartadas)) {
                 continue;
             }
             $claves = [];
@@ -169,6 +187,49 @@ final class EngineFacts
         }
 
         return $salida;
+    }
+
+    /**
+     * Las claves de las quejas que una persona descartó (Q1-8): la clave de cada
+     * `complaint_dismissed` del lote sin su prefijo. Las filas ya vienen en la
+     * ventana y hasta «ahora»: un descarte posterior no cuenta todavía.
+     *
+     * @param  iterable<object>  $filas
+     * @return array<string, true>
+     */
+    private static function dismissedComplaints(iterable $filas): array
+    {
+        $prefijo = CommercialVocabulary::EV_COMPLAINT_DISMISSED.':';
+        $claves = [];
+        foreach ($filas as $f) {
+            $clave = $f->dedupe_key ?? null;
+            if ($f->event === CommercialVocabulary::EV_COMPLAINT_DISMISSED && is_string($clave) && str_starts_with($clave, $prefijo) && strlen($clave) > strlen($prefijo)) {
+                $claves[substr($clave, strlen($prefijo))] = true;
+            }
+        }
+
+        return $claves;
+    }
+
+    /**
+     * ¿Es esta queja una de la IA que alguien descartó? Su clave tiene que estar
+     * entre las descartadas y su carga tiene que decir, legible, que la registró
+     * la IA. Cualquier otra cosa (la del personal, sin clave, sin carga legible):
+     * no está descartada.
+     *
+     * @param  array<string, true>  $descartadas
+     */
+    private static function dismissed(object $f, array $descartadas): bool
+    {
+        if (! is_string($f->dedupe_key ?? null) || ! isset($descartadas[$f->dedupe_key])) {
+            return false;
+        }
+        $payload = $f->payload ?? null;
+        if (is_string($payload) && $payload !== '') {
+            $payload = json_decode($payload, true);
+        }
+
+        return is_array($payload) && in_array($payload['source'] ?? null, CommercialVocabulary::COMPLAINT_SOURCES_DISMISSABLE, true);
     }
 
     /** @return array<string, int> solo el `plan_id` de los eventos de pago */

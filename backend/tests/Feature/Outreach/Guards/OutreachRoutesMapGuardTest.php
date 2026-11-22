@@ -35,6 +35,8 @@ class OutreachRoutesMapGuardTest extends TestCase
         'commercial_automation.stop', 'commercial_automation.release',
         // Enmienda C9 (22-11-2026, C9-3): las autorizaciones de contacto por WhatsApp, a cuatro ojos.
         'commercial_automation.consents_record', 'commercial_automation.consents_confirm',
+        // Enmienda Q1-8 (22-11-2026): registrar una queja presencial o por teléfono.
+        'commercial_automation.complaints_record',
     ];
 
     /** D9-13: el dominio de la ejecución está excluido del token compartido (rama del H9, R-2 de SEC9-a). */
