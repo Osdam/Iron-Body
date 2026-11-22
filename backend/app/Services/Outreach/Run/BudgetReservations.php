@@ -21,7 +21,10 @@ use InvalidArgumentException;
  *  - `strategy:<uuid>`: el tope de contactos al día de la estrategia
  *    (`limits.contactsPerDay`);
  *  - `phone:<phone_ref>`: UN contacto al día por teléfono (L9-30), con el
- *    seudónimo del número.
+ *    seudónimo del número;
+ *  - `classifier:reply`: AI9, las llamadas al clasificador de respuestas y su
+ *    coste del día, con su propio techo. Nunca va entre las parcelas de un
+ *    trabajo; en PostgreSQL lo admite el CHECK ampliado por `2026_11_22_100001`.
  *
  * El techo vigente es el MENOR entre el que guarda la fila (nació con la
  * configuración de ese momento) y el que la configuración dice ahora: subir
@@ -37,10 +40,13 @@ final class BudgetReservations
 
     public const SCOPE_PHONE = 'phone:';
 
+    /** AI9: el único alcance del clasificador (llamadas y micros de dólar del día). */
+    public const SCOPE_CLASSIFIER = 'classifier:reply';
+
     /** Una parcela: lo que se reserva en un alcance y su techo de ahora. @return array{scope: string, units: int, micros: int, capUnits: int, capMicros: int} */
     public static function parcel(string $scope, int $units, int $micros, int $capUnits, int $capMicros): array
     {
-        if (preg_match('/^(channel:(assisted|whatsapp_template|voice_call)|strategy:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|phone:[0-9a-f]{64})$/D', $scope) !== 1) {
+        if (preg_match('/^(channel:(assisted|whatsapp_template|voice_call)|strategy:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|phone:[0-9a-f]{64}|classifier:reply)$/D', $scope) !== 1) {
             throw new InvalidArgumentException('Alcance de la reserva fuera de su forma.');
         }
         if ($units < 0 || $micros < 0 || $capUnits < 0 || $capMicros < 0) {

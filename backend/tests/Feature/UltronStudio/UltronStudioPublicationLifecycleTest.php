@@ -608,10 +608,11 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         }
     }
 
-    public function test_el_fixture_trae_las_58_puertas_de_publicar_y_promover(): void
+    public function test_el_fixture_trae_las_61_puertas_de_publicar_y_promover(): void
     {
-        $this->assertCount(45, iterator_to_array(self::publishGateCases()));
-        $this->assertCount(13, iterator_to_array(self::promoteGateCases()));
+        // 45 + 13 y, con B-2 (Enmienda del 22-11-2026), dos de publicar y una de promover.
+        $this->assertCount(47, iterator_to_array(self::publishGateCases()));
+        $this->assertCount(14, iterator_to_array(self::promoteGateCases()));
     }
 
     #[DataProvider('publishGateCases')]
@@ -696,6 +697,7 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         if (in_array('rule:S-001', $sinEfecto, true)) {
             $this->newStudioRule($revisora)->assertCreated();
         }
+        $this->phraseRuleBy($f, $actor);
         $contenido = $this->contentWith(
             in_array('persona.tone', $sinEfecto, true) ? ['persona' => ['tone' => 'profesional']] : [],
             $f['revalidation'] === 'blocked' ? array_values(array_diff($this->baseline()['definition']['edgeIds'], ['E10'])) : null,
@@ -779,6 +781,7 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         $autor = $f['actor']['isAuthor'] && $actor !== null ? $actor : $autora;
         $publica = $this->personWith(['ultron.view', 'ultron.publish'], 'Quien publicó en canario');
         $this->openKeys(['marketing.ultron.studio_config' => 'all']);
+        $this->phraseRuleBy($f, $actor);
 
         $uuid = (string) Str::uuid();
         $estado = $f['version']['status'];
@@ -835,6 +838,21 @@ class UltronStudioPublicationLifecycleTest extends TestCase
      *
      * @param  array<string, mixed>|null  $carga
      */
+    /**
+     * B-2 (`actor.isRulePhraseAuthor`): quien actúa escribe, por la API, una
+     * S-NNN con frases que la versión copia (sin «si»: aporta siempre). La
+     * versión la crea otra persona.
+     */
+    private function phraseRuleBy(array $f, ?Admin $actor): void
+    {
+        if (! ($f['actor']['isRulePhraseAuthor'] ?? false) || $actor === null) {
+            return;
+        }
+        $this->newStudioRule($actor, ['layers' => ['persona'], 'conditions' => self::conditionsOf(
+            [['kind' => 'forbid', 'target' => 'text', 'op' => 'contains', 'phrases' => ['te lo regalo']]],
+        )])->assertCreated();
+    }
+
     private function assertOutcome(TestResponse $r, ?int $estado, ?string $codigo, ?array $carga, string $accion, int $entradasAntes): void
     {
         if ($estado === null) {
