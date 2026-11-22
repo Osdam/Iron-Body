@@ -108,6 +108,21 @@ Lo que queda abierto: la lista todavía puede salir ante una pregunta sobre una 
 
 ---
 
+## 1 quinquies. Novedades del 21-11 por la noche («regenerar antes de sustituir»)
+
+Nada de esta sección está desplegado: espera tu autorización.
+
+| Qué | Qué pasaba | Cómo queda |
+|---|---|---|
+| Quién escribe la respuesta | Cuando una protección rechazaba el texto del modelo, salía un texto fijo del servidor. Medido: el modelo escribía 67 de cada 89 respuestas | **Hecho y revisado, sin desplegar.** Antes de enviar, el servidor le devuelve al modelo el defecto exacto y el modelo reescribe, como mucho dos veces más. El texto fijo queda como última red |
+| La lista de planes | La armaba el servidor con una frase fija | **Hecho y revisado, sin desplegar.** La frase la escribe el modelo; el servidor elige los planes y pone nombre y precio desde el CRM al enviar. La lista fija queda como respaldo |
+| Límites | — | Tres borradores por turno y 25 segundos, como mucho. El caso normal sigue costando lo mismo |
+| Medición | No había | Una orden de solo lectura dice cuántas respuestas escribió el modelo, cuántas se reescribieron y cuántas fueron respaldo, frente al objetivo del 90 % |
+
+Lo que queda abierto: el 90 % es un objetivo que se medirá, no una garantía; la regla de beneficios no detecta paráfrasis; y antes de abrir ULTRON a más conversaciones hay que darle a la comprobación su propio cupo de peticiones. Aparte, los beneficios de «Plan Semana» y «Plan Mensual» están mal guardados en el CRM (con comillas sobrantes).
+
+---
+
 ## 2. Sección por sección
 
 ### 2.1 Studio · Versiones, aprobación y publicación

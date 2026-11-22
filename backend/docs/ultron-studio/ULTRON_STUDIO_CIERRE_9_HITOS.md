@@ -4,9 +4,13 @@
 
 ---
 
-## 0. Estado vigente (19-11-2026, 04:20 UTC)
+## 0. Estado vigente (22-11-2026, 02:33 UTC)
 
-### 0.0 Novedad del 19-11: el tono y la lista de planes, listos y SIN DESPLEGAR
+### 0.0 Novedad del 22-11: «regenerar antes de sustituir», listo y SIN DESPLEGAR
+
+El propietario no aprobó el gate del 19-11: pidió que ULTRON siguiera siendo un agente con IA y no un chatbot de respuestas fijas, y decidió construir primero «regenerar antes de sustituir» (L9-124 y Enmienda A4-3 del contrato H5). Está hecho: cuando una protección rechaza el borrador del modelo por algo corregible, el modelo reescribe con el defecto exacto (como mucho dos veces más), y la lista de planes la redacta el modelo con datos que pone el servidor desde el catálogo. Revisado por seguridad (apto con condiciones) y por el revisor (aprobado con condiciones), sin bloqueantes, y verificado con la batería completa (18 985 pruebas, solo las dos rojas esperadas) y con una sonda en el servidor. **Nada de esto está en producción ni en n8n:** espera la autorización del propietario (gate 4-H). Lo del 19-11, que sigue debajo, queda como última red.
+
+### 0.0 bis Novedad del 19-11: el tono y la lista de planes, listos y SIN DESPLEGAR
 
 Tras la segunda prueba real (18-11) quedaban dos observaciones del propietario: el trato alternaba entre usted y tú, y a la pregunta por los planes salía un solo plan. Las dos están corregidas en el código (L9-123 y Enmienda A4-2 del contrato H5), revisadas por seguridad (apto con condiciones) y por el revisor (aprobado con condiciones, tras cerrar sus dos bloqueantes) y verificadas con la batería completa (18 649 pruebas, solo las dos rojas esperadas) y con una sonda en el servidor. **Nada de esto está en producción:** espera la aprobación del propietario (gate 4-G: textos fijos, modo y despliegue). Los commits están en la rama `feat/ultron-studio-h9`, no en `main`. La tabla 0.1 sigue describiendo producción: la API sirve hoy `e861e2c8` (despliegues de otras líneas de trabajo encima de `cd5dce0e`, que es lo último del Studio) y la versión 2 sigue publicada en la conversación canaria.
 
