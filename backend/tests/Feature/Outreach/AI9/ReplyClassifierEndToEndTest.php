@@ -286,7 +286,7 @@ class ReplyClassifierEndToEndTest extends TestCase
         (new WhatsappTemplateOutcomes)->run(now());
 
         $contexto = null;
-        Log::shouldHaveReceived('info')->once()->with('outreach.classifier.discarded', Mockery::capture($contexto));
+        Log::shouldHaveReceived('info')->with('outreach.classifier.discarded', Mockery::capture($contexto))->once();
         Log::shouldNotHaveReceived('info', ['outreach.classifier.recorded', Mockery::any()]);
         $this->assertIsArray($contexto);
         $claves = array_keys($contexto);
@@ -306,7 +306,7 @@ class ReplyClassifierEndToEndTest extends TestCase
         (new WhatsappTemplateOutcomes)->run(now());
 
         $contexto = null;
-        Log::shouldHaveReceived('info')->once()->with('outreach.classifier.recorded', Mockery::capture($contexto));
+        Log::shouldHaveReceived('info')->with('outreach.classifier.recorded', Mockery::capture($contexto))->once();
         Log::shouldNotHaveReceived('info', ['outreach.classifier.discarded', Mockery::any()]);
         $this->assertSame(['not_interested', 95, 'recorded'], [$contexto['label'], $contexto['confidence'], $contexto['result']]);
         $this->assertSame(1, $this->classifierOutcomes()->count(), 'lo mismo que ya guarda el libro');
@@ -408,6 +408,69 @@ class ReplyClassifierEndToEndTest extends TestCase
         $c = (new ReplyClassifier)->classifyReply($s['job'], (int) $s['job']->enrollment_id, (int) DB::table('marketing_messages')->where('direction', 'inbound')->value('id'), [(int) $s['member']['lead']], now()->toDateTimeImmutable(), now());
         $this->assertSame('budget_exhausted', $c['reason']);
         $this->assertSame([], $fake->calls);
+    }
+
+    // ── M2 · El tope por pasada ─────────────────────────────────────────────
+
+    /**
+     * M2 de security: con más respuestas que el tope, el clasificador ve las
+     * de los trabajos más antiguos; las demás quedan como hoy (`replied`) y
+     * NO se clasifican después, ni con plazas de sobra: la única puerta es
+     * haber ganado la inserción de su `replied`. Ninguna llamada de más.
+     */
+    public function test_con_mas_respuestas_que_el_tope_las_demas_quedan_como_hoy_y_no_se_clasifican_despues(): void
+    {
+        $fake = new FakeReplyTransport(FakeReplyTransport::says('not_interested', 95));
+        $this->classifierOn($fake, ['outreach.classifier.max_per_pass' => 2]);
+        $enviados = $this->sentTemplates(5);
+        foreach ($enviados as $e) {
+            $this->inbound($e['lead'], 'No me interesa, gracias', 1);
+        }
+        Log::spy();
+
+        $r = (new WhatsappTemplateOutcomes)->run(now());
+
+        $this->assertSame(['replied' => 5, 'not_interested' => 2], $r['recorded'], 'las cinco como hoy; el freno, en las dos que vio');
+        $this->assertSame(['calls' => 2, 'costMicros' => 280, 'recorded.recorded' => 2, 'skipped.pass_cap' => 3], $r['classifier']);
+        $this->assertCount(2, $fake->calls);
+        $this->assertSame([(int) $enviados[0]['job']->id, (int) $enviados[1]['job']->id], $this->classifierOutcomes()->pluck('job_id')->map(static fn ($id): int => (int) $id)->all(), 'los trabajos más antiguos primero');
+        Log::shouldHaveReceived('info')->with('outreach.classifier.pass_cap', ['skipped' => 3, 'max_per_pass' => 2])->once();
+        $this->assertSame(5, DB::table('outreach_enrollments')->where('status', 'handed_off')->count(), 'todas derivadas, como hoy');
+
+        // La pasada siguiente, con plazas de sobra: las tres ya están `replied` (duplicado) y no se clasifican.
+        Carbon::setTestNow(now()->addMinute());
+        config(['outreach.classifier.max_per_pass' => 40]);
+        $otra = (new WhatsappTemplateOutcomes)->run(now());
+
+        $this->assertSame([], $otra['recorded']);
+        $this->assertSame([], $otra['classifier']);
+        $this->assertCount(2, $fake->calls, 'ni una llamada de más');
+        $this->assertSame(2, (int) $this->classifierCounter()->reserved_units);
+        $this->assertSame(5, DB::table('outreach_outcomes')->where('outcome', 'replied')->count());
+    }
+
+    public function test_la_plaza_se_toma_al_encolar_tambien_lo_que_espera_a_un_commit_y_con_tope_0_no_clasifica(): void
+    {
+        $fake = new FakeReplyTransport(FakeReplyTransport::says('not_interested', 95));
+        $this->classifierOn($fake, ['outreach.classifier.max_per_pass' => 1]);
+        $enviados = $this->sentTemplates(2);
+        foreach ($enviados as $e) {
+            $this->inbound($e['lead'], 'No me interesa, gracias', 1);
+        }
+
+        $r = DB::transaction(function () use ($fake): array {
+            $r = (new WhatsappTemplateOutcomes)->run(now());
+            $this->assertSame([], $fake->calls, 'dentro de la transacción no sale nada');
+
+            return $r;
+        });
+
+        $this->assertCount(1, $fake->calls, 'al confirmar, una: la otra ya pasó del tope al encolar');
+        $this->assertSame(1, $r['classifier']['skipped.pass_cap']);
+
+        config(['outreach.classifier.max_per_pass' => 0]);
+        $this->assertSame(0, OutreachConfig::classifierSetup()['maxPerPass']);
+        $this->assertFalse(OutreachConfig::classifierSetup()['effective'], 'con tope 0 no clasificaría: el estado lo dice');
     }
 
     // ── El texto es un dato no confiable ────────────────────────────────────
@@ -529,7 +592,7 @@ class ReplyClassifierEndToEndTest extends TestCase
         // El transporte lo enlaza el proveedor de servicios (`transport`); sin su clave propia ni modelo no está `configured`.
         $this->assertSame([
             'implemented' => true, 'version' => '1', 'promptRef' => ReplyClassifierPrompt::ref(), 'labels' => ReplyClassifierPrompt::LABELS,
-            'enabled' => false, 'transport' => true, 'configured' => false, 'model' => null, 'dailyCap' => 0, 'dailyBudgetMicros' => 0, 'timeoutSeconds' => 5, 'effective' => false,
+            'enabled' => false, 'transport' => true, 'configured' => false, 'model' => null, 'dailyCap' => 0, 'dailyBudgetMicros' => 0, 'timeoutSeconds' => 5, 'maxPerPass' => 10, 'effective' => false,
         ], $apagado['classifierSetup']);
 
         $this->classifierOn(new FakeReplyTransport(FakeReplyTransport::says('not_interested', 95)));

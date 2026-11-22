@@ -136,6 +136,12 @@ return [
         // Tiempo máximo de la llamada (2–10 s) y tokens de salida (16–256, incluido el razonamiento). Sin reintentos.
         'timeout_seconds' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS', 5, 2, 10),
         'max_output_tokens' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS', 64, 16, 256),
+        // Respuestas que se le pasan al clasificador en UNA pasada de `outreach:whatsapp-outcomes` (0–40; 0 = ninguna).
+        // La pasada corre cada minuto, en el proceso del programador y antes del despacho, y cada llamada espera como
+        // mucho su tiempo máximo: con 10 y 5 s, ≤ 50 s aunque todas agoten el tiempo (cabe en el minuto); con 40 y 10 s,
+        // ≤ 400 s, lejos de los 10 min de `withoutOverlapping`. Lo que pasa del tope queda como hoy (`replied`) y NO se
+        // clasifica después: la única puerta es ganar la inserción de ese `replied` (M2 de security).
+        'max_per_pass' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS', 10, 0, 40),
         // La clave PROPIA del clasificador. Solo la lee su transporte (fuera del H9), en el momento de llamar.
         'api_key' => env('COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY'),
     ],

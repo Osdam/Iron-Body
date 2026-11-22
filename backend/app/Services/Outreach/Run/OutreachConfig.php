@@ -193,12 +193,23 @@ final class OutreachConfig
     }
 
     /**
+     * AI9 (M2 de security): las respuestas que una pasada de W9 le pasa al
+     * clasificador (0–40; 0 = ninguna). Acota lo que la pasada puede esperar
+     * a la red: el tope por el tiempo máximo de una llamada.
+     */
+    public static function classifierMaxPerPass(): int
+    {
+        return self::int('outreach.classifier.max_per_pass', 10, 0, 40);
+    }
+
+    /**
      * AI9 · lo que dice el panel del clasificador (sin la base ni la red y sin
      * secretos): que existe, su versión y su huella, la bandera, si hay
-     * transporte enlazado y configurado (clave propia), el modelo, los techos
-     * y si de verdad clasificaría ahora (`effective`: todo lo anterior, cupo y
-     * techo distintos de 0, y la ejecución en vivo). El consumo del día lo
-     * añade la lectura del estado (`OutreachReadModels`).
+     * transporte enlazado y configurado (clave propia), el modelo, los techos,
+     * el tope por pasada y si de verdad clasificaría ahora (`effective`: todo
+     * lo anterior, cupo, techo y tope por pasada distintos de 0, y la
+     * ejecución en vivo). El consumo del día lo añade la lectura del estado
+     * (`OutreachReadModels`).
      *
      * @return array<string, mixed>
      */
@@ -220,7 +231,8 @@ final class OutreachConfig
             'dailyCap' => self::classifierDailyCap(),
             'dailyBudgetMicros' => self::classifierDailyBudgetMicros(),
             'timeoutSeconds' => self::classifierTimeoutSeconds(),
-            'effective' => self::classifierEnabled() && $configurado && self::classifierDailyCap() > 0 && self::classifierDailyBudgetMicros() > 0 && self::isLive(),
+            'maxPerPass' => self::classifierMaxPerPass(),
+            'effective' => self::classifierEnabled() && $configurado && self::classifierDailyCap() > 0 && self::classifierDailyBudgetMicros() > 0 && self::classifierMaxPerPass() > 0 && self::isLive(),
         ];
     }
 

@@ -38,6 +38,39 @@ trait AI9World
         return ['job' => DB::table('outreach_jobs')->first(), 'message' => MarketingMessage::query()->where('direction', 'outbound')->sole(), 'member' => $p['member'], 'live' => $p['live']];
     }
 
+    /**
+     * Varias plantillas en vivo que ya salieron, una por persona (cada una con
+     * su teléfono), por la misma estrategia; en el orden de sus trabajos.
+     *
+     * @return list<array{job: object, lead: int}>
+     */
+    private function sentTemplates(int $people): array
+    {
+        $this->whatsappLive();
+        $this->metaOn();
+        $plantilla = $this->whatsappTemplate();
+        $this->metaCheck($plantilla);
+        $this->whatsappStrategy($plantilla);
+        $leads = [];
+        for ($i = 1; $i <= $people; $i++) {
+            $leads[] = (int) $this->qualifyingMember(self::utcAt(self::NOW), 5, '30012345'.str_pad((string) $i, 2, '0', STR_PAD_LEFT))['lead'];
+        }
+        $planner = $this->openPlanner();
+        $planner->sweep(now(), true);
+        $this->assertSame($people, $planner->planDue(now())['planned']);
+        Carbon::setTestNow(now()->addMinutes(15));
+        $this->assertSame(['started' => $people], $this->openDispatcher()->dispatch(now(), null, true)['results']);
+        $salida = [];
+        foreach (DB::table('outreach_jobs')->orderBy('id')->get() as $i => $trabajo) {
+            $lead = (int) DB::table('marketing_messages as m')->join('marketing_conversations as c', 'c.id', '=', 'm.conversation_id')
+                ->where('m.id', $trabajo->marketing_message_id)->value('c.lead_id');
+            $this->assertContains($lead, $leads);
+            $salida[] = ['job' => $trabajo, 'lead' => $lead];
+        }
+
+        return $salida;
+    }
+
     /** Un entrante de la persona por el camino de siempre (lo que guarda el webhook), minutos después. */
     private function inbound(int $leadId, string $body, int $minutesLater = 5): MarketingMessage
     {
