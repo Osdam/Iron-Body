@@ -87,14 +87,17 @@ class ReplyClassifierStaticGuardsTest extends TestCase
     /** Trozos de URL que solo puede llevar el literal de la URL oficial. */
     private const URL_FRAGMENTS = ['http', '://', '//', 'www.', '.com', '/v1', 'api.openai'];
 
-    /** Las claves de OpenAI de otras partes del sistema en estas pruebas (M4). */
-    private const FOREIGN = ['services.openai.api_key' => 'sk-compartida-de-prueba', 'iron_crm.api_key' => 'sk-copiloto-de-prueba', 'ultron_studio.lab.openai.api_key' => 'sk-laboratorio-de-prueba'];
+    /** Las claves de OpenAI de otras partes del sistema en estas pruebas (M4), por su configuración… */
+    private const FOREIGN = ['services.openai.api_key' => 'sk-compartida-de-prueba', 'iron_crm.api_key' => 'sk-copiloto-de-prueba'];
+
+    /** …y la del laboratorio del Studio, que llega por su huella (`config/outreach.php` la calcula desde el entorno). */
+    private const LAB_KEY = 'sk-laboratorio-de-prueba';
 
     protected function setUp(): void
     {
         parent::setUp();
         Http::preventStrayRequests();
-        config(['outreach.classifier.api_key' => 'sk-clasificador-propio-de-prueba'] + self::FOREIGN);
+        config(['outreach.classifier.api_key' => 'sk-clasificador-propio-de-prueba', OpenAiReplyClassifierTransport::FOREIGN_KEY_HASHES => [hash('sha256', self::LAB_KEY)]] + self::FOREIGN);
     }
 
     public function test_el_espacio_del_transporte_contiene_solo_el_adaptador(): void
@@ -289,7 +292,7 @@ class ReplyClassifierStaticGuardsTest extends TestCase
     public function test_sin_clave_propia_no_sale_ninguna_peticion_ni_por_el_clasificador(): void
     {
         Http::fake();
-        foreach (['', '   ', ...array_values(self::FOREIGN)] as $clave) {
+        foreach (['', '   ', ...array_values(self::FOREIGN), self::LAB_KEY] as $clave) {
             config(['outreach.classifier.api_key' => $clave]);
             $this->assertFalse(app(ReplyClassifierTransport::class)->configured(), "clave «{$clave}»");
             $this->assertSame('not_configured', app(ReplyClassifierTransport::class)->classify('gpt-4.1-mini', 'x', 'No me interesa', [], 64, 5)['error']);
@@ -305,12 +308,14 @@ class ReplyClassifierStaticGuardsTest extends TestCase
     }
 
     /**
-     * M4: las claves ajenas del adaptador ({@see OpenAiReplyClassifierTransport::FOREIGN_KEYS})
-     * son TODAS las claves de OpenAI de `config/`. Se buscan por el texto las
-     * variables de entorno de clave de OpenAI que lee la configuración, y se
-     * vuelve a evaluar cada fichero con un valor centinela en cada una: las
-     * rutas que lo devuelven son las claves. Una variable nueva, u otra ruta
-     * que lea la misma, hace caer esto hasta que entre en la lista.
+     * M4: el adaptador rechaza TODAS las claves de OpenAI de `config/`, por
+     * su configuración ({@see OpenAiReplyClassifierTransport::FOREIGN_KEYS})
+     * o por su huella (`outreach.classifier.foreign_key_sha256`, la del
+     * laboratorio: fuera del Studio nadie nombra su configuración). Se buscan
+     * por el texto las variables de entorno de clave de OpenAI que lee la
+     * configuración, y se vuelve a evaluar cada fichero con un valor centinela
+     * en cada una: las rutas que lo devuelven son las claves. Una variable
+     * nueva, u otra ruta que lea la misma, hace caer esto hasta que la cubra.
      */
     public function test_las_claves_ajenas_del_adaptador_son_todas_las_de_openai_de_la_configuracion(): void
     {
@@ -322,7 +327,8 @@ class ReplyClassifierStaticGuardsTest extends TestCase
         }
         $variables = array_values(array_unique($variables));
         sort($variables);
-        $this->assertSame(['OPENAI_API_KEY', 'ULTRON_STUDIO_LAB_OPENAI_API_KEY'], $variables, 'las variables de clave de OpenAI que lee config/');
+        $this->assertContains('OPENAI_API_KEY', $variables, 'el rastreo ve las variables de clave de OpenAI de config/');
+        $this->assertContains('ULTRON_STUDIO_LAB_OPENAI_API_KEY', $variables);
 
         $previos = [];
         $centinelas = [];
@@ -333,18 +339,23 @@ class ReplyClassifierStaticGuardsTest extends TestCase
             putenv("{$v}={$c}");
         }
         $rutas = [];
+        $huellas = null;
         $recorrer = static function (mixed $valor, string $ruta) use (&$recorrer, &$rutas, $centinelas): void {
             if (is_array($valor)) {
                 foreach ($valor as $k => $hijo) {
                     $recorrer($hijo, $ruta.'.'.$k);
                 }
             } elseif (is_string($valor) && in_array(trim($valor), $centinelas, true)) {
-                $rutas[] = $ruta;
+                $rutas[$ruta] = trim($valor);
             }
         };
         try {
             foreach ($ficheros as $fichero) {
-                $recorrer((static fn (string $f): mixed => require $f)($fichero), basename($fichero, '.php'));
+                $valores = (static fn (string $f): mixed => require $f)($fichero);
+                if (basename($fichero) === 'outreach.php') {
+                    $huellas = $valores['classifier']['foreign_key_sha256'] ?? null;
+                }
+                $recorrer($valores, basename($fichero, '.php'));
             }
         } finally {
             foreach ($previos as $v => [$servidor, $entorno, $proceso]) {
@@ -361,10 +372,21 @@ class ReplyClassifierStaticGuardsTest extends TestCase
                 putenv($proceso === false ? $v : "{$v}={$proceso}");
             }
         }
-        sort($rutas);
-        $esperadas = OpenAiReplyClassifierTransport::FOREIGN_KEYS;
-        sort($esperadas);
-        $this->assertSame($esperadas, $rutas, 'el adaptador compara con todas las claves de OpenAI de la configuración, y solo con ellas');
+        ksort($rutas);
+        foreach (['iron_crm.api_key', 'services.openai.api_key', 'ultron_studio.lab.openai.api_key'] as $conocida) {
+            $this->assertArrayHasKey($conocida, $rutas, 'el centinela encuentra las claves de OpenAI de config/');
+        }
+        $this->assertIsArray($huellas, 'config/outreach.php calcula sus huellas');
+        $cubiertas = [];
+        foreach ($rutas as $ruta => $centinela) {
+            if (in_array($ruta, OpenAiReplyClassifierTransport::FOREIGN_KEYS, true) || in_array(hash('sha256', $centinela), $huellas, true)) {
+                $cubiertas[] = $ruta;
+            }
+        }
+        $this->assertSame(array_keys($rutas), $cubiertas, 'el adaptador rechaza cada clave de OpenAI de la configuración, por su ruta o por su huella');
+        $this->assertSame([], array_values(array_diff(OpenAiReplyClassifierTransport::FOREIGN_KEYS, array_keys($rutas))), 'y su lista no nombra nada que no sea una de ellas');
+        $deCentinelas = array_map(static fn (string $c): string => hash('sha256', $c), $centinelas);
+        $this->assertSame([], array_values(array_diff($huellas, $deCentinelas)), 'cada huella es la de una de ellas');
     }
 
     public function test_un_corte_de_conexion_antes_de_salir_tampoco_se_reintenta(): void

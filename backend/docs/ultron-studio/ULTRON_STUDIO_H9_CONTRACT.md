@@ -1652,7 +1652,11 @@ Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/
   - Desde la ronda 3 (M1 de security), también el correo escrito con espacios o con «arroba» y «punto» (solo si acaba en un dominio de primer nivel conocido), un dominio con ruta sin esquema (`instagram.com/usuario`) y una cuenta `@usuario`. Los dos últimos se ocultan como `[enlace]`, porque las instrucciones fijas solo nombran tres marcas. La huella del prompt no cambia.
 - Nunca `user`, `metadata` ni `safety_identifier`, ni el nombre, el teléfono o los identificadores de la persona.
 - El texto no se guarda ni se registra en los logs, que solo llevan la clase de lo ocurrido.
-- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). No vale ninguna clave de OpenAI que ya use otra parte del sistema (M4): ni la compartida de IRON IA, del cerebro legado y del copiloto del CRM (`OPENAI_API_KEY`, en `services.openai.api_key` y en `iron_crm.api_key`) ni la del laboratorio del Studio (`ULTRON_STUDIO_LAB_OPENAI_API_KEY`). Con cualquiera de ellas no llama. La comparación es por huella, sin devolver ni registrar ninguna clave, y una prueba de la guarda exige que la lista cerrada (`OpenAiReplyClassifierTransport::FOREIGN_KEYS`) sean todas las de `config/`.
+- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). No vale ninguna clave de OpenAI que ya use otra parte del sistema (M4): ni la compartida de IRON IA, del cerebro legado y del copiloto del CRM (`OPENAI_API_KEY`, en `services.openai.api_key` y en `iron_crm.api_key`) ni la del laboratorio del Studio (`ULTRON_STUDIO_LAB_OPENAI_API_KEY`). Con cualquiera de ellas no llama.
+  - La comparación es por huella, sin devolver ni registrar ninguna clave.
+  - Las dos primeras se leen por su configuración: la lista cerrada `OpenAiReplyClassifierTransport::FOREIGN_KEYS`.
+  - La del laboratorio se lee por la huella que `config/outreach.php` calcula desde el entorno (`classifier.foreign_key_sha256`), porque fuera del Studio nadie nombra su configuración (`UltronEngineIsolationTest`). Es lo mismo que hace el laboratorio con la compartida.
+  - Una prueba de la guarda exige que entre las dos cubran todas las claves de OpenAI de `config/`.
 
 **Red.**
 - `App\Services\Outreach` sigue sin nombrar ni el proveedor ni `Http::` (§3.4): solo conoce el puerto `ReplyClassifierTransport`.

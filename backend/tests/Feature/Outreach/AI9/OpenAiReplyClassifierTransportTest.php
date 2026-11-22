@@ -125,7 +125,7 @@ class OpenAiReplyClassifierTransportTest extends TestCase
     public function test_con_la_clave_de_otra_parte_del_sistema_no_esta_configurado_y_no_sale_nada(string $ruta): void
     {
         Http::fake();
-        config(['services.openai.api_key' => null, 'iron_crm.api_key' => null, 'ultron_studio.lab.openai.api_key' => null]);
+        config(['services.openai.api_key' => null, 'iron_crm.api_key' => null, OpenAiReplyClassifierTransport::FOREIGN_KEY_HASHES => []]);
         config([$ruta => ' '.self::OWN_KEY."\n"]);
 
         $this->assertFalse((new OpenAiReplyClassifierTransport)->configured(), "con la clave de {$ruta}");
@@ -136,6 +136,55 @@ class OpenAiReplyClassifierTransportTest extends TestCase
         config([$ruta => 'sk-otra-clave-de-'.str_replace('.', '-', $ruta)]);
         $this->assertTrue((new OpenAiReplyClassifierTransport)->configured(), 'con otra distinta en ese sitio, la propia vale');
         Http::assertNothingSent();
+    }
+
+    /**
+     * M4: la clave del laboratorio del Studio, de punta a punta desde el
+     * ENTORNO. `config/outreach.php` se vuelve a evaluar con
+     * `ULTRON_STUDIO_LAB_OPENAI_API_KEY` y lleva su huella, nunca la clave.
+     * Con la misma que la del clasificador (también con espacios), no está
+     * configurado; con otra, sí.
+     */
+    public function test_con_la_clave_del_laboratorio_del_studio_no_esta_configurado_y_la_configuracion_solo_lleva_su_huella(): void
+    {
+        Http::fake();
+        config(['services.openai.api_key' => null, 'iron_crm.api_key' => null]);
+
+        $huellas = self::outreachConfigWithEnv('ULTRON_STUDIO_LAB_OPENAI_API_KEY', ' '.self::OWN_KEY."\n")['classifier']['foreign_key_sha256'];
+        $this->assertSame([hash('sha256', self::OWN_KEY)], $huellas);
+        $this->assertStringNotContainsString(self::OWN_KEY, (string) json_encode($huellas), 'la configuración lleva la huella, no la clave');
+        config([OpenAiReplyClassifierTransport::FOREIGN_KEY_HASHES => $huellas]);
+        $this->assertFalse((new OpenAiReplyClassifierTransport)->configured());
+        $this->assertSame('not_configured', $this->classify()['error']);
+
+        config([OpenAiReplyClassifierTransport::FOREIGN_KEY_HASHES => self::outreachConfigWithEnv('ULTRON_STUDIO_LAB_OPENAI_API_KEY', 'sk-otra-del-laboratorio')['classifier']['foreign_key_sha256']]);
+        $this->assertTrue((new OpenAiReplyClassifierTransport)->configured(), 'con otra en el laboratorio, la propia vale');
+        $this->assertSame([], self::outreachConfigWithEnv('ULTRON_STUDIO_LAB_OPENAI_API_KEY', '  ')['classifier']['foreign_key_sha256'], 'sin clave del laboratorio, ninguna huella');
+        Http::assertNothingSent();
+    }
+
+    /** `config/outreach.php` evaluado con una variable de entorno puesta, y el entorno como estaba. @return array<string, mixed> */
+    private static function outreachConfigWithEnv(string $variable, string $valor): array
+    {
+        $antes = [$_SERVER[$variable] ?? null, $_ENV[$variable] ?? null, getenv($variable)];
+        $_SERVER[$variable] = $_ENV[$variable] = $valor;
+        putenv("{$variable}={$valor}");
+        try {
+            return (static fn (string $f): array => require $f)(config_path('outreach.php'));
+        } finally {
+            [$servidor, $entorno, $proceso] = $antes;
+            if ($servidor === null) {
+                unset($_SERVER[$variable]);
+            } else {
+                $_SERVER[$variable] = $servidor;
+            }
+            if ($entorno === null) {
+                unset($_ENV[$variable]);
+            } else {
+                $_ENV[$variable] = $entorno;
+            }
+            putenv($proceso === false ? $variable : "{$variable}={$proceso}");
+        }
     }
 
     /** @return iterable<string, array{int, mixed, string}> */

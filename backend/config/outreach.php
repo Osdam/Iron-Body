@@ -148,6 +148,11 @@ return [
         'max_per_pass' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS', 10, 0, 40),
         // La clave PROPIA del clasificador. Solo la lee su transporte (fuera del H9), en el momento de llamar.
         'api_key' => env('COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY'),
+        // M4 de security: la huella (sha256) de la clave del laboratorio del Studio, que el transporte NO puede usar.
+        // Fuera del Studio nadie nombra su configuración (UltronEngineIsolationTest), así que se calcula aquí desde el
+        // entorno, como hace el laboratorio con la compartida (`forbidden_key_sha256`): la caché de configuración lleva
+        // la huella y nunca la clave. Solo sirve para comparar.
+        'foreign_key_sha256' => ($laboratorio = trim((string) env('ULTRON_STUDIO_LAB_OPENAI_API_KEY', ''))) !== '' ? [hash('sha256', $laboratorio)] : [],
     ],
 
     /*

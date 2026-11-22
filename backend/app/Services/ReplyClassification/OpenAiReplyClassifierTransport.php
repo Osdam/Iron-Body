@@ -25,9 +25,10 @@ use Throwable;
  *  - `withToken(<la clave PROPIA del clasificador>)`, leída de
  *    `outreach.classifier.api_key` en el momento de llamar, nunca guardada ni
  *    registrada. Ninguna clave de OpenAI que ya use otra parte del sistema
- *    vale ({@see FOREIGN_KEYS}: la compartida de IRON IA y del cerebro legado,
- *    la del copiloto del CRM y la del laboratorio del Studio): si es la misma,
- *    no está configurado (como el laboratorio con la suya);
+ *    vale ({@see FOREIGN_KEYS}: la compartida de IRON IA y del cerebro legado
+ *    y la del copiloto del CRM; {@see FOREIGN_KEY_HASHES}: la del laboratorio
+ *    del Studio, por su huella): si es la misma, no está configurado (como el
+ *    laboratorio con la suya);
  *  - `connectTimeout(3)`, `timeout(<2–10 s>)`, sin redirecciones y SIN
  *    `retry()`: un reintento podría cobrar dos veces;
  *  - cuerpo: `model`, `store: false`, `instructions` (fijas), `input` con UN
@@ -55,13 +56,18 @@ final class OpenAiReplyClassifierTransport implements ReplyClassifierTransport
 
     /**
      * Las claves de OpenAI que ya usa otra parte del sistema (M4 de security),
-     * lista cerrada: IRON IA y el cerebro legado (`services.openai`), el
-     * copiloto del CRM (`iron_crm`, hoy la misma `OPENAI_API_KEY`) y el
-     * laboratorio del Studio. Con cualquiera de ellas el clasificador
-     * compartiría su proyecto y su presupuesto. Una prueba de la guarda
-     * comprueba que son TODAS las de `config/`.
+     * por su configuración (lista cerrada): IRON IA y el cerebro legado
+     * (`services.openai`) y el copiloto del CRM (`iron_crm`, hoy la misma
+     * `OPENAI_API_KEY`). La del laboratorio del Studio va por su huella
+     * ({@see FOREIGN_KEY_HASHES}): fuera del Studio nadie nombra su
+     * configuración. Con cualquiera de ellas el clasificador compartiría su
+     * proyecto y su presupuesto. Una prueba de la guarda comprueba que entre
+     * las dos cubren TODAS las de `config/`.
      */
-    public const FOREIGN_KEYS = ['services.openai.api_key', 'iron_crm.api_key', 'ultron_studio.lab.openai.api_key'];
+    public const FOREIGN_KEYS = ['services.openai.api_key', 'iron_crm.api_key'];
+
+    /** Las huellas (sha256) de las demás, calculadas desde el entorno por `config/outreach.php` (hoy, la del laboratorio). */
+    public const FOREIGN_KEY_HASHES = 'outreach.classifier.foreign_key_sha256';
 
     /** Solo compara huellas: no devuelve, no guarda y no registra ninguna clave. */
     public function configured(): bool
@@ -75,6 +81,12 @@ final class OpenAiReplyClassifierTransport implements ReplyClassifierTransport
             $otra = config($ajena);
             $otra = is_string($otra) ? trim($otra) : '';
             if ($otra !== '' && hash_equals(hash('sha256', $otra), $huella)) {
+                return false;
+            }
+        }
+        $huellas = config(self::FOREIGN_KEY_HASHES);
+        foreach (is_array($huellas) ? $huellas : [] as $otra) {
+            if (is_string($otra) && hash_equals($otra, $huella)) {
                 return false;
             }
         }
