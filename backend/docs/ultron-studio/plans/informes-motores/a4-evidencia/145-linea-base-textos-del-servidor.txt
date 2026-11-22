@@ -1,0 +1,57 @@
+LÍNEA BASE · ¿HAY TEXTOS ENTEROS DEL SERVIDOR QUE EL INFORME CUENTE COMO DEL MODELO? · producción, SOLO LECTURA (default_transaction_read_only=on) · 22-11-2026 02:40 UTC
+
+Por qué: el informe del backend (§8.6) anota que tres sustituciones enteras del servidor en el camino del modelo
+(«cortesía sin confirmar», «nada que confirmar» y «sin enlace pero sin mentir») todavía cuentan como texto del modelo en
+ultron:origin-report. Aquí se mide si alguna está en la línea base (conversaciones canarias #273 y #882). Solo conteos.
+
+── Consulta ──
+-- SOLO LECTURA (lead, 22-11-2026): cuántas respuestas de la línea base (conversaciones canarias #273 y #882) son,
+-- enteras, uno de los tres textos del servidor que el informe de origen todavía cuenta como texto del modelo
+-- (informe del backend, §8.6). Solo conteos: ningún texto de mensajes.
+select $$G1 · mensajes que contienen uno de los tres textos$$ as q,
+  case
+    when position($$Dejé registrada tu solicitud de día de cortesía. El equipo de Iron Body la revisará$$ in body) > 0 then $$cortesia sin confirmar$$
+    when position($$Para no darte un dato equivocado: la visita la confirma el equipo de Iron Body$$ in body) > 0 then $$nada que confirmar$$
+    when position($$Puedes hacer el pago desde la app Iron Body Workout o directamente en el gimnasio$$ in body) > 0 then $$sin enlace pero sin mentir$$
+    else $$ninguno$$
+  end as texto, count(*)
+from marketing_messages
+where conversation_id in (273, 882)
+group by 2 order by 2;
+
+select $$G2 · filas reply/executed con la marca$$ as q,
+  count(*) filter (where metadata::jsonb ? $$checkout_denial_dropped$$) as cobro_negado_retirado,
+  count(*) filter (where (metadata::jsonb->$$checkout_denial_dropped$$->>$$texto_curado$$) = $$true$$) as de_ellas_texto_entero_del_servidor,
+  count(*) filter (where metadata::jsonb ? $$courtesy_reply_corrected$$) as fecha_de_cortesia_corregida,
+  count(*) as total
+from marketing_ai_actions
+where conversation_id in (273, 882) and action_type = $$reply$$ and status = $$executed$$;
+
+select $$G3 · de esas, las que el informe cuenta como del modelo$$ as q,
+  count(*) filter (where metadata::jsonb ? $$checkout_denial_dropped$$) as cobro_negado_retirado,
+  count(*) filter (where (metadata::jsonb->$$checkout_denial_dropped$$->>$$texto_curado$$) = $$true$$) as texto_entero_del_servidor,
+  count(*) filter (where metadata::jsonb ? $$courtesy_reply_corrected$$) as fecha_de_cortesia_corregida,
+  count(*) as total_del_modelo
+from marketing_ai_actions
+where conversation_id in (273, 882) and action_type = $$reply$$ and status = $$executed$$
+  and not (metadata::jsonb ? $$fallback_mode$$) and not (metadata::jsonb ? $$policy_discarded_draft$$) and not (metadata::jsonb ? $$visit_hour$$);
+
+── Resultado ──
+G1 · mensajes que contienen uno de los tres textos | ninguno | 206
+G2 · filas reply/executed con la marca | 0 | 0 | 0 | 89
+G3 · de esas, las que el informe cuenta como del modelo | 0 | 0 | 0 | 68
+
+── Lectura ──
+Ninguno de los 206 mensajes de las dos conversaciones contiene esos textos, y ninguna fila lleva las marcas
+checkout_denial_dropped ni courtesy_reply_corrected: la línea base no cambia por esas tres sustituciones.
+
+Hay una respuesta más que cuando se midió la línea base (19-11: 88 reply/executed y 1 recuperada = 89 enviadas, 67 del modelo):
+la fila 8209, del 20-11 00:11 UTC (19-11 19:11 en Bogotá), en la conversación canaria #882, con la versión publicada
+(uuid 2e243853…), aprobada por el revisor al primer intento, sin respaldo, sin política y sin hora de la visita.
+Hoy: 89 reply/executed + 1 recuperada = 90 enviadas, 68 escritas por el modelo.
+
+── Versiones del Studio (misma sesión de solo lectura) ──
+I2 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | CANARY | 18-11-2026 22:40 | 24b29173
+I2 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55 | 24b29173
+I2 · versiones | 1 | ad1f1562 | ULTRON Studio - Canario V1 - Pruebas | APPROVED | 09-11-2026 18:55 | d2361ab5
+La versión en canario no ha cambiado desde el 18-11 22:40 UTC. Producción sirve e861e2c8.
