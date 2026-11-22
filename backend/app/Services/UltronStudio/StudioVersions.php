@@ -555,7 +555,7 @@ final class StudioVersions
         }
 
         $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
-            "Intentó aprobar «{$version->label}», que copia frases de reglas que escribió", [
+            "Intentó aprobar «{$version->label}», que copia ".StudioRulePhraseAuthors::auditReason($suyas), [
                 'fromStatus' => $version->status,
                 'contentHash' => $version->content_hash,
                 'diff' => ['action' => $action] + StudioRulePhraseAuthors::auditDiff($suyas),

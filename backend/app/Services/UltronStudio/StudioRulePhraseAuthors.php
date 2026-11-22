@@ -131,21 +131,43 @@ final class StudioRulePhraseAuthors
     }
 
     /**
-     * El `diff` del evento `*.four_eyes_denied`: los códigos, y aparte los que
-     * se niegan por falta de rastro en el libro.
+     * El `diff` del evento `*.four_eyes_denied`. `rulePhraseAuthor`: SOLO las
+     * reglas de las que quien lo intentó escribió alguna revisión copiada
+     * (puede quedar vacía); `rulePhraseUnverified`, aparte, las que se niegan
+     * porque el libro no prueba quién escribió todas sus revisiones. Una regla
+     * puede estar en las dos. El libro es de solo inserción y no se corrige
+     * después: nunca dice que alguien escribió lo que no escribió (M-1 de la
+     * revisión de API).
      *
      * @param  list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>  $rules
      * @return array{rulePhraseAuthor:list<string>,rulePhraseUnverified?:list<string>}
      */
     public static function auditDiff(array $rules): array
     {
-        $sinVerificar = array_values(array_map(
-            static fn (array $r): string => $r['code'],
-            array_filter($rules, static fn (array $r): bool => $r['unverified']),
-        ));
+        $escritas = self::codesWhere($rules, static fn (array $r): bool => $r['authored'] !== []);
+        $sinVerificar = self::codesWhere($rules, static fn (array $r): bool => $r['unverified']);
 
-        return ['rulePhraseAuthor' => array_column($rules, 'code')]
+        return ['rulePhraseAuthor' => $escritas]
             + ($sinVerificar === [] ? [] : ['rulePhraseUnverified' => $sinVerificar]);
+    }
+
+    /**
+     * El final del resumen del evento, según el caso: «frases de reglas que
+     * escribió», «frases de reglas sin autoría probada en el libro» o las dos
+     * cosas. Como {@see auditDiff()}, no atribuye lo que no consta.
+     *
+     * @param  list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>  $rules
+     */
+    public static function auditReason(array $rules): string
+    {
+        $escritas = self::codesWhere($rules, static fn (array $r): bool => $r['authored'] !== []) !== [];
+        $sinRastro = self::codesWhere($rules, static fn (array $r): bool => $r['unverified']) !== [];
+
+        return match (true) {
+            $escritas && $sinRastro => 'frases de reglas que escribió y de reglas sin autoría probada en el libro',
+            $sinRastro => 'frases de reglas sin autoría probada en el libro',
+            default => 'frases de reglas que escribió',
+        };
     }
 
     /**
@@ -185,6 +207,18 @@ final class StudioRulePhraseAuthors
         }
 
         return implode(' ', $partes);
+    }
+
+    /**
+     * Los códigos de las reglas que cumplen `$filtro`, en su orden.
+     *
+     * @param  list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>  $rules
+     * @param  callable(array{code:string,revision:int|null,authored:list<int>,unverified:bool}): bool  $filtro
+     * @return list<string>
+     */
+    private static function codesWhere(array $rules, callable $filtro): array
+    {
+        return array_values(array_map(static fn (array $r): string => $r['code'], array_filter($rules, $filtro)));
     }
 
     /**

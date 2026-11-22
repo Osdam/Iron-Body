@@ -199,19 +199,84 @@ class UltronStudioRulePhraseAuthorsTest extends TestCase
                 ['code' => 'S-001', 'revision' => 2, 'authored' => [], 'unverified' => true],
                 ['code' => 'S-002', 'revision' => 2, 'authored' => [], 'unverified' => true],
             ]);
+        // Y la línea del libro, que no se corrige después, no dice que Carla
+        // escribiera nada (M-1 de la revisión de API).
         $evento = $this->ultimoDenegado();
-        $this->assertSame(['S-001', 'S-002'], $evento->diff['rulePhraseAuthor']);
-        $this->assertSame(['S-001', 'S-002'], $evento->diff['rulePhraseUnverified']);
+        $this->assertSame($this->carla->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'approve', 'rulePhraseAuthor' => [], 'rulePhraseUnverified' => ['S-001', 'S-002']], $evento->diff);
+        $this->assertSame('Intentó aprobar «Propuesta enviada», que copia frases de reglas sin autoría probada en el libro', $evento->summary);
 
+        // Ana sí escribió la revisión 1 de las dos: consta eso, y aparte, lo que no consta.
         $this->aprobar($this->ana, $uuid)->assertStatus(403)
-            ->assertJsonPath('message', 'Escribiste S-001, revisión 1; S-002, revisión 1: tiene que aprobarla otra persona. No consta en el libro quién escribió todas las revisiones de S-001, S-002: no se aprueba una versión que la copie.');
+            ->assertJsonPath('message', 'Escribiste S-001, revisión 1; S-002, revisión 1: tiene que aprobarla otra persona. No consta en el libro quién escribió todas las revisiones de S-001, S-002: no se aprueba una versión que la copie.')
+            ->assertJsonPath('rulePhraseAuthor', [
+                ['code' => 'S-001', 'revision' => 2, 'authored' => [1], 'unverified' => true],
+                ['code' => 'S-002', 'revision' => 2, 'authored' => [1], 'unverified' => true],
+            ]);
+        $evento = $this->ultimoDenegado();
+        $this->assertSame($this->ana->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'approve', 'rulePhraseAuthor' => ['S-001', 'S-002'], 'rulePhraseUnverified' => ['S-001', 'S-002']], $evento->diff);
+        $this->assertSame('Intentó aprobar «Propuesta enviada», que copia frases de reglas que escribió y de reglas sin autoría probada en el libro', $evento->summary);
 
-        // Publicar tampoco (una versión sembrada como aprobada).
+        // Publicar tampoco (una versión sembrada como aprobada), y a quien lo
+        // intenta no se le señala como autor: ni en la vista previa, ni en las
+        // acciones, ni en el 403, ni en el libro.
         $aprobada = $this->seededVersion($this->root, $this->carla, $this->baseline());
+        $publicar = 'No consta en el libro quién escribió todas las revisiones de S-001, S-002: no se publica una versión que la copie.';
+        $sinAutoria = [
+            ['code' => 'S-001', 'revision' => 2, 'authored' => [], 'unverified' => true],
+            ['code' => 'S-002', 'revision' => 2, 'authored' => [], 'unverified' => true],
+        ];
+        $vista = $this->previewOf($this->pub, $aprobada->uuid);
+        $this->assertSame(['ok' => false, 'message' => $publicar, 'detail' => 'rule_phrase_author'], $vista['requirements']['fourEyes']);
+        $this->assertSame(['ok' => false, 'message' => $publicar, 'rules' => $sinAutoria], $vista['requirements']['rulePhraseAuthor']);
+        $this->assertSame(['allowed' => false, 'code' => 'four_eyes_required', 'message' => $publicar, 'detail' => 'rule_phrase_author'],
+            $this->studio('GET', "versions/{$aprobada->uuid}", $this->pub)->json('data.actions.publish'));
         $this->publishAs($this->pub, $aprobada->uuid)->assertStatus(403)
+            ->assertJsonPath('code', 'four_eyes_required')
+            ->assertJsonPath('message', $publicar)
             ->assertJsonPath('detail', 'rule_phrase_author')
-            ->assertJsonPath('rulePhraseAuthor.1.unverified', true);
+            ->assertJsonPath('rulePhraseAuthor', $sinAutoria);
+        $evento = $this->ultimoDenegado();
+        $this->assertSame($this->pub->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'publish', 'rulePhraseAuthor' => [], 'rulePhraseUnverified' => ['S-001', 'S-002']], $evento->diff);
+        $this->assertSame("Intentó publicar «{$aprobada->label}», que copia frases de reglas sin autoría probada en el libro", $evento->summary);
         $this->assertSame(0, StudioPublication::query()->count());
+    }
+
+    public function test_sin_autoria_probada_promover_se_niega_y_el_libro_no_nombra_autor_a_quien_lo_intenta(): void
+    {
+        $regla = $this->frases($this->root, ['te lo regalo']);
+        $uuid = $this->submittedVersion($this->ana);
+        $this->aprobar($this->carla, $uuid)->assertOk();
+        $this->publishAs($this->pub, $uuid)->assertCreated();
+        // Con la versión ya en canario, una línea sin persona para la revisión
+        // copiada (solo se llega por SQL o desde el sistema): esa revisión ya no
+        // tiene autor probado y nadie la promueve.
+        $this->lineaSinPersona($regla, 1);
+
+        $promover = 'No consta en el libro quién escribió todas las revisiones de S-001: no se promueve una versión que la copie.';
+        $this->assertSame(['allowed' => false, 'code' => 'four_eyes_required', 'message' => $promover, 'detail' => 'rule_phrase_author'],
+            $this->studio('GET', "versions/{$uuid}", $this->pub)->json('data.actions.promote'));
+        $this->promoteAs($this->pub, $uuid, null, str_repeat('a', 64))->assertStatus(403)
+            ->assertJsonPath('code', 'four_eyes_required')
+            ->assertJsonPath('message', $promover)
+            ->assertJsonPath('detail', 'rule_phrase_author')
+            ->assertJsonPath('rulePhraseAuthor', [['code' => 'S-001', 'revision' => 1, 'authored' => [], 'unverified' => true]]);
+        $evento = $this->ultimoDenegado();
+        $this->assertSame($this->pub->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'promote', 'rulePhraseAuthor' => [], 'rulePhraseUnverified' => ['S-001']], $evento->diff);
+        $this->assertSame('Intentó promover «Propuesta enviada», que copia frases de reglas sin autoría probada en el libro', $evento->summary);
+
+        // Root, que sí la escribió: consta su revisión, y aparte, lo que no consta.
+        $this->promoteAs($this->root, $uuid, null, str_repeat('a', 64))->assertStatus(403)
+            ->assertJsonPath('message', 'Escribiste S-001, revisión 1: tiene que promoverla otra persona. '.$promover)
+            ->assertJsonPath('rulePhraseAuthor', [['code' => 'S-001', 'revision' => 1, 'authored' => [1], 'unverified' => true]]);
+        $evento = $this->ultimoDenegado();
+        $this->assertSame($this->root->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'promote', 'rulePhraseAuthor' => ['S-001'], 'rulePhraseUnverified' => ['S-001']], $evento->diff);
+        $this->assertSame('Intentó promover «Propuesta enviada», que copia frases de reglas que escribió y de reglas sin autoría probada en el libro', $evento->summary);
+        $this->assertSame(['CANARY'], StudioVersion::query()->where('uuid', $uuid)->pluck('status')->all(), 'nadie la movió');
     }
 
     public function test_quien_escribio_las_frases_si_puede_rechazar(): void
@@ -376,6 +441,45 @@ class UltronStudioRulePhraseAuthorsTest extends TestCase
         $this->assertSame('promote', StudioAuditEvent::query()->where('event', 'voice_publication.four_eyes_denied')->orderByDesc('id')->first()->diff['action']);
     }
 
+    public function test_la_voz_sin_autoria_probada_no_nombra_autor_a_quien_publica_ni_a_quien_promueve(): void
+    {
+        $this->voiceSetUp();
+        $pablo = $this->personWith(self::VOICE_PUBLISHER, 'Pablo Publica la voz');
+        $olga = $this->personWith(self::VOICE_PUBLISHER, 'Olga Promueve la voz');
+        $this->bindFake();
+        $regla = $this->frases($this->ana, ['te lo regalo']);
+
+        $v = $this->approvedVersion($this->root, $this->carla, 'Versión de Root');
+        $p = $this->approvedProfile($this->root, $this->carla, null, 'Perfil de Root');
+        $this->labVerdictFor($v, $p, $this->root, $this->carla);
+        $v = StudioVersion::query()->with('review')->whereKey($v->id)->sole();
+        $this->publishVoice($pablo, $v, $p)->assertCreated();
+        $desplegadas = count($this->fake->calls);
+        // Con la voz ya en canario, la revisión copiada se queda sin autor probado.
+        $this->lineaSinPersona($regla, 1);
+        $sinAutoria = [['code' => 'S-001', 'revision' => 1, 'authored' => [], 'unverified' => true]];
+
+        $this->publishVoice($pablo, $v, $p)->assertStatus(403)
+            ->assertJsonPath('code', 'four_eyes_required')
+            ->assertJsonPath('message', 'No consta en el libro quién escribió todas las revisiones de S-001: no se publica una versión que la copie.')
+            ->assertJsonPath('detail', 'rule_phrase_author')
+            ->assertJsonPath('rulePhraseAuthor', $sinAutoria);
+        $evento = StudioAuditEvent::query()->where('event', 'voice_publication.four_eyes_denied')->orderByDesc('id')->firstOrFail();
+        $this->assertSame($pablo->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'publish', 'version' => false, 'profile' => false, 'rulePhraseAuthor' => [], 'rulePhraseUnverified' => ['S-001']], $evento->diff);
+        $this->assertSame('Intentó publicar una voz con frases de reglas sin autoría probada en el libro', $evento->summary);
+
+        $this->promoteVoice($olga, str_repeat('a', 64))->assertStatus(403)
+            ->assertJsonPath('message', 'No consta en el libro quién escribió todas las revisiones de S-001: no se promueve una versión que la copie.')
+            ->assertJsonPath('detail', 'rule_phrase_author')
+            ->assertJsonPath('rulePhraseAuthor', $sinAutoria);
+        $evento = StudioAuditEvent::query()->where('event', 'voice_publication.four_eyes_denied')->orderByDesc('id')->firstOrFail();
+        $this->assertSame($olga->id, (int) $evento->actor_admin_id);
+        $this->assertSame(['action' => 'promote', 'version' => false, 'profile' => false, 'rulePhraseAuthor' => [], 'rulePhraseUnverified' => ['S-001']], $evento->diff);
+        $this->assertSame('Intentó promover una voz con frases de reglas sin autoría probada en el libro', $evento->summary);
+        $this->assertCount($desplegadas, $this->fake->calls, 'nada más se despliega');
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     /** @param list<string> $frases */
@@ -400,6 +504,18 @@ class UltronStudioRulePhraseAuthorsTest extends TestCase
         $avisos = StudioVersion::query()->where('uuid', $uuid)->sole()->last_validation['warnings'] ?? [];
 
         return $this->studio('POST', "versions/{$uuid}/approve", $as, ['acknowledgedWarnings' => $avisos]);
+    }
+
+    /**
+     * Una línea `rule.updated` SIN persona para una revisión ya escrita (solo
+     * se llega por SQL o desde el sistema): esa revisión queda sin autor
+     * probado y la regla, `unverified`.
+     */
+    private function lineaSinPersona(StudioRule $regla, int $revision): void
+    {
+        app(StudioAudit::class)->record(null, null, 'rule.updated', StudioAuditEvent::SUBJECT_RULE, $regla->uuid, 'Edición sin persona', [
+            'diff' => ['fromRevision' => $revision, 'toRevision' => $revision, 'changes' => []],
+        ], maxValueLength: StudioAudit::MAX_RULE_VALUE_LENGTH);
     }
 
     private function ultimoDenegado(): StudioAuditEvent

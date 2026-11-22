@@ -1098,7 +1098,7 @@ final class StudioVoicePublishing
             return;
         }
         $this->audit->recordDenied($request, $access->actor, 'voice_publication.four_eyes_denied', StudioAuditEvent::SUBJECT_INTEGRATION, $perfil?->uuid,
-            "Intentó {$verbo} una voz con frases de reglas que escribió", ['diff' => ['action' => $action, 'version' => false, 'profile' => false] + StudioRulePhraseAuthors::auditDiff($suyas)]);
+            "Intentó {$verbo} una voz con ".StudioRulePhraseAuthors::auditReason($suyas), ['diff' => ['action' => $action, 'version' => false, 'profile' => false] + StudioRulePhraseAuthors::auditDiff($suyas)]);
 
         throw StudioRulePhraseAuthors::refusal($suyas, $action);
     }
