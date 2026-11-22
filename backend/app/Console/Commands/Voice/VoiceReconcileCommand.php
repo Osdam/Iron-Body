@@ -10,8 +10,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * `voice:reconcile` — la CONCILIACIÓN y la vigilancia de la voz (contrato H8,
  * D8-21; E1-2, E2-3): las llamadas de la subcuenta en Twilio frente a
- * `voice_calls` (una sin su fila abre el freno; resuelve las ambiguas y
- * registra el precio real), las salientes que perdieron su job, la deriva de
+ * `voice_calls` (una sin su fila abre el freno; resuelve las ambiguas —por su
+ * SID o, si no salieron, con una pasada completa, E19-3— y registra el precio
+ * real), las salientes que perdieron su job, la deriva de
  * los agentes vigentes (abre el freno) y el techo duro de gasto. Con
  * `--numbers` (Enmienda 4, E4-8), ADEMÁS la deriva del número importado (a qué
  * agente apunta en ElevenLabs frente al publicado; abre el freno). GET a los
@@ -57,6 +58,9 @@ class VoiceReconcileCommand extends Command
             $this->line('Sin job     : '.$resumen['staleRequested'].' pasadas a ambiguous · atascadas en dialing: '.$resumen['stuckDialing']);
             $this->line('Deriva      : '.($resumen['drift'] === [] ? '—' : implode(', ', array_map(static fn ($p, $r) => "{$p} {$r}", array_keys($resumen['drift']), $resumen['drift']))));
             $this->line('Techo gasto : '.($resumen['costCap'] ? 'SUPERADO (freno)' : 'dentro'));
+            $retenidas = $resumen['ambiguous']['held'];
+            $this->line('Ambiguas    : '.$resumen['ambiguous']['resolved'].' cerradas como no iniciadas (E19-3) · retenidas: '
+                .($retenidas === [] ? '—' : implode(', ', array_map(static fn ($m, $n) => "{$m} ×{$n}", array_keys($retenidas), $retenidas))));
             if (isset($resumen['number'])) {
                 $n = $resumen['number'];
                 $this->line('Número      : '.match ($n['result']) {

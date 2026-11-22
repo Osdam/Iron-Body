@@ -48,6 +48,15 @@ use Illuminate\Support\Facades\Log;
  * La deriva y el techo SE REARMAN si la evidencia cambió después de soltar el
  * freno (E10-6: {@see VoiceBrake::openOrRearm()}).
  *
+ * LA `ambiguous` QUE NO SALIÓ (Enmienda del 22-11-2026, E19-3; H-1;
+ * {@see VoiceAmbiguousResolution}): con una pasada COMPLETA del operador (todas
+ * sus páginas listadas, ninguna truncada y sin cortar por el tope) que cubre la
+ * ventana de la fila y no ve NINGUNA llamada desconocida, una `ambiguous` sin
+ * ids del proveedor y más vieja que el plazo de gracia pasa a
+ * `failed_to_start`, con su `reconciled` (`ambiguous_resolved`, la pasada y la
+ * ventana como evidencia). Si no, se queda `ambiguous` y el resumen dice por
+ * qué (`ambiguous.held`). Hasta la migración E19-3, `schema_pending`.
+ *
  * Una saliente CORTADA mientras el job esperaba al proveedor y que el
  * proveedor inició igual (E10-5, SEC8-b M-3): su SID está en su evento
  * `outbound_started` (la fila `canceled` no admite ids, DB8). FALLA CERRADO
@@ -123,22 +132,29 @@ final class VoiceReconciler
         $this->dryRun = $dryRun;
         $this->simulated = [];
         $resumen = ['staleRequested' => $this->staleRequested(), 'carrier' => null, 'known' => 0, 'legs' => 0, 'unknown' => 0, 'pages' => 0,
-            'truncated' => false, 'drift' => [], 'stuckDialing' => 0, 'costCap' => false];
+            'truncated' => false, 'drift' => [], 'stuckDialing' => 0, 'costCap' => false, 'ambiguous' => ['resolved' => 0, 'held' => []]];
 
+        // E19-3: ¿la pasada vio la lista ENTERA? Todas las páginas listadas, ninguna truncada, y sin cortar por el tope.
+        $completa = true;
         $token = null;
         do {
             $pagina = $carrier->listCalls($since, $token);
             $resumen['carrier'] = $pagina->outcome;
             $resumen['pages']++;
             if ($pagina->outcome !== CarrierCallsPage::OUTCOME_LISTED) {
+                $completa = false;
                 break;
             }
             foreach ($pagina->calls as $llamada) {
                 $resumen[$this->reconcileCall($carrier, $llamada)]++;
             }
             $resumen['truncated'] = $pagina->truncated;
+            $completa = $completa && ! $pagina->truncated;
             $token = $pagina->nextPageToken;
         } while ($token !== null && $resumen['pages'] < self::MAX_PAGES);
+        $completa = $completa && $token === null;
+
+        $resumen['ambiguous'] = $this->unstartedAmbiguous($completa, $since, $resumen['unknown'], $resumen['pages']);
 
         $resumen['drift'] = $this->drift($deployer);
         $atascadas = VoiceCall::query()->where('status', VoiceCall::STATUS_DIALING)
@@ -454,6 +470,90 @@ final class VoiceReconciler
             $total += is_array($e->codes) && is_int($e->codes['micros'] ?? null) ? $e->codes['micros'] : 0;
         }
         VoiceCall::bind((int) $fila->id, ['carrier_cost_micros' => $total]);
+    }
+
+    /**
+     * E19-3 (H-1): las `ambiguous` que NO salieron, con las reglas de
+     * {@see VoiceAmbiguousResolution} y la evidencia de ESTA pasada. Cada una,
+     * en su transacción y con su cerrojo (las reglas de la fila se vuelven a
+     * mirar sobre la fila bloqueada: una post-llamada o otra pasada pudo
+     * adelantarse); en seco, lo que haría. Como mucho 50 por pasada.
+     *
+     * @return array{resolved: int, held: array<string, int>}
+     */
+    private function unstartedAmbiguous(bool $completa, DateTimeInterface $since, int $desconocidas, int $paginas): array
+    {
+        $out = ['resolved' => 0, 'held' => []];
+        $ahora = now();
+        // En seco: las que esta misma pasada habría pasado a `ambiguous` (sin job) lo serían desde ahora, dentro del plazo de
+        // gracia, como de verdad; y las que ya saca por su SID no se miran.
+        $recienAmbiguas = count(array_filter($this->simulated, static fn (array $s): bool => ($s['status'] ?? null) === VoiceCall::STATUS_AMBIGUOUS));
+        if ($recienAmbiguas > 0) {
+            $out['held'][VoiceAmbiguousResolution::HELD_WITHIN_GRACE] = $recienAmbiguas;
+        }
+        $filas = VoiceCall::query()->where('status', VoiceCall::STATUS_AMBIGUOUS)->where('direction', VoiceCall::DIRECTION_OUTBOUND)
+            ->whereNull('transfer_of_call_id')->whereNotIn('id', array_keys($this->simulated))->orderBy('id')->limit(50)->get();
+        foreach ($filas as $fila) {
+            $motivo = VoiceAmbiguousResolution::rowHold($fila, $ahora) ?? match (true) {
+                ! $completa => VoiceAmbiguousResolution::HELD_PASS_INCOMPLETE,
+                $desconocidas > 0 => VoiceAmbiguousResolution::HELD_UNKNOWN_CALLS,
+                ! VoiceAmbiguousResolution::windowCovered($fila, $since) => VoiceAmbiguousResolution::HELD_WINDOW,
+                ! VoiceAmbiguousResolution::schemaAllows() => VoiceAmbiguousResolution::HELD_SCHEMA,
+                default => null,
+            };
+            if ($motivo !== null) {
+                $out['held'][$motivo] = ($out['held'][$motivo] ?? 0) + 1;
+
+                continue;
+            }
+            $evidencia = [
+                'pass' => ['since' => self::utc($since), 'until' => self::utc($ahora), 'pages' => $paginas, 'carrier' => CarrierCallsPage::OUTCOME_LISTED, 'unknown' => 0],
+                'window' => ['requestedAt' => self::utc($fila->created_at), 'ambiguousAt' => self::utc($fila->status_changed_at),
+                    'graceMinutes' => VoiceAmbiguousResolution::GRACE_MINUTES, 'skewMinutes' => VoiceAmbiguousResolution::CLOCK_SKEW_MINUTES],
+                'before' => VoiceCall::STATUS_AMBIGUOUS, 'after' => VoiceAmbiguousResolution::FINAL,
+            ];
+            $cerrada = $this->dryRun ? $this->resolveUnstarted($fila, $evidencia) : DB::transaction(fn (): bool => $this->resolveUnstarted($fila, $evidencia));
+            if ($cerrada) {
+                $out['resolved']++;
+                if (! $this->dryRun) {
+                    Log::channel('voice')->warning('voice.reconcile.ambiguous_resolved', ['call_uuid' => $fila->uuid, 'pages' => $paginas]);
+                }
+            }
+        }
+        if ($out['held'] !== []) {
+            Log::channel('voice')->info('voice.reconcile.ambiguous_held', ['held' => $out['held']] + ($this->dryRun ? ['dry_run' => true] : []));
+        }
+
+        return $out;
+    }
+
+    /**
+     * E19-3: UNA `ambiguous` que no salió, a `failed_to_start` con su
+     * `reconciled`. Sobre la fila BLOQUEADA y con sus reglas otra vez; en seco,
+     * si lo haría (y lo apunta).
+     *
+     * @param  array<string, mixed>  $evidencia
+     */
+    private function resolveUnstarted(VoiceCall $fila, array $evidencia): bool
+    {
+        $bloqueada = $this->locked(VoiceCall::query()->whereKey($fila->id)->where('status', VoiceCall::STATUS_AMBIGUOUS));
+        if ($bloqueada === null || VoiceAmbiguousResolution::rowHold($bloqueada, now()) !== null) {
+            return false;
+        }
+        if (! $this->transition($bloqueada, [VoiceCall::STATUS_AMBIGUOUS], VoiceAmbiguousResolution::FINAL, VoiceAmbiguousResolution::transitionValues())) {
+            return false;
+        }
+        $this->event('reconciled', (int) $bloqueada->id, VoiceCallEvent::PROVIDER_LARAVEL, 'unstarted:'.$bloqueada->uuid, [
+            'outcome' => VoiceAmbiguousResolution::OUTCOME, 'codes' => $evidencia,
+        ]);
+
+        return true;
+    }
+
+    /** Un instante en UTC, ISO 8601 (la evidencia de E19-3). */
+    private static function utc(?DateTimeInterface $t): ?string
+    {
+        return $t === null ? null : \DateTimeImmutable::createFromInterface($t)->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM);
     }
 
     /** Una `requested` vieja perdió su job: `ambiguous` (pudo haber salido). En seco, cuántas pasarían. */

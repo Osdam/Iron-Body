@@ -31,6 +31,12 @@ use Illuminate\Support\Facades\Log;
  *    LABORATORIO HABLADO y él la reconozca como suya (LAB8, informe-lab §2.6;
  *    {@see labReport()}): sin oyente, o si dice que no es suya, freno.
  *  - Duplicado (la misma conversación y el mismo tipo): 200 y nada nuevo (DF-E2).
+ *  - E19-3 (H-1): una post-llamada (o un fallo de iniciación) de una saliente
+ *    que se cerró como «no llegó a iniciarse» ({@see VoiceAmbiguousResolution})
+ *    dice que la llamada SÍ existió. No se resucita: sigue el camino de una
+ *    fila final (su evento, el sello y la guarda, sin cambiar el estado) y
+ *    queda como ANOMALÍA: su `reconciled` (`resolved_call_reappeared`) y el
+ *    freno, como una llamada que Laravel no controlaba (DF-E5).
  */
 final class VoicePostCall
 {
@@ -102,6 +108,7 @@ final class VoicePostCall
         if ($evento === null) {
             return ['ok' => true, 'duplicate' => true];
         }
+        $anomalia = self::reappeared($llamada, $v, $evento);
         $destino = match ($v->failureReason) {
             'busy' => VoiceCall::STATUS_BUSY,
             'no-answer' => VoiceCall::STATUS_NO_ANSWER,
@@ -111,7 +118,7 @@ final class VoicePostCall
         $cambio = self::bindable($llamada, $ids) && VoiceCall::transition((int) $llamada->id, [VoiceCall::STATUS_REQUESTED, VoiceCall::STATUS_AMBIGUOUS, VoiceCall::STATUS_DIALING, VoiceCall::STATUS_ACTIVE], $destino,
             $ids + ['failure_code' => $v->failureReason === null ? 'unknown' : str_replace('-', '_', $v->failureReason), 'ended_at' => now()]);
 
-        return ['ok' => true, 'status' => $cambio ? $destino : (string) $llamada->status];
+        return ['ok' => true, 'status' => $cambio ? $destino : (string) $llamada->status] + $anomalia;
     }
 
     /** @return array<string, mixed> */
@@ -132,6 +139,7 @@ final class VoicePostCall
         if ($evento === null) {
             return ['ok' => true, 'duplicate' => true];
         }
+        $anomalia = self::reappeared($llamada, $v, $evento);
 
         // 1. El sello observado (una vez).
         $verificado = null;
@@ -170,7 +178,30 @@ final class VoicePostCall
         }
         Log::channel('voice')->info('voice.post_call.transcription', ['call_uuid' => $llamada->uuid, 'seal_verified' => $verificado, 'violations' => count($violaciones), 'completed' => $cambio]);
 
-        return ['ok' => true, 'status' => $cambio ? VoiceCall::STATUS_COMPLETED : (string) $llamada->status, 'sealVerified' => $verificado, 'violations' => count($violaciones)];
+        return ['ok' => true, 'status' => $cambio ? VoiceCall::STATUS_COMPLETED : (string) $llamada->status, 'sealVerified' => $verificado, 'violations' => count($violaciones)] + $anomalia;
+    }
+
+    /**
+     * E19-3 (H-1): si la fila se cerró como «no llegó a iniciarse», la llamada
+     * existió: su evento de anomalía (una vez) y el freno (idempotente por su
+     * clave), como una llamada que Laravel no controlaba. Nada más cambia.
+     *
+     * @return array{anomaly?: string} lo que se añade a la respuesta
+     */
+    private static function reappeared(VoiceCall $llamada, VoiceWebhookVerdict $v, VoiceCallEvent $evento): array
+    {
+        if (! VoiceAmbiguousResolution::wasResolved($llamada)) {
+            return [];
+        }
+        $id = (int) $llamada->id;
+        $anomalia = VoiceEvents::record('reconciled', $id, VoiceCallEvent::PROVIDER_LARAVEL, 'reappeared:'.$llamada->uuid, [
+            'outcome' => VoiceAmbiguousResolution::OUTCOME_REAPPEARED, 'codes' => ['kind' => $v->kind, 'status' => (string) $llamada->status],
+        ]);
+        VoiceBrake::open('unknown_provider_call', 'reappeared:'.$llamada->uuid, ['where' => 'post_call', 'kind' => $v->kind, 'resolved' => VoiceAmbiguousResolution::OUTCOME],
+            $id, (int) ($anomalia?->id ?? $evento->id));
+        Log::channel('voice')->warning('voice.post_call.resolved_call_reappeared', ['call_uuid' => $llamada->uuid, 'kind' => $v->kind]);
+
+        return ['anomaly' => VoiceAmbiguousResolution::OUTCOME_REAPPEARED];
     }
 
     /** @return array<string, mixed> una conversación que Laravel no inició: evento y freno (DF-E5) */
