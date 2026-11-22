@@ -45,7 +45,9 @@ use Illuminate\Support\Str;
  *    `live` o el canal asistido apagado (F-1, {@see openBrakes()});
  *  - `strategy_stopped`: la (versión, parte) de su inscripción ya no está en
  *    marcha en la cadena: pausada, apagada, revertida, retirada, archivada o
- *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
+ *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2), o la referencia
+ *    del Studio de su versión ya no vale (N3 `studio_reference_invalid`, m-2
+ *    de `informe-security-bandeja-r3.md`);
  *  - `template_not_approved`: su plantilla ya no está aprobada con la huella
  *    del sello (retirada después de salir): no hay guion que dar (N4, F-3);
  *  - `opted_out`: una señal de «no contactar» de N1/N2 que se SABE: el
@@ -650,9 +652,13 @@ final class AssistedQueue
      * N-2: las (versión, parte) EN MARCHA de unas estrategias, tal como está AHORA la cadena
      * ({@see OutreachPublishedStrategies::liveStrategies()}, solo de esas): la parte viva con `runnable()` (cadena
      * legible, versión en su estado vivo y contenido releído), sin `paused()` y en `active`. Son las entradas de
-     * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Lo que no está aquí (revertida,
-     * retirada, archivada, apagada, ilegible o versión que no es de la estrategia) no está en marcha. Con cada parte va
-     * si su versión del Studio declara «solo canario» (N3 `canary_only_declared`, F-2).
+     * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Y con la referencia del Studio de su
+     * versión ÍNTEGRA (N3 `studio_reference_invalid`, m-2 de `informe-security-bandeja-r3.md`): la versión del Studio
+     * que ya no se encuentra, su huella distinta, una línea base que ya no es la del código desplegado o una referencia
+     * ilegible la paran igual que la escalera, sin consultas nuevas (`studio` ya viene en la parte leída). Lo que no está
+     * aquí (revertida, retirada, archivada, apagada, ilegible, con la referencia que no vale o versión que no es de la
+     * estrategia) no está en marcha. Con cada parte va si su versión del Studio declara «solo canario» (N3
+     * `canary_only_declared`, F-2).
      *
      * @param  list<int>  $strategyIds
      * @return array<string, array{0: int, 1: string, 2: bool}> clave {@see partKey()} → [versión, parte, solo canario]
@@ -661,7 +667,7 @@ final class AssistedQueue
     {
         $enMarcha = [];
         foreach ($this->bridge->liveStrategies(array_values(array_unique($strategyIds))) as $l) {
-            if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE) {
+            if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE && $l->studio['referenceValid'] === true) {
                 $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part, $l->studio['canaryOnly'] !== false];
             }
         }

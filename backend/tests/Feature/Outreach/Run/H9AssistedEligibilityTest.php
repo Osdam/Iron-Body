@@ -5,6 +5,9 @@ namespace Tests\Feature\Outreach\Run;
 use App\Models\Admin;
 use App\Models\MarketingLead;
 use App\Models\Member;
+use App\Services\Outreach\Core\OutreachCatalog;
+use App\Services\Outreach\Core\StrategyContent;
+use App\Services\Outreach\Facts\CatalogDomains;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutcomeRecorder;
 use App\Services\Outreach\Run\OutreachDispatcher;
@@ -14,7 +17,9 @@ use App\Services\Outreach\Run\OutreachPublishedStrategies;
 use App\Services\Outreach\Run\OutreachReplay;
 use App\Services\Outreach\Run\OutreachStore;
 use App\Services\Telephony\VoiceContacts;
+use App\Services\UltronStudio\StudioCatalog;
 use App\Support\Privacy\PhoneFingerprint;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +43,8 @@ use Tests\TestCase;
  *    `H9AssistedClaimRaceTest`, solo PostgreSQL);
  *  - m-1 de `informe-security-bandeja-r3.md`: la inscripción que se cierra en ese mismo hueco da 409
  *    `enrollment_closed`, como la repetición, sin entregar el contacto;
+ *  - m-2 de `informe-security-bandeja-r3.md`: la referencia del Studio que deja de valer (N3
+ *    `studio_reference_invalid`) para la estrategia en la bandeja (`strategy_stopped`), por cada causa del puente;
  *  - m-1: la página no hace consultas por fila.
  *
  * El martes 17-11-2026 a las 10:00 de Bogotá (15:00Z), en vivo, con la fuente de eventos encendida (L9-26),
@@ -696,6 +703,166 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame('template_not_approved', $motivo(), 'template_not_approved > opted_out');
         $this->pauseStrategy($this->vivo);
         $this->assertSame('strategy_stopped', $motivo(), 'strategy_stopped > template_not_approved');
+    }
+
+    // ── m-2 (security R3) · La referencia del Studio que deja de valer ──────
+
+    /** Una versión del Studio aprobada, por las filas del esquema (como `V9World::v9PublishVoice()`). @return array{uuid: string, hash: string} */
+    private function studioVersion(): array
+    {
+        $uuid = (string) Str::uuid();
+        $hash = hash('sha256', 'version-del-studio-'.$uuid);
+        DB::table('ultron_studio_versions')->insert([
+            'uuid' => $uuid, 'client_request_id' => (string) Str::uuid(), 'label' => 'Versión del Studio de la bandeja', 'status' => 'APPROVED',
+            'content' => '{}', 'content_hash' => $hash, 'catalog_version' => StudioCatalog::VERSION, 'catalog_hash' => StudioCatalog::hash(),
+            'source_draft_revision' => 1, 'created_by_admin_id' => (int) $this->threePeople()['ana']->id, 'created_by_name' => 'Ana', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return ['uuid' => $uuid, 'hash' => $hash];
+    }
+
+    /**
+     * Una estrategia viva en la parte canario con la cadena FIRMADA de verdad, como `RunWorld::liveStrategy()`, cuya
+     * versión guarda la referencia del Studio `$ref` en su contenido y en su fila. Las columnas `studio_*` de la fila son
+     * inmutables, así que se siembran así al crearla.
+     *
+     * @param  array<string, string>  $ref  `{kind: version, uuid, contentHash}` o `{kind: baseline, catalogVersion, catalogHash}`
+     * @return array<string, mixed>
+     */
+    private function liveWithStudioReference(array $ref): array
+    {
+        $leido = StrategyContent::fromArray($this->validContent($this->assistedTemplate(), ['exclusions' => null, 'studio' => $ref]), (new CatalogDomains)->read());
+        $this->assertNotNull($leido['canonical'], 'el contenido de la prueba es válido: '.json_encode($leido['errors']));
+        $s = $this->insertStrategy(['purpose' => 'commercial']);
+        $v = $this->insertVersion($s, [
+            'content_json' => $leido['json'], 'content_hash' => $leido['contentHash'], 'catalog_version' => OutreachCatalog::VERSION,
+            'studio_ref_kind' => $ref['kind'],
+            'studio_version_uuid' => $ref['kind'] === 'version' ? $ref['uuid'] : null,
+            'studio_content_hash' => $ref['kind'] === 'version' ? $ref['contentHash'] : $ref['catalogHash'],
+        ]);
+        $this->approveVersion($v);
+        $fila = DB::table('ultron_studio_strategy_versions')->where('id', $v)->first();
+        $seq = $this->signedPublication($s, $v, 'publish', ['canary' => ['contentHash' => (string) $fila->content_hash, 'version' => (string) $fila->uuid], 'rest' => null, 'status' => 'active']);
+        $this->setVersionStatus($v, 'CANARY');
+
+        return [
+            'strategy' => $s, 'strategyUuid' => (string) DB::table('ultron_studio_strategies')->where('id', $s)->value('uuid'), 'version' => $v,
+            'versionUuid' => (string) $fila->uuid, 'seq' => $seq, 'purpose' => 'commercial', 'part' => 'canary',
+            'v' => DB::table('ultron_studio_strategy_versions')->where('id', $v)->first(), 'contentHash' => (string) $fila->content_hash,
+        ];
+    }
+
+    /**
+     * Dos socios canarios de WhatsApp con un trabajo asistido `started` en vivo cada uno en `$live`: el primero, reclamado
+     * por Ana a mano (lo que pasó ANTES); el segundo, libre.
+     *
+     * @param  array<string, mixed>  $live
+     * @return array{0: string, 1: string, 2: array<string, mixed>}  [el reclamado, el libre, el socio del reclamado]
+     */
+    private function mineAndFreeIn(array $live, bool $claimByHand = true): array
+    {
+        [$uno, $dos] = [$this->canaryMember('whatsapp'), $this->canaryMember('whatsapp')];
+        $mio = $this->seedStarted(['subject_key' => $uno['key'], 'member_id' => $uno['member']], 'whatsapp', '2026-11-18 09:00:00', $live);
+        $libre = $this->seedStarted(['subject_key' => $dos['key'], 'member_id' => $dos['member']], 'whatsapp', '2026-11-18 09:00:00', $live);
+        if ($claimByHand) {
+            $this->claimedBy($mio, $this->threePeople()['ana']);
+        }
+
+        return [$this->uuidOf($mio), $this->uuidOf($libre), $uno];
+    }
+
+    /** La referencia del Studio de la estrategia, como la lee el puente (la entrada de N3). @return array{0: bool, 1: string|null} */
+    private static function studioOf(array $live): array
+    {
+        $l = (new OutreachPublishedStrategies)->liveStrategies([(int) $live['strategy']])[0];
+
+        return [$l->studio['referenceValid'], $l->studio['reason']];
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function referenciasQueNoValen(): array
+    {
+        return [
+            'la versión del Studio que ya no se encuentra' => ['version_not_found'],
+            'la huella de la versión del Studio, distinta' => ['content_hash_mismatch'],
+            'la línea base de otro catálogo (un despliegue que cambia StudioCatalog::hash())' => ['baseline_mismatch'],
+        ];
+    }
+
+    /**
+     * m-2 de `informe-security-bandeja-r3.md`: con la referencia del Studio de su versión rota, la escalera niega a todos
+     * (N3 `studio_reference_invalid`). La bandeja tampoco entrega: la parte no está en marcha (`strategy_stopped`), así
+     * que lo libre no se ofrece ni se reclama y quien ya lo reclamó pierde el enlace y el guion. Lo de OTRA estrategia
+     * sigue. Cada causa del puente (`OutreachPublishedStrategies::studioReference()`), sembrada en las filas.
+     */
+    #[DataProvider('referenciasQueNoValen')]
+    public function test_m2_la_referencia_del_studio_que_no_vale_para_la_estrategia_en_la_bandeja_como_n3(string $causa): void
+    {
+        $gente = $this->threePeople();
+        [$otro] = $this->startedFor(['3001234567']);
+        $studio = $this->studioVersion();
+        $vivo = $this->liveWithStudioReference(match ($causa) {
+            'version_not_found' => ['kind' => 'version', 'uuid' => (string) Str::uuid(), 'contentHash' => $studio['hash']],
+            'content_hash_mismatch' => ['kind' => 'version', 'uuid' => $studio['uuid'], 'contentHash' => hash('sha256', 'otra-huella')],
+            'baseline_mismatch' => ['kind' => 'baseline', 'catalogVersion' => StudioCatalog::VERSION, 'catalogHash' => hash('sha256', 'el-catalogo-de-antes')],
+        });
+        $this->assertSame([false, $causa], self::studioOf($vivo), 'la causa sembrada es la que lee el puente');
+        [$mio, $libre] = $this->mineAndFreeIn($vivo);
+        $cola = new AssistedQueue;
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'strategy_stopped', '310000000');
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), (string) $otro['job']->uuid), 'lo de otra estrategia, sí: N3 es de la versión');
+    }
+
+    /**
+     * m-2, la cuarta causa: la referencia que no se puede LEER (`unreadable`: la lectura de la versión del Studio falla).
+     * Empieza íntegra (el control de la siembra con `kind: version`): se ofrece y el reclamante recibe el enlace y el
+     * guion. Cuando la tabla deja de leerse, retiene como las otras tres; cuando vuelve, vuelve todo.
+     */
+    public function test_m2_la_referencia_del_studio_ilegible_para_la_estrategia_y_al_volver_a_leerse_vuelve(): void
+    {
+        $gente = $this->threePeople();
+        $this->startedFor(['3001234567']);
+        $studio = $this->studioVersion();
+        $vivo = $this->liveWithStudioReference(['kind' => 'version', 'uuid' => $studio['uuid'], 'contentHash' => $studio['hash']]);
+        $this->assertSame([true, null], self::studioOf($vivo), 'íntegra');
+        [$mio, $libre, $uno] = $this->mineAndFreeIn($vivo, false);
+        $cola = new AssistedQueue;
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'antes: se ofrece');
+        $this->assertSame([['kind' => 'member', 'id' => $uno['member']], true, null], self::contact($cola->claim($gente['ana'], $mio, (string) Str::uuid())['job']), 'antes: el enlace y el guion');
+
+        // La lectura de las versiones del Studio falla (un permiso retirado, la tabla bloqueada): la consulta no llega a ejecutarse.
+        $ilegible = true;
+        DB::beforeExecuting(function (string $sql, array $bindings, $conexion) use (&$ilegible): void {
+            if ($ilegible && str_contains($sql, '"ultron_studio_versions"')) {
+                throw new QueryException((string) $conexion->getName(), $sql, $bindings, new \PDOException('SQLSTATE[42501]: permission denied for table ultron_studio_versions'));
+            }
+        });
+        $this->assertSame([false, 'unreadable'], self::studioOf($vivo));
+        // Lo de assertWithheldEverywhere(), salvo el registro: aquí el puente anota además, con razón, cada lectura ilegible.
+        $antes = self::rowsSnapshot();
+        Log::spy();
+        $this->assertNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'ilegible: no se ofrece');
+        $this->assertNull(self::row($cola->queue($gente['beto'], 'all', 50), $libre), 'ilegible: tampoco en «all»');
+        $this->assertSame(1, $cola->page($gente['beto'], 'unclaimed', 50)['withheld'], 'ilegible: se cuenta, sin decir de quién');
+        $this->assertClaimWithheld($cola, $libre, 'ilegible');
+        Log::shouldHaveReceived('warning')->with('outreach.assisted.claim_withheld', ['job' => $libre, 'reason' => 'strategy_stopped'])->once();
+        Log::shouldHaveReceived('warning')->with('outreach.studio_reference_unreadable', ['version_id' => (int) $vivo['version'], 'error_class' => 'QueryException']);
+        $this->assertNull(DB::table('outreach_jobs')->where('uuid', $libre)->value('assisted_claimed_by_admin_id'), 'no se reclamó');
+        foreach (['mine', 'all'] as $vista) {
+            $this->assertSame([null, false, 'strategy_stopped'], self::contact(self::row($cola->queue($gente['ana'], $vista, 50), $mio)), "ilegible: el reclamante en {$vista}");
+        }
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertTrue($r['replayed']);
+        $this->assertSame([null, false, 'strategy_stopped'], self::contact($r['job']), 'ilegible: la repetición');
+        $this->assertSame([null, false, null], self::contact(self::row($cola->queue($gente['beto'], 'all', 50), $mio)), 'a otra persona no se le cuenta');
+        $this->assertStringNotContainsString('310000000', json_encode([$cola->queue($gente['ana'], 'all', 50), $cola->queue($gente['beto'], 'all', 50), $r]));
+        $this->assertSame($antes, self::rowsSnapshot(), 'la bandeja no escribe nada al retener');
+
+        // Vuelve a leerse: vuelve todo. Retenía la referencia y nada más.
+        $ilegible = false;
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre));
+        $this->assertSame([['kind' => 'member', 'id' => $uno['member']], true, null], self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), $mio)));
     }
 
     // ── m-1 · Ninguna consulta por fila ─────────────────────────────────────
