@@ -10,6 +10,7 @@ use App\Services\Outreach\Run\OutcomeRecorder;
 use App\Services\Outreach\Run\OutreachDispatcher;
 use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
+use App\Services\Outreach\Run\OutreachReplay;
 use App\Services\Telephony\VoiceContacts;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -144,6 +145,15 @@ class H9AssistedEligibilityTest extends TestCase
         ];
     }
 
+    /** Un contacto de voz retirado, con la forma que exige DB8 (`vct_cipher_chk`, `vct_retire_chk`): sin el número cifrado, con quién, cuándo y por qué. */
+    private function retireVoiceContact(int $contactId): void
+    {
+        DB::table('voice_contacts')->where('id', $contactId)->update([
+            'status' => 'retired', 'phone_encrypted' => null, 'retired_at' => now(), 'retired_by_admin_id' => 1, 'retire_reason' => 'Número dado de baja',
+            'status_changed_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
     /** Reclamado a mano (sin pasar por la bandeja): lo que pasó ANTES de que llegara la señal. */
     private function claimedBy(int $jobId, Admin $who): void
     {
@@ -257,10 +267,47 @@ class H9AssistedEligibilityTest extends TestCase
         }
         $this->assertSame(2, DB::table('voice_consents')->where('kind', 'revoked')->count());
 
-        // La foto no distingue una revocación de un contacto desactivado: retiene con `policy_unknown` (informe, «R3-1»).
-        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '555010');
+        // La revocación CONSTA (`voice.consent_revoked`): lo pidió, `opted_out`.
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'opted_out', '555010');
         $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $whatsapp), 'el de WhatsApp de la misma persona sigue: R3-1 es del medio voz');
         $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
+    }
+
+    /**
+     * R3-1 y la reproducibilidad (D9-12): `voice.consent_revoked` es una clave de la FOTO de política, no de lo que se
+     * guarda. Ni la foto de condiciones (`facts_json`) ni la traza (la entrada de la escalera) la llevan, así que una
+     * decisión guardada antes o después se repite igual: `outreach:replay` da `same` en todas.
+     */
+    public function test_r3_1_la_clave_nueva_no_entra_en_lo_que_se_guarda_y_las_decisiones_se_repiten_igual(): void
+    {
+        $this->startedFor(['3001234561', '3001234562']);
+        $decisiones = DB::table('outreach_decisions')->orderBy('id')->get(['uuid', 'trace_json', 'facts_json']);
+        $this->assertGreaterThanOrEqual(4, $decisiones->count(), 'inscripción y plan de cada una, como mínimo');
+        foreach ($decisiones as $d) {
+            $this->assertStringNotContainsString('consent_revoked', (string) $d->trace_json.(string) $d->facts_json);
+            $this->assertSame(OutreachReplay::SAME, (new OutreachReplay)->replay((string) $d->uuid)['result'], "replay de {$d->uuid}");
+        }
+    }
+
+    /**
+     * R3-1, el otro caso: el consentimiento deja de estar concedido SIN que conste una revocación (el contacto de voz
+     * se retira). N1 lo niega igual; la bandeja retiene, pero no dice que lo pidió: `policy_unknown`.
+     */
+    public function test_r3_1_el_contacto_de_voz_retirado_despues_de_salir_retiene_con_policy_unknown(): void
+    {
+        $gente = $this->threePeople();
+        $this->startedFor(['3001234567']);
+        $uno = $this->callableMember('+573005550101');
+        $dos = $this->callableMember('+573005550102');
+        $mio = $this->uuidOf($this->seedStarted($uno['persona'], 'voice'));
+        $libre = $this->uuidOf($this->seedStarted($dos['persona'], 'voice'));
+        $cola = new AssistedQueue;
+        $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+
+        $this->retireVoiceContact($uno['contact']['id']);
+        $this->retireVoiceContact($dos['contact']['id']);
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '555010');
     }
 
     // ── R3-3 · El menor y la consulta al RNE que caduca ─────────────────────
@@ -357,8 +404,10 @@ class H9AssistedEligibilityTest extends TestCase
         // Sin datos de eventos: `rne_check_missing` > `complaint_unknown`.
         config(['commercial.events_enabled' => false]);
         $this->assertSame('rne_check_missing', $motivo());
-        // Y la revocación (desconocido): `rne_check_missing` > `policy_unknown`.
-        (new VoiceContacts)->revoke($gente['caro'], $uno['contact']['uuid'], ['clientRequestId' => (string) Str::uuid(), 'source' => 'written_form', 'evidence' => 'Revoca por escrito']);
+        // El consentimiento deja de estar concedido SIN revocación que conste (se retira el contacto que lo tenía y queda
+        // otro, activo, sin consentimiento ni consulta al RNE): `rne_check_missing` > `policy_unknown`.
+        $this->retireVoiceContact($uno['contact']['id']);
+        $otro = $this->voiceContact('member', $uno['member'], '+573005550199');
         $this->assertSame('rne_check_missing', $motivo());
         // Menor: `subject_minor` > `rne_check_missing`.
         Member::query()->findOrFail($uno['member'])->forceFill(['birth_date' => '2012-03-03'])->save();
@@ -367,8 +416,9 @@ class H9AssistedEligibilityTest extends TestCase
         config(['commercial.events_enabled' => true]);
         $this->commercialEvent('complaint_created', Carbon::now()->subMinute()->format('Y-m-d H:i:s'), $uno['member']);
         $this->assertSame('complaint_recent', $motivo());
-        // Y lo que pidió la persona: `opted_out` > `complaint_recent`.
-        $this->voiceExclusion($uno['contact']['hash']);
+        // Y lo que pidió la persona (revoca en el contacto que queda; R3-1): `opted_out` > `complaint_recent`.
+        $uuidOtro = (string) DB::table('voice_contacts')->where('id', $otro['id'])->value('uuid');
+        (new VoiceContacts)->revoke($gente['caro'], $uuidOtro, ['clientRequestId' => (string) Str::uuid(), 'source' => 'written_form', 'evidence' => 'Revoca por escrito']);
         $this->assertSame('opted_out', $motivo());
 
         $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);

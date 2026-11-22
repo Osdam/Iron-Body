@@ -29,7 +29,7 @@ class AssistedQueueOptedOutTest extends TestCase
         'lead.do_not_contact' => false, 'lead.do_not_contact_sibling' => false, 'lead.commercial_opt_out' => false, 'lead.consent_denied' => false,
         'consent.whatsapp.commercial' => true, 'consent.whatsapp.service' => false, 'consent.whatsapp.collections' => false,
         'consent.voice_call.commercial' => true, 'consent.voice_call.service' => false, 'consent.voice_call.collections' => false,
-        'voice.excluded' => false, 'voice.rne_check_missing' => false,
+        'voice.excluded' => false, 'voice.rne_check_missing' => false, 'voice.consent_revoked' => false,
     ];
 
     /** Los hechos de N1 que pide la bandeja, de una persona adulta con contacto de voz. */
@@ -74,7 +74,12 @@ class AssistedQueueOptedOutTest extends TestCase
             'exclusión de voz en un trabajo por voz' => [['voice.excluded' => true] + self::LIMPIA, 'commercial', 'voice', true],
             'exclusión de voz en un trabajo por WhatsApp: no aplica' => [['voice.excluded' => true] + self::LIMPIA, 'commercial', 'whatsapp', false],
             // R3-1: revocar (o el contacto desactivado) deja el consentimiento de voz en `missing`; N1 lo niega y la foto no dice cuál de los dos.
-            'R3-1: voz sin el consentimiento concedido: no se sabe (retiene)' => [['consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'voice', null],
+            'R3-1: voz sin el consentimiento concedido y sin revocación que conste (contacto retirado): no se sabe (retiene)' => [['consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'voice', null],
+            'R3-1: voz revocada (consta: voice.consent_revoked): lo pidió' => [['consent.voice_call.commercial' => false, 'voice.consent_revoked' => true] + self::LIMPIA, 'commercial', 'voice', true],
+            'R3-1: la revocación sin leer: no se sabe' => [['consent.voice_call.commercial' => false] + $sin('voice.consent_revoked'), 'commercial', 'voice', null],
+            // Otro contacto activo la mantiene concedida: N1 no niega y la bandeja tampoco (la revocación de un número no es de la persona entera).
+            'R3-1: revocó en un contacto y otro la tiene concedida: no cuenta' => [['voice.consent_revoked' => true] + self::LIMPIA, 'commercial', 'voice', false],
+            'R3-1: la revocación de voz no cuenta en un trabajo por WhatsApp' => [['consent.voice_call.commercial' => false, 'voice.consent_revoked' => true] + self::LIMPIA, 'commercial', 'whatsapp', false],
             'R3-1: voz con el consentimiento sin leer: no se sabe' => [$sin('consent.voice_call.commercial'), 'commercial', 'voice', null],
             'R3-1: la voz sin consentimiento no cuenta en un trabajo por WhatsApp' => [['consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'whatsapp', false],
             // R3-1 NO se extiende a WhatsApp: el de servicio depende de la ventana de 24 h (`LeadFacts`) y retendría trabajos válidos.

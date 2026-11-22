@@ -46,17 +46,17 @@ use Illuminate\Support\Str;
  *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
  *  - `opted_out`: una señal de «no contactar» de N1/N2 que se SABE: el
  *    `do_not_contact` (suyo o de un prospecto con su número), el *opt-out*
- *    comercial, el consentimiento del medio denegado, la exclusión de voz y la
- *    supresión del libro ({@see CoreProjection::policyInput()},
- *    {@see SubjectSuppressions}; N-1);
+ *    comercial, el consentimiento del medio denegado, la revocación del de voz
+ *    (R3-1), la exclusión de voz y la supresión del libro
+ *    ({@see CoreProjection::policyInput()}, {@see SubjectSuppressions}; N-1);
  *  - `complaint_recent`: N6, una queja dentro de la ventana;
  *  - `subject_minor` y `rne_check_missing`: lo que N1 niega sin que la persona
  *    lo pida (R3-3, directiva del propietario del 21-11-2026): es menor, o
  *    (por voz) la consulta al RNE de algún contacto de voz ya no está vigente;
  *  - `policy_unknown`: lo de `opted_out` o lo de R3-3 no se puede comprobar
  *    (persona sin resolver, clave que ya no es de una persona o, por voz, el
- *    consentimiento que ya no está concedido sin saber que se revocó: R3-1):
- *    falla cerrado;
+ *    consentimiento que ya no está concedido sin que conste una revocación: un
+ *    contacto desactivado, R3-1): falla cerrado;
  *  - `complaint_unknown`: N6 sin datos de eventos (falla cerrado);
  *  - `expired`: el plazo del trabajo (`expires_at <= ahora`, el borde del
  *    despachador) ya pasó: la política se evaluó para ese plazo.
@@ -500,8 +500,9 @@ final class AssistedQueue
      *
      * R3-1 (`informe-security-bandeja-ronda3.md`): por VOZ, N1 niega todo consentimiento que no sea `granted`
      * (`no_consent_for_purpose_channel`), y revocarlo (`revoked` en `voice_consents`, D8-18: «revocar no espera a
-     * nadie») lo deja en `missing`, no en `denied`. Aquí retiene igual: `null`, porque la foto no distingue una
-     * revocación de un contacto desactivado (decir «lo pidió» sin saberlo sería falso). Por WhatsApp NO se extiende:
+     * nadie») lo deja en `missing`, no en `denied`. Aquí retiene igual: `true` si se sabe que revocó
+     * (`voice.consent_revoked`: el último evento válido de algún contacto activo es `revoked`); si no (un contacto
+     * desactivado, nunca concedido o sin leer), `null`, porque decir «lo pidió» sin saberlo sería falso. Por WhatsApp NO se extiende:
      * `consent.whatsapp.service` depende de la ventana de 24 h y retendría trabajos de servicio válidos; la baja por
      * WhatsApp ya llega como `lead.consent_denied`.
      */
@@ -517,7 +518,7 @@ final class AssistedQueue
             $entrada['optOut']['siblingDoNotContact'],
             match (true) {
                 $consentimiento === 'denied' => $s->policy('lead.consent_denied'),
-                $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => null,
+                $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => $s->policy('voice.consent_revoked') === true ? true : null,
                 default => false,
             },
         ];

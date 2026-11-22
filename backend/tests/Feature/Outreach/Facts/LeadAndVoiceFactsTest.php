@@ -217,11 +217,58 @@ class LeadAndVoiceFactsTest extends TestCase
         $this->assertTrue($p(4, 'voice.excluded'));
         $this->assertFalse($foto->subject($claves[5])->fact('subject.has_voice_contact'));
         $this->assertFalse($p(5, 'consent.voice_call.commercial'));
+        // R3-1: la revocación que CONSTA (el último evento válido es `revoked`) solo la tiene la persona que revocó.
+        $this->assertSame([false, false, true, false, false, false], array_map(static fn (int $i): ?bool => $p($i, 'voice.consent_revoked'), range(0, 5)));
 
         // Con la vigencia en 0 (el defecto mientras P-14 no se decida) ninguna consulta vale.
         config(['voice.contacts.rne_validity_days' => 0]);
         $cero = $this->snap([$claves[0]], self::NOW, self::only([], false, true));
         $this->assertTrue($cero->subject($claves[0])->policy('voice.rne_check_missing'));
+    }
+
+    /**
+     * R3-1 de `informe-security-bandeja-ronda3.md`: `voice.consent_revoked` ⇔ algún contacto ACTIVO cuyo último evento
+     * VÁLIDO (el orden de `VoiceConsentRule`) es `revoked`, con los eventos que ya se leen (ni una consulta de más).
+     */
+    public function test_voz_la_revocacion_que_consta_es_el_ultimo_evento_valido_de_un_contacto_activo(): void
+    {
+        $persona = function (string $e164, array $eventos, string $estado = 'active'): string {
+            $s = $this->socio();
+            $c = $this->voiceContact('member', $s['member'], $e164);
+            foreach ($eventos as [$tipo, $confirma, $cuando, $fuente]) {
+                // La petición grabada en una entrante NO vale con la grabación apagada (P-7): la carga el sistema, sin cuenta.
+                $grabada = $fuente === 'recorded_inbound_request';
+                $this->voiceConsent($c['id'], $tipo, $confirma, $cuando, $grabada ? null : ($tipo === 'revoked' ? 3 : 1), $fuente);
+            }
+            if ($estado === 'retired') {
+                // Con la forma que exige DB8 (`vct_cipher_chk`, `vct_retire_chk`).
+                DB::table('voice_contacts')->where('id', $c['id'])->update(['status' => 'retired', 'phone_encrypted' => null, 'retired_at' => self::utc('2026-11-03 12:00'),
+                    'retired_by_admin_id' => 1, 'retire_reason' => 'Número dado de baja', 'status_changed_at' => self::utc('2026-11-03 12:00')]);
+            }
+
+            return SubjectKey::member($s['member']);
+        };
+        $f = 'written_form';
+        $claves = [
+            'revocó' => $persona('+573001120001', [['granted', 2, '2026-11-01 12:00:00', $f], ['revoked', null, '2026-11-02 12:00:00', $f]]),
+            'revocó y volvió a conceder (confirmado)' => $persona('+573001120002', [['revoked', null, '2026-11-01 12:00:00', $f], ['granted', 2, '2026-11-02 12:00:00', $f]]),
+            'revocó y una concesión que no vale no lo tapa' => $persona('+573001120003', [['granted', 2, '2026-11-01 12:00:00', $f], ['revoked', null, '2026-11-02 12:00:00', $f], ['granted', null, '2026-11-03 12:00:00', 'recorded_inbound_request']]),
+            'nunca concedió' => $persona('+573001120004', []),
+            'revocó en un contacto retirado' => $persona('+573001120005', [['granted', 2, '2026-11-01 12:00:00', $f], ['revoked', null, '2026-11-02 12:00:00', $f]], 'retired'),
+        ];
+        $sql = [];
+        DB::listen(function ($q) use (&$sql): void {
+            $sql[] = $q->sql;
+        });
+        $foto = $this->snap(array_values($claves), self::NOW, self::only(VoiceConsentFacts::FACTS, false, true));
+        $leidas = count(array_filter($sql, static fn (string $q): bool => str_contains($q, 'voice_consents')));
+
+        $this->assertSame(
+            ['revocó' => [true, false], 'revocó y volvió a conceder (confirmado)' => [false, true], 'revocó y una concesión que no vale no lo tapa' => [true, false],
+                'nunca concedió' => [false, false], 'revocó en un contacto retirado' => [false, false]],
+            array_map(static fn (string $k): array => [$foto->subject($k)->policy('voice.consent_revoked'), $foto->subject($k)->policy('consent.voice_call.commercial')], $claves),
+        );
+        $this->assertSame(1, $leidas, 'los eventos se leen una vez para todo el lote, como antes');
     }
 
     public function test_canario_activo_por_huella_del_numero_de_la_persona(): void
