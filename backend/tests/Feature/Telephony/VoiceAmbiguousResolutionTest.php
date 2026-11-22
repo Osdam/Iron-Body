@@ -182,7 +182,10 @@ class VoiceAmbiguousResolutionTest extends TestCase
         foreach (['concurrency_exceeded', 'daily_cap_reached', 'budget_exhausted'] as $suelto) {
             $this->assertNotContains($suelto, $alOtro, $suelto);
         }
-        $this->assertContains('calls_disabled_in_code', $alOtro, 'la constante sigue cerrada');
+        // Sin nombrar la constante (CALLS_ENABLED_IN_CODE): con las llamadas abiertas (C-4) esta prueba no cambia. A la otra
+        // persona la siguen negando las cerraduras de este mundo de prueba (salientes, Twilio, número y ElevenLabs
+        // apagados), las mismas para las dos: ninguna es suya ni de la frecuencia.
+        $this->assertNotSame([], $alOtro);
         $this->assertSame([(int) $a->id, (int) $b->id, (int) $rechazada->id], VoiceCall::query()->orderBy('id')->pluck('id')->map(static fn ($id): int => (int) $id)->all(),
             'la puerta (cerrada) no crea filas');
     }
