@@ -9,6 +9,7 @@ use App\Models\RolePermission;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutreachAccess;
 use App\Support\Access\RolePermissionPolicy;
+use App\Support\Privacy\PhoneFingerprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -211,11 +212,22 @@ class AssistedQueueLoadBench extends TestCase
             ], $trozo));
         }
         $usuarios = DB::table('users')->where('email', 'like', "%-{$marca}@run.test")->orderBy('id')->pluck('id')->all();
+        // Cada socio con su número en la ficha y ese número como canario ACTIVO de WhatsApp: la parte canario y la línea
+        // base «solo canario» solo dejan salir eso (N5 y N3; la bandeja lo vuelve a mirar desde F-2).
+        $telefono = static fn (int $u): string => '33'.str_pad((string) $u, 8, '0', STR_PAD_LEFT);
         foreach (array_chunk($usuarios, 500) as $trozo) {
             DB::table('members')->insert(array_map(static fn (int $u): array => [
                 'member_uuid' => (string) Str::uuid(), 'access_hash' => hash('sha256', 'carga'.$u), 'full_name' => "Carga {$u}",
-                'document_number' => 'CAR'.$u.'X', 'user_id' => $u, 'birth_date' => '1990-05-05', 'is_minor' => false,
+                'document_number' => 'CAR'.$u.'X', 'user_id' => $u, 'birth_date' => '1990-05-05', 'is_minor' => false, 'phone' => $telefono($u),
                 'status' => 'active', 'created_at' => '2026-01-01 12:00:00', 'updated_at' => '2026-01-01 12:00:00',
+            ], $trozo));
+            DB::table('ultron_studio_canary_numbers')->insert(array_map(static fn (int $u): array => [
+                'uuid' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'channel' => 'whatsapp', 'alias' => 'Canario carga',
+                'phone_hash' => PhoneFingerprint::of('+57'.$telefono($u)), 'phone_last4' => substr($telefono($u), -4), 'country_code' => 'CO',
+                'phone_encrypted' => null, 'status' => 'active', 'consent_attested' => true,
+                'registered_by_admin_id' => 1, 'registered_by_name' => 'Ana', 'authorized_by_admin_id' => 2, 'authorized_by_name' => 'Beto',
+                'authorized_at' => '2026-11-01 12:00:00', 'activated_by_admin_id' => 2, 'activated_by_name' => 'Beto', 'activated_at' => '2026-11-01 12:00:00',
+                'status_changed_at' => '2026-11-01 12:00:00', 'created_at' => '2026-11-01 12:00:00', 'updated_at' => '2026-11-01 12:00:00',
             ], $trozo));
         }
         $socios = DB::table('members')->whereIn('user_id', $usuarios)->orderBy('id')->pluck('id')->all();

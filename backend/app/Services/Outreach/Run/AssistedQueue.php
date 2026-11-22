@@ -55,6 +55,9 @@ use Illuminate\Support\Str;
  *  - `subject_minor` y `rne_check_missing`: lo que N1 niega sin que la persona
  *    lo pida (R3-3, directiva del propietario del 21-11-2026): es menor, o
  *    (por voz) la consulta al RNE de algún contacto de voz ya no está vigente;
+ *  - `canary_scope_mismatch`: en la parte canario (N5) o en una versión que
+ *    declara «solo canario» (N3), su número ya no es un canario activo del
+ *    medio: se desactivó o se revocó después de salir (F-2);
  *  - `policy_unknown`: lo de `opted_out` o lo de R3-3 no se puede comprobar
  *    (persona sin resolver, clave que ya no es de una persona o, por voz, el
  *    consentimiento que ya no está concedido sin que conste una revocación: un
@@ -108,6 +111,9 @@ final class AssistedQueue
     /** R3-3: N1 `rne_check_missing` (solo por voz). */
     public const WITHHELD_RNE_CHECK_MISSING = 'rne_check_missing';
 
+    /** F-2: N5 `canary_scope_mismatch` y N3 `canary_only_declared` (su número ya no es un canario activo del medio). */
+    public const WITHHELD_CANARY_SCOPE_MISMATCH = 'canary_scope_mismatch';
+
     public const WITHHELD_POLICY_UNKNOWN = 'policy_unknown';
 
     public const WITHHELD_COMPLAINT_UNKNOWN = 'complaint_unknown';
@@ -116,7 +122,7 @@ final class AssistedQueue
 
     public const WITHHELD_REASONS = [
         self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
-        self::WITHHELD_SUBJECT_MINOR, self::WITHHELD_RNE_CHECK_MISSING,
+        self::WITHHELD_SUBJECT_MINOR, self::WITHHELD_RNE_CHECK_MISSING, self::WITHHELD_CANARY_SCOPE_MISMATCH,
         self::WITHHELD_POLICY_UNKNOWN, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED,
     ];
 
@@ -378,7 +384,7 @@ final class AssistedQueue
      * la forma de M-5 (`complaint_recent` y `known`: false = sin datos); los demás, solo su código.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      */
     private function requireNotWithheld(object $trabajo, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): void
     {
@@ -404,24 +410,28 @@ final class AssistedQueue
      * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose`, `channel`, `medium`, `strategy_uuid`,
      *                                  `enrollment_version_id`, `enrollment_part` y `expires_at`
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      * @return array<int, string> por id de trabajo con motivo
      */
     private function withholdReasons(array $trabajos, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): array
     {
         $motivos = [];
         $porPersona = [];
+        $restringido = [];
         foreach ($trabajos as $j) {
+            $parte = self::partKey((int) $j->enrollment_version_id, (string) $j->enrollment_part);
             if (in_array(true, OutreachStop::ladderBrakes($abiertos, (string) $j->strategy_uuid, (string) $j->channel), true)) {
                 $motivos[(int) $j->id] = self::WITHHELD_BRAKE;
-            } elseif (! isset($enMarcha[self::partKey((int) $j->enrollment_version_id, (string) $j->enrollment_part)])) {
+            } elseif (! isset($enMarcha[$parte])) {
                 // N-2: una parte que la cadena no trae en marcha (o que apareció después de leerla): retenida.
                 $motivos[(int) $j->id] = self::WITHHELD_STRATEGY_STOPPED;
             } else {
                 $porPersona[] = $j;
+                // F-2: solo el alcance canario en la parte canario (N5) y en toda versión que lo declare (N3, «solo canario»).
+                $restringido[(int) $j->id] = (string) $j->enrollment_part === 'canary' || $enMarcha[$parte][2];
             }
         }
-        $deLaPersona = $this->personReasons($porPersona, $ahora);
+        $deLaPersona = $this->personReasons($porPersona, $ahora, $restringido);
         foreach ($porPersona as $j) {
             if (isset($deLaPersona[(int) $j->id])) {
                 $motivos[(int) $j->id] = $deLaPersona[(int) $j->id];
@@ -441,16 +451,19 @@ final class AssistedQueue
      *  - `complaint_recent` si se quejó dentro de la ventana ({@see LadderInputBuilder::complaintRecently()}, el
      *    lector del despachador, con la finalidad de la inscripción);
      *  - `subject_minor` o `rne_check_missing` si N1 la niega por elegibilidad ({@see ineligible()}, R3-3);
-     *  - `policy_unknown` si la política o la elegibilidad no se pueden comprobar (falla cerrado; decir «pidió que
-     *    no la contacten» sin saberlo sería falso);
+     *  - `canary_scope_mismatch` si el trabajo solo puede llegar al alcance canario y su número ya no es un canario
+     *    activo del medio ({@see outOfCanaryScope()}, F-2);
+     *  - `policy_unknown` si la política, la elegibilidad o el alcance no se pueden comprobar (falla cerrado; decir
+     *    «pidió que no la contacten» sin saberlo sería falso);
      *  - `complaint_unknown` si no hay datos de eventos para la queja (falla cerrado, como N6).
      * Lo SABIDO gana a lo desconocido. Una clave que ya no es de una persona (la supresión 1581 la deja en `x:<id>`)
      * no se lee: no se sabe nada.
      *
      * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose` y `medium`
+     * @param  array<int, bool>  $restringido  por id: ¿solo alcanza al alcance canario? (sin la entrada, sí: falla cerrado)
      * @return array<int, string> por id de trabajo retenido
      */
-    private function personReasons(array $trabajos, DateTimeImmutable $ahora): array
+    private function personReasons(array $trabajos, DateTimeImmutable $ahora, array $restringido): array
     {
         if ($trabajos === []) {
             return [];
@@ -462,11 +475,13 @@ final class AssistedQueue
         $foto = $claves === [] ? null : $this->snapshots->build($claves, $ahora, self::personSelection());
         $politica = [];
         $elegible = [];
+        $canario = [];
         $preguntas = [];
         foreach ($trabajos as $j) {
             $s = $foto?->subject((string) $j->subject_key);
             $politica[(int) $j->id] = self::optedOut($s, (string) $j->purpose, (string) $j->medium);
             $elegible[(int) $j->id] = self::ineligible($s, (string) $j->purpose, (string) $j->medium);
+            $canario[(int) $j->id] = ($restringido[(int) $j->id] ?? true) ? self::outOfCanaryScope($s, (string) $j->medium) : false;
             if ($politica[(int) $j->id] !== true && $s !== null && $s->resolved()) {
                 $preguntas[(int) $j->id] = ['key' => (string) ($s->canonicalKey ?? $s->key), 'purpose' => (string) $j->purpose, 'medium' => (string) $j->medium];
             }
@@ -484,7 +499,8 @@ final class AssistedQueue
                 $politica[(int) $j->id] === true => self::WITHHELD_OPTED_OUT,
                 $queja === true => self::WITHHELD_COMPLAINT_RECENT,
                 is_string($elegible[(int) $j->id]) => $elegible[(int) $j->id],
-                $politica[(int) $j->id] === null, $elegible[(int) $j->id] === null => self::WITHHELD_POLICY_UNKNOWN,
+                $canario[(int) $j->id] === true => self::WITHHELD_CANARY_SCOPE_MISMATCH,
+                $politica[(int) $j->id] === null, $elegible[(int) $j->id] === null, $canario[(int) $j->id] === null => self::WITHHELD_POLICY_UNKNOWN,
                 $queja === null => self::WITHHELD_COMPLAINT_UNKNOWN,
                 default => null,
             };
@@ -587,21 +603,39 @@ final class AssistedQueue
     }
 
     /**
+     * F-2: ¿está la persona FUERA del alcance canario del medio del trabajo, con la MISMA entrada que N5 y N3
+     * (`canary.{medio}`, `LadderInputBuilder`: `inCanaryScope`)? `true` si se sabe que ninguno de sus números es un
+     * canario ACTIVO de ese medio (desactivado o revocado después de salir); `false` si alguno lo es; `null` si no se
+     * puede comprobar (sin foto, sin resolver, medio fuera del conjunto o la política sin leer): la escalera niega todo
+     * lo que no sea `true`, y la bandeja retiene con `policy_unknown`.
+     */
+    private static function outOfCanaryScope(?SubjectFacts $s, string $medium): ?bool
+    {
+        if ($s === null || ! $s->resolved() || ! in_array($medium, OutreachCatalog::MEDIUMS, true)) {
+            return null;
+        }
+        $enAlcance = $s->policy("canary.{$medium}");
+
+        return $enAlcance === null ? null : ! $enAlcance;
+    }
+
+    /**
      * N-2: las (versión, parte) EN MARCHA de unas estrategias, tal como está AHORA la cadena
      * ({@see OutreachPublishedStrategies::liveStrategies()}, solo de esas): la parte viva con `runnable()` (cadena
      * legible, versión en su estado vivo y contenido releído), sin `paused()` y en `active`. Son las entradas de
      * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Lo que no está aquí (revertida,
-     * retirada, archivada, apagada, ilegible o versión que no es de la estrategia) no está en marcha.
+     * retirada, archivada, apagada, ilegible o versión que no es de la estrategia) no está en marcha. Con cada parte va
+     * si su versión del Studio declara «solo canario» (N3 `canary_only_declared`, F-2).
      *
      * @param  list<int>  $strategyIds
-     * @return array<string, array{0: int, 1: string}> clave {@see partKey()} → [versión, parte]
+     * @return array<string, array{0: int, 1: string, 2: bool}> clave {@see partKey()} → [versión, parte, solo canario]
      */
     private function runningParts(array $strategyIds): array
     {
         $enMarcha = [];
         foreach ($this->bridge->liveStrategies(array_values(array_unique($strategyIds))) as $l) {
             if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE) {
-                $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part];
+                $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part, $l->studio['canaryOnly'] !== false];
             }
         }
 
@@ -616,7 +650,7 @@ final class AssistedQueue
     /**
      * N-2 en SQL: la inscripción es de una parte en marcha (lista blanca; sin ninguna, nada).
      *
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha
      */
     private static function inRunningPart(Builder $w, array $enMarcha): void
     {
@@ -662,7 +696,7 @@ final class AssistedQueue
      * esconde trabajo ofrecible en `all`).
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      * @return list<object>
      */
     private function queueRows(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, ?object $after, int $size): array
@@ -698,7 +732,7 @@ final class AssistedQueue
      * ni ninguna parte parada en la vista, 0 sin consultar.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      */
     private function heldCount(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, bool $hayParadas): int
     {

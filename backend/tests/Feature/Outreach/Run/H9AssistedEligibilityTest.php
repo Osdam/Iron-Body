@@ -12,6 +12,7 @@ use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
 use App\Services\Outreach\Run\OutreachReplay;
 use App\Services\Telephony\VoiceContacts;
+use App\Support\Privacy\PhoneFingerprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -127,13 +128,14 @@ class H9AssistedEligibilityTest extends TestCase
 
     /**
      * Un socio que se puede llamar HOY: su contacto de voz activo con el consentimiento comercial concedido y
-     * confirmado por OTRA persona (E3-4) y una consulta al RNE vigente que dice `not_listed`.
+     * confirmado por OTRA persona (E3-4), una consulta al RNE vigente que dice `not_listed` y su número de la ficha
+     * como canario activo de voz y de WhatsApp (F-2: la parte canario y la línea base «solo canario» lo exigen).
      *
-     * @return array{member: int, persona: array<string, mixed>, contact: array{id: int, hash: string, uuid: string}}
+     * @return array{member: int, persona: array<string, mixed>, contact: array{id: int, hash: string, uuid: string}, phone: string}
      */
     private function callableMember(string $e164, string $rneCheckedAt = '2026-11-15 12:00:00'): array
     {
-        $socio = $this->socio();
+        $socio = $this->canaryMember('voice', 'whatsapp');
         $contacto = $this->voiceContact('member', $socio['member'], $e164);
         $this->voiceConsent($contacto['id'], 'granted', 2, '2026-11-01 12:00:00', 1);
         $this->rneCheck($contacto['hash'], $rneCheckedAt);
@@ -142,6 +144,7 @@ class H9AssistedEligibilityTest extends TestCase
             'member' => $socio['member'],
             'persona' => ['subject_key' => 'm:'.$socio['member'], 'member_id' => $socio['member']],
             'contact' => $contacto + ['uuid' => (string) DB::table('voice_contacts')->where('id', $contacto['id'])->value('uuid')],
+            'phone' => $socio['phone'],
         ];
     }
 
@@ -335,6 +338,7 @@ class H9AssistedEligibilityTest extends TestCase
         // Un prospecto sin ficha de socio: la edad no se infiere (D9-15) y la escalera no niega `subject_minor`.
         $lead = $this->lead(['phone' => '3009990001', 'consent_status' => 'granted']);
         $this->conversation($lead);
+        $this->canary('+573009990001', 'whatsapp');
         $libre = $this->uuidOf($this->seedStarted(['subject_key' => 'l:'.$lead, 'member_id' => null, 'lead_id' => $lead], 'whatsapp'));
         $cola = new AssistedQueue;
 
@@ -421,7 +425,7 @@ class H9AssistedEligibilityTest extends TestCase
         (new VoiceContacts)->revoke($gente['caro'], $uuidOtro, ['clientRequestId' => (string) Str::uuid(), 'source' => 'written_form', 'evidence' => 'Revoca por escrito']);
         $this->assertSame('opted_out', $motivo());
 
-        $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+        $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
     }
 
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────
@@ -522,6 +526,85 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame([['kind' => 'member', 'id' => $libre['member']['member']], true, null], self::contact($r['job']), 'y se deja reclamar con el contacto');
     }
 
+    // ── F-2 · El canario desactivado o revocado después de salir ────────────
+
+    /**
+     * El número canario `$e164` del canal pasa a `$to` con las MISMAS columnas que escribe el Studio:
+     * `StudioCanaryNumbers::deactivate()` (vuelve a `authorized`), `revoke()` (`revoked`, sin el cifrado, con quién,
+     * cuándo y por qué: `uscn_revoke_chk`) y `activate()` (`active`).
+     */
+    private function moveCanary(string $e164, string $channel, string $to): void
+    {
+        $fila = DB::table('ultron_studio_canary_numbers')->where('phone_hash', PhoneFingerprint::of($e164))->where('channel', $channel);
+        $this->assertSame(1, match ($to) {
+            'authorized', 'active' => $fila->update(['status' => $to, 'status_changed_at' => now(), 'updated_at' => now()]),
+            'revoked' => $fila->update(['status' => 'revoked', 'phone_encrypted' => null, 'revoked_by_admin_id' => 1, 'revoked_by_name' => 'Ana', 'revoked_by_role' => 'Super Admin',
+                'revoked_at' => now(), 'revoke_reason' => 'Ya no se usa este móvil', 'status_changed_at' => now(), 'updated_at' => now()]),
+        });
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function canariosQueSalen(): array
+    {
+        return ['desactivado (vuelve a «autorizado»)' => ['authorized'], 'revocado' => ['revoked']];
+    }
+
+    /**
+     * F-2: en la parte canario (N5 `canary_scope_mismatch`) solo alcanza a los números canarios ACTIVOS del medio. Si el
+     * de la persona se desactiva o se revoca después de salir, lo libre no se ofrece ni se reclama y quien ya lo reclamó
+     * pierde el enlace y el guion. El motivo es uno propio: no lo pidió (`opted_out`), no es un freno (`brake`) y se
+     * sabe (`policy_unknown` no).
+     */
+    #[DataProvider('canariosQueSalen')]
+    public function test_f2_el_canario_que_deja_de_estar_activo_despues_de_salir_retiene_la_parte_canario(string $to): void
+    {
+        $gente = $this->threePeople();
+        [$mio, $libre] = $this->startedFor(['3001234561', '3001234562']);
+        $this->assertSame('canary', $this->vivo['part']);
+        $cola = new AssistedQueue;
+        $cola->claim($gente['ana'], (string) $mio['job']->uuid, (string) Str::uuid());
+
+        foreach (['+573001234561', '+573001234562'] as $numero) {
+            $this->moveCanary($numero, 'whatsapp', $to);
+        }
+        $this->assertWithheldEverywhere($cola, (string) $mio['job']->uuid, (string) $libre['job']->uuid, 'canary_scope_mismatch', '300123456');
+
+        if ($to === 'authorized') {
+            // Activado otra vez: vuelve. (Revocar es definitivo: hay que volver a registrar el número.)
+            foreach (['+573001234561', '+573001234562'] as $numero) {
+                $this->moveCanary($numero, 'whatsapp', 'active');
+            }
+            $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), (string) $libre['job']->uuid));
+            $this->assertSame([['kind' => 'member', 'id' => $mio['member']['member']], true, null], self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), (string) $mio['job']->uuid)));
+        }
+    }
+
+    /**
+     * F-2 también fuera de la parte canario: la línea base del Studio declara «solo canario» (N3 `canary_only_declared`),
+     * así que en la parte publicada (`rest`) tampoco sale a quien no sea canario. Y es por MEDIO: el canario de voz
+     * revocado retiene el asistido por voz, no el de WhatsApp de la misma persona.
+     */
+    public function test_f2_con_la_version_solo_canario_tambien_retiene_la_parte_publicada_y_por_medio(): void
+    {
+        $gente = $this->threePeople();
+        $this->startedFor(['3001234567']);
+        $publicada = $this->liveStrategy($this->validContent($this->assistedTemplate(), ['exclusions' => null]), 'PUBLISHED');
+        $this->assertSame('rest', $publicada['part']);
+        $uno = $this->callableMember('+573005550101');
+        $voz = $this->uuidOf($this->seedStarted(['part' => 'rest'] + $uno['persona'], 'voice', '2026-11-18 09:00:00', $publicada));
+        $whatsapp = $this->uuidOf($this->seedStarted($uno['persona'], 'whatsapp', '2026-11-18 10:00:00'));
+        $cola = new AssistedQueue;
+        $libres = static fn () => array_column($cola->queue($gente['beto'], 'unclaimed', 50), 'uuid');
+        $this->assertContains($voz, $libres(), 'antes, canario de voz activo: se ofrece en la parte publicada');
+
+        $this->moveCanary('+57'.$uno['phone'], 'voice', 'revoked');
+        $this->assertNotContains($voz, $libres(), 'el de voz, ya no: la versión es «solo canario»');
+        $this->assertContains($whatsapp, $libres(), 'el de WhatsApp de la misma persona, sí: su canario de WhatsApp sigue activo');
+        Log::spy();
+        $this->assertClaimWithheld($cola, $voz, 'canario de voz revocado');
+        Log::shouldHaveReceived('warning')->once()->with('outreach.assisted.claim_withheld', ['job' => $voz, 'reason' => 'canary_scope_mismatch']);
+    }
+
     // ── m-1 · Ninguna consulta por fila ─────────────────────────────────────
 
     /**
@@ -572,7 +655,7 @@ class H9AssistedEligibilityTest extends TestCase
         $gente = $this->threePeople();
         [$p] = $this->startedFor(['3001234567']);
         $socio = function (): array {
-            $m = $this->socio()['member'];
+            $m = $this->canaryMember('whatsapp')['member'];
 
             return ['subject_key' => 'm:'.$m, 'member_id' => $m];
         };
