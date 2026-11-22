@@ -316,13 +316,7 @@ lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$
 # el primer fichero de su traza que está en la lista del lote, o «-». NUNCA el mensaje: puede llevar datos personales.
 # Lo que se imprime se valida otra vez al leerlo (RE_CLASE, RE_CLAVE, RE_DONDE). Con un patrón, se descuentan las
 # entradas cuya cabecera lo tiene (las del 55P03 que el guion reintentó).
-errores_detalle() { # <lineas_log de antes> <patrón que se descuenta, o vacío>
-  local f n
-  for f in "$LOGS"/laravel*.log; do
-    [ -f "$f" ] || continue
-    n=$(printf '%s\n' "$1" | awk -v f="$f" '$1 == f {print $2}')
-    tail -n +"$(( ${n:-0} + 1 ))" "$f"
-  done | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="$2" '
+AWK_ERRORES='
     function rel(p) { return index(p, pre) == 1 ? substr(p, length(pre) + 1) : "" }
     function mira(r, l) {
       if (r == "" || r !~ /^backend\// || r ~ /^backend\/vendor\//) return
@@ -351,7 +345,26 @@ errores_detalle() { # <lineas_log de antes> <patrón que se descuenta, o vacío>
       s = substr($0, index($0, " ") + 1); j = index(s, "(")
       if (j > 0) { c = substr(s, 1, j - 1); l = substr(s, j + 1); j = index(l, ")"); if (j > 0) l = substr(l, 1, j - 1); mira(rel(c), l) }
     }
-    END { cierra() }' <(tr -d '\r' < "$BK/lista.txt") - | tr -s '\\'
+    END { cierra() }'
+errores_detalle() { # <lineas_log de antes> <patrón que se descuenta, o vacío>
+  local f n
+  for f in "$LOGS"/laravel*.log; do
+    [ -f "$f" ] || continue
+    n=$(printf '%s\n' "$1" | awk -v f="$f" '$1 == f {print $2}')
+    tail -n +"$(( ${n:-0} + 1 ))" "$f"
+  done | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="$2" "$AWK_ERRORES" <(tr -d '\r' < "$BK/lista.txt") - | tr -s '\\'
+}
+# Autoprueba del analizador con el awk de ESTE servidor (en Ubuntu, mawk; el banco solo tiene el de macOS): dos entradas
+# sintéticas, sin ningún dato, tienen que dar exactamente esto. Si no, C1 no podría decidir: el paso 0 aborta.
+autoprueba_errores() {
+  local sal esp
+  sal=$(printf '%s\n' \
+    "[2026-01-01 00:00:00] $NIVEL_ERROR: prueba {\"exception\":\"[object] (App\\\\Prueba\\\\Falla(code: 0): texto at $APP/backend/vendor/x/Y.php:3)" \
+    "[stacktrace]" "#0 $APP/backend/vendor/x/Y.php(9): Z->a()" "#1 $APP/backend/app/Prueba.php(7): Y->b()" "#2 {main}" "\"} " \
+    "[2026-01-01 00:00:01] $NIVEL_ERROR: prueba.clave_ajena {\"a\":1} " "[2026-01-01 00:00:02] produccion.INFO: nada " \
+    | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="" "$AWK_ERRORES" <(printf 'backend/app/Prueba.php\n') - | tr -s '\\') || return 1
+  esp=$(printf 'excepcion\tApp\\Prueba\\Falla\tbackend/app/Prueba.php:7\tbackend/app/Prueba.php\nregistro\tprueba.clave_ajena\t-\t-')
+  [ "$sal" = "$esp" ]
 }
 RE_CLASE='^[A-Za-z_][A-Za-z0-9_\]{0,159}$'
 RE_CLAVE='^[a-z][a-z0-9_.:-]{0,79}$'
@@ -953,6 +966,8 @@ if [ -n "$F_config" ]; then
   B0=$(banderas "$F_config") || aborta "no se pudo leer la caché de configuración como $WWW"
   say "   banderas declaradas, hoy en la caché: $(printf '%s\n' "$B0" | paste -sd '|' -)"
 fi
+autoprueba_errores || aborta "el analizador de errores (C1) no da lo esperado con el awk de este servidor ($(awk --version < /dev/null 2>&1 | head -1 || true)): sin él no se puede decidir entre desvío y vuelta atrás"
+say "   analizador de errores (C1), autoprueba con el awk de este servidor: bien"
 C_VOZ0=$(http admin/voice/status)
 [ "$C_VOZ0" = 401 ] || aborta "GET admin/voice/status sin token → $C_VOZ0 (esperado 401): sin esa referencia no se puede verificar nada después"
 LOG_ANTES=$(lineas_log)
