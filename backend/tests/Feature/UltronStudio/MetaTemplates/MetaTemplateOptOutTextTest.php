@@ -102,6 +102,43 @@ class MetaTemplateOptOutTextTest extends TestCase
         }
     }
 
+    /**
+     * NB6 (`informe-apisec-quejas.md`, sonda F): una negación (no, nunca, jamás) en las dos palabras anteriores al
+     * verbo anula la instrucción. Antes pasaban «No responda BAJA» y «Nunca escriba STOP». Más lejos no cuenta, y otra
+     * instrucción válida en el mismo texto sí vale; lo demás lo ve la revisión a cuatro ojos.
+     */
+    public function test_nb6_una_negacion_delante_del_verbo_no_es_una_instruccion_de_baja(): void
+    {
+        foreach ([
+            'Hola {{1}}. No responda BAJA.',
+            'Hola {{1}}. Nunca escriba STOP.',
+            'Hola {{1}}. Jamás conteste BAJA a este número.',
+            'Hola {{1}}. NO RESPONDA «BAJA».',
+            'Hola {{1}}. Por favor no nos escriba BAJA.',
+            'Hola {{1}}. Por favor, no, responda con la palabra BAJA.',
+            "Hola {{1}}. Nunca\nenvíe STOP.",
+        ] as $cuerpo) {
+            $this->assertSame(self::SIN_BAJA, self::errores(self::plantilla($cuerpo)), $cuerpo);
+            if (! str_contains($cuerpo, "\n")) {   // el pie es una sola línea
+                $pie = substr($cuerpo, strlen('Hola {{1}}. '));
+                $this->assertSame(self::SIN_BAJA, self::errores(self::plantilla('Hola {{1}}, tu plan vence pronto.', extra: ['footer' => ['text' => $pie]])), "en el pie: {$pie}");
+            }
+        }
+        foreach ([
+            'Hola {{1}}. Si no desea recibir más mensajes, responda BAJA.',
+            'Hola {{1}}. Si no quiere más mensajes responda BAJA.',
+            'Hola {{1}}. No olvide: si desea salir, responda BAJA.',
+            'Hola {{1}}. No responda STOP a este número. Para salir, responda BAJA.',
+            'Hola {{1}}. Si nunca más quiere mensajes, escriba BAJA.',
+        ] as $cuerpo) {
+            $this->assertSame([], self::errores(self::plantilla($cuerpo)), $cuerpo);
+        }
+        $this->assertSame(['no', 'nunca', 'jamas'], T::OPT_OUT_NEGATIONS);
+        foreach (T::OPT_OUT_NEGATIONS as $negacion) {
+            $this->assertSame($negacion, WhatsappSignals::normalize($negacion), 'en la forma normalizada con la que se compara');
+        }
+    }
+
     public function test_mayusculas_tildes_comillas_rellenos_y_saltos_de_linea(): void
     {
         foreach ([

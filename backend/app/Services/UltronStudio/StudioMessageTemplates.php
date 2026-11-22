@@ -34,7 +34,8 @@ use InvalidArgumentException;
  *    `utility` (cobranza sin ofertas ni precio, P9-7). La casilla no basta
  *    (hallazgo «MALA 2c», 22-11-2026): el cuerpo o el pie tienen que pedir
  *    una respuesta que el normalizador de W9 registre como baja SEGURA
- *    ({@see hasOptOutInstruction()}); si no, `opt_out_text_missing`.
+ *    ({@see hasOptOutInstruction()}), sin una negación delante del verbo
+ *    (NB6); si no, `opt_out_text_missing`.
  *  - `assisted`: `medium` (`whatsapp`/`voice`) y `script` (≤ 600, el guion
  *    que ve el personal).
  *  - `voice` (V9): `purposeKey`, un objetivo de la lista cerrada del motor
@@ -211,6 +212,17 @@ final class StudioMessageTemplates
 
     /** Lo que puede ir entre el verbo y la respuesta («responda con la palabra BAJA»), del más largo al más corto. */
     public const OPT_OUT_FILLERS = ['con la palabra', 'la palabra', 'con'];
+
+    /**
+     * NB6 de la revisión de API de Q1-8: una de estas negaciones (en la forma
+     * normalizada, sin tildes) en las DOS palabras anteriores al verbo anula
+     * esa instrucción («No responda BAJA», «Nunca escriba STOP», «no nos
+     * escriba BAJA»). Solo la negación: el resto de las burlas semánticas
+     * («si responde BAJA perderá sus beneficios») lo ve la revisión a cuatro
+     * ojos. Más lejos no cuenta: «Si no desea recibir más mensajes, responda
+     * BAJA» es la línea de las cinco plantillas propuestas.
+     */
+    public const OPT_OUT_NEGATIONS = ['no', 'nunca', 'jamas'];
 
     /**
      * Los ejemplos FICTICIOS por defecto de cada marcador (lo que Meta pide
@@ -1057,7 +1069,8 @@ final class StudioMessageTemplates
 
     /**
      * ¿Pide alguno de estos textos una respuesta que W9 registraría como baja
-     * SEGURA? Un verbo de {@see OPT_OUT_VERBS}, quizá uno de
+     * SEGURA? Un verbo de {@see OPT_OUT_VERBS} sin una de
+     * {@see OPT_OUT_NEGATIONS} en las dos palabras anteriores, quizá uno de
      * {@see OPT_OUT_FILLERS} y, justo después, unas palabras que
      * `WhatsappSignals::isOptOutText()` acepta enteras. PURA. Lo que no se
      * puede leer no cuenta (falla cerrado: la plantilla se rechaza).
@@ -1076,6 +1089,9 @@ final class StudioMessageTemplates
             $palabras = explode(' ', $forma);
             foreach ($palabras as $i => $palabra) {
                 if (! in_array($palabra, self::OPT_OUT_VERBS, true)) {
+                    continue;
+                }
+                if (array_intersect(array_slice($palabras, max(0, $i - 2), min(2, $i)), self::OPT_OUT_NEGATIONS) !== []) {
                     continue;
                 }
                 $desde = $i + 1;
