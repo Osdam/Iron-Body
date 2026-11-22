@@ -10,7 +10,9 @@ use App\Models\Plan;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\ConversationMemoryService;
+use App\Services\Marketing\Ultron\UltronDraftCheck;
 use App\Services\Marketing\Ultron\UltronDraftDefects;
+use App\Services\Marketing\Ultron\UltronRegenerationNotes;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -254,6 +256,89 @@ class UltronCheckEndpointTest extends TestCase
 
         // Las dos razones a la vez: manda la del número de borradores.
         $this->assertSame('last_attempt', $this->check($m, $token, self::TRES_DE_TU, attempt: 3)->assertOk()->json('budget.reason'));
+    }
+
+    /**
+     * m-8 del revisor: el tope de 25 s lo defendía una sola prueba (la de
+     * arriba), y quitarlo o subirlo al TTL del token tumbaba solo esa. Esta lo
+     * defiende por otro lado: con el segundo borrador, a los 24 s todavía se
+     * concede; a los 26, a los 60 y a los 119 s (el token aún vale: caduca a
+     * los 120), ya no.
+     */
+    public function test_el_tope_de_25_segundos_vale_para_el_segundo_borrador_hasta_el_ttl(): void
+    {
+        $this->assertSame(25, UltronDraftCheck::TIME_BUDGET_SECONDS);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+
+        foreach ([24 => true, 26 => false, 60 => false, 119 => false] as $segundos => $concede) {
+            Carbon::setTestNow(Carbon::parse('2026-11-18 22:47:00', 'UTC')->addSeconds($segundos));
+            $r = $this->check($m, $token, self::TRES_DE_TU, attempt: 2)->assertOk();
+            $this->assertSame(
+                [$concede, $concede, $concede ? null : 'time_budget', $segundos],
+                [$r->json('may_rewrite'), $r->json('rewrite'), $r->json('budget.reason'), $r->json('budget.elapsed_s')],
+                "{$segundos} s",
+            );
+        }
+    }
+
+    // ── Correcciones tras las revisiones (encargo `encargo-be-r6.md`) ────────
+
+    /**
+     * C2 · I-2 del revisor: el borrador del 18-11 («Plan Valera» a mano con
+     * `{{PLAN_PRICE}}`, ningún marcador de la lista) recibe la nota que le pide
+     * la lista (N-P1), no la que le pide quitar el nombre.
+     */
+    public function test_el_borrador_del_18_11_recibe_la_nota_de_la_lista(): void
+    {
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+
+        $r = $this->check($m, $token, 'Claro. El Plan Valera cuesta {{PLAN_PRICE}} al mes e incluye acceso total al gimnasio. ¿Le gustaría conocer más?', plan: 3)->assertOk();
+
+        $this->assertSame([['code' => 'plans_overview', 'detail' => 'missing', 'issue' => 'relevance']], $r->json('defects'));
+        $this->assertSame(self::N_P1, $r->json('notes'));
+        $this->assertSame([false, true, true], [$r->json('pass'), $r->json('may_rewrite'), $r->json('rewrite')]);
+    }
+
+    /**
+     * C3 · I-3 del revisor: cada dato al que remite una nota es uno que el
+     * redactor RECIBE. Las notas nombran claves de `commercial_turn_policy`, y
+     * todas viajan en `decide` (la lista blanca de `politicaDelTurno()`);
+     * ninguna nombra `forbidden_plan_ids`, que no viaja.
+     */
+    public function test_cada_nota_remite_a_un_dato_que_el_redactor_recibe(): void
+    {
+        $politica = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO), true)['context']['commercial_turn_policy'];
+
+        $vistas = [];
+        foreach (UltronRegenerationNotes::entries() as [$code, $detail, , $plantilla]) {
+            $this->assertStringNotContainsString('forbidden_plan_ids', $plantilla, $code.'/'.$detail);
+            preg_match_all('/commercial_turn_policy\.([a-z_]+)/', $plantilla, $m);
+            foreach ($m[1] as $clave) {
+                $this->assertArrayHasKey($clave, $politica, "{$code}/{$detail} remite a {$clave}, que no viaja");
+                $vistas[$clave] = true;
+            }
+        }
+        ksort($vistas);
+        $this->assertSame(['allowed_plan_ids', 'plans_overview', 'required_plan_id'], array_keys($vistas));
+    }
+
+    /**
+     * C6 · R-8 de seguridad: una nota no tumba la puerta. Un plan cuyo nombre
+     * queda vacío al sanearlo (solo llaves) y al que el borrador cuelga un
+     * beneficio de otro: la nota lo llama por su marcador y la puerta contesta
+     * 200 (antes, `InvalidArgumentException` → 500).
+     */
+    public function test_un_nombre_que_queda_vacio_no_tumba_la_puerta(): void
+    {
+        $this->beneficiosDistintos();
+        Plan::query()->whereKey(3)->update(['name' => '{{}}']);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+
+        $r = $this->check($m, $token, 'Claro. El {{}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál le interesa?')->assertOk();
+
+        $this->assertContains('benefit_misattributed', array_column($r->json('defects'), 'code'));
+        $this->assertStringContainsString('el borrador atribuye a PLAN_1 un beneficio que en active_plans es de otro plan ("Entrenador personal dedicado")', $r->json('notes'));
+        $this->assertDoesNotMatchRegularExpression('/[{}]/', $r->json('notes'));
     }
 
     // ── Cada código con su nota literal (§4.4 y §7.2) ──────────────────────
@@ -650,7 +735,7 @@ class UltronCheckEndpointTest extends TestCase
     private const POLITICA = [
         'policy_greeting_sells' => 'SALUDO QUE VENDE: la persona solo saludo. Saluda, da la bienvenida y pregunta en que le puede ayudar. No nombres planes, precios ni pagos y no preguntes todavia su objetivo.',
         'policy_active_goal_lost' => 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.',
-        'policy_wrong_first_plan' => 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.',
+        'policy_wrong_first_plan' => 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y nombra solo planes de commercial_turn_policy.allowed_plan_ids. Los demas permitidos, solo despues y si aportan.',
         'policy_answer_without_fact' => 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.',
         'policy_general_info_only_discovery' => 'SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.',
         'policy_memory_turn_sells' => 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.',

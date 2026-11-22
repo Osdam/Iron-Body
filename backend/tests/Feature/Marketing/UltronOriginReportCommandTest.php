@@ -33,6 +33,13 @@ use Tests\TestCase;
  *    entrante al saliente; las llamadas al modelo por turno; los tokens y el
  *    costo con los precios dados; los reintentos del job; lo que queda fuera
  *    del reparto.
+ *  - CORRECCIONES TRAS LAS REVISIONES (C4, I-4 del revisor): el 90 % cuenta solo
+ *    lo que escribió el modelo. Las respuestas `*_recovered` enviadas (el último
+ *    recurso del servidor) entran en el reparto como respaldo, y el texto del
+ *    servidor dentro del camino del modelo (la hora de la visita, el respaldo de
+ *    la realineación, el cobro negado, la excusa vaciada, la red de los
+ *    marcadores y el desbordamiento) no cuenta como IA. La cifra con la regla
+ *    de la línea base (solo las filas `reply`) queda en su línea aparte.
  *  - Sin datos personales ni texto de mensajes, ni ids de conversación.
  *  - SOLO LECTURA.
  *  - Las opciones (`--conversation`, `--since`, `--until`, los precios) y sus
@@ -62,20 +69,22 @@ class UltronOriginReportCommandTest extends TestCase
         [$informe, , $escrituras] = $this->informe(['--json' => true, '--conversation' => [$a->id, $b->id]]);
 
         $this->assertSame([], $escrituras, 'solo lectura');
-        $this->assertSame(88, $informe['total']);
+        // C4 (a): las 88 `reply` de la consulta y la repetida recuperada, que salió (último recurso del servidor).
+        $this->assertSame(89, $informe['total']);
         $this->assertSame(0, $informe['traced']);
-        $this->assertSame(['count' => 71, 'pct' => 80.7], array_intersect_key($informe['ai'], ['count' => 1, 'pct' => 1]), '71 del modelo');
+        $this->assertSame(['count' => 71, 'pct' => 80.7, 'baseline_total' => 88], array_intersect_key($informe['ai'], ['count' => 1, 'pct' => 1, 'baseline_total' => 1]), 'la regla de la línea base, aparte: 71 de 88');
+        $this->assertSame([67, 75.3], [$informe['ai']['written_count'], $informe['ai']['written_pct']], 'lo que escribió el modelo: 67 de 89');
         $this->assertSame([90, false], [$informe['ai']['target_pct'], $informe['ai']['meets_target']]);
-        $this->assertSame(['count' => 56, 'pct' => 63.6], $informe['ai']['first_attempt'], 'al primer intento: las 56 aprobadas a la primera');
-        $this->assertSame(['count' => 11, 'pct' => 12.5], $informe['ai']['regenerated'], 'tras la reescritura del revisor');
+        $this->assertSame(['count' => 56, 'pct' => 62.9], $informe['ai']['first_attempt'], 'al primer intento: las 56 aprobadas a la primera');
+        $this->assertSame(['count' => 11, 'pct' => 12.4], $informe['ai']['regenerated'], 'tras la reescritura del revisor');
         $this->assertSame(['count' => 4, 'pct' => 4.5], $informe['ai']['unknown_attempt'], 'sin revisor ni traza: no se sabe');
         $this->assertSame(1, $informe['ai']['trimmed']);
-        $this->assertSame(['count' => 17, 'pct' => 19.3], array_intersect_key($informe['fallbacks'], ['count' => 1, 'pct' => 1]));
-        $this->assertSame([UltronReplyOrigin::REASON_CRITIC => 12, UltronReplyOrigin::REASON_RECOVERY => 2, UltronReplyOrigin::REASON_POLICY => 3], $informe['fallbacks']['by_reason'], '14 del revisor o la rendición y 3 de la política');
+        $this->assertSame(['count' => 18, 'pct' => 20.2], array_intersect_key($informe['fallbacks'], ['count' => 1, 'pct' => 1]));
+        $this->assertSame([UltronReplyOrigin::REASON_CRITIC => 12, UltronReplyOrigin::REASON_RECOVERY => 2, UltronReplyOrigin::REASON_POLICY => 3, UltronReplyOrigin::REASON_LAST_RESORT => 1], $informe['fallbacks']['by_reason'], '14 del revisor o la rendición, 3 de la política y la recuperada');
         $this->assertSame(['policy_greeting_sells' => 2, 'policy_active_goal_lost' => 1], $informe['fallbacks']['policy_codes']);
         $this->assertSame(['critic_unavailable' => 2], $informe['fallbacks']['recovery_reasons']);
         $this->assertSame(['count' => 23, 'by' => ['critic' => 23], 'codes' => []], $informe['rewrites'], '11 rescatadas + 12 que no: 23 reescrituras del revisor');
-        $this->assertSame(['no_reply/executed' => 3, 'repeated_reply_recovered/executed' => 1], $informe['outside'], 'fuera del reparto, como la consulta (por frecuencia)');
+        $this->assertSame(['no_reply/executed' => 3], $informe['outside'], 'fuera del reparto, solo lo que no salió');
 
         // La misma clasificación, fila a fila, que la consulta C (sus reglas, copiadas aquí como oráculo).
         foreach (MarketingAiAction::query()->whereIn('conversation_id', [$a->id, $b->id])->where('action_type', 'reply')->where('status', 'executed')->get() as $fila) {
@@ -113,9 +122,11 @@ class UltronOriginReportCommandTest extends TestCase
 
         [$informe] = $this->informe(['--json' => true, '--conversation' => [$a->id, $b->id]]);
         $this->assertSame(['1' => 70, '1b' => 1, '2' => 3, '3' => 14], $reparto, 'la consulta');
-        $this->assertSame([$reparto['1'] + $reparto['1b'], $reparto['1b'], $reparto['2'], $reparto['3']], [
+        // La consulta solo mira las `reply`: del informe, la regla de la línea base (sin la recuperada, que el informe cuenta aparte).
+        $this->assertSame([$reparto['1'] + $reparto['1b'], $reparto['1b'], $reparto['2'], $reparto['3'], array_sum($reparto)], [
             $informe['ai']['count'], $informe['ai']['trimmed'], $informe['fallbacks']['by_reason'][UltronReplyOrigin::REASON_POLICY],
-            $informe['fallbacks']['count'] - $informe['fallbacks']['by_reason'][UltronReplyOrigin::REASON_POLICY],
+            $informe['fallbacks']['count'] - $informe['fallbacks']['by_reason'][UltronReplyOrigin::REASON_POLICY] - $informe['fallbacks']['by_reason'][UltronReplyOrigin::REASON_LAST_RESORT],
+            $informe['ai']['baseline_total'],
         ], 'el informe');
     }
 
@@ -142,8 +153,9 @@ class UltronOriginReportCommandTest extends TestCase
         $this->turno($c, ['fallback_mode' => 'SAFE_CURATED_REPLY', 'recovery' => ['reason' => 'critic_unavailable', 'attempt' => 2]], latencia: null, intentos: null);
         // La hora de la visita: texto del servidor que la consulta cuenta como del modelo.
         $this->turno($c, ['visit_hour' => ['mode' => 'ask', 'date' => '2026-11-21'], 'discarded_draft' => 'Te espero mañana'], latencia: 6, intentos: 1);
-        // Fuera del reparto.
+        // La repetida recuperada: salió el último recurso del servidor (C4 a: entra en el reparto como respaldo). 3 llamadas, 9 s, sin evento.
         $this->turno($c, ['critic' => $pasa], tipo: 'repeated_reply_recovered');
+        // Fuera del reparto.
         $this->turno($c, ['fallback_mode' => 'NO_REPLY_AND_HANDOFF', 'critic' => ['verdict' => 'fail', 'attempt' => 2]], estado: 'skipped');
 
         [$informe, , $escrituras] = $this->informe(['--json' => true, '--precio-entrada' => '2.5', '--precio-salida' => '10']);
@@ -151,29 +163,34 @@ class UltronOriginReportCommandTest extends TestCase
         $this->assertSame([], $escrituras);
         $this->assertSame(['window', 'total', 'traced', 'ai', 'rewrites', 'fallbacks', 'latency_s', 'model_calls', 'server_checks', 'tokens', 'job', 'outside'], array_keys($informe), 'la forma');
         $this->assertSame(['since' => null, 'until' => null, 'conversations' => null], $informe['window']);
-        $this->assertSame([7, 3], [$informe['total'], $informe['traced']]);
+        $this->assertSame([8, 3], [$informe['total'], $informe['traced']]);
         $this->assertSame([
-            'count' => 5, 'pct' => 71.4, 'written_count' => 4, 'written_pct' => 57.1, 'target_pct' => 90, 'meets_target' => false,
-            'first_attempt' => ['count' => 2, 'pct' => 28.6],
-            'regenerated' => ['count' => 2, 'pct' => 28.6],
-            'unknown_attempt' => ['count' => 1, 'pct' => 14.3],
+            // La regla de la línea base: 5 de las 7 `reply`.
+            'count' => 5, 'pct' => 71.4, 'baseline_total' => 7,
+            // Lo que escribió el modelo: sin la hora de la visita, de las 8 que salieron.
+            'written_count' => 4, 'written_pct' => 50.0, 'target_pct' => 90, 'meets_target' => false,
+            'first_attempt' => ['count' => 2, 'pct' => 25.0],
+            'regenerated' => ['count' => 2, 'pct' => 25.0],
+            'unknown_attempt' => ['count' => 1, 'pct' => 12.5],
             'trimmed' => 1,
-            'visit_hour' => 1, 'pct_without_visit_hour' => 57.1,
+            'visit_hour' => 1,
+            'server_text' => ['count' => 1, 'by' => [UltronReplyOrigin::SERVER_VISIT_HOUR => 1]],
+            'pct_without_visit_hour' => 50.0,
         ], $informe['ai']);
         $this->assertSame(['count' => 4, 'by' => ['server' => 2, 'critic' => 2], 'codes' => ['register_tuteo' => 2, 'policy_greeting_sells' => 2]], $informe['rewrites'], 'dos del servidor, una del revisor con traza y una del revisor de S1');
         $this->assertSame([
-            'count' => 2, 'pct' => 28.6,
-            'by_reason' => [UltronReplyOrigin::REASON_CRITIC => 1, UltronReplyOrigin::REASON_RECOVERY => 1],
+            'count' => 3, 'pct' => 37.5,
+            'by_reason' => [UltronReplyOrigin::REASON_CRITIC => 1, UltronReplyOrigin::REASON_RECOVERY => 1, UltronReplyOrigin::REASON_LAST_RESORT => 1],
             'policy_codes' => [], 'recovery_reasons' => ['critic_unavailable' => 1],
         ], $informe['fallbacks']);
-        // Latencias 6, 7, 8, 9, 10, 30 (la rendición, sin saliente): rango más cercano.
-        $this->assertSame(['samples' => 6, 'p50' => 8, 'p95' => 30, 'max' => 30], $informe['latency_s']);
-        // 3, 3, 4, 6, 5 (la rendición y la hora de la visita, sin dato).
-        $this->assertSame(['samples' => 5, 'mean' => 4.2, 'max' => 6], $informe['model_calls']);
+        // Latencias 6, 7, 8, 9, 9, 10, 30 (la rendición, sin saliente): rango más cercano.
+        $this->assertSame(['samples' => 7, 'p50' => 9, 'p95' => 30, 'max' => 30], $informe['latency_s']);
+        // 3, 3, 4, 6, 5, 3 (la rendición y la hora de la visita, sin dato).
+        $this->assertSame(['samples' => 6, 'mean' => 4.0, 'max' => 6], $informe['model_calls']);
         $this->assertSame(['samples' => 3, 'mean' => 1.7, 'max' => 2], $informe['server_checks']);
         $this->assertSame(['samples' => 2, 'input' => 61000, 'output' => 1400, 'cost' => 0.1665], $informe['tokens'], '0,061 × 2,5 + 0,0014 × 10');
         $this->assertSame(['events' => 6, 'retried' => 2, 'max_attempts' => 3], $informe['job'], 'por turno del reparto con su evento');
-        $this->assertSame(['repeated_reply_recovered/executed' => 1, 'reply/skipped' => 1], $informe['outside']);
+        $this->assertSame(['reply/skipped' => 1], $informe['outside']);
     }
 
     public function test_sin_precios_no_hay_costo_y_sin_turnos_no_hay_porcentajes(): void
@@ -213,6 +230,76 @@ class UltronOriginReportCommandTest extends TestCase
         $this->assertSame(1, $informe['ai']['visit_hour']);
     }
 
+    /**
+     * C4 (a) · I-4 del revisor: una respuesta `*_recovered` ENVIADA es el último
+     * recurso del servidor y entra en el reparto como respaldo. Nueve del modelo
+     * y una repetida recuperada: 90 %, no 100 %. La regla de la línea base (solo
+     * las filas `reply`), aparte: 9 de 9.
+     */
+    public function test_la_recuperada_entra_en_el_reparto_como_respaldo(): void
+    {
+        $c = $this->conversacion('3150537005');
+        for ($i = 0; $i < 9; $i++) {
+            $this->turno($c, ['critic' => ['verdict' => 'pass', 'attempt' => 1]]);
+        }
+        $this->turno($c, ['critic' => ['verdict' => 'pass', 'attempt' => 1], 'risk_flags' => ['repeated_reply']], tipo: 'repeated_reply_recovered');
+
+        [$informe] = $this->informe(['--json' => true]);
+
+        $this->assertSame(10, $informe['total']);
+        $this->assertSame([9, 90.0, true], [$informe['ai']['written_count'], $informe['ai']['written_pct'], $informe['ai']['meets_target']], '9 de 10');
+        $this->assertSame([9, 100.0, 9], [$informe['ai']['count'], $informe['ai']['pct'], $informe['ai']['baseline_total']], 'la regla de la línea base, aparte');
+        $this->assertSame(['count' => 1, 'pct' => 10.0], array_intersect_key($informe['fallbacks'], ['count' => 1, 'pct' => 1]));
+        $this->assertSame([UltronReplyOrigin::REASON_LAST_RESORT => 1], $informe['fallbacks']['by_reason']);
+        $this->assertSame([], $informe['outside'], 'ya no queda fuera');
+
+        [, $texto] = $this->informe([]);
+        $this->assertStringContainsString('Escrito por la IA: 9 de 10 (90,0 %) · objetivo 90 %: sí', $texto);
+        $this->assertStringContainsString('Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 9 de 9 (100,0 %)', $texto);
+        $this->assertStringContainsString('Respaldos: 1 de 10 (10,0 %)', $texto);
+        $this->assertStringContainsString('el último recurso: 1', $texto);
+    }
+
+    /**
+     * C4 (b) · I-4 del revisor: las sustituciones del servidor DENTRO del camino
+     * del modelo no cuentan como IA, una por una: la hora de la visita, el
+     * respaldo de la realineación en un turno de cobro, el texto curado del
+     * cobro que el borrador negaba, la excusa de precio que dejaba el texto
+     * vacío, la red de los marcadores (C1) y el desbordamiento del punto de
+     * control. Dos del modelo y una de cada: 2 de 8. La regla de la línea base
+     * las contaba todas como del modelo: 8 de 8.
+     */
+    public function test_las_sustituciones_del_servidor_no_cuentan_como_ia(): void
+    {
+        $c = $this->conversacion('3150537006');
+        $pasa = ['verdict' => 'pass', 'attempt' => 1];
+        $this->turno($c, ['critic' => $pasa]);
+        $this->turno($c, ['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 5]]);
+        $this->turno($c, ['visit_hour' => ['mode' => 'ask', 'date' => '2026-11-21']]);
+        $this->turno($c, ['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 4, 'fallback' => true, 'money_turn' => true]]);
+        $this->turno($c, ['critic' => $pasa, 'server_replaced' => [UltronReplyOrigin::SERVER_PAYMENT_LINK]]);
+        $this->turno($c, ['critic' => $pasa, 'price_excuse_dropped' => 1, 'server_replaced' => [UltronReplyOrigin::SERVER_PRICE_EXCUSE]]);
+        $this->turno($c, ['critic' => $pasa, 'server_replaced' => [UltronReplyOrigin::SERVER_MARKER_LEAK]]);
+        $this->turno($c, ['critic' => $pasa, 'length' => ['cap' => 200, 'action' => 'fit', 'from' => 150, 'to' => 90, 'dropped' => 0, 'overflow' => true]]);
+
+        [$informe, , $escrituras] = $this->informe(['--json' => true]);
+
+        $this->assertSame([], $escrituras);
+        $this->assertSame(8, $informe['total']);
+        $this->assertSame([2, 25.0, false], [$informe['ai']['written_count'], $informe['ai']['written_pct'], $informe['ai']['meets_target']]);
+        $this->assertSame([8, 100.0, 8], [$informe['ai']['count'], $informe['ai']['pct'], $informe['ai']['baseline_total']], 'la regla de la línea base: todas del modelo');
+        $this->assertSame(['count' => 6, 'by' => [
+            UltronReplyOrigin::SERVER_VISIT_HOUR => 1, UltronReplyOrigin::SERVER_PRICE_REALIGNED => 1, UltronReplyOrigin::SERVER_PAYMENT_LINK => 1,
+            UltronReplyOrigin::SERVER_PRICE_EXCUSE => 1, UltronReplyOrigin::SERVER_MARKER_LEAK => 1, UltronReplyOrigin::SERVER_LENGTH_OVERFLOW => 1,
+        ]], $informe['ai']['server_text'], 'una de cada, en el orden del camino');
+        $this->assertSame(1, $informe['ai']['visit_hour']);
+        $this->assertSame(0, $informe['fallbacks']['count'], 'no son respaldos: el origen sigue siendo el de la línea base');
+
+        [, $texto] = $this->informe([]);
+        $this->assertStringContainsString('Escrito por la IA: 2 de 8 (25,0 %) · objetivo 90 %: NO', $texto);
+        $this->assertStringContainsString('Texto del servidor en el camino del modelo (no cuenta como IA): 6 (visit_hour: 1, price_realigned_fallback: 1, payment_link_message: 1, price_excuse_emptied: 1, marker_leak: 1, length_overflow: 1)', $texto);
+    }
+
     public function test_la_salida_de_texto(): void
     {
         [$a, $b] = $this->lineaBase();
@@ -221,19 +308,21 @@ class UltronOriginReportCommandTest extends TestCase
 
         foreach ([
             'ULTRON · ¿quién escribió cada respuesta? (solo lectura)',
-            'Respuestas enviadas: 88 (con traza de regeneración: 0)',
-            'Escrito por la IA: 67 de 88 (76,1 %) · objetivo 90 %: NO',
-            'La hora de la visita (la escribe el servidor desde el CRM; no cuenta como IA): 4',
-            'con la regla de la línea base, que la contaba como del modelo: 71 (80,7 %)',
-            'al primer intento: 56 (63,6 %) · regeneradas: 11 (12,5 %) · intento sin dato: 4 (4,5 %)',
-            'Respaldos: 17 de 88 (19,3 %)',
+            'Respuestas enviadas: 89 (con traza de regeneración: 0)',
+            'Escrito por la IA: 67 de 89 (75,3 %) · objetivo 90 %: NO',
+            'Texto del servidor en el camino del modelo (no cuenta como IA): 4 (visit_hour: 4)',
+            'Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 71 de 88 (80,7 %)',
+            'al primer intento: 56 (62,9 %) · regeneradas: 11 (12,4 %) · intento sin dato: 4 (4,5 %)',
+            'Respaldos: 18 de 89 (20,2 %)',
             'el revisor rechazó todos los intentos: 12',
             'la rendición: 2 (critic_unavailable: 2)',
             'la política del commit: 3 (policy_greeting_sells: 2, policy_active_goal_lost: 1)',
+            'el último recurso: 1',
             'Recortadas (sin su pregunta final): 1',
             'Reescrituras: 23 (revisor: 23)',
             'Tokens: sin dato',
-            'Fuera del reparto: no_reply/executed: 3, repeated_reply_recovered/executed: 1',
+            // La recuperada ya no queda fuera: la línea acaba ahí.
+            "Fuera del reparto: no_reply/executed: 3\n",
             'el 90 % se juzga con al menos 30 turnos con traza; aquí hay 0',
         ] as $linea) {
             $this->assertStringContainsString($linea, $salida);

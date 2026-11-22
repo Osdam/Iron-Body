@@ -14,7 +14,8 @@ use InvalidArgumentException;
  * nota de ese defecto en `critic_notes` y su `issue` en `critic_issues`: los
  * mismos campos que ya usa la reescritura que pide el revisor
  * (`composer_retry.txt`: «Corrige EXACTAMENTE lo senalado en critic_issues y
- * critic_notes»). Nadie la llama todavía (ola 1: pieza sin cablear).
+ * critic_notes»). La llama `UltronDraftDefects`, desde la comprobación de solo
+ * lectura `ai/check` (`UltronDraftCheck`).
  *
  * EL MECANISMO ES GENÉRICO: un código (o código/detalle) → su `issue`, del
  * vocabulario cerrado del revisor ({@see CriticContract::DIMENSIONS}), su
@@ -120,7 +121,13 @@ final class UltronRegenerationNotes
 
     private const N_PS_VISITA = 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.';
 
-    private const N_PS_PLAN = 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.';
+    /*
+     * Correcciones tras las revisiones (C3; I-3 del revisor): remite a
+     * `commercial_turn_policy.allowed_plan_ids`, que el redactor SÍ recibe
+     * (`UltronDecideService::politicaDelTurno()`), y no a `forbidden_plan_ids`,
+     * que no viaja. Texto literal del lead, pendiente del propietario.
+     */
+    private const N_PS_PLAN = 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y nombra solo planes de commercial_turn_policy.allowed_plan_ids. Los demas permitidos, solo despues y si aportan.';
 
     private const N_PS_DATO = 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.';
 
@@ -296,14 +303,30 @@ final class UltronRegenerationNotes
         return (string) $valor;
     }
 
+    /**
+     * Un texto del catálogo tal como entra en una nota (el tipo `text`): sin
+     * llaves, sin saltos de línea ni espacios dobles, las comillas dobles por
+     * simples y a {@see self::MAX_TEXT_PARAM} caracteres. Vacío si no queda
+     * nada (o si no es texto): quien llama lo mira antes de pedir la nota, que
+     * con un texto vacío lanza (correcciones, C6; R-8 de seguridad).
+     */
+    public static function cleanText(mixed $valor): string
+    {
+        if (! is_string($valor)) {
+            return '';
+        }
+        $limpio = str_replace(['{', '}', '"'], ['', '', "'"], $valor);
+        $limpio = trim((string) preg_replace('/[\x00-\x1F\x7F\s]+/u', ' ', $limpio));
+
+        return rtrim(mb_substr($limpio, 0, self::MAX_TEXT_PARAM));
+    }
+
     private static function texto(mixed $valor): string
     {
         if (! is_string($valor)) {
             throw new InvalidArgumentException('Un parámetro de texto de la nota no es texto.');
         }
-        $limpio = str_replace(['{', '}', '"'], ['', '', "'"], $valor);
-        $limpio = trim((string) preg_replace('/[\x00-\x1F\x7F\s]+/u', ' ', $limpio));
-        $limpio = rtrim(mb_substr($limpio, 0, self::MAX_TEXT_PARAM));
+        $limpio = self::cleanText($valor);
         if ($limpio === '') {
             throw new InvalidArgumentException('Un parámetro de texto de la nota queda vacío.');
         }

@@ -1,0 +1,357 @@
+# 133 · Correcciones de «regenerar antes de sustituir» (encargo be-r6): las pruebas nuevas y las tocadas, con app/ = HEAD 808a0b81 (el producto sin tocar). ROJO esperado.
+# Orden: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php tests/Unit/Marketing/Ultron/UltronDraftPlaceholdersTest.php tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php tests/Unit/Marketing/Ultron/UltronRegenerarTextosFijosTest.php tests/Feature/Marketing/UltronCheckEndpointTest.php tests/Feature/Marketing/UltronOriginReportCommandTest.php tests/Feature/Marketing/UltronRegenerationCommitTest.php tests/Feature/Marketing/UltronA4ListaDelModeloTest.php 
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...........FFEEF...F...E..............EE.......................  63 / 220 ( 28%)
+................F.....FFF...................................... 126 / 220 ( 57%)
+.......F.......FSF..FEF.....FFEF............................... 189 / 220 ( 85%)
+.....................EEEEF..EE.                                 220 / 220 (100%)
+
+Time: 00:08.063, Memory: 102.50 MB
+
+There was 1 PHPUnit error:
+
+1) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_el_texto_del_servidor_en_el_camino_del_modelo
+The data provider specified for Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_el_texto_del_servidor_en_el_camino_del_modelo is invalid
+Undefined constant App\Services\Marketing\Ultron\UltronReplyOrigin::SERVER_PRICE_REALIGNED
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:194
+
+--
+
+There were 13 errors:
+
+1) Tests\Unit\Marketing\Ultron\UltronDraftPlaceholdersTest::test_lo_que_tiene_forma_de_marcador_no_sale
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::looksLikeMarker()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftPlaceholdersTest.php:52
+
+2) Tests\Unit\Marketing\Ultron\UltronDraftPlaceholdersTest::test_sin_marcadores_no_queda_ni_un_marcador_ni_una_llave
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::withoutMarkers()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftPlaceholdersTest.php:75
+
+3) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_el_saneo_del_texto_del_catalogo_a_la_vista
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronRegenerationNotes::cleanText()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:175
+
+4) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_un_nombre_que_queda_vacio_se_nombra_por_su_marcador_o_ese_plan
+InvalidArgumentException: Un parámetro de texto de la nota queda vacío.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php:308
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php:206
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftDefects.php:209
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftDefects.php:125
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:217
+
+5) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_si_la_nota_lanza_el_defecto_va_sin_nota
+InvalidArgumentException: Un parámetro de texto de la nota queda vacío.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php:308
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php:206
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftDefects.php:209
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:232
+
+6) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_las_sustituciones_del_servidor_no_cuentan_como_ia
+Error: Undefined constant App\Services\Marketing\Ultron\UltronReplyOrigin::SERVER_PAYMENT_LINK
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:280
+
+7) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_con_la_oferta_firmada_la_traza_se_guarda_aunque_la_version_se_haya_revertido
+Mockery\Exception\InvalidCountException: Method warning(<Any Arguments>) from Mockery_3_Illuminate_Log_LogManager should be called
+ at least 1 times but called 0 times.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/CountValidator/AtLeast.php:42
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/Expectation.php:739
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/ReceivedMethodCalls.php:36
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/VerificationDirector.php:86
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:270
+
+8) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_no_sale_con_herramientas with data set "PLAN_1 sin llaves (sonda S4)" ('Claro. Tenemos PLAN_1 y PLAN_...a app.')
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::looksLikeMarker()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:814
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:637
+
+9) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_no_sale_con_herramientas with data set "{PLAN_1} con una llave (sonda S5)" ('Claro. Tenemos {PLAN_1} y {PL...a app.')
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::looksLikeMarker()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:814
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:637
+
+10) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_tampoco_sale_sin_herramientas with data set "PLAN_1 sin llaves (sonda S4)" ('Claro. Tenemos PLAN_1 y PLAN_...a app.')
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::looksLikeMarker()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:814
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:660
+
+11) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_tampoco_sale_sin_herramientas with data set "{PLAN_1} con una llave (sonda S5)" ('Claro. Tenemos {PLAN_1} y {PL...a app.')
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftPlaceholders::looksLikeMarker()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:814
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:660
+
+12) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_la_excusa_de_precio_que_vacia_el_texto_deja_su_marca
+Error: Undefined constant App\Services\Marketing\Ultron\UltronReplyOrigin::SERVER_PRICE_EXCUSE
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:749
+
+13) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_el_cobro_que_el_borrador_negaba_deja_su_marca with data set "con versión del Studio" (true)
+Error: Undefined constant App\Services\Marketing\Ultron\UltronReplyOrigin::SERVER_PAYMENT_LINK
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:796
+
+--
+
+There were 17 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_el_nombre_de_un_plan_pierde_las_llaves_al_expandirse
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Plan OTRO ($65.000 COP)'
++'Plan {{OTRO}} ($65.000 COP)'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:359
+
+2) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_sin_ningun_marcador_de_la_lista_falta_la_lista_aunque_nombre_un_plan
+el borrador del 18-11
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'missing'
++'name_written'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:382
+
+3) Tests\Unit\Marketing\Ultron\UltronDraftPlaceholdersTest::test_el_nombre_pierde_las_llaves_solo_si_se_pide
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El Plan Oro cuesta $65.000 COP y dura un mes.'
++'El Plan {{Oro}} cuesta $65.000 COP y dura un mes.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftPlaceholdersTest.php:91
+
+4) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_las_seis_de_la_politica_con_su_issue_y_su_nota_literal
+policy_wrong_first_plan
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y nombra solo planes de commercial_turn_policy.allowed_plan_ids. Los demas permitidos, solo despues y si aportan.'
++'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:117
+
+5) Tests\Unit\Marketing\Ultron\UltronRegenerarTextosFijosTest::test_los_textos_fijos_de_regenerar_que_aprueba_el_propietario
+Failed asserting that file "/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/plans/informes-motores/a4-textos-regenerar.md" exists.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarTextosFijosTest.php:154
+
+6) Tests\Feature\Marketing\UltronCheckEndpointTest::test_el_borrador_del_18_11_recibe_la_nota_de_la_lista
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     0 => Array &1 [
+         'code' => 'plans_overview',
+-        'detail' => 'missing',
++        'detail' => 'name_written',
+         'issue' => 'relevance',
+     ],
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:297
+
+7) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_nota_remite_a_un_dato_que_el_redactor_recibe
+policy_wrong_first_plan/
+Failed asserting that 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.' [ASCII](length: 229) does not contain "forbidden_plan_ids" [ASCII](length: 18).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:314
+
+8) Tests\Feature\Marketing\UltronCheckEndpointTest::test_un_nombre_que_queda_vacio_no_tumba_la_puerta
+Expected response status code [200] but received 500.
+Failed asserting that 500 is identical to 200.
+
+The following exception occurred during the last request:
+
+InvalidArgumentException: Un parámetro de texto de la nota queda vacío. in /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php:308
+Stack trace:
+#0 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php(206): App\Services\Marketing\Ultron\UltronRegenerationNotes::texto('{{}}')
+#1 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftDefects.php(209): App\Services\Marketing\Ultron\UltronRegenerationNotes::note('benefit_misattr...', NULL, Array)
+#2 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftDefects.php(125): App\Services\Marketing\Ultron\UltronDraftDefects::defecto('benefit_misattr...', NULL, Array)
+#3 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronDraftCheck.php(156): App\Services\Marketing\Ultron\UltronDraftDefects::of(Array, 'Claro. El {{}} ...', Array, Array, Array, '\xC2\xBFQu\xC3\xA9 planes t...')
+#4 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Controllers/Api/Internal/UltronController.php(406): App\Services\Marketing\Ultron\UltronDraftCheck->check(Array)
+#5 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(46): App\Http\Controllers\Api\Internal\UltronController->check(Object(Illuminate\Http\Request), Object(App\Services\Marketing\Ultron\UltronDraftCheck))
+#6 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Route.php(265): Illuminate\Routing\ControllerDispatcher->dispatch(Object(Illuminate\Routing\Route), Object(App\Http\Controllers\Api\Internal\UltronController), 'check')
+#7 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Route.php(211): Illuminate\Routing\Route->runController()
+#8 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Router.php(822): Illuminate\Routing\Route->run()
+#9 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\Routing\Router->Illuminate\Routing\{closure}(Object(Illuminate\Http\Request))
+#10 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/VerifyInternalAutomationSignature.php(46): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#11 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\VerifyInternalAutomationSignature->handle(Object(Illuminate\Http\Request), Object(Closure))
+#12 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/EnforceTrainerMemberScope.php(46): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#13 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\EnforceTrainerMemberScope->handle(Object(Illuminate\Http\Request), Object(Closure))
+#14 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/EnforceAdminAuthorization.php(32): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#15 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\EnforceAdminAuthorization->handle(Object(Illuminate\Http\Request), Object(Closure))
+#16 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/ProtectAdminPaths.php(30): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#17 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\ProtectAdminPaths->handle(Object(Illuminate\Http\Request), Object(Closure))
+#18 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php(50): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#19 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Routing\Middleware\SubstituteBindings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#20 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Middleware/ThrottleRequests.php(166): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#21 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Middleware/ThrottleRequests.php(129): Illuminate\Routing\Middleware\ThrottleRequests->handleRequest(Object(Illuminate\Http\Request), Object(Closure), Array)
+#22 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Middleware/ThrottleRequests.php(90): Illuminate\Routing\Middleware\ThrottleRequests->handleRequestUsingNamedLimiter(Object(Illuminate\Http\Request), Object(Closure), 'internal-market...', Object(Closure))
+#23 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Routing\Middleware\ThrottleRequests->handle(Object(Illuminate\Http\Request), Object(Closure), 'internal-market...')
+#24 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#25 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Router.php(821): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#26 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Router.php(800): Illuminate\Routing\Router->runRouteWithinStack(Object(Illuminate\Routing\Route), Object(Illuminate\Http\Request))
+#27 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Router.php(764): Illuminate\Routing\Router->runRoute(Object(Illuminate\Http\Request), Object(Illuminate\Routing\Route))
+#28 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Routing/Router.php(753): Illuminate\Routing\Router->dispatchToRoute(Object(Illuminate\Http\Request))
+#29 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(200): Illuminate\Routing\Router->dispatch(Object(Illuminate\Http\Request))
+#30 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\Foundation\Http\Kernel->Illuminate\Foundation\Http\{closure}(Object(Illuminate\Http\Request))
+#31 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/SecurityHeaders.php(28): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#32 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\SecurityHeaders->handle(Object(Illuminate\Http\Request), Object(Closure))
+#33 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#34 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php(31): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#35 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull->handle(Object(Illuminate\Http\Request), Object(Closure))
+#36 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#37 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php(51): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#38 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Foundation\Http\Middleware\TrimStrings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#39 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php(27): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#40 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/ValidatePostSizeWithStudioCap.php(72): Illuminate\Http\Middleware\ValidatePostSize->handle(Object(Illuminate\Http\Request), Object(Closure))
+#41 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\ValidatePostSizeWithStudioCap->handle(Object(Illuminate\Http\Request), Object(Closure))
+#42 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php(109): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#43 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance->handle(Object(Illuminate\Http\Request), Object(Closure))
+#44 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php(74): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#45 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Http\Middleware\HandleCors->handle(Object(Illuminate\Http\Request), Object(Closure))
+#46 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php(58): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#47 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Http\Middleware\TrustProxies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#48 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php(22): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#49 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks->handle(Object(Illuminate\Http\Request), Object(Closure))
+#50 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php(26): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#51 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\Http\Middleware\ValidatePathEncoding->handle(Object(Illuminate\Http\Request), Object(Closure))
+#52 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Http/Middleware/NoStoreAdminResponses.php(41): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#53 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\Http\Middleware\NoStoreAdminResponses->handle(Object(Illuminate\Http\Request), Object(Closure))
+#54 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#55 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(175): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#56 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(144): Illuminate\Foundation\Http\Kernel->sendRequestThroughRouter(Object(Illuminate\Http\Request))
+#57 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(607): Illuminate\Foundation\Http\Kernel->handle(Object(Illuminate\Http\Request))
+#58 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(573): Illuminate\Foundation\Testing\TestCase->call('POST', '/api/internal/m...', Array, Array, Array, Array, '{"conversation_...')
+#59 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(411): Illuminate\Foundation\Testing\TestCase->json('POST', '/api/internal/m...', Array, Array, 0)
+#60 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php(893): Illuminate\Foundation\Testing\TestCase->postJson('/api/internal/m...', Array, Array)
+#61 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php(337): Tests\Feature\Marketing\UltronCheckEndpointTest->check(Object(App\Models\MarketingMessage), 'eyJjIjoxLCJtIjo...', 'Claro. El {{}} ...')
+#62 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestCase.php(1667): Tests\Feature\Marketing\UltronCheckEndpointTest->test_un_nombre_que_queda_vacio_no_tumba_la_puerta()
+#63 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestCase.php(519): PHPUnit\Framework\TestCase->runTest()
+#64 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestRunner/TestRunner.php(87): PHPUnit\Framework\TestCase->runBare()
+#65 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestCase.php(365): PHPUnit\Framework\TestRunner->run(Object(Tests\Feature\Marketing\UltronCheckEndpointTest))
+#66 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestSuite.php(369): PHPUnit\Framework\TestCase->run()
+#67 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/Framework/TestSuite.php(369): PHPUnit\Framework\TestSuite->run()
+#68 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/TextUI/TestRunner.php(64): PHPUnit\Framework\TestSuite->run()
+#69 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/src/TextUI/Application.php(211): PHPUnit\TextUI\TestRunner->run(Object(PHPUnit\TextUI\Configuration\Configuration), Object(PHPUnit\Runner\ResultCache\DefaultResultCache), Object(PHPUnit\Framework\TestSuite))
+#70 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/phpunit/phpunit/phpunit(104): PHPUnit\TextUI\Application->run(Array)
+#71 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/bin/phpunit(122): include('/Users/alejodev...')
+#72 {main}
+
+----------------------------------------------------------------------------------
+
+Un parámetro de texto de la nota queda vacío.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:337
+
+9) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "primer plan equivocado" ('¿Cuánto cuesta el Plan Mensual?', 'pricing_question', 'El Plan Valera cuesta {{PLAN_...cluye?', 3, '', 'policy_wrong_first_plan', 'phase_alignment')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y nombra solo planes de commercial_turn_policy.allowed_plan_ids. Los demas permitidos, solo despues y si aportan.'
++'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:767
+
+10) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_reproduce_el_reparto_de_la_linea_base
+Failed asserting that 88 is identical to 89.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:73
+
+11) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_los_agregados_y_el_json
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+-    0 => 8,
++    0 => 7,
+     1 => 3,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:166
+
+12) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_la_recuperada_entra_en_el_reparto_como_respaldo
+Failed asserting that 9 is identical to 10.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:249
+
+13) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_la_salida_de_texto
+Failed asserting that 'ULTRON · ¿quién escribió cada respuesta? (solo lectura)\n
+  Ventana: desde el principio · hasta ahora · conversaciones: 2\n
+  Respuestas enviadas: 88 (con traza de regeneración: 0)\n
+  Escrito por la IA: 67 de 88 (76,1 %) · objetivo 90 %: NO\n
+    al primer intento: 56 (63,6 %) · regeneradas: 11 (12,5 %) · intento sin dato: 4 (4,5 %)\n
+    Recortadas (sin su pregunta final): 1\n
+    La hora de la visita (la escribe el servidor desde el CRM; no cuenta como IA): 4 · con la regla de la línea base, que la contaba como del modelo: 71 (80,7 %)\n
+  Reescrituras: 23 (revisor: 23)\n
+  Respaldos: 17 de 88 (19,3 %)\n
+    el revisor rechazó todos los intentos: 12\n
+    la rendición: 2 (critic_unavailable: 2)\n
+    la política del commit: 3 (policy_greeting_sells: 2, policy_active_goal_lost: 1)\n
+  Latencia del entrante al saliente: p50 9 s · p95 9 s · máx 9 s (n = 88)\n
+  Llamadas al modelo por turno: media 3,6 · máx 5 (n = 82) · comprobaciones del servidor por turno: sin dato\n
+  Tokens: sin dato (n8n no los entrega todavía)\n
+  Reintentos del job: 0 de 0 turnos con evento\n
+  Fuera del reparto: no_reply/executed: 3, repeated_reply_recovered/executed: 1\n
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 0.\n
+' [UTF-8](length: 1224) contains "Respuestas enviadas: 89 (con traza de regeneración: 0)" [UTF-8](length: 55).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:328
+
+14) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_sin_la_oferta_firmada_la_traza_no_se_guarda_y_queda_un_aviso with data set "sin negociar" (false)
+sin la oferta, sin la traza
+Failed asserting that an array does not have the key 'regeneration'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:239
+
+15) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_sin_la_oferta_firmada_la_traza_no_se_guarda_y_queda_un_aviso with data set "prompts del Studio apagados" (true)
+sin la oferta, sin la traza
+Failed asserting that an array does not have the key 'regeneration'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:239
+
+16) Tests\Feature\Marketing\UltronRegenerationCommitTest::test_una_fila_bloqueada_guarda_la_traza_solo_con_la_oferta
+Failed asserting that an array does not have the key 'regeneration'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php:292
+
+17) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_nombre_con_llaves_no_sale_como_marcador
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Tenemos Plan OTRO ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes. ¿Cuál le interesa más?'
++'Claro. Tenemos Plan {{OTRO}} ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes. ¿Cuál le interesa más?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:686
+
+ERRORS!
+Tests: 220, Assertions: 9553, Errors: 14, Failures: 17, Skipped: 1.

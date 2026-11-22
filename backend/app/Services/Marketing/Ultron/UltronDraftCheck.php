@@ -48,8 +48,12 @@ use App\Services\Observability\ChannelLog;
  *    sobre su texto final, que puede diferir (pega enlaces o el cobro, retira
  *    frases). La paridad y sus excepciones las fija
  *    `UltronCheckCommitParityTest`.
- *  - No es un oráculo de las guardas: no dice nada del guard de contenido ni
- *    del dinero, que siguen solo en el commit.
+ *  - No es un oráculo de las guardas: no dice nada del guard de contenido,
+ *    de las URL, de los datos de tarjeta ni del pago o la membresía
+ *    inventados, que siguen solo en el commit. Del dinero dice una sola cosa,
+ *    y a propósito: con la lista, `plans_overview/price_written` es la regla
+ *    del validador (una cifra escrita por el modelo), con su nota fija. Es
+ *    R-5 de seguridad, aceptado y declarado.
  *
  * SIN VERSIÓN DEL STUDIO (`sp.m` ≠ `studio`), contesta `legacy` sin leer nada:
  * Legacy no cambia ni un byte (P-6, defensa en profundidad: n8n ni siquiera
@@ -172,6 +176,12 @@ final class UltronDraftCheck
         };
         $respuesta = self::respuesta(self::MODE_STUDIO, $attempt, $defectos, $reason === null, ['max_drafts' => self::MAX_DRAFTS, 'elapsed_s' => $elapsed, 'reason' => $reason]);
 
+        // Una nota que no se pudo escribir (C6): el defecto va sin ella, y aquí queda dicho (códigos, sin parámetros).
+        $sinNota = array_values(array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], array_filter($defectos, fn (array $d): bool => $d['note'] === '')));
+        if ($sinNota !== []) {
+            ChannelLog::warning('ultron.check.note_unavailable', ['conversation_id' => $conversationId, 'codes' => $sinNota]);
+        }
+
         // Códigos y números: ni el borrador, ni el entrante, ni las notas, ni el token.
         ChannelLog::info('ultron.check.result', [
             'conversation_id' => $conversationId,
@@ -232,7 +242,8 @@ final class UltronDraftCheck
             }
             // El id como lo lee el commit (`resolvePlan()`): un entero, o nada.
             $plan = is_numeric($planId) ? Plan::query()->sellable()->whereKey((int) $planId)->first() : null;
-            $texto = $this->placeholders->resolve($texto, $plan ?? $this->knowledge->defaultMonthlyPlan());
+            // El nombre sin llaves, como en el commit de un turno del Studio (C1): la puerta solo mira turnos del Studio.
+            $texto = $this->placeholders->resolve($texto, $plan ?? $this->knowledge->defaultMonthlyPlan(), true);
         }
 
         if (($politica['memory_mode'] ?? false) === true) {

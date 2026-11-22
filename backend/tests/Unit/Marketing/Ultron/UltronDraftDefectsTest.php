@@ -96,7 +96,8 @@ class UltronDraftDefectsTest extends TestCase
         // Sin pedir el precio y con dos planes nombrados (a mano, sin marcadores), no se mira la lista: como en el commit.
         $aMano = 'Tenemos el Plan Valera y el Plan Mensual. ¿Cuál le interesa?';
         $this->assertSame([], self::codigos(self::defectos($aMano, entrante: '¿Qué planes tienen?', intent: SalesIntents::GENERAL_INFO)));
-        $this->assertSame(['plans_overview/name_written'], self::codigos(self::defectos($aMano)), 'pidiendo el precio, sí');
+        // Correcciones, C2 (I-2): sin ningún marcador de la lista, lo que falta es la lista (antes, `name_written`).
+        $this->assertSame(['plans_overview/missing'], self::codigos(self::defectos($aMano)), 'pidiendo el precio, sí: falta la lista');
         $this->assertSame(['plans_overview/missing'], self::codigos(self::defectos('Tenemos varios planes.', entrante: '¿Qué planes tienen?', intent: SalesIntents::GENERAL_INFO)), 'menos de dos nombrados');
     }
 
@@ -200,6 +201,38 @@ class UltronDraftDefectsTest extends TestCase
         $d = self::defectos('El Élite incluye clases grupales.', po: [], entrante: '¿El Élite tiene clases?', intent: SalesIntents::GENERAL_INFO);
         $this->assertSame(['benefit_misattributed'], self::codigos($d));
         $this->assertSame(N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'Élite', 'BENEFICIO' => 'Clases grupales']), $d[0]['note'], 'nombrado a mano: el nombre del catálogo');
+    }
+
+    /**
+     * C6 · R-8 de seguridad: una nota no tumba la puerta. Si el nombre del plan
+     * queda vacío al sanearlo (solo llaves), la nota lo llama por su marcador
+     * si el plan es de la lista y, si no, «ese plan».
+     */
+    public function test_un_nombre_que_queda_vacio_se_nombra_por_su_marcador_o_ese_plan(): void
+    {
+        $catalogo = self::catalogo();
+        $catalogo[0]['name'] = '{{}}';
+        $borrador = 'El {{}} incluye clases grupales.';
+
+        $d = D::of(['reply_draft' => $borrador, 'intent' => SalesIntents::GENERAL_INFO, 'tools_requested' => []], $borrador, self::SP, [3, 4, 8], $catalogo, '¿Qué incluye?');
+        $this->assertContains('benefit_misattributed', self::codigos($d));
+        $this->assertSame(N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'PLAN_1', 'BENEFICIO' => 'Clases grupales']), $d[array_search('benefit_misattributed', self::codigos($d), true)]['note'], 'de la lista: su marcador');
+
+        // El mismo plan, en un turno sin lista: «ese plan».
+        $d = D::of(['reply_draft' => $borrador, 'intent' => SalesIntents::GENERAL_INFO, 'tools_requested' => []], $borrador, self::SP, [], $catalogo, '¿Qué incluye?');
+        $this->assertSame(['benefit_misattributed'], self::codigos($d));
+        $this->assertSame(N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'ese plan', 'BENEFICIO' => 'Clases grupales']), $d[0]['note'], 'fuera de la lista: «ese plan»');
+    }
+
+    /** C6 · R-8: y si la nota lanza de todos modos, el defecto va sin nota (la puerta no responde 500). */
+    public function test_si_la_nota_lanza_el_defecto_va_sin_nota(): void
+    {
+        $defecto = new \ReflectionMethod(D::class, 'defecto');
+
+        $d = $defecto->invoke(null, N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => '{{}}', 'BENEFICIO' => '}}']);
+
+        $this->assertSame(['code' => N::BENEFIT_MISATTRIBUTED, 'detail' => null, 'issue' => 'factuality', 'note' => ''], $d);
+        $this->assertSame('', N::merge([$d['note']]), 'y la mezcla no la cuenta');
     }
 
     // ── Ola 4b · las reglas de política corregibles ─────────────────────────

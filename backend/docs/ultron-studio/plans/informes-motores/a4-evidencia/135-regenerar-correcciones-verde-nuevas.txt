@@ -1,0 +1,18 @@
+# 135 · Correcciones (be-r6): las mismas pruebas que la 133, en verde (con --display-warnings).
+# Orden: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging --display-warnings tests/Feature/Marketing/UltronA4ListaDelModeloTest.php tests/Feature/Marketing/UltronCheckCommitParityTest.php tests/Feature/Marketing/UltronCheckEndpointTest.php tests/Feature/Marketing/UltronOriginReportCommandTest.php tests/Feature/Marketing/UltronRegenerationCommitTest.php tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php tests/Unit/Marketing/Ultron/UltronDraftPlaceholdersTest.php tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php tests/Unit/Marketing/Ultron/UltronRegenerarTextosFijosTest.php tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php 
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 281 ( 22%)
+............................................................... 126 / 281 ( 44%)
+......................S........................................ 189 / 281 ( 67%)
+............................................................... 252 / 281 ( 89%)
+.............................                                   281 / 281 (100%)
+
+Time: 00:10.826, Memory: 106.50 MB
+
+OK, but some tests were skipped!
+Tests: 281, Assertions: 10404, Skipped: 1.

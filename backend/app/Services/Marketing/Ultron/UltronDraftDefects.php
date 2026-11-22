@@ -5,6 +5,7 @@ namespace App\Services\Marketing\Ultron;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
+use InvalidArgumentException;
 
 /**
  * LOS DEFECTOS CORREGIBLES DE UN BORRADOR (cierre V2, apartado 4, «regenerar
@@ -49,6 +50,11 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
  * PURA: sin base de datos, sin config, sin reloj y sin log; las notas no
  * llevan nada del entrante ni del borrador (solo marcas de la lista cerrada,
  * números y textos del catálogo).
+ *
+ * UNA NOTA NO TUMBA LA PUERTA (correcciones, C6; R-8 de seguridad): si el
+ * nombre de un plan queda vacío al sanearlo, la nota lo llama por su marcador
+ * (o «ese plan»); y si aun así una nota lanza, ese defecto va sin nota
+ * (`note` vacía, que `merge()` no cuenta) en vez de que la puerta responda 500.
  */
 final class UltronDraftDefects
 {
@@ -199,20 +205,36 @@ final class UltronDraftDefects
         return $defectos;
     }
 
-    /** @return array{code:string,detail:?string,issue:string,note:string} */
+    /**
+     * Si la nota lanza (un parámetro que no es el de su entrada), el defecto va
+     * igual, sin nota: n8n sabe por qué reescribir por el código y el `issue`,
+     * y la puerta no responde 500 (C6). El código y el detalle son constantes
+     * de aquí, así que `issue()` no puede lanzar.
+     *
+     * @return array{code:string,detail:?string,issue:string,note:string}
+     */
     private static function defecto(string $code, ?string $detail, array $params): array
     {
+        try {
+            $nota = UltronRegenerationNotes::note($code, $detail, $params);
+        } catch (InvalidArgumentException) {
+            // A propósito: la nota es una ayuda; el defecto se dice sin ella (quien llama lo deja en el log).
+            $nota = '';
+        }
+
         return [
             'code' => $code,
             'detail' => $detail,
             'issue' => UltronRegenerationNotes::issue($code, $detail),
-            'note' => UltronRegenerationNotes::note($code, $detail, $params),
+            'note' => $nota,
         ];
     }
 
     /**
      * Cómo llamar al plan en la nota N-B: su marcador sin llaves (`PLAN_2`)
-     * si el borrador lo nombra con él, o su nombre del catálogo.
+     * si el borrador lo nombra con él, o su nombre del catálogo. Si el nombre
+     * queda vacío al sanearlo (C6; un nombre hecho solo de llaves), su
+     * marcador si es de la lista y, si no, «ese plan».
      *
      * @param  list<int>  $po
      * @param  array<int,array<string,mixed>>  $catalog
@@ -220,15 +242,19 @@ final class UltronDraftDefects
     private static function comoSeNombra(int $planId, string $raw, array $po, array $catalog): string
     {
         $k = array_search($planId, $po, true);
-        if ($k !== false && $k < UltronPlansOverview::MAX_PLANS && preg_match('/\{\{\s*PLAN_'.($k + 1).'\s*\}\}/', $raw) === 1) {
-            return 'PLAN_'.($k + 1);
+        $marcador = $k !== false && $k < UltronPlansOverview::MAX_PLANS ? 'PLAN_'.($k + 1) : null;
+        if ($marcador !== null && preg_match('/\{\{\s*'.$marcador.'\s*\}\}/', $raw) === 1) {
+            return $marcador;
         }
+        $nombre = '';
         foreach ($catalog as $p) {
             if ((int) $p['id'] === $planId) {
-                return (string) ($p['name'] ?? '');
+                $nombre = (string) ($p['name'] ?? '');
+
+                break;
             }
         }
 
-        return '';
+        return UltronRegenerationNotes::cleanText($nombre) !== '' ? $nombre : ($marcador ?? 'ese plan');
     }
 }

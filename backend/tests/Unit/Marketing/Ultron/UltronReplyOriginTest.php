@@ -155,6 +155,51 @@ class UltronReplyOriginTest extends TestCase
         $this->assertSame([['by' => O::BY_UNKNOWN, 'codes' => [], 'issues' => []], ['by' => O::BY_UNKNOWN, 'codes' => [], 'issues' => []]], $c['rewrites']);
     }
 
+    /**
+     * C4 (b) · I-4 del revisor: las sustituciones del servidor DENTRO del camino
+     * del modelo cuentan como texto del servidor, como ya se hacía con la hora de
+     * la visita. El origen sigue siendo el de la regla de la línea base (la
+     * comparación no cambia); `server_text` dice cuál fue: el último recurso de
+     * la realineación en un turno de cobro, el texto curado del cobro que el
+     * borrador negaba, el último recurso de una excusa de precio que dejaba el
+     * texto vacío, la red de los marcadores (C1) y el desbordamiento del punto de
+     * control. Si hubo varias, la última del camino, que es la que puso el texto.
+     *
+     * @return array<string, array{array<string,mixed>, ?string}>
+     */
+    public static function textosDelServidor(): array
+    {
+        $pasa = ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9];
+
+        return [
+            'la realineación con respaldo (turno de cobro)' => [['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 4, 'fallback' => true, 'money_turn' => true]], O::SERVER_PRICE_REALIGNED],
+            'el texto curado del cobro negado' => [['critic' => $pasa, 'server_replaced' => [O::SERVER_PAYMENT_LINK]], O::SERVER_PAYMENT_LINK],
+            'la excusa de precio vaciada' => [['critic' => $pasa, 'price_excuse_dropped' => 1, 'server_replaced' => [O::SERVER_PRICE_EXCUSE]], O::SERVER_PRICE_EXCUSE],
+            'la red de los marcadores' => [['critic' => $pasa, 'server_replaced' => [O::SERVER_MARKER_LEAK]], O::SERVER_MARKER_LEAK],
+            'el desbordamiento del punto de control' => [['critic' => $pasa, 'length' => ['cap' => 200, 'action' => 'fit', 'from' => 150, 'to' => 90, 'dropped' => 0, 'overflow' => true]], O::SERVER_LENGTH_OVERFLOW],
+            'la hora de la visita, como antes' => [['visit_hour' => ['mode' => 'ask', 'date' => '2026-11-21']], O::SERVER_VISIT_HOUR],
+            'dos: manda la última del camino' => [['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 4, 'fallback' => true], 'server_replaced' => [O::SERVER_MARKER_LEAK]], O::SERVER_MARKER_LEAK],
+            // Lo que NO es texto del servidor: la realineación de verdad (la cifra del plan nombrado), la frase del precio que se añade al texto del modelo, la excusa retirada sin vaciar.
+            'la realineación al plan nombrado' => [['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 5]], null],
+            'la frase del precio' => [['critic' => $pasa, 'plan_price_realigned' => ['from' => 4, 'to' => 4, 'price_sentence' => true]], null],
+            'la excusa retirada sin vaciar' => [['critic' => $pasa, 'price_excuse_dropped' => 1], null],
+            'cabe' => [['critic' => $pasa, 'length' => ['cap' => 200, 'action' => 'fit', 'from' => 150, 'to' => 150, 'dropped' => 0]], null],
+            'una marca fuera del vocabulario' => [['critic' => $pasa, 'server_replaced' => ['Ramiro 3209876543', 7, ['x']], 'plan_price_realigned' => 'fallback'], null],
+            // En un respaldo, el texto ya es del servidor: no se marca aparte.
+            'en un respaldo' => [['fallback_mode' => 'SAFE_CURATED_REPLY', 'recovery' => ['reason' => 'x'], 'server_replaced' => [O::SERVER_MARKER_LEAK]], null],
+        ];
+    }
+
+    #[DataProvider('textosDelServidor')]
+    public function test_el_texto_del_servidor_en_el_camino_del_modelo(array $metadata, ?string $esperado): void
+    {
+        $c = O::classify($metadata);
+
+        $this->assertSame($esperado, $c['server_text']);
+        $this->assertSame(array_key_exists('fallback_mode', $metadata) ? O::FALLBACK : O::MODEL, $c['origin'], 'el origen, el de la regla de la línea base');
+        $this->assertSame([O::SERVER_VISIT_HOUR, O::SERVER_PRICE_REALIGNED, O::SERVER_PAYMENT_LINK, O::SERVER_PRICE_EXCUSE, O::SERVER_MARKER_LEAK, O::SERVER_LENGTH_OVERFLOW], O::SERVER_TEXTS, 'en el orden del camino');
+    }
+
     /** Las llamadas al modelo de un turno: 1 (el estratega) + redacciones + revisores, si se saben. */
     public function test_las_llamadas_al_modelo(): void
     {

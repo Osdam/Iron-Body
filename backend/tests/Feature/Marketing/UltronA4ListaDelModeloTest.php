@@ -9,17 +9,22 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
+use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\CommercialTurnPolicy;
 use App\Services\Marketing\Ultron\ConversationMemory;
 use App\Services\Marketing\Ultron\ConversationMemoryService;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronDraftPlaceholders;
+use App\Services\Marketing\Ultron\UltronFormalReplies;
 use App\Services\Marketing\Ultron\UltronPlansOverview;
 use App\Services\Marketing\Ultron\UltronRegisterDetector;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
+use App\Services\Marketing\Ultron\UltronReplyOrigin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -599,7 +604,243 @@ class UltronA4ListaDelModeloTest extends TestCase
         $this->assertFalse($p->needsPlan('{{PLAN_1}} y {{PLAN_2}}'), 'un marcador de la lista no pide el plan del turno');
     }
 
+    // ── C1 · Ningún marcador sale por WhatsApp (encargo be-r6; R-1 e I-1) ────
+
+    /** La pregunta de las sondas S4 y S5 del revisor (I-1). */
+    private const I1 = '¿Qué planes tienen y cuánto cuestan?';
+
+    /** @return array<string, array{string}> */
+    public static function marcadoresMalEscritos(): array
+    {
+        return [
+            'PLAN_1 sin llaves (sonda S4)' => ['Claro. Tenemos PLAN_1 y PLAN_2, los dos de un mes. Le dejo la app.'],
+            '{PLAN_1} con una llave (sonda S5)' => ['Claro. Tenemos {PLAN_1} y {PLAN_2}, los dos de un mes. Le dejo la app.'],
+        ];
+    }
+
+    /**
+     * I-1: con una herramienta en el turno, ni el commit exige la lista (G1.2)
+     * ni la comprobación la mira, y un marcador mal escrito salía LITERAL por
+     * WhatsApp con los enlaces debajo. Ahora lo para la red del punto de
+     * control: no sale; va el último recurso de la intención, con un aviso en el
+     * log (sin el texto) y la constancia en la fila, que el informe de origen
+     * cuenta como texto del servidor (C4).
+     */
+    #[DataProvider('marcadoresMalEscritos')]
+    public function test_un_marcador_mal_escrito_no_sale_con_herramientas(string $borrador): void
+    {
+        $this->publica('profesional', 200);
+        $log = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$log): void {
+            $log[] = [$e->level, $e->message, $e->context];
+        });
+
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::I1, $borrador, null, [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+        $this->assertNingunMarcador((string) $r['reply_final']);
+        $this->assertNingunMarcador((string) $this->ultimoSaliente()?->body);
+        $this->assertContains($r['reply_final'], self::ultimosRecursos(SalesIntents::PRICING_QUESTION), 'el último recurso de la intención, de usted');
+        $fila = $this->ultimaAccion();
+        $this->assertSame(self::PO, $fila->metadata['plans_overview']['offered'], 'la lista se ofreció (el turno de I-1)');
+        $this->assertSame([UltronReplyOrigin::SERVER_MARKER_LEAK], $fila->metadata['server_replaced']);
+        $this->assertSame(UltronReplyOrigin::SERVER_MARKER_LEAK, UltronReplyOrigin::classify($fila->metadata, (string) $fila->action_type)['server_text'], 'el informe lo cuenta como texto del servidor');
+        $avisos = array_values(array_filter($log, fn (array $l) => $l[1] === 'ultron.commit.marker_leak'));
+        $this->assertCount(1, $avisos, 'un aviso');
+        $this->assertSame(['warning', $this->conversation->id, (int) $fila->id, SalesIntents::PRICING_QUESTION], [$avisos[0][0], $avisos[0][2]['conversation_id'] ?? null, $avisos[0][2]['ai_action_id'] ?? null, $avisos[0][2]['intent'] ?? null]);
+        $this->assertStringNotContainsString('PLAN_', (string) json_encode($avisos[0][2], JSON_UNESCAPED_UNICODE), 'sin el texto');
+        $this->assertStringNotContainsString('Le dejo', (string) json_encode($avisos[0][2], JSON_UNESCAPED_UNICODE), 'sin el texto');
+    }
+
+    /**
+     * Sin herramientas, los dos borradores de I-1 no llegan al punto de control
+     * con el marcador: falta la lista y sale la lista fija, como antes. Y en un
+     * turno sin lista (el horario), un `PLAN_1` suelto lo para la red.
+     */
+    #[DataProvider('marcadoresMalEscritos')]
+    public function test_un_marcador_mal_escrito_tampoco_sale_sin_herramientas(string $borrador): void
+    {
+        $this->publica('profesional', 200);
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::I1, $borrador, null);
+
+        $this->assertNingunMarcador((string) $r['reply_final']);
+        $fila = $this->ultimaAccion();
+        $this->assertContains(CommercialTurnPolicy::VIOLACION_PANORAMA, $fila->metadata['policy_violations'], 'falta la lista: la lista fija');
+        $this->assertArrayNotHasKey('server_replaced', $fila->metadata);
+
+        $this->nuevaConversacion();
+        $this->publica('profesional', 200);
+        $r = $this->aprobado(SalesIntents::SCHEDULE_QUESTION, '¿Cuál es el horario entre semana?', str_replace(['Claro. Tenemos', 'Le dejo la app.'], ['Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. Para empezar tenemos', '¿Le sirve?'], $borrador), null);
+        $this->assertNingunMarcador((string) $r['reply_final']);
+        $this->assertSame([UltronReplyOrigin::SERVER_MARKER_LEAK], $this->ultimaAccion()->metadata['server_replaced'] ?? null);
+    }
+
+    /**
+     * R-1: un nombre con llaves en el CRM (renombrado entre `decide` y el
+     * commit). Con versión del Studio pierde las llaves en la lista del modelo
+     * y en `{{PLAN_NAME}}`, y no se reexpande; si lo que queda tiene forma de
+     * marcador (`PLAN_PRICE`, `APP_LINKS`, `PLAN_2`), lo para la red: ni un
+     * marcador, ni una llave, ni los enlaces dentro de la lista.
+     */
+    public function test_un_nombre_con_llaves_no_sale_como_marcador(): void
+    {
+        $this->publica('profesional', 200);
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m, true);
+        Plan::query()->whereKey(3)->update(['name' => 'Plan {{OTRO}}']);
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::TRES, null), self::APROBADO))->assertOk()->json();
+        $this->assertSame(str_replace('Plan Valera', 'Plan OTRO', self::TRES_EXPANDIDO), $r['reply_final']);
+        $this->assertArrayNotHasKey('server_replaced', $this->ultimaAccion()->metadata);
+
+        foreach (['Plan {{PLAN_PRICE}}', 'Plan {{APP_LINKS}}', 'Plan {{PLAN_2}}'] as $nombre) {
+            $this->nuevaConversacion();
+            Plan::query()->whereKey(3)->update(['name' => 'Plan Valera']);
+            $this->publica('profesional', 200);
+            $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+            $decide = $this->decide($m, true);
+            Plan::query()->whereKey(3)->update(['name' => $nombre]);
+
+            $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::TRES, null), self::APROBADO))->assertOk()->json();
+
+            $this->assertNingunMarcador((string) $r['reply_final'], $nombre);
+            $this->assertStringNotContainsString('https://', (string) $r['reply_final'], $nombre.': ni los enlaces dentro de la lista');
+            $this->assertSame([UltronReplyOrigin::SERVER_MARKER_LEAK], $this->ultimaAccion()->metadata['server_replaced'] ?? null, $nombre);
+        }
+
+        // `{{PLAN_NAME}}`, con versión del Studio: el nombre sin llaves.
+        $this->nuevaConversacion();
+        Plan::query()->whereKey(3)->update(['name' => 'Plan Valera']);
+        $this->publica('profesional', 320);
+        $m = $this->entrante('¿Qué incluye el Plan Mensual?');
+        $decide = $this->decide($m, true);
+        Plan::query()->whereKey(4)->update(['name' => 'Plan {{Oro}}']);
+        $borrador = 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?';
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $borrador, 4), self::APROBADO))->assertOk()->json();
+        $this->assertSame('El Plan Oro cuesta $80.000 COP al mes. ¿Le cuento qué incluye?', $r['reply_final']);
+        $this->assertSame(4, $r['price_source']['plan_id'] ?? null, 'salió su precio');
+
+        // Y si el nombre deja algo con forma de marcador, la red manda el último recurso: el plan no salió, y ni la memoria ni `price_source` lo dan por entregado.
+        $this->nuevaConversacion();
+        Plan::query()->whereKey(4)->update(['name' => 'Plan Mensual']);
+        $this->publica('profesional', 320);
+        $m = $this->entrante('¿Qué incluye el Plan Mensual?');
+        $decide = $this->decide($m, true);
+        Plan::query()->whereKey(4)->update(['name' => 'Plan {{APP_LINKS}}']);
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $borrador, 4), self::APROBADO))->assertOk()->json();
+        $this->assertNingunMarcador((string) $r['reply_final'], 'PLAN_NAME con APP_LINKS');
+        $this->assertStringNotContainsString('https://', (string) $r['reply_final']);
+        $this->assertContains($r['reply_final'], self::ultimosRecursos(SalesIntents::PRICING_QUESTION));
+        $this->assertNull($r['price_source']);
+        $this->assertSame([], array_column((array) $this->memoria()->get('prices_delivered'), 'plan_id'));
+    }
+
+    /**
+     * Sin versión del Studio no cambia nada (decisión del lead en C1): el mismo
+     * `{{PLAN_NAME}}` con el nombre con llaves sale como hoy. Que ya pasaba en
+     * Legacy lo dejó dicho R-1 (S3b); no es de este cambio.
+     */
+    #[DataProvider('modosLegacy')]
+    public function test_sin_version_del_studio_el_nombre_con_llaves_sale_como_hoy(bool $negocia): void
+    {
+        $this->publica('profesional', 320);
+        if ($negocia) {
+            config()->set('marketing.ultron.studio_prompts', 'off');
+        }
+        $m = $this->entrante('¿Qué incluye el Plan Mensual?');
+        $decide = $this->decide($m, $negocia);
+        Plan::query()->whereKey(4)->update(['name' => 'Plan {{Oro}}']);
+        $borrador = 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?';
+
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $borrador, 4), self::APROBADO))->assertOk()->json();
+
+        $this->assertSame('El Plan {{Oro}} cuesta $80.000 COP al mes. ¿Le cuento qué incluye?', $r['reply_final']);
+        $this->assertArrayNotHasKey('server_replaced', $this->ultimaAccion()->metadata);
+    }
+
+    // ── C4 (b) · Las sustituciones del servidor dejan su marca (solo Studio) ─
+
+    /** La excusa de precio que deja el texto vacío: sale el último recurso, y la fila lo dice. Retirada sin vaciar, o en Legacy, sin marca. */
+    public function test_la_excusa_de_precio_que_vacia_el_texto_deja_su_marca(): void
+    {
+        $excusa = 'La diferencia puede ser por confusión con otro plan o información previa.';
+        $this->publica('profesional', 200);
+        $this->aprobado(SalesIntents::GENERAL_INFO, '¿Por qué antes me dijeron otro precio?', $excusa, null);
+        $fila = $this->ultimaAccion();
+        $this->assertSame(1, $fila->metadata['price_excuse_dropped']);
+        $this->assertSame([UltronReplyOrigin::SERVER_PRICE_EXCUSE], $fila->metadata['server_replaced']);
+
+        // Retirada sin vaciar: sale lo demás, que es del modelo.
+        $this->nuevaConversacion();
+        $this->publica('profesional', 200);
+        $this->aprobado(SalesIntents::GENERAL_INFO, '¿Por qué antes me dijeron otro precio?', 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. '.$excusa, null);
+        $this->assertSame(1, $this->ultimaAccion()->metadata['price_excuse_dropped']);
+        $this->assertArrayNotHasKey('server_replaced', $this->ultimaAccion()->metadata);
+
+        // Legacy: la fila de hoy.
+        $this->nuevaConversacion();
+        $this->publica('profesional', 200);
+        $m = $this->entrante('¿Por qué antes me dijeron otro precio?');
+        $decide = $this->decide($m, false);
+        $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::GENERAL_INFO, $excusa, null), self::APROBADO))->assertOk();
+        $this->assertSame(1, $this->ultimaAccion()->metadata['price_excuse_dropped']);
+        $this->assertArrayNotHasKey('server_replaced', $this->ultimaAccion()->metadata);
+    }
+
+    /**
+     * El borrador que NEGABA el cobro (el turno del canario, «No contamos con un
+     * link de pago…») se tira entero y sale el texto curado del cobro: texto del
+     * servidor, con su marca. En Legacy, la fila de hoy.
+     */
+    #[DataProvider('conYSinStudio')]
+    public function test_el_cobro_que_el_borrador_negaba_deja_su_marca(bool $studio): void
+    {
+        config()->set('wompi.env', 'production');
+        config()->set('wompi.public_key', 'pub_prod_test_key');
+        config()->set('wompi.private_key', 'prv_prod_test_key');
+        config()->set('wompi.integrity_secret', 'integrity_test_secret');
+        config()->set('wompi.events_secret', 'events_test_secret');
+        config()->set('wompi.checkout.base_url', 'https://checkout.wompi.co/p/');
+        config()->set('wompi.checkout.redirect_url', 'https://web.ironbodyneiva.cloud/pago');
+        config()->set('marketing.ultron.payment_canary_conversation_id', $this->conversation->id);
+        $this->publica('cercano', 320);
+        $m = $this->entrante('y tienes un link de pago mas directo de casulidad?');
+        $decide = $this->decide($m, $studio);
+        $propuesta = ['next_state' => P::CLOSING] + self::propuesta(SalesIntents::PAYMENT_LINK_REQUEST,
+            'No contamos con un link de pago directo por ahora, pero puedes hacer el pago seguro desde la app Iron Body Workout o directamente en el gimnasio cuando vengas.', 4, [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+        $r = $this->commit($this->payload($m, $decide['decide_token'], $propuesta, self::APROBADO))->assertOk()->json();
+
+        $this->assertStringContainsString('checkout.wompi.co', (string) $r['reply_final'], 'el cobro existía y sale');
+        $this->assertStringNotContainsString('No contamos con un link de pago', (string) $r['reply_final']);
+        $fila = $this->ultimaAccion();
+        if ($studio) {
+            $this->assertSame([UltronReplyOrigin::SERVER_PAYMENT_LINK], $fila->metadata['server_replaced']);
+            $this->assertSame(UltronReplyOrigin::SERVER_PAYMENT_LINK, UltronReplyOrigin::classify($fila->metadata)['server_text']);
+        } else {
+            $this->assertArrayNotHasKey('server_replaced', $fila->metadata);
+        }
+    }
+
+    /** @return array<string, array{bool}> */
+    public static function conYSinStudio(): array
+    {
+        return ['con versión del Studio' => [true], 'Legacy' => [false]];
+    }
+
     // ── Andamio ──────────────────────────────────────────────────────────────
+
+    /** Ni un marcador ni una llave en lo que sale. */
+    private function assertNingunMarcador(string $texto, string $caso = ''): void
+    {
+        $this->assertFalse(UltronDraftPlaceholders::looksLikeMarker($texto), $caso.': «'.$texto.'»');
+        $this->assertStringNotContainsStringIgnoringCase('PLAN_', $texto, $caso);
+        $this->assertDoesNotMatchRegularExpression('/[{}]/', $texto, $caso);
+    }
+
+    /** @return list<string> los últimos recursos de la intención, de usted (la versión es «profesional»). */
+    private static function ultimosRecursos(string $intent): array
+    {
+        return array_map(fn (string $v): string => (string) UltronFormalReplies::segun('profesional', $v), (new SalesConversationReplyService)->lastResorts($intent));
+    }
 
     /**
      * La misma traza, valor a valor y con sus tipos (`assertSame`), sin mirar

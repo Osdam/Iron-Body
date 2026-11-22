@@ -59,6 +59,20 @@ final class UltronDraftPlaceholders
     /** Cualquier `{{ algo }}` del texto, con o sin espacios. */
     private const PATTERN = '/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/';
 
+    /**
+     * LO QUE TIENE FORMA DE MARCADOR en un texto que va a salir (correcciones
+     * de «regenerar antes de sustituir», C1; R-1 de seguridad e I-1 del
+     * revisor): `{{` o `}}`; una llave seguida de `PLAN_`; `PLAN_1`, `PLAN_2`…
+     * sueltos; y `PLAN_PRICE`, `PLAN_NAME`, `PLAN_DURATION` o `APP_LINKS`
+     * sueltos. Sin distinguir mayúsculas: nada de eso es español que lea una
+     * persona. Una llave suelta en un texto («{lunes a viernes}») no lo es.
+     * Sin `\p{…}` (PCRE 10.39) y sin cuantificadores anidados.
+     */
+    private const FORMA_DE_MARCADOR = '/\{\{|\}\}|\{\s*PLAN_|\bPLAN_(?:[0-9]+|PRICE|NAME|DURATION)\b|\bAPP_LINKS\b/i';
+
+    /** Para quitarlo: cualquier llave y cualquier palabra `PLAN_…` o `APP_LINKS`. */
+    private const RESTOS_DE_MARCADOR = '/[{}]+|\bPLAN_[A-Z0-9_]*|\bAPP_LINKS\b/i';
+
     public function __construct(
         private readonly SalesConversationReplyService $replies = new SalesConversationReplyService,
     ) {}
@@ -150,8 +164,14 @@ final class UltronDraftPlaceholders
      * Se llama DESPUÉS de validar el borrador. El precio sale de `Plan::price`
      * leído en este instante, no del que hubiera cuando ULTRON decidió: entre
      * una cosa y otra pueden haber cambiado la tarifa.
+     *
+     * Con `$nombreSinLlaves` (un turno con versión del Studio; C1), el nombre
+     * pierde las llaves ({@see self::nameWithoutBraces()}): un nombre con
+     * llaves en el CRM no puede volverse un marcador que otra pasada sustituya
+     * (los enlaces de la app) ni salir como tal. Sin él, el nombre tal cual:
+     * Legacy no cambia ni un byte.
      */
-    public function resolve(string $draft, ?Plan $plan): string
+    public function resolve(string $draft, ?Plan $plan, bool $nombreSinLlaves = false): string
     {
         if ($plan === null) {
             return $draft;
@@ -161,12 +181,43 @@ final class UltronDraftPlaceholders
             self::PATTERN,
             fn (array $m) => match ($m[1]) {
                 self::PRICE => $this->replies->formatCop((float) $plan->price),
-                self::NAME => (string) $plan->name,
+                self::NAME => $nombreSinLlaves ? self::nameWithoutBraces((string) $plan->name) : (string) $plan->name,
                 self::DURATION => $this->duration($plan),
                 default => $m[0],
             },
             $draft,
         );
+    }
+
+    /**
+     * El nombre de un plan sin llaves, sin espacios dobles ni en los bordes
+     * (C1). Lo usan la lista del modelo ({@see UltronPlansOverview::item()}) y
+     * `{{PLAN_NAME}}` en un turno del Studio. Un nombre hecho solo de llaves
+     * queda vacío.
+     */
+    public static function nameWithoutBraces(string $nombre): string
+    {
+        return trim((string) preg_replace('/ {2,}/', ' ', str_replace(['{', '}'], '', $nombre)));
+    }
+
+    /**
+     * ¿Lleva el texto algo con forma de marcador? ({@see self::FORMA_DE_MARCADOR}).
+     * La red del commit (`antesDeEnviar()`, C1) no deja salir un texto así.
+     */
+    public static function looksLikeMarker(string $texto): bool
+    {
+        return preg_match(self::FORMA_DE_MARCADOR, $texto) === 1;
+    }
+
+    /**
+     * El texto sin nada con forma de marcador: sin llaves y sin palabras
+     * `PLAN_…` ni `APP_LINKS`, sin espacios dobles. Para cuando la red no
+     * tiene último recurso que mandar (todos los tumba el guard: hoy no se
+     * alcanza), antes que mandar un marcador o callar.
+     */
+    public static function withoutMarkers(string $texto): string
+    {
+        return trim((string) preg_replace('/[ \t]{2,}/', ' ', (string) preg_replace(self::RESTOS_DE_MARCADOR, '', $texto)));
     }
 
     /** «30 días» / «1 mes»: se dice como lo diría una persona. */

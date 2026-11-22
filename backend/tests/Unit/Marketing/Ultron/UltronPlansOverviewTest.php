@@ -345,4 +345,46 @@ class UltronPlansOverviewTest extends TestCase
         $this->assertFalse(O::isMoneyTurn('pricing_question', ['app_links_send', 'staff_review']));
         $this->assertFalse(O::isMoneyTurn('general_info', []));
     }
+
+    // ── 5. Correcciones tras las revisiones (encargo `encargo-be-r6.md`) ─────
+
+    /**
+     * C1 · R-1 de seguridad: un nombre con llaves en el CRM pierde las llaves al
+     * expandirse, para que no se reexpanda (un `{{PLAN_PRICE}}` dentro del
+     * nombre ponía el precio de otro plan) ni salga como marcador. Lo que quede
+     * con forma de marcador (`PLAN_PRICE` suelto) lo para la red del commit.
+     */
+    public function test_el_nombre_de_un_plan_pierde_las_llaves_al_expandirse(): void
+    {
+        $this->assertSame('Plan OTRO ($65.000 COP)', O::item(self::plan('Plan {{OTRO}}', 65000, 30)));
+        $this->assertSame('Plan PLAN_PRICE (7 días, $45.000 COP)', O::item(self::plan('Plan {{PLAN_PRICE}}', 45000, 7)));
+        $this->assertSame('Plan Valera ($65.000 COP)', O::item(self::plan(' {Plan} {{ Valera }} ', 65000, 30)), 'sin llaves, sin espacios dobles ni en los bordes');
+        $this->assertSame('Plan Valera ($65.000 COP)', O::item(self::plan('Plan Valera', 65000, 30)), 'un nombre sin llaves, igual que antes');
+
+        // Y la lista expandida con ese nombre no lleva ni una llave.
+        $r = O::expand('Tenemos {{PLAN_1}} y {{PLAN_2}}.', [3 => O::item(self::plan('Plan {{APP_LINKS}}', 65000, 30)), 4 => O::item(self::plan('Plan Mensual', 80000, 30))], [3, 4]);
+        $this->assertSame('Tenemos Plan APP_LINKS ($65.000 COP) y Plan Mensual ($80.000 COP).', $r['text']);
+        $this->assertDoesNotMatchRegularExpression('/[{}]/', $r['text']);
+    }
+
+    /**
+     * C2 · I-2 del revisor: el borrador típico del turno de precios (el del
+     * 18-11: un plan escrito a mano con `{{PLAN_PRICE}}`) no lleva NINGÚN
+     * marcador de la lista. Lo que le falta es la lista (`missing`, nota «FALTA
+     * LA LISTA…»), no quitar el nombre: obedecer `name_written` dejaba un
+     * borrador que volvía a dar `missing` en la segunda comprobación.
+     */
+    public function test_sin_ningun_marcador_de_la_lista_falta_la_lista_aunque_nombre_un_plan(): void
+    {
+        $c = self::catalogo();
+        $po = [3, 4, 8];
+
+        $this->assertSame(O::MISSING, O::verify('Claro. El Plan Valera cuesta {{PLAN_PRICE}} al mes e incluye acceso total al gimnasio. ¿Le gustaría conocer más?', $po, $c), 'el borrador del 18-11');
+        $this->assertSame(O::MISSING, O::verify('Tenemos el Plan Valera y el Plan Mensual. ¿Cuál le interesa?', $po, $c), 'dos nombres a mano, ningún marcador');
+        // Con un marcador de la lista, el nombre a mano sigue siendo `name_written`; la cifra y el marcador inexistente siguen mandando.
+        $this->assertSame(O::NAME_WRITTEN, O::verify('El Plan Valera {{PLAN_1}} y {{PLAN_2}}', $po, $c));
+        $this->assertSame(O::NAME_WRITTEN, O::verify('{{PLAN_1}} y el Plan Mensual', [3, 4], $c));
+        $this->assertSame(O::PRICE_WRITTEN, O::verify('El Plan Valera cuesta $65.000 al mes.', $po, $c));
+        $this->assertSame(O::UNKNOWN_MARKER, O::verify('El Plan Valera y {{PLAN_4}}', $po, $c));
+    }
 }

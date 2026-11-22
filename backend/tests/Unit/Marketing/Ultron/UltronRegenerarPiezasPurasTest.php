@@ -39,6 +39,8 @@ class UltronRegenerarPiezasPurasTest extends TestCase
         'app/Services/Marketing/Ultron/UltronTurnPolicyReader.php',
         // Ola 6: el informe de origen.
         'app/Console/Commands/Marketing/UltronOriginReport.php',
+        // Correcciones (C1): la forma de marcador que la red del commit no deja salir.
+        'app/Services/Marketing/Ultron/UltronDraftPlaceholders.php',
     ];
 
     /** Lo que una pieza pura no puede usar: clases y métodos de consulta o escritura. */

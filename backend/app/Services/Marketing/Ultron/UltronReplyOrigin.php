@@ -23,8 +23,9 @@ namespace App\Services\Marketing\Ultron;
  *     le quitó la pregunta final.
  * Las acciones `*_recovered` (la respuesta repetida o la reventa, que el commit
  * sustituye por su último recurso) son respaldo del último recurso; la consulta
- * de la línea base no las cuenta (no son `reply`), y el informe tampoco las
- * mete en el reparto.
+ * de la línea base no las cuenta (no son `reply`), y el informe las mete en el
+ * reparto como respaldo y las deja fuera solo de la cifra de la línea base
+ * (correcciones, C4 a; I-4 del revisor).
  *
  * DEL MODELO, CUÁNTAS REDACCIONES Y QUIÉN PIDIÓ CADA REESCRITURA:
  *  - con la traza (`metadata.regeneration`, ola 4), lo que dice: borradores,
@@ -41,6 +42,17 @@ namespace App\Services\Marketing\Ultron;
  * (no tiene `fallback_mode`). Aquí se respeta esa regla y se MARCA aparte
  * (`server_text = visit_hour`), para que el informe la diga y se pueda
  * descontar sin cambiar la comparación con la línea base.
+ *
+ * Y LO MISMO CON LAS SUSTITUCIONES DEL SERVIDOR DENTRO DEL CAMINO DEL MODELO
+ * (correcciones, C4 b; I-4 del revisor): el último recurso de la realineación
+ * en un turno de cobro (`plan_price_realigned.fallback`), el texto curado del
+ * cobro que el borrador negaba, el último recurso de una excusa de precio que
+ * dejaba el texto vacío, la red de los marcadores (C1) —las tres, en
+ * `metadata.server_replaced`, que el commit escribe solo con versión del
+ * Studio— y el último recurso del desbordamiento del punto de control
+ * (`length.overflow`). `server_text` dice cuál: la última del camino, que es la
+ * que puso el texto que salió. El origen no cambia (la comparación con la
+ * línea base, tampoco); el informe las descuenta del 90 %.
  *
  * PURA: sin base de datos, sin config, sin reloj y sin log. NO DEVUELVE TEXTO:
  * solo valores de vocabularios cerrados (los códigos corregibles, las
@@ -84,6 +96,27 @@ final class UltronReplyOrigin
 
     /** Texto del servidor que la línea base cuenta como del modelo. */
     public const SERVER_VISIT_HOUR = 'visit_hour';
+
+    /** El último recurso de la realineación del precio en un turno de cobro (`plan_price_realigned.fallback`). */
+    public const SERVER_PRICE_REALIGNED = 'price_realigned_fallback';
+
+    /** El texto curado del cobro, cuando el borrador negaba el enlace de pago (`metadata.server_replaced`). */
+    public const SERVER_PAYMENT_LINK = 'payment_link_message';
+
+    /** El último recurso de una excusa de precio que dejaba el texto vacío (`metadata.server_replaced`). */
+    public const SERVER_PRICE_EXCUSE = 'price_excuse_emptied';
+
+    /** El último recurso de la red de los marcadores del punto de control (C1, `metadata.server_replaced`). */
+    public const SERVER_MARKER_LEAK = 'marker_leak';
+
+    /** El último recurso del desbordamiento del punto de control (`length.overflow`). */
+    public const SERVER_LENGTH_OVERFLOW = 'length_overflow';
+
+    /** El texto del servidor en el camino del modelo, en el orden del camino (manda el último). */
+    public const SERVER_TEXTS = [self::SERVER_VISIT_HOUR, self::SERVER_PRICE_REALIGNED, self::SERVER_PAYMENT_LINK, self::SERVER_PRICE_EXCUSE, self::SERVER_MARKER_LEAK, self::SERVER_LENGTH_OVERFLOW];
+
+    /** Las que el commit anota en `metadata.server_replaced` (las otras dos tienen su marca de antes). */
+    public const SERVER_REPLACED = [self::SERVER_PAYMENT_LINK, self::SERVER_PRICE_EXCUSE, self::SERVER_MARKER_LEAK];
 
     /** Un código de violación del commit (`policy_greeting_sells`, `memory_turn_wrong_commitment`…): con esa forma, o no sale. */
     private const CODIGO = '/\A[a-z][a-z0-9_]{0,63}\z/';
@@ -139,7 +172,7 @@ final class UltronReplyOrigin
             'policy_codes' => $reason === self::REASON_POLICY ? self::codigos($violaciones) : [],
             'recovery_reason' => $reason === self::REASON_RECOVERY ? self::conForma($metadata['recovery']['reason'] ?? null, self::ETIQUETA) : null,
             'trimmed' => $origin === self::MODEL && (($metadata['length']['action'] ?? null) === 'trimmed' || ($metadata['register']['action'] ?? null) === 'trimmed'),
-            'server_text' => $origin === self::MODEL && array_key_exists('visit_hour', $metadata) ? self::SERVER_VISIT_HOUR : null,
+            'server_text' => $origin === self::MODEL ? self::textoDelServidor($metadata) : null,
             'traced' => $traza !== null,
             'tokens' => $traza === null || ! is_array($traza['tokens'] ?? null) ? null : [
                 'input' => self::entero($traza['tokens']['input'] ?? null, 0, self::MAX_TOKENS),
@@ -161,6 +194,32 @@ final class UltronReplyOrigin
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
+
+    /**
+     * Qué texto del servidor salió en el camino del modelo, o null: de las
+     * marcas de la fila, la última del camino ({@see self::SERVER_TEXTS}). Solo
+     * valores del vocabulario.
+     */
+    private static function textoDelServidor(array $metadata): ?string
+    {
+        $anotadas = is_array($metadata['server_replaced'] ?? null) ? $metadata['server_replaced'] : [];
+        $hay = [
+            self::SERVER_VISIT_HOUR => array_key_exists('visit_hour', $metadata),
+            self::SERVER_PRICE_REALIGNED => is_array($metadata['plan_price_realigned'] ?? null) && ($metadata['plan_price_realigned']['fallback'] ?? null) === true,
+            self::SERVER_PAYMENT_LINK => in_array(self::SERVER_PAYMENT_LINK, $anotadas, true),
+            self::SERVER_PRICE_EXCUSE => in_array(self::SERVER_PRICE_EXCUSE, $anotadas, true),
+            self::SERVER_MARKER_LEAK => in_array(self::SERVER_MARKER_LEAK, $anotadas, true),
+            self::SERVER_LENGTH_OVERFLOW => is_array($metadata['length'] ?? null) && ($metadata['length']['overflow'] ?? null) === true,
+        ];
+        $ultima = null;
+        foreach (self::SERVER_TEXTS as $codigo) {
+            if ($hay[$codigo]) {
+                $ultima = $codigo;
+            }
+        }
+
+        return $ultima;
+    }
 
     /** @return list<array{by:string,codes:list<string>,issues:list<string>}> */
     private static function reescrituras(mixed $valor): array

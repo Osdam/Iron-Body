@@ -11,10 +11,13 @@ use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -34,11 +37,19 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *
  * Lo que la fila tenía antes sin el bloque lo fijan además las dos
  * instantáneas Legacy de A4 (`tests/fixtures/ultron-a4/`), sin regenerar.
+ *
+ * CORRECCIONES TRAS LAS REVISIONES (C5, R-4 de seguridad): la traza se guarda
+ * SOLO si el token de `decide` de ese turno lleva la oferta del Studio
+ * (`sp.m = studio`, que es cuando `decide` ofreció `regeneration`), aunque la
+ * versión se haya revertido entre `decide` y el commit. Sin la oferta, el bloque
+ * no se guarda y queda un aviso; un `critic.attempt` de 3 se guarda tal cual,
+ * con su aviso (es una anomalía de n8n que conviene ver).
  */
 class UltronRegenerationCommitTest extends TestCase
 {
     use PromptPublications;
     use RefreshDatabase;
+    use UltronTurnEvents;
 
     private const SECRET = 'test-internal-secret';
 
@@ -59,6 +70,9 @@ class UltronRegenerationCommitTest extends TestCase
     private const TRES = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes. ¿Cuál le interesa más?';
 
     private const TRES_EXPANDIDO = 'Claro. Tenemos Plan Valera ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes. ¿Cuál le interesa más?';
+
+    /** Un borrador sin los marcadores de la lista, que vale también sin la oferta del Studio (C5). */
+    private const SIN_MARCADORES = 'Claro. El Plan Valera y el Plan Mensual son de un mes. ¿Cuál le interesa?';
 
     /** Lo que mandaría S2 tras dos reescrituras: una del servidor y otra del revisor. */
     private const BLOQUE = [
@@ -132,7 +146,12 @@ class UltronRegenerationCommitTest extends TestCase
 
     // ── Traza: con el bloque, sin él y con uno incoherente ──────────────────
 
-    public function test_con_el_bloque_la_fila_lo_lleva_y_sin_el_es_la_de_hoy(): void
+    /**
+     * m-10 del revisor: el nombre decía «la de hoy» y la prueba compara DENTRO
+     * del código nuevo (con el bloque frente a sin él, en el mismo commit). Lo
+     * que la fila tenía antes del cambio lo fijan las instantáneas Legacy.
+     */
+    public function test_con_el_bloque_la_fila_lleva_la_traza_y_sin_el_es_la_misma_fila_sin_la_clave(): void
     {
         $hoy = $this->turnoAprobado(null, ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9]);
         $conBloque = $this->turnoAprobado(self::BLOQUE, ['verdict' => 'pass', 'attempt' => 3, 'score' => 0.9]);
@@ -188,6 +207,94 @@ class UltronRegenerationCommitTest extends TestCase
         $fila = $this->ultimaAccion();
         $this->assertArrayHasKey('recovery', $fila->metadata);
         $this->assertMismaTraza(['consistent' => null] + self::TRAZA, $fila->metadata['regeneration']);
+    }
+
+    // ── C5 · R-4: la traza, solo con la oferta firmada ──────────────────────
+
+    /** @return array<string, array{bool}> */
+    public static function sinLaOferta(): array
+    {
+        return ['sin negociar' => [false], 'prompts del Studio apagados' => [true]];
+    }
+
+    /**
+     * Sin la oferta en el token, `decide` no ofreció `regeneration`: si n8n
+     * manda el bloque igual, no se guarda y queda un aviso (sin el bloque). El
+     * turno sale como sin él. El tercer intento del revisor se guarda tal cual,
+     * con su aviso.
+     */
+    #[DataProvider('sinLaOferta')]
+    public function test_sin_la_oferta_firmada_la_traza_no_se_guarda_y_queda_un_aviso(bool $negocia): void
+    {
+        if ($negocia) {
+            config()->set('marketing.ultron.studio_prompts', 'off');
+        }
+        $avisos = $this->escuchaLosAvisos();
+        $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
+        $token = $this->decideSinLaOferta($m, $negocia);
+
+        $this->commit($this->payload($m, $token, self::SIN_MARCADORES, ['verdict' => 'pass', 'attempt' => 3, 'score' => 0.9], self::BLOQUE))->assertOk();
+
+        $fila = $this->ultimaAccion();
+        $this->assertArrayNotHasKey('regeneration', $fila->metadata, 'sin la oferta, sin la traza');
+        $this->assertSame(3, $fila->metadata['critic']['attempt'], 'el intento, tal cual');
+        $id = $this->conversation->id;
+        $this->assertSame([
+            ['warning', 'ultron.commit.regeneration_not_offered', ['conversation_id' => $id]],
+            ['warning', 'ultron.commit.critic_attempt_not_offered', ['conversation_id' => $id, 'attempt' => 3]],
+        ], $avisos(), 'los dos avisos, y sin el bloque');
+
+        // Sin el bloque y con el intento de siempre: ni traza ni avisos (lo de hoy).
+        $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
+        $token = $this->decideSinLaOferta($m, $negocia);
+        $avisos = $this->escuchaLosAvisos();
+        $this->commit($this->payload($m, $token, self::SIN_MARCADORES, ['verdict' => 'pass', 'attempt' => 2, 'score' => 0.9], null))->assertOk();
+        $this->assertArrayNotHasKey('regeneration', $this->ultimaAccion()->metadata);
+        $this->assertSame([], $avisos());
+    }
+
+    /**
+     * Con la oferta firmada, la traza se guarda aunque la versión se haya
+     * revertido entre `decide` y el commit (aquí, la cadena del Studio y sus
+     * prompts apagados después de `decide`): lo que hizo n8n es verdad, y lo
+     * ofreció `decide`. Sin avisos.
+     */
+    public function test_con_la_oferta_firmada_la_traza_se_guarda_aunque_la_version_se_haya_revertido(): void
+    {
+        $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
+        $token = $this->decide($m);
+        config()->set('marketing.ultron.studio_config', 'off');
+        config()->set('marketing.ultron.studio_prompts', 'off');
+        $avisos = $this->escuchaLosAvisos();
+
+        $this->commit($this->payload($m, $token, self::TRES, ['verdict' => 'pass', 'attempt' => 3, 'score' => 0.9], self::BLOQUE))->assertOk();
+
+        $this->assertMismaTraza(self::TRAZA, $this->ultimaAccion()->metadata['regeneration'] ?? null);
+        $this->assertArrayNotHasKey('studio', $this->ultimaAccion()->metadata, 'la versión se revirtió: la fila ya no lleva su sello');
+        $this->assertSame([], $avisos());
+    }
+
+    /**
+     * Una fila bloqueada (aquí, la persona escribió otra vez: `superseded`) se
+     * escribe ANTES de verificar el token: la oferta se lee del token firmado
+     * igual, con `peek()`. Con ella, la traza; sin ella, no, con su aviso.
+     */
+    public function test_una_fila_bloqueada_guarda_la_traza_solo_con_la_oferta(): void
+    {
+        $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
+        $token = $this->decide($m);
+        $this->otroEntrante('Y otra cosa');
+        $this->commit($this->payload($m, $token, self::TRES, ['verdict' => 'pass', 'attempt' => 3, 'score' => 0.9], self::BLOQUE))->assertOk()->assertJsonPath('outcome', 'blocked');
+        // La fila bloqueada no lleva veredicto: la traza, sin nada con qué cuadrar.
+        $this->assertMismaTraza(['consistent' => null] + self::TRAZA, $this->ultimaAccion()->metadata['regeneration'] ?? null);
+
+        $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
+        $token = $this->decideSinLaOferta($m, false);
+        $this->otroEntrante('Y otra cosa');
+        $avisos = $this->escuchaLosAvisos();
+        $this->commit($this->payload($m, $token, self::SIN_MARCADORES, ['verdict' => 'pass', 'attempt' => 3, 'score' => 0.9], self::BLOQUE))->assertOk()->assertJsonPath('outcome', 'blocked');
+        $this->assertArrayNotHasKey('regeneration', $this->ultimaAccion()->metadata);
+        $this->assertSame([['warning', 'ultron.commit.regeneration_not_offered', ['conversation_id' => $this->conversation->id]]], $avisos());
     }
 
     // ── La forma (§4.3) ─────────────────────────────────────────────────────
@@ -349,6 +456,55 @@ class UltronRegenerationCommitTest extends TestCase
         $this->assertSame(['contract' => 'ultron-regen/1', 'max_drafts' => 3], $decide['regeneration'] ?? null, 'decide ofrece el contrato');
 
         return $decide['decide_token'];
+    }
+
+    /** `decide` de un turno sin la oferta del Studio: sin negociar, o negociado con los prompts del Studio apagados. */
+    private function decideSinLaOferta(MarketingMessage $m, bool $negocia): string
+    {
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
+        $this->assertArrayNotHasKey('regeneration', $decide, 'decide no ofrece el contrato');
+        $this->assertNotSame('studio', self::cargaDelToken($decide['decide_token'])['x']['sp']['m'] ?? null);
+
+        return $decide['decide_token'];
+    }
+
+    /** Otro mensaje de la persona en la misma conversación, con su turno abierto: releva al anterior (`superseded`). */
+    private function otroEntrante(string $texto): MarketingMessage
+    {
+        $m = MarketingMessage::create([
+            'conversation_id' => $this->conversation->id,
+            'direction' => MarketingMessage::DIRECTION_INBOUND,
+            'sender_type' => MarketingMessage::SENDER_LEAD,
+            'body' => $texto, 'meta_message_id' => 'wamid.rgc.otro.'.uniqid(), 'status' => 'received',
+        ]);
+        $this->abreTurno($m);
+
+        return $m;
+    }
+
+    /**
+     * Los avisos de la traza desde ahora: [nivel, evento, contexto sin el sobre
+     * de `ChannelLog`].
+     *
+     * @return \Closure(): list<array{string,string,array<string,mixed>}>
+     */
+    private function escuchaLosAvisos(): \Closure
+    {
+        $avisos = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$avisos): void {
+            if (in_array($e->message, ['ultron.commit.regeneration_not_offered', 'ultron.commit.critic_attempt_not_offered'], true)) {
+                $avisos[] = [$e->level, $e->message, array_diff_key($e->context, array_flip(['event', 'service', 'environment', 'release', 'host', 'correlation_id', 'agent_run_id']))];
+            }
+        });
+
+        return function () use (&$avisos): array {
+            $vistos = $avisos;
+            $avisos = [];
+
+            return $vistos;
+        };
     }
 
     private function payload(MarketingMessage $m, string $token, string $borrador, array $critico, ?array $bloque): array

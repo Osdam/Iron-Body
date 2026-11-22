@@ -1254,3 +1254,122 @@ Sin red y sin tocar n8n; 0 si todo cuadra, 1 ante una diferencia, 2 si no lee la
 ### 7.10 Variables, migraciones y configuración
 
 Ninguna: ni migraciones, ni `config/`, ni rutas, ni variables de entorno. La orden gana `--rev` (por defecto S1, como hoy).
+
+
+---
+
+## 8. Correcciones tras las revisiones
+
+21-11-2026 · rama `feat/ultron-studio-h9`, HEAD `808a0b81` al empezar y `e7611629` al terminar (un commit del lead, solo `docs/`; §8.5) (todo lo anterior confirmado; árbol limpio al empezar, salvo las capturas sin seguimiento de `ops/evidencia-h8` y `-h9`, que no son mías y no he tocado) · **sin commit**: todo está en el árbol de trabajo, nada desplegado, sin producción y sin n8n (ni MCP, ni API, ni su base).
+Guía: el encargo del lead (`encargos-regenerar/encargo-be-r6.md`), con las ocho decisiones C1 a C8 que cierran los hallazgos de `informe-reviewer-a4-regenerar.md` (§4 y §5) y de `informe-security-a4-regenerar.md` (§4: R-1, R-4 y R-8); criterio de aceptación, `MATRIZ_CIERRE_V2.md` §5.
+
+### 8.0 Resumen
+
+- **Las ocho, hechas; ninguna se quedó sin poder cumplir.** C3 se comprobó antes de escribirla: `required_plan_id` y `allowed_plan_ids` viajan al redactor con ESOS nombres, dentro de `commercial_turn_policy` (`UltronDecideService::politicaDelTurno()`, `:254`), y `allowed_plan_ids` es el catálogo menos `forbidden_plan_ids` (`CommercialTurnPolicy.php:523`). Lo fija además una prueba nueva: toda clave de `commercial_turn_policy.*` que nombre una nota tiene que venir en `decide`.
+- **Invariantes [C]:**
+  - las dos instantáneas Legacy (`tests/fixtures/ultron-a4/`), en verde y **sin regenerar**;
+  - `n8n/flujos/ultron-studio-s1/` y `-s2/`, **idénticos**: el sha256 de sus 28 ficheros (con las instantáneas), igual antes y después; ningún fixture cambió por C3 (la nota no está en ninguno: `grep` en `n8n/`, vacío);
+  - la puerta `ai/check` sigue siendo de solo lectura (sus pruebas, en verde);
+  - `a4-textos-regenerar.md` lleva ya la nota de C3 corregida (la genera la prueba).
+- **Números:**
+  - rojo antes (133, la versión final de las pruebas con los 8 ficheros de producto puestos a HEAD): 268 pruebas contadas, 13 errores y 18 fallos; siguen en verde, como deben, las que afirman que algo NO cambia (Legacy con el nombre con llaves, la traza con la oferta, el cobro en Legacy, el tope de 25 s);
+  - en verde: las nuevas y las tocadas, 281 (135); el motor, 1 919 (134); Marketing, **6 844** (136: las 6 802 de la ola 5 + 42 nuevas); en PostgreSQL, 411, ninguna omitida (137);
+  - las guardas: 141, con **una** roja, la esperada (138); `pint`: `passed` (139).
+- **Ficheros de producto tocados (8):** `UltronDraftPlaceholders.php`, `UltronPlansOverview.php`, `UltronRegenerationNotes.php`, `UltronDraftDefects.php`, `UltronDraftCheck.php`, `UltronReplyOrigin.php`, `UltronCommitService.php` y `app/Console/Commands/Marketing/UltronOriginReport.php`. Ninguno nuevo. Sin tocar: el compilador, los prompts base, `config/`, las migraciones, las rutas, `SalesConversationReplyService`, `SalesObjectionResponderService`, el guard, `CourtesyRequestService`, el CRM y n8n.
+
+### 8.1 Hallazgo → corrección → prueba
+
+| | Hallazgo | Corrección | Pruebas (rojas antes, 133; verdes después, 135) |
+|---|---|---|---|
+| **C1** | R-1 (un nombre de plan con llaves se reexpande o sale literal) e I-1 (un marcador mal escrito sale por WhatsApp con herramientas) | (1) El nombre pierde las llaves: `UltronPlansOverview::item()` siempre (solo lo usan la lista del modelo y la puerta, que son del Studio) y `UltronDraftPlaceholders::resolve()` en `{{PLAN_NAME}}` **solo con versión del Studio** (`resolve(…, $nombreSinLlaves)`; el commit pasa `$turno['studio']` en sus tres llamadas; la puerta, `true`). (2) La red en `antesDeEnviar()`, solo con `studio`: si lo que va a salir tiene forma de marcador (`looksLikeMarker()`: `{{` o `}}`, `{ PLAN_`, `PLAN_k` suelto, `PLAN_PRICE`/`NAME`/`DURATION` o `APP_LINKS` sueltos, sin distinguir mayúsculas), va el último recurso de la intención, con aviso `ultron.commit.marker_leak` (conversación, acción e intención; sin el texto) y `metadata.server_replaced: ["marker_leak"]`. Sin último recurso (hoy no se alcanza), el texto sin los marcadores (`withoutMarkers()`). (3) Sin versión del Studio, nada: lo de hoy | `UltronA4ListaDelModeloTest`: las dos reproducciones de I-1 (S4 y S5) con `app_links_send` (×2) y sin herramientas (×2: falta la lista y sale la lista fija; en el horario, sin lista, la red); un nombre con llaves en el catálogo (`Plan {{OTRO}}` en la lista; `Plan {{PLAN_PRICE}}`, `{{APP_LINKS}}` y `{{PLAN_2}}`, que la red para; `{{PLAN_NAME}}` con `Plan {{Oro}}`; y con `Plan {{APP_LINKS}}`, que la red para y entonces ni la memoria ni `price_source` dan el plan por entregado); Legacy con el nombre con llaves (×2), igual que hoy. En lo que sale, ni `PLAN_` ni una llave. `UltronDraftPlaceholdersTest` (nueva, unitaria): 13 formas que no salen y 7 que sí; el texto sin marcadores; el nombre sin llaves solo si se pide. `UltronPlansOverviewTest`: `item()` sin llaves |
+| **C2** | I-2 (al borrador típico del turno de precios le llegaba la nota que no le corresponde) | `UltronPlansOverview::verify()`: si el borrador no lleva NINGÚN marcador de la lista, `missing` antes que `name_written` (una línea; la cifra y el marcador inexistente siguen mandando). Como `verify()` es la misma función en la puerta y en el commit, cambia también `metadata.plans_overview.detail` de esos borradores (ver §8.2) | `UltronPlansOverviewTest`: el borrador del 18-11 da `missing`; con un marcador de la lista, el nombre a mano sigue siendo `name_written`. `UltronCheckEndpointTest`: por la puerta, el borrador del 18-11 recibe solo `plans_overview/missing` con la nota N-P1 literal |
+| **C3** | I-3 (la nota del primer plan remitía a `forbidden_plan_ids`, que no viaja) | El texto nuevo del lead, literal, en `UltronRegenerationNotes::N_PS_PLAN` | Las dos que la fijan literal (§8.2) y `UltronCheckEndpointTest::test_cada_nota_remite_a_un_dato_que_el_redactor_recibe`: las claves que nombran las notas (`plans_overview`, `required_plan_id`, `allowed_plan_ids`) vienen todas en `decide`, y ninguna nota nombra `forbidden_plan_ids` |
+| **C4** | I-4 (el 90 % no se calculaba solo con lo que escribió el modelo) | (a) El informe mete las `*_recovered/executed` en el reparto, como respaldo `last_resort`; la regla de la línea base, aparte (`ai.count`/`ai.pct` sobre `ai.baseline_total`, solo las `reply`, y su línea en el texto). (b) Las sustituciones del servidor dentro del camino del modelo son texto del servidor (`UltronReplyOrigin::SERVER_TEXTS`, `server_text`: la última del camino): `plan_price_realigned.fallback` y `length.overflow` se leen de su marca de antes; para el cobro negado (`:1536`), la excusa de precio vaciada y la red de C1, una marca nueva, aditiva y solo con versión del Studio: `metadata.server_replaced` (lista de códigos). El titular y `meets_target` descuentan todo eso | `UltronOriginReportCommandTest`: 9 del modelo + 1 `repeated_reply_recovered` → **90,0 %** (antes, 100 %), con la línea base aparte (9 de 9); una fila de cada sustitución → 2 de 8, con el desglose. `UltronReplyOriginTest`: 13 casos (cada una, las que no lo son y en un respaldo). `UltronA4ListaDelModeloTest`: el commit deja la marca por el endpoint (la red, la excusa vaciada y el cobro negado con versión del Studio; sin ella, ninguna) |
+| **C5** | R-4 (un turno sin la oferta guardaba la traza) | `persist()` recibe si el token de ese turno lleva la oferta (`sp.m = studio`, de `turnoDelStudio()`, que lee el token firmado: vale aunque la versión se revierta antes del commit). Sin la oferta: no se guarda `metadata.regeneration` y queda `ultron.commit.regeneration_not_offered`; un `critic.attempt` de 3 se guarda tal cual con `ultron.commit.critic_attempt_not_offered`. Las filas bloqueadas, que se escriben antes de verificar el token, leen la oferta con `peek()` | `UltronRegenerationCommitTest`: sin negociar y con los prompts apagados (×2), sin traza, con el intento 3 y los dos avisos exactos (y sin el bloque, ninguno); con la oferta y la cadena del Studio y sus prompts apagados tras `decide`, la traza y ningún aviso; una fila bloqueada (`superseded`), con la oferta lleva la traza y sin ella no |
+| **C6** | R-8 (una nota que queda vacía tumbaba la puerta con un 500) | `UltronDraftDefects`: si el nombre queda vacío al sanearlo, su marcador (`PLAN_k`) si es de la lista y, si no, «ese plan»; y si `note()` lanza de todos modos, el defecto va sin nota (y la puerta lo deja en el log: `ultron.check.note_unavailable`, con los códigos). `UltronRegenerationNotes::cleanText()`, el saneo de siempre, a la vista | `UltronCheckEndpointTest`: un plan llamado `{{}}` con un beneficio de otro → **200** (antes, 500) con la nota por su marcador. `UltronDraftDefectsTest`: el marcador o «ese plan»; la nota que lanza (por reflexión). `UltronRegenerationNotesTest`: el saneo |
+| **C7** | m-3, m-7, m-8, m-10 | m-3: los tres comentarios (`UltronPlansOverview` y `UltronRegenerationNotes`, que ya se llaman; `UltronDraftCheck`, que sí dice una cosa del dinero: `price_written`, R-5). m-7: el docblock de la paridad, con las once (E1–E11, la otra dirección de E6 y cuál fija cada prueba). m-8: una segunda prueba del tope de 25 s. m-10: el nombre de la prueba | m-8: `UltronCheckEndpointTest::test_el_tope_de_25_segundos_vale_para_el_segundo_borrador_hasta_el_ttl` (24 s sí; 26, 60 y 119 s no; `TIME_BUDGET_SECONDS` = 25). m-10: `test_con_el_bloque_la_fila_lleva_la_traza_y_sin_el_es_la_misma_fila_sin_la_clave` |
+| **C8** | Los textos fijos nuevos, para el propietario | `docs/…/a4-textos-regenerar.md`, generado y fijado por `UltronRegenerarTextosFijosTest` (`A4_REGENERAR=escribir`): las dos instrucciones del parche del motor con dónde van; las 15 notas, cada una con cuándo sale, su plantilla y un ejemplo relleno; y la expansión con «Plan Valera ($65.000 COP)», «Plan Semana (7 días, $45.000 COP)» y «PLAN DÍA (1 día, $10.000 COP)», y un borrador entero | La prueba falla si el documento y el código no coinciden, si una nota del código no está en el documento o si un texto lleva llaves |
+
+### 8.2 Aserciones existentes cambiadas, y por qué
+
+Ninguna se relaja: cada una fija ahora el valor nuevo exacto, y su porqué es una decisión del lead.
+
+| Fichero · prueba | Antes → ahora | Por qué |
+|---|---|---|
+| `UltronRegenerationNotesTest` (`POLITICA`) y `UltronCheckEndpointTest` (`POLITICA`) | La nota `policy_wrong_first_plan`, literal: «…y no nombres ninguno de forbidden_plan_ids (la persona los rechazo)…» → «…y nombra solo planes de commercial_turn_policy.allowed_plan_ids…» | C3 |
+| `UltronDraftDefectsTest::test_la_lista_solo_cuando_hay_lista_sin_herramientas_y_se_pide_el_precio_o_faltan_planes` | «Tenemos el Plan Valera y el Plan Mensual», pidiendo el precio: `plans_overview/name_written` → `plans_overview/missing` | C2: dos nombres a mano y ningún marcador. **No la previ en el rojo de la primera versión (133a)**: salió en la primera pasada verde; en el rojo final (133) ya está, roja contra HEAD |
+| `UltronOriginReportCommandTest::test_reproduce_el_reparto_de_la_linea_base` | `total` 88 → 89; al primer intento 63,6 → 62,9 %, regeneradas 12,5 → 12,4 %; respaldos 17 (19,3 %) → 18 (20,2 %), con `last_resort: 1`; «fuera del reparto» ya no lleva la recuperada. Se añaden `baseline_total` 88 y lo escrito por el modelo, 67 de 89 (75,3 %) | C4 (a): la recuperada salió. La regla de la línea base no cambia: 71 de 88 (80,7 %) |
+| `…::test_en_postgresql_la_consulta_de_la_linea_base_da_lo_mismo` | Del lado del informe, los respaldos de la consulta se cuentan sin la política **y sin el último recurso**, y se añade `baseline_total` = la suma de la consulta | C4 (a): la consulta C no ve la recuperada; el informe la cuenta aparte |
+| `…::test_los_agregados_y_el_json` | La recuperada del fixture entra: `total` 7 → 8; `ai` gana `baseline_total` (7) y `server_text`, y lo escrito pasa de 57,1 a 50,0 % (4 de 8); respaldos 2 → 3 (`last_resort`); latencia, 6 → 7 muestras (p50 8 → 9); llamadas al modelo, 5 → 6 muestras (media 4,2 → 4,0); «fuera», solo `reply/skipped` | C4 (a) y (b) |
+| `…::test_la_salida_de_texto` | Las líneas de la hora de la visita y de la línea base pasan a «Texto del servidor en el camino del modelo (no cuenta como IA): 4 (visit_hour: 4)» y «Con la regla de la línea base (…): 71 de 88 (80,7 %)»; 67 de 88 → 67 de 89; los porcentajes de arriba; «el último recurso: 1»; «Fuera del reparto» acaba en `no_reply/executed: 3` | C4 |
+| `UltronRegenerationCommitTest` | Solo el nombre de una prueba (m-10) | — |
+| `UltronRegenerarPiezasPurasTest` | `UltronDraftPlaceholders` entra en la guarda de «sin `\p{…}`» | Ampliada: ahí están las expresiones nuevas |
+| `UltronCheckCommitParityTest` | Solo el docblock (m-7) | — |
+
+**Mis propias pruebas, corregidas antes de darlas por buenas** (la versión final es la del rojo 133):
+- (a) Los avisos del log: `shouldHaveReceived(…)->never()` de Mockery no niega (exige al menos uno), así que la prueba «con la oferta, sin avisos» salía roja por la prueba y no por el código. Pasé a escuchar `MessageLogged` (como `UltronCheckEndpointTest`) y comparar los avisos exactos, con su contexto sin el sobre de `ChannelLog`.
+- (b) En C6, un nombre con espacios en los bordes (` { } `) no lo encuentra `plansNamedIn()` (mira la palabra entera): el caso «ese plan» usa el mismo `{{}}` en un turno sin lista.
+- (c) La fila bloqueada no lleva veredicto: su traza tiene `consistent: null`, no `true`.
+
+### 8.3 Contratos
+
+- **`ai/check`:** sin cambios de forma. Cambian dos contenidos, los dos de C2/C3/C6: el detalle de `plans_overview` para un borrador sin marcadores de la lista (`missing`) y el texto de la nota del primer plan. Con un defecto cuya nota no se pudo escribir (no se alcanza con los datos de hoy), `notes` no la lleva.
+- **`commit`:** sin cambios en la entrada ni en la respuesta. En la fila (`marketing_ai_actions.metadata`), solo con versión del Studio y solo cuando ocurre: `server_replaced` (lista de `payment_link_message`, `price_excuse_emptied` y `marker_leak`) y, con la red, `length.action = replaced`. `regeneration` ya no aparece en una fila cuyo token no llevaba la oferta (en el flujo real, S1 no manda el bloque: no cambia nada). Tres avisos nuevos en el log: `ultron.commit.marker_leak`, `ultron.commit.regeneration_not_offered` y `ultron.commit.critic_attempt_not_offered` (y `ultron.check.note_unavailable` en la puerta), todos sin textos.
+- **`ultron:origin-report --json`:** `total` cuenta también las `*_recovered/executed`; `ai` gana `baseline_total` y `server_text: {count, by}`; `ai.count`/`ai.pct` siguen siendo la regla de la línea base (ahora sobre `baseline_total`); `pct_without_visit_hour` se queda, igual a `written_pct`. Nadie lo consume aún fuera de las pruebas (no está desplegado).
+
+### 8.4 Decisiones mías (el encargo no las fija)
+
+1. **`{{PLAN_NAME}}` pierde las llaves solo con versión del Studio.** El encargo pide quitarlas «en el `NAME` de la resolución de `UltronDraftPlaceholders`» y, a la vez, que sin versión del Studio no cambie ni un byte. `resolve()` es la misma en Legacy, así que lleva un tercer argumento y el commit le pasa `$turno['studio']`. En Legacy, un nombre con llaves sale como hoy (R-1 ya lo daba por anterior), y lo fija una prueba. Si el lead prefiere quitarlas también en Legacy, es cambiar las tres llamadas del commit y esa prueba.
+2. **La red va primero en `antesDeEnviar()`**, antes del registro y de la longitud, para que los dos miren lo que sale; y deja `length.action = replaced` (como la rama de la política, m-3 de la ola 2), así el informe no cuenta como «recortado» un texto que no es del modelo.
+3. **La memoria, tras el punto de control.** Si `antesDeEnviar()` cambia el texto (la red, o el desbordamiento; los dos solo con versión del Studio) y el último recurso no nombra el plan del modelo, `planQueSalio` pasa a null: ni la memoria ni `price_source` lo dan por entregado (la regla de G4). Sin esto, con `Plan {{APP_LINKS}}` en `{{PLAN_NAME}}` la respuesta decía que salió el precio del plan 4 **[C: mutación a mano, quitando el bloque cae `test_un_nombre_con_llaves_no_sale_como_marcador` con `price_source` = plan 4; restaurado y `cmp` idéntico]**. **Alcance:** también cubre el desbordamiento, que hoy no se alcanza en el camino normal; Legacy no entra.
+4. **La forma de marcador, sin distinguir mayúsculas** (`plan_1` tampoco sale) y solo con la lista del encargo: una llave suelta en un texto («{lunes a viernes}») sí sale. Las sondas de I-1 no traen otra forma.
+5. **La oferta de una fila bloqueada se lee con `peek()`**, solo si n8n mandó el bloque (un turno sin el bloque no mira el token y su log no cambia). Sin esto, los bloqueos del Studio (`superseded`, la elegibilidad) perdían una traza verdadera.
+6. **«Un tercer intento sin la oferta»** es `critic.attempt` > `UltronDraftCheck::LEGACY_MAX_DRAFTS` (2): S1 nunca pasa de dos.
+7. **`server_text` es la última sustitución del camino** (la que puso el texto que salió), en el orden de `SERVER_TEXTS`; las dos que ya tenían marca (`plan_price_realigned.fallback`, `length.overflow`) se leen de ella, también en filas históricas; las otras tres llevan la nueva. El origen no cambia: la comparación con la línea base sigue siendo la misma.
+8. **En el informe, `total` es todo lo que salió** (las `reply` y las recuperadas), y la regla de la línea base conserva sus nombres de antes (`ai.count`, `ai.pct`), ahora sobre `ai.baseline_total`; así la consulta C de PostgreSQL se sigue comparando cifra a cifra.
+9. **C6, «ese plan»** solo cuando el plan no es de la lista; si lo es, su marcador, aunque el borrador lo nombrara a mano: es como el modelo lo ve en `plans_overview`.
+
+### 8.5 Números
+
+| # | Qué | Resultado |
+|---|---|---|
+| 133a | Las pruebas nuevas y tocadas, en su PRIMERA versión, con `app/` = HEAD | **ROJO:** 220 pruebas, 14 errores, 17 fallos, 1 omitida. Una de las rojas era de la prueba (§8.2, a) |
+| 133 | Las mismas 12 en su versión FINAL. Los 8 ficheros de producto puestos a HEAD con `git show` (copias en el scratchpad), restaurados y comparados con `cmp` (los 8, idénticos) | **ROJO:** 268 pruebas contadas, 13 errores (uno es del proveedor de `UltronReplyOriginTest`, que nombra constantes que HEAD no tiene: sus 13 casos no se cuentan) y 18 fallos, 1 omitida |
+| 135 | Las mismas, en verde (con `--display-warnings`) | **OK (281 pruebas, 10 404 aserciones)**, 1 omitida (solo PostgreSQL). 268 + 13 = 281 |
+| 134a | Motor, antes de `pint` y de ampliar la guarda de PCRE | OK (1 919 pruebas, 38 447 aserciones), 1 omitida |
+| 134 | Motor con el árbol final: `tests/Unit/Marketing/Ultron`, las tres A4, `UltronCheckEndpointTest`, `UltronCheckCommitParityTest`, `UltronRegenerationCommitTest`, `UltronOriginReportCommandTest`, `UltronDecideTest`, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest`, `UltronPromptsN8nCommandTest`, `UltronPromptsN8nS2CommandTest` | **OK (1 919 pruebas, 38 451 aserciones)**, 1 omitida |
+| 136 | `tests/Feature/Marketing tests/Unit/Marketing` | **OK (6 844 pruebas, 60 029 aserciones)**, 1 omitida (solo PostgreSQL): las 6 802 de la ola 5 + 42 nuevas |
+| 137 | PostgreSQL (`UNIT_DB=ultron_studio_lead_ola5`, local y desechable): las cinco de Feature tocadas (`UltronA4ListaDelModeloTest`, `UltronCheckEndpointTest`, `UltronCheckCommitParityTest`, `UltronRegenerationCommitTest`, `UltronOriginReportCommandTest`) y las otras dos A4 | **OK (411 pruebas, 4 300 aserciones)**, ninguna omitida (corre la consulta C real) |
+| 138 | Guardas: los 16 ficheros de la 125 | 141 pruebas, 182 972 aserciones, **1 fallo esperado** (`OutreachIsolationTest::test_la_puerta_de_diff…`) |
+| 139 | `vendor/bin/pint --test` sobre los 20 PHP tocados o nuevos | `passed` (antes, `pint` solo reordenó los `use` y un espacio tras `!` en dos pruebas) |
+| — | sha256 de `n8n/flujos/ultron-studio-s1/`, `-s2/` y `tests/fixtures/ultron-a4/` (28 ficheros), antes y después | idénticos |
+| — | `\p{` en las líneas añadidas a `app/` | ninguna expresión: solo un comentario que dice que no lo llevan |
+
+**Qué demuestra el rojo (133) contra HEAD [C]:**
+- **R-8**, que `security` no llegó a provocar ([S] en su informe): la puerta respondía **500** con `InvalidArgumentException: Un parámetro de texto de la nota queda vacío`, con un plan llamado `{{}}`.
+- **R-1:** con `Plan {{OTRO}}` en el catálogo, la lista salía «Claro. Tenemos Plan {{OTRO}} ($65.000 COP)…».
+- **I-2:** el borrador del 18-11 daba `name_written` (y la nota N-P3).
+- **I-4 (a):** con 9 del modelo y 1 recuperada, el reparto de HEAD tenía 9 respuestas, no 10 (la recuperada quedaba fuera: 9 de 9, el 100 % del revisor).
+- **I-1:** sus cuatro pruebas caen en HEAD por la pieza que falta (`looksLikeMarker()`, que usa la comprobación de la prueba), no por el texto que sale; que salía literal lo reprodujo el revisor (sondas S4 y S5, [C]).
+- **C5:** sin la oferta, HEAD guardaba la traza y no avisaba.
+
+**La puerta de diff del H9** nombra **25** ficheros. El único nuevo frente a la 125 es `app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php`, de la ola 5 (ya confirmado en `cd431e20`). **Esta ronda no añade ninguno:** los siete de `app/Services/Marketing/Ultron/` que toca ya estaban, y el comando del informe no es zona de la puerta. Ningún fichero nuevo de producto.
+
+**Durante el trabajo entró un commit del lead en la rama** (`e7611629`, solo `docs/`: la regla de beneficios contra el catálogo real y la evidencia 132b). No toca nada de esta ronda (`git diff 808a0b81 e7611629 -- backend/app backend/tests backend/routes backend/config n8n`, vacío), así que «HEAD» en la 133 es, para los ficheros de producto, el mismo contenido que `808a0b81`.
+
+### 8.6 Lo que no comprobé, y adyacentes (anotados, sin tocar)
+
+- **[S] El modelo:** que obedezca la nota nueva del primer plan y la de la lista con el borrador del 18-11 (aquí no corre ningún modelo).
+- **El PCRE 10.39 de producción:** las tres expresiones nuevas (`UltronDraftPlaceholders`) son alternativas de literales con `\b`, `\s*` y una clase, sin cuantificadores anidados ni `\p{…}` (lo comprueba la guarda ampliada), pero no las he pasado por el PCRE del servidor: es la sonda del lead.
+- **El cobro negado con versión del Studio** lo probé con la configuración de prueba de Wompi y HTTP falso (como `PaymentIntentRoutingTest`); los enlaces de pago siguen apagados en producción.
+- **Sin último recurso**, la red manda el texto sin marcadores: solo lo prueba la pieza pura (`withoutMarkers()`); por el endpoint no se alcanza (todos los últimos recursos pasan el guard).
+- **`length.overflow` sin último recurso** (el texto del modelo sale igual): `classify()` lo contaría como texto del servidor. Hoy no se alcanza (el último recurso más largo mide 102 y el tope mínimo es 160).
+- **Adyacente, misma familia que I-4 b, no señalado allí:** otras sustituciones enteras del servidor en el camino del modelo siguen contando como del modelo: `sinNegarUnCobroDisponible()` cuando no queda nada (`SIN_ENLACE_PERO_SIN_MENTIR`, `:4282`), `sinConfirmarUnaCortesiaQueNadieConfirmo()` (`CORTESIA_SIN_CONFIRMAR`/`NADA_QUE_CONFIRMAR`, `:3928`) y `sinConstanciaDeUnaCortesiaQueNoSeRegistro()` (`:4088`). Con el mismo mecanismo (`anotarTextoDelServidor()`) es una línea cada una.
+- **Adyacente (R-1):** la lista fija (`respaldoDePrecios()`) pone `trim($plan->name)` sin quitar llaves. Con `{{…}}` la para la red; una llave suelta en un nombre sí saldría en la lista fija. No es de C1 (que nombra `item()` y `resolve()`).
+- **Fuera, como pide el encargo:** m-1, m-2, m-4, m-5, m-6, m-9; R-2, R-3, R-5, R-6 y R-7.
+- **Para `tester`:** la red con el saludo repetido recortado o con la retoma de la visita pegada (textos que añade el servidor después de la política); un nombre del CRM que ya lleva `PLAN_` sin llaves (también lo para la red); la fila bloqueada por elegibilidad (no por `superseded`) con el bloque; un token caducado en una fila bloqueada con el bloque (`peek()` falla: sin traza, con su aviso y la línea `ultron.decide_token.rejected`).
+- **Para `security`:** los avisos nuevos llevan ids, la intención y números; ningún texto. `metadata.server_replaced` solo lleva códigos del vocabulario cerrado. La puerta sigue sin escribir (C6 solo añade una línea de log).
+
+### 8.7 Variables, migraciones y configuración
+
+Ninguna: ni migraciones, ni `config/`, ni rutas, ni variables de entorno.

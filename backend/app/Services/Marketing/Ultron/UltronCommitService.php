@@ -684,7 +684,8 @@ class UltronCommitService
 
         // 10) El plan y su precio REAL, leídos ahora.
         $plan = $this->resolvePlan($proposal['recommended_plan_id'] ?? null, $sanitized['reply']);
-        $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+        // Con versión del Studio, el nombre del plan sin llaves (correcciones, C1; R-1): Legacy, tal cual.
+        $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan, $turno['studio']);
 
         /*
          * 10.pre) TONO. La persona debe sentir que la ayudan, no que la empujan.
@@ -863,7 +864,7 @@ class UltronCommitService
                 ]);
 
                 $plan = $forzado;
-                $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+                $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan, $turno['studio']);
             }
         }
 
@@ -958,7 +959,7 @@ class UltronCommitService
                     ]);
                     $realineado = ['from' => (int) $plan->id, 'to' => (int) $alineado->id];
                     $plan = $alineado;
-                    $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan);
+                    $replyFinal = $this->placeholders->resolve($sanitized['reply'], $plan, $turno['studio']);
                 }
             }
             if ($realineado === null) {
@@ -1368,7 +1369,7 @@ class UltronCommitService
             'customer_lifecycle' => $perfil['customer_lifecycle'],
             'novelty_max_similarity' => $previas === [] ? null
                 : round(max(array_map(fn ($b) => $this->novelty->similarity($replyFinal, $b), $previas)), 2),
-        ]);
+        ], $turno['studio']);
 
         $this->applyPhase($conversation, $nextState, $proposal, $plan);
         $this->memory->remember($conversation->fresh(), $decision, (string) $message->body);
@@ -1536,6 +1537,10 @@ class UltronCommitService
             $replyFinal = ($cobro['nego_el_cobro'] ?? null) !== null && $plan !== null
                 ? UltronFormalReplies::segun($turno['tono'], $this->replies->paymentLinkMessage($plan, (float) ($cobro['amount'] ?? 0), (string) $cobro['payment_url']))
                 : $this->conCheckout($replyFinal, $cobro, $turno['tono']);
+            // El texto curado del cobro sustituyó el borrador entero: es texto del servidor (correcciones, C4 b; solo con versión del Studio).
+            if ($turno['studio'] && ($cobro['nego_el_cobro'] ?? null) !== null && $plan !== null) {
+                $this->anotarTextoDelServidor($action, UltronReplyOrigin::SERVER_PAYMENT_LINK);
+            }
 
             /*
              * Y la fila cuenta que el cobro salió. Se ejecutó —hay referencia y
@@ -1625,7 +1630,7 @@ class UltronCommitService
          * frase y sale lo demás; si queda claro que la persona pregunta por
          * un precio, el precio actual se afirma abajo desde el catálogo.
          */
-        $replyFinal = $this->sinExcusasDePrecio($conversation, $replyFinal, $action, (string) $sanitized['intent'], $turno['tono']);
+        $replyFinal = $this->sinExcusasDePrecio($conversation, $replyFinal, $action, (string) $sanitized['intent'], $turno['tono'], $turno['studio']);
 
         /*
          * UNA CLASE QUE NO EXISTE TAMPOCO SALE.
@@ -2082,6 +2087,7 @@ class UltronCommitService
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
         // turno, no al primero que encuentre el despachador.
+        $antesDelControl = $replyFinal;
         $replyFinal = $this->antesDeEnviar($conversation, $action, $replyFinal, (string) $sanitized['intent'], $turno, $longitud);
         $send = $this->dispatcher->dispatchWhatsapp(
             $lead->fresh(),
@@ -2094,6 +2100,19 @@ class UltronCommitService
 
         $outcome = $send['sent'] ? 'sent' : ($send['dry_run'] ? 'dry_run' : 'failed');
         $this->finalise($action, $outcome, $send);
+
+        /*
+         * Si el punto de control cambió el texto (la red de los marcadores, C1, o
+         * el desbordamiento; los dos, solo con versión del Studio), lo que salió
+         * es su último recurso: el plan del modelo no salió si no lo nombra, y
+         * ni la memoria ni `price_source` lo dan por entregado (la regla de G4,
+         * la de la sustitución por la política). Legacy no entra: ahí el punto
+         * de control nunca cambia el texto.
+         */
+        if ($turno['studio'] && $replyFinal !== $antesDelControl && $planQueSalio !== null
+            && ! in_array((int) $planQueSalio->id, CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo), true)) {
+            $planQueSalio = null;
+        }
 
         // 14.bis) El link de pago, si el modelo lo pidió y Laravel lo permite: se
         // genera con el precio del catálogo y sale como mensaje propio DESPUÉS de
@@ -2523,6 +2542,7 @@ class UltronCommitService
                 'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500),
                 'tools_not_run_on_fallback' => $descartadas ?: null,
             ], fn ($v) => $v !== null), $causa['metadata']),
+            $turno['studio'],
         );
 
         if ($necesitaPersona) {
@@ -2752,7 +2772,7 @@ class UltronCommitService
             'model_intent' => $proposal['intent'] ?? null,
             'model_tools_requested' => ((array) ($proposal['tools_requested'] ?? [])) ?: null,
             'discarded_draft' => mb_substr((string) ($proposal['reply_draft'] ?? ''), 0, 500) ?: null,
-        ], fn ($v) => $v !== null));
+        ], fn ($v) => $v !== null), $delStudio['studio']);
 
         $ejecutadas = [];
         if ($resolver) {
@@ -2991,8 +3011,29 @@ class UltronCommitService
         ?array $studio,
         ?array $studioPrompts,
         array $extraMetadata = [],
+        bool $regeneracionOfrecida = false,
     ): MarketingAiAction {
         $proposal = (array) ($payload['proposal'] ?? []);
+
+        /*
+         * LA TRAZA, SOLO CON LA OFERTA FIRMADA (correcciones, C5; R-4 de
+         * seguridad). `$regeneracionOfrecida` = el token de `decide` de este turno
+         * lleva `sp.m = studio`, que es cuando `decide` ofreció `regeneration`
+         * (aunque la versión se haya revertido después: lo que hizo n8n es
+         * verdad). Sin la oferta, el bloque es una anomalía de n8n: no se guarda
+         * y queda un aviso. Un tercer intento del revisor sin la oferta (S1 solo
+         * hace dos) se guarda tal cual, también con su aviso. Nada se ramifica
+         * por esto: es traza.
+         */
+        if (! $regeneracionOfrecida) {
+            if (($payload['regeneration'] ?? null) !== null) {
+                ChannelLog::warning('ultron.commit.regeneration_not_offered', ['conversation_id' => (int) $conversation->id]);
+            }
+            $intento = is_array($extraMetadata['critic'] ?? null) ? ($extraMetadata['critic']['attempt'] ?? null) : null;
+            if (is_int($intento) && $intento > UltronDraftCheck::LEGACY_MAX_DRAFTS) {
+                ChannelLog::warning('ultron.commit.critic_attempt_not_offered', ['conversation_id' => (int) $conversation->id, 'attempt' => $intento]);
+            }
+        }
 
         $metadata = array_merge([
             'message_id' => (int) $message->id,
@@ -3023,7 +3064,7 @@ class UltronCommitService
              * en ESTA fila para `consistent`. Sin bloque es null y desaparece:
              * la fila queda como hoy.
              */
-            'regeneration' => UltronRegenerationTrace::forMetadata($payload['regeneration'] ?? null, $extraMetadata['critic'] ?? null),
+            'regeneration' => $regeneracionOfrecida ? UltronRegenerationTrace::forMetadata($payload['regeneration'] ?? null, $extraMetadata['critic'] ?? null) : null,
         ], $extraMetadata);
 
         try {
@@ -4439,6 +4480,7 @@ class UltronCommitService
             // Antes del token: no hubo respuesta que observar (§B.6).
             null,
             array_merge(['blocked_reason' => $reason], $extra),
+            $this->ofrecioLaRegeneracionAntesDelToken($payload, $conversation, $message),
         );
 
         $action->forceFill(['status' => 'skipped'])->save();
@@ -5054,7 +5096,7 @@ class UltronCommitService
      * otra explicación. Si el mensaje se queda vacío, sale el respaldo de la
      * intención; si sigue habiendo texto, sale lo que queda.
      */
-    private function sinExcusasDePrecio(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, string $intent, ?string $tono): string
+    private function sinExcusasDePrecio(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, string $intent, ?string $tono, bool $studio = false): string
     {
         if ($this->style->priceExcuseIn($respuesta) === null) {
             return $respuesta;
@@ -5083,7 +5125,13 @@ class UltronCommitService
 
         // Un mensaje vacío no es un mensaje: sale el respaldo de la intención.
         if ($limpio === '') {
-            return $this->ultimoRecurso($conversation, $intent, null, $tono) ?? $respuesta;
+            $ultimo = $this->ultimoRecurso($conversation, $intent, null, $tono);
+            // Y es texto del servidor (correcciones, C4 b; solo con versión del Studio).
+            if ($studio && $ultimo !== null) {
+                $this->anotarTextoDelServidor($action, UltronReplyOrigin::SERVER_PRICE_EXCUSE);
+            }
+
+            return $ultimo ?? $respuesta;
         }
 
         return $limpio;
@@ -5502,12 +5550,35 @@ class UltronCommitService
      * el texto) y un aviso, y sale igual. Antes un texto que tutea que un
      * turno mudo; reescribir la ficha no es de este código.
      *
+     * LA RED DE LOS MARCADORES (correcciones de «regenerar antes de sustituir»,
+     * C1; R-1 de seguridad e I-1 del revisor). Con versión del Studio, NINGÚN
+     * MARCADOR SALE POR WHATSAPP: si lo que va a salir tiene forma de marcador
+     * ({@see UltronDraftPlaceholders::looksLikeMarker()}: un `PLAN_1` mal
+     * escrito en un turno con herramientas, un nombre del CRM con llaves…), va
+     * el último recurso de la intención, con un aviso en el log (sin el texto)
+     * y la constancia en la fila (`metadata.server_replaced`), que el informe de
+     * origen cuenta como texto del servidor. Si no hubiera último recurso (hoy
+     * no se alcanza), el texto sin los marcadores: antes eso que un marcador o
+     * que callar. Va primero, para que el registro y la longitud miren lo que de
+     * verdad sale. Sin versión del Studio no mira nada: Legacy, igual.
+     *
      * @param  array{studio:bool,tope:?int,tono:?string}  $turno
      * @param  array{action:string,from:int,dropped:int}|null  $longitud  lo que hizo el camino con el texto
      */
     private function antesDeEnviar(MarketingConversation $conversation, MarketingAiAction $action, string $texto, string $intent, array $turno, ?array $longitud): string
     {
         $tope = $turno['tope'];
+        if (($turno['studio'] ?? false) && UltronDraftPlaceholders::looksLikeMarker($texto)) {
+            ChannelLog::warning('ultron.commit.marker_leak', [
+                'conversation_id' => (int) $conversation->id, 'ai_action_id' => (int) $action->id, 'intent' => $intent,
+            ]);
+            $alternativa = $this->ultimoRecurso($conversation, $intent, $tope, $turno['tono'] ?? null);
+            $desde = UltronReplyFitter::measure($texto);
+            $texto = $alternativa !== null && ! UltronDraftPlaceholders::looksLikeMarker($alternativa) ? $alternativa : UltronDraftPlaceholders::withoutMarkers($texto);
+            // La traza de la longitud dice que el texto se SUSTITUYÓ, con la medida del que no salió (como la rama de la política).
+            $longitud = ['action' => 'replaced', 'from' => $longitud['from'] ?? $desde, 'dropped' => 0];
+            $this->anotarTextoDelServidor($action, UltronReplyOrigin::SERVER_MARKER_LEAK);
+        }
         $marcas = UltronFormalReplies::aplica($turno['tono'] ?? null) ? UltronRegisterDetector::tuteo($texto, $this->knowledge->activePlans()) : [];
         if ($marcas !== []) {
             ChannelLog::warning('ultron.commit.register_fallback_mismatch', [
@@ -5536,6 +5607,44 @@ class UltronCommitService
         $action->forceFill(['metadata' => $meta])->save();
 
         return $texto;
+    }
+
+    /**
+     * Anota en la fila que el servidor puso el texto dentro del camino del
+     * modelo (correcciones, C4 b; I-4 del revisor): `metadata.server_replaced`,
+     * los códigos de {@see UltronReplyOrigin::SERVER_REPLACED}, sin repetir y
+     * en el orden en que ocurrieron. Aditiva: quien llama solo lo hace con
+     * versión del Studio, así que en Legacy la fila queda como hoy.
+     */
+    private function anotarTextoDelServidor(MarketingAiAction $action, string $codigo): void
+    {
+        $meta = is_array($action->metadata) ? $action->metadata : [];
+        $anotadas = is_array($meta['server_replaced'] ?? null) ? $meta['server_replaced'] : [];
+        if (! in_array($codigo, $anotadas, true)) {
+            $anotadas[] = $codigo;
+        }
+        $meta['server_replaced'] = $anotadas;
+        $action->forceFill(['metadata' => $meta])->save();
+    }
+
+    /**
+     * ¿Ofreció `decide` la regeneración en este turno? Para las filas que se
+     * escriben ANTES de verificar el token (los bloqueos; correcciones, C5): la
+     * oferta se lee del token FIRMADO con `peek()` (la firma, la caducidad y el
+     * par conversación/mensaje; el mundo no importa: es lo que dijo `decide`
+     * entonces), con la misma regla que {@see turnoDelStudio()}: `sp.m =
+     * studio`. Solo si n8n mandó el bloque; si no, no hay nada que guardar y no
+     * se mira el token.
+     */
+    private function ofrecioLaRegeneracionAntesDelToken(array $payload, MarketingConversation $conversation, MarketingMessage $message): bool
+    {
+        if (($payload['regeneration'] ?? null) === null) {
+            return false;
+        }
+        $token = $this->tokens->peek($payload['decide_token'] ?? null, (int) $conversation->id, (int) $message->id);
+        $sp = $token['extra']['sp'] ?? null;
+
+        return $token['valid'] && is_array($sp) && ($sp['m'] ?? null) === UltronPromptStamp::MODE_STUDIO;
     }
 
     /**

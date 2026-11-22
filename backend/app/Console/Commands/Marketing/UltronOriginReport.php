@@ -20,18 +20,29 @@ use Throwable;
  * el 90 % de generación por IA como objetivo de calidad, y medir también
  * latencia y costo).
  *
- * EL REPARTO es el de la consulta de la línea base
- * (`ops/comprobacion-produccion/origen-respuestas.sql`, C): las filas `reply`
- * con estado `executed` del motor (`source_type = inbound_message`), cada una
- * clasificada con {@see UltronReplyOrigin::classify()}, que sigue sus mismas
- * reglas. Lo demás que deja el commit (bloqueos, rendiciones mudas, la
- * respuesta repetida recuperada…) va en una línea aparte. Las filas sin
- * `source_type` (Legacy, el enrutador) no son turnos de ULTRON y no cuentan.
+ * EL REPARTO son las respuestas que SALIERON: las filas `reply` con estado
+ * `executed` del motor (`source_type = inbound_message`), las de la consulta de
+ * la línea base (`ops/comprobacion-produccion/origen-respuestas.sql`, C), y
+ * además las `*_recovered` ejecutadas (la respuesta repetida o la reventa que
+ * el commit sustituyó por su último recurso: salieron, y como respaldo;
+ * correcciones, C4 a). Cada una, clasificada con
+ * {@see UltronReplyOrigin::classify()}, que sigue las reglas de la consulta. Lo
+ * demás que deja el commit (bloqueos, rendiciones mudas…) va en una línea
+ * aparte. Las filas sin `source_type` (Legacy, el enrutador) no son turnos de
+ * ULTRON y no cuentan.
+ *
+ * EL 90 % SE JUZGA CON LO QUE ESCRIBIÓ EL MODELO (C4; I-4 del revisor): las del
+ * modelo menos el texto del servidor dentro de su camino (la hora de la visita
+ * y las sustituciones de `UltronReplyOrigin::SERVER_TEXTS`), sobre todo el
+ * reparto. La cifra con la regla de la línea base (solo las `reply`, y ese
+ * texto del servidor como del modelo) queda en su línea aparte, para poder
+ * compararla con la de antes.
  *
  * LO QUE DICE: el total; el porcentaje escrito por la IA frente al 90 % y,
  * aparte, el del primer intento; las reescrituras por autor (servidor o
- * revisor) y por código; los respaldos por causa; los recortes; la hora de la
- * visita (texto del servidor que la línea base cuenta como del modelo); la
+ * revisor) y por código; los respaldos por causa; los recortes; el texto del
+ * servidor en el camino del modelo, por causa (la hora de la visita y las
+ * sustituciones, que la línea base cuenta como del modelo); la
  * latencia p50, p95 y máxima del entrante al saliente (`created_at` de los dos
  * mensajes, percentil por rango más cercano); las llamadas al modelo por turno
  * (1 + redacciones + revisores) y las comprobaciones del servidor; los tokens y
@@ -65,6 +76,9 @@ class UltronOriginReport extends Command
 
     /** El universo de la consulta de la línea base. */
     private const TIPO = 'reply';
+
+    /** Las que el commit sustituyó por su último recurso (`repeated_reply_recovered`, `resell_blocked_recovered`): salieron, y entran en el reparto (C4 a). */
+    private const RECUPERADA = '_recovered';
 
     private const ESTADO = 'executed';
 
@@ -167,7 +181,7 @@ class UltronOriginReport extends Command
                 $tipo = (string) $a->action_type;
                 $estado = (string) $a->status;
                 $meta = is_array($a->metadata) ? $a->metadata : [];
-                if ($tipo !== self::TIPO || $estado !== self::ESTADO) {
+                if (($tipo !== self::TIPO && ! str_ends_with($tipo, self::RECUPERADA)) || $estado !== self::ESTADO) {
                     $clave = (preg_match(self::CODIGO, $tipo) === 1 ? $tipo : 'otro').'/'.(preg_match(self::CODIGO, $estado) === 1 ? $estado : 'otro');
                     $fuera[$clave] = ($fuera[$clave] ?? 0) + 1;
 
@@ -175,6 +189,7 @@ class UltronOriginReport extends Command
                 }
                 $saliente = $meta['outbound']['message_id'] ?? null;
                 $turnos[] = [
+                    'linea_base' => $tipo === self::TIPO,
                     'origen' => UltronReplyOrigin::classify($meta, $tipo),
                     'entrante' => is_int($a->source_event_id) || ctype_digit((string) $a->source_event_id) ? (int) $a->source_event_id : null,
                     'saliente' => is_int($saliente) ? $saliente : null,
@@ -187,10 +202,17 @@ class UltronOriginReport extends Command
         $respaldos = array_filter($origenes, fn (array $o) => $o['origin'] === UltronReplyOrigin::FALLBACK);
         $cuenta = fn (array $lista, string $intento) => count(array_filter($lista, fn (array $o) => $o['attempt'] === $intento));
         $horaDeLaVisita = count(array_filter($delModelo, fn (array $o) => $o['server_text'] === UltronReplyOrigin::SERVER_VISIT_HOUR));
-        $pctIa = self::pct(count($delModelo), $total);
-        // Lo que de verdad escribió el modelo: sin la hora de la visita, que la escribe el servidor desde la fila del CRM.
-        // El objetivo del 90 % se juzga con esto, no con la regla de la línea base, que la contaba como del modelo (lead, 21-11).
-        $escritoPorLaIa = count($delModelo) - $horaDeLaVisita;
+        $textoDelServidor = array_values(array_filter(array_column($delModelo, 'server_text'), 'is_string'));
+        /*
+         * La regla de la línea base, aparte: solo las `reply` (la consulta no ve
+         * las recuperadas) y el texto del servidor de su camino como del modelo.
+         * Todas las del modelo son `reply`: una recuperada es siempre respaldo.
+         */
+        $totalLineaBase = count(array_filter($turnos, fn (array $t) => $t['linea_base']));
+        $pctIa = self::pct(count($delModelo), $totalLineaBase);
+        // Lo que de verdad escribió el modelo: sin el texto del servidor de su camino (la hora de la visita, desde la
+        // fila del CRM, y las sustituciones de C4 b), sobre todo lo que salió. El 90 % se juzga con esto (lead, 21-11; C4).
+        $escritoPorLaIa = count($delModelo) - count($textoDelServidor);
         $pctEscrito = self::pct($escritoPorLaIa, $total);
 
         return [
@@ -202,8 +224,10 @@ class UltronOriginReport extends Command
             'total' => $total,
             'traced' => count(array_filter($origenes, fn (array $o) => $o['traced'])),
             'ai' => [
+                // La regla de la línea base: las del modelo sobre las `reply`.
                 'count' => count($delModelo),
                 'pct' => $pctIa,
+                'baseline_total' => $totalLineaBase,
                 'written_count' => $escritoPorLaIa,
                 'written_pct' => $pctEscrito,
                 'target_pct' => self::TARGET_PCT,
@@ -213,6 +237,8 @@ class UltronOriginReport extends Command
                 'unknown_attempt' => self::parte($cuenta($delModelo, UltronReplyOrigin::ATTEMPT_UNKNOWN), $total),
                 'trimmed' => count(array_filter($delModelo, fn (array $o) => $o['trimmed'])),
                 'visit_hour' => $horaDeLaVisita,
+                'server_text' => ['count' => count($textoDelServidor), 'by' => self::enOrden(self::frecuencias($textoDelServidor), UltronReplyOrigin::SERVER_TEXTS)],
+                // El mismo que `written_pct` (lo era ya con la hora de la visita sola); se queda por compatibilidad.
                 'pct_without_visit_hour' => $pctEscrito,
             ],
             'rewrites' => self::reescrituras($origenes),
@@ -416,8 +442,10 @@ class UltronOriginReport extends Command
         $this->line(sprintf('    al primer intento: %s · regeneradas: %s · intento sin dato: %s',
             self::conPct($ia['first_attempt']), self::conPct($ia['regenerated']), self::conPct($ia['unknown_attempt'])));
         $this->line(sprintf('    Recortadas (sin su pregunta final): %d', $ia['trimmed']));
-        $this->line(sprintf('    La hora de la visita (la escribe el servidor desde el CRM; no cuenta como IA): %d · con la regla de la línea base, que la contaba como del modelo: %d (%s)',
-            $ia['visit_hour'], $ia['count'], self::porciento($ia['pct'])));
+        $this->line(sprintf('    Texto del servidor en el camino del modelo (no cuenta como IA): %d%s',
+            $ia['server_text']['count'], $ia['server_text']['by'] === [] ? '' : ' ('.self::lista($ia['server_text']['by']).')'));
+        $this->line(sprintf('    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): %d de %d (%s)',
+            $ia['count'], $ia['baseline_total'], self::porciento($ia['pct'])));
 
         $re = $i['rewrites'];
         $nombres = [UltronReplyOrigin::BY_SERVER => 'servidor', UltronReplyOrigin::BY_CRITIC => 'revisor', UltronReplyOrigin::BY_UNKNOWN => 'sin dato'];

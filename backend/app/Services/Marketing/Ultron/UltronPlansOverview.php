@@ -35,8 +35,9 @@ use InvalidArgumentException;
  *  - {@see self::verify()}: si la lista del borrador vale, o por qué no
  *    (los seis detalles de §4.4).
  *
- * Nadie la llama todavía para la lista del modelo (ola 1: piezas sin
- * cablear); `respaldoDePrecios()` sí, para su selección.
+ * La llaman `decide` (la lista que ve el modelo, firmada en `po`), el commit
+ * (expandirla y juzgarla), la comprobación `ai/check` (medirla y señalar sus
+ * defectos) y `respaldoDePrecios()` (su selección).
  *
  * PURA: sin base de datos, sin config, sin reloj y sin log. El catálogo
  * (`activePlans()`) y los `Plan` los pasa quien llama. Sin `\p{…}` en las
@@ -254,10 +255,15 @@ final class UltronPlansOverview
      *
      * Lee los atributos del `Plan` que pasa quien llama (leído en ese
      * momento: el precio puede haber cambiado desde `decide`); no consulta.
+     *
+     * El nombre, SIN LLAVES (correcciones de «regenerar antes de sustituir»,
+     * C1; R-1 de seguridad): un `{{PLAN_PRICE}}` o un `{{APP_LINKS}}` escrito
+     * en el nombre en el CRM no se reexpande con lo de otro plan ni con los
+     * enlaces. Lo que quede con forma de marcador lo para la red del commit.
      */
     public static function item(Plan $plan): string
     {
-        $nombre = trim((string) $plan->name);
+        $nombre = UltronDraftPlaceholders::nameWithoutBraces((string) $plan->name);
         $precio = (new SalesConversationReplyService)->formatCop((float) $plan->price);
         $dias = (int) $plan->duration_days;
         if (self::isMonthly($dias)) {
@@ -316,7 +322,12 @@ final class UltronPlansOverview
      * no la fija): primero lo que en el commit acaba en un 422 y en la
      * rendición —`unknown_marker` (marcador desconocido) y `price_written`
      * (el validador tira cualquier cifra)—; después la estructura de la
-     * lista en el orden de §4.4: `mixed`, `name_written`, `missing`.
+     * lista en el orden de §4.4: `mixed`, `name_written`, `missing`. Con una
+     * excepción (correcciones, C2; I-2 del revisor): si el borrador no lleva
+     * NINGÚN marcador de la lista, `missing` antes que `name_written`. Es el
+     * borrador típico del turno de precios (un plan a mano con
+     * `{{PLAN_PRICE}}`): lo que le falta es la lista, y quitarle el nombre
+     * dejaba otro borrador que volvía a dar `missing`.
      *
      * @param  list<int>  $po  la lista firmada (vacía sin lista)
      * @param  array<int,array<string,mixed>>  $activePlans  el catálogo: los nombres de los planes de la lista
@@ -346,6 +357,9 @@ final class UltronPlansOverview
         $deUnPlan = [UltronDraftPlaceholders::PRICE, UltronDraftPlaceholders::NAME, UltronDraftPlaceholders::DURATION];
         if ($validos !== [] && (array_intersect($nombres, $deUnPlan) !== [] || count($validos) !== count(array_unique($validos)))) {
             return self::MIXED;
+        }
+        if ($validos === []) {
+            return self::MISSING;
         }
         $deLaListaEnElCatalogo = array_values(array_filter($activePlans, fn (array $p) => in_array((int) $p['id'], $po, true)));
         if (CommercialTurnPolicy::plansNamedIn($raw, $deLaListaEnElCatalogo) !== []) {

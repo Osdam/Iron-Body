@@ -48,9 +48,14 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *  - `benefit_misattributed` ⇔ la violación `policy_benefit_misattributed`.
  *
  * LAS EXCEPCIONES, UNA A UNA (hecho H7 del plan: el commit pega o retira texto
- * antes de medir, y decide sobre el mundo de ese instante). Las tres primeras
- * se ejercitan abajo, cada una con su prueba que fija la divergencia exacta; las
- * demás quedan declaradas aquí con su porqué, sin prueba propia:
+ * antes de medir, y decide sobre el mundo de ese instante). SON ONCE, E1 a E11
+ * (m-7 del revisor: este docblock decía siete y eran nueve; E10 y E11 se
+ * añadieron en las correcciones tras las revisiones). E1 a E3 se ejercitan
+ * abajo, cada una con su prueba que fija la divergencia exacta; E10 la fija la
+ * suya en `UltronA4ListaDelModeloTest`; las demás quedan declaradas aquí con su
+ * porqué, sin prueba propia. En ninguna sale un texto peor que sin la
+ * comprobación: lo peor es una reescritura perdida (E1, E4, E6, E9, E10, E11) o
+ * una llamada de más (E2, E3, E5 y la otra dirección de E6):
  *
  *  E1. Un plan de la lista deja de venderse entre la comprobación y el commit
  *      (H14): la comprobación no lo ve (no lo arregla una reescritura) y el
@@ -79,7 +84,12 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *      puede bajarla a `unknown` o el saludo puro la vuelve `greeting`), con su
  *      política (la memoria pudo cambiar) y sin herramientas ejecutadas ni
  *      relevo autorizado en el turno; la comprobación mira la intención del
- *      borrador y si `decide` ofreció la lista (`po`).
+ *      borrador y si `decide` ofreció la lista (`po`). Va en las dos
+ *      direcciones: casi siempre es más laxa, pero cuando la intención del
+ *      estratega no es de las del panorama, la comprobación pide la lista
+ *      porque la persona preguntó el precio (`preguntaPorPrecio`) y el commit
+ *      no la habría exigido: una llamada de más, hacia lo que pidió el
+ *      propietario (H4-10).
  *  E7. Un borrador que el commit tumba ANTES (URL, datos de tarjeta, pago o
  *      membresía inventados, guard de contenido, presión, transición ilegal,
  *      efecto sin autoridad) no llega a medirse: el 422 no es por estas
@@ -110,6 +120,20 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *  E9.  La memoria se lee unos segundos antes que en el commit: un objetivo
  *       que caduca justo entre los dos (horas de antigüedad) lo verían
  *       distinto. Sin prueba propia.
+ *
+ * CORRECCIONES TRAS LAS REVISIONES (encargo `encargo-be-r6.md`):
+ *  E10. Un marcador MAL ESCRITO (`PLAN_1` sin llaves, `{PLAN_1}`) en un turno
+ *       con herramientas (I-1 del revisor): ni la comprobación ni el commit
+ *       miran la lista con herramientas (G1.2), así que la comprobación dice
+ *       `[]`; el commit lo para en el punto de control (C1: la red de los
+ *       marcadores) y manda el último recurso, con `metadata.server_replaced`.
+ *       Una reescritura perdida, no un texto peor: antes salía literal. Lo fija
+ *       `UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_no_sale_con_herramientas`.
+ *  E11. «Profesional» y los enlaces de la app ya enviados hace menos de una
+ *       hora (H4-12 b, anterior a este cambio): la comprobación cuenta los
+ *       enlaces (E3), y el commit pega `LINKS_ALREADY_SENT`, que tutea, y lo
+ *       descarta por el registro. Una reescritura no lo arregla. Sin prueba
+ *       propia.
  */
 class UltronCheckCommitParityTest extends TestCase
 {

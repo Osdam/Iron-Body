@@ -55,7 +55,7 @@ class UltronRegenerationNotesTest extends TestCase
     private const POLITICA = [
         'policy_greeting_sells' => ['customer_fit', 'SALUDO QUE VENDE: la persona solo saludo. Saluda, da la bienvenida y pregunta en que le puede ayudar. No nombres planes, precios ni pagos y no preguntes todavia su objetivo.'],
         'policy_active_goal_lost' => ['phase_alignment', 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.'],
-        'policy_wrong_first_plan' => ['phase_alignment', 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.'],
+        'policy_wrong_first_plan' => ['phase_alignment', 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y nombra solo planes de commercial_turn_policy.allowed_plan_ids. Los demas permitidos, solo despues y si aportan.'],
         'policy_answer_without_fact' => ['relevance', 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.'],
         'policy_general_info_only_discovery' => ['relevance', 'SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.'],
         'policy_memory_turn_sells' => ['customer_fit', 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.'],
@@ -163,6 +163,23 @@ class UltronRegenerationNotesTest extends TestCase
 
         $nota = N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'Élite', 'BENEFICIO' => 'Asesoría de entrenador']);
         $this->assertStringContainsString('atribuye a Élite un beneficio que en active_plans es de otro plan ("Asesoría de entrenador")', $nota);
+    }
+
+    /**
+     * C6 · R-8 de seguridad: el mismo saneo, a la vista de quien llama, para
+     * que sepa si un texto del catálogo queda vacío (y use el marcador o «ese
+     * plan») antes de pedir la nota, que con un texto vacío lanza.
+     */
+    public function test_el_saneo_del_texto_del_catalogo_a_la_vista(): void
+    {
+        $this->assertSame('Plan PLAN_1 Valera', N::cleanText("Plan {{PLAN_1}}\nValera"));
+        $this->assertSame("Acceso 'total'", N::cleanText(' {Acceso} "total" '));
+        $this->assertSame('', N::cleanText('{{}}'));
+        $this->assertSame('', N::cleanText(" { }\n "));
+        $this->assertSame('', N::cleanText(7), 'lo que no es texto, vacío');
+        $this->assertSame(60, mb_strlen(N::cleanText(str_repeat('a', 80))));
+        // La nota usa exactamente ese saneo.
+        $this->assertStringContainsString('atribuye a '.N::cleanText(' Plan {{Oro}} ').' un beneficio', N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => ' Plan {{Oro}} ', 'BENEFICIO' => 'Clases']));
     }
 
     public function test_los_parametros_se_exigen_exactos(): void
