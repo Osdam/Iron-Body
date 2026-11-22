@@ -1,0 +1,248 @@
+GATE 4-H · LAS CUATRO CONFIRMACIONES QUE PIDIÓ EL PROPIETARIO ANTES DE AUTORIZAR EL DESPLIEGUE
+lead · 22-11-2026, 03:10 UTC (21-11, 22:10 en Bogotá) · todo de SOLO LECTURA: nada desplegado, n8n sin tocar, ningún fichero de producto cambiado.
+Commit que se desplegaría: la rama feat/ultron-studio-h9 (código final 0400b267). Producción sirve e861e2c8.
+
+El propietario escribió: «Estoy conforme con la arquitectura «regenerar antes de sustituir», las dos instrucciones de lista de
+planes, las quince notas de reescritura y el formato dinámico de planes y precios.» y pidió confirmar cuatro puntos, con
+evidencia de las diferencias relevantes, sin abrir otra auditoría ni desarrollar nada nuevo. «Mantén el HUMAN GATE activo
+hasta mi autorización expresa.»
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+1. LOS 106 TEXTOS DE RESPALDO: MISMAS CONDICIONES, CAMBIOS SOLO DE TRATO
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Mecanismo (app/Services/Marketing/Ultron/UltronFormalReplies.php): el commit sigue llamando al MISMO productor de hoy
+(SalesConversationReplyService, SalesObjectionResponderService, CommercialTurnPolicy, CourtesyRequestService, constantes del
+commit) y, solo con el tono «profesional», pasa su texto por una tabla frase → frase (strtr). La tabla no lleva lógica:
+cuándo sale cada texto lo sigue decidiendo el productor de hoy. Con cualquier otro tono, o sin versión del Studio, sale el
+original byte a byte. Los dos productores que comparte el agente anterior no cambian (diff vacío frente a producción).
+El documento y la tabla no han cambiado desde el commit del gate 4-G (e9b1dd52): la página «Textos de usted» está al día.
+Pruebas que lo atan, hoy: test_los_textos_de_usted_que_aprueba_el_propietario, test_ningun_respaldo_de_usted_lleva_marcas y
+test_legacy_un_borrador_de_usted_da_lo_mismo_que_antes → OK (6 tests, 555 assertions).
+
+Ninguno de los 106 lleva un precio (0 con el signo $). 9 llevan cifras: horas del horario, la dirección y la fecha de
+ejemplo de la visita; idénticas en las dos versiones.
+
+Salida de ops/herramientas-lead/comparar-usted-doc.php (compara cada «Hoy» con su «De usted» del documento):
+
+ENTRADAS «Hoy / De usted» EN EL DOCUMENTO: 149 · DISTINTAS: 106
+   25 · Por intención (`replyFor`)
+    1 · Horario sin ficha (`replyFor`)
+    5 · Objeciones
+    1 · Pago pendiente
+   18 · Bienvenida (`welcomeReplies`)
+    7 · Últimos recursos (`lastResorts`)
+    2 · Política: plan (`planReply`)
+    3 · Política: visita (`courtesyReply`)
+    4 · Política: retomar la visita (`courtesyResumption`)
+    3 · Acta de la cortesía (`actaDeLaFila`)
+    2 · Acta de la cortesía (`preguntaDeHora`)
+    2 · Acta de la cortesía (`estadoDe`)
+    3 · Commit: constantes
+   64 · Tabla completa (`UltronFormalReplies::FRASES`)
+    2 · Colas (`UltronFormalReplies::COLAS`)
+    2 · Ficha del gimnasio
+    5 · Pregunta sugerida (`StrategyContract`, sin tildes: cruza al modelo)
+
+SOBRE LAS 106 DISTINTAS:
+sin ningún cambio (ya estaban de usted o no tratan a nadie): 2
+mismas cifras, $ y signos, en el mismo orden: 106 de 106
+mismo vocabulario comercial y de compromiso (70 palabras vigiladas), mismas veces: 106 de 106
+mismas negaciones, mismas veces: 106 de 106
+mismo número de frases: 105 de 106 · mismo número de preguntas: 106 de 106
+ajustadas a 200 caracteres, quedan las mismas frases, cifras y vocabulario que en el original ajustado: 105 de 106 (se recortan 6)
+ajustadas a 160 caracteres, ídem: 105 de 106 (se recortan 9)
+
+EXCEPCIONES: 1
+  [1] Por intención (`replyFor`) · cambia: frases, tope200, tope160
+      HOY:   Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.
+      USTED: Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.
+      HOY a 200:   Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.
+      USTED a 200: Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.
+      HOY a 160:   Listo, tranquilo. No hay problema. Si después te animas o solo quieres resolver dudas, aquí te ayudamos.
+      USTED a 160: Entendido, no hay problema. Si después se anima o solo quiere resolver dudas, aquí le ayudamos.
+
+TRAMOS QUE CAMBIAN (lo que había → lo que hay · veces): 59 distintos, 238 en total
+   65 · te → le
+   31 · tu → su
+   22 · Cuéntame → Cuénteme
+    8 · Te → Le
+    8 · Dime → Dígame
+    8 · Tu → Su
+    7 · quieres → quiere
+    7 · necesitas → necesita
+    6 · Quieres → Quiere
+    5 · atenderte → atenderle
+    4 · tenerte → tenerle
+    3 · buscas → busca
+    3 · vienes → viene
+    3 · estás → está
+    3 · ayudarte → ayudarle
+    3 · darte → darle
+    3 · Te refieres → Se refiere
+    2 · puedes → puede
+    2 · vengas → venga
+    2 · ir → venir
+    2 · tienes → tiene
+    2 · has → ha
+    2 · escribes → escribe
+    2 · te refieres → se refiere
+    1 · haces tú → hace usted
+    1 · creas tu → crea su
+    1 · pagas → paga
+    1 · sientas → sienta
+    1 · vas → va
+    1 · crees → cree
+    1 · podrías ir → podría venir
+    1 · complicarte → complicarse
+    1 · Tranquilo → Por supuesto
+    1 · decides → decide
+    1 · resolverte → resolverle
+    1 · sentirte → sentirse
+    1 · Vas → Va
+    1 · entrenas → se entrena
+    1 · seas → sea
+    1 · Listo → Muy bien
+    1 · puedas → pueda
+    1 · arrancas → empieza
+    1 · De una , tranquilo → Con gusto
+    1 · Listo → Entendido
+    1 · tranquilo . No → no
+    1 · te animas → se anima
+    1 · prefieres → prefiere
+    1 · dímelo → dígamelo
+    1 · Tranquilo → Entiendo
+    1 · Quieres que te ayude → Le ayudo
+    1 · responderte → responderle
+    1 · pregúntame → pregúnteme
+    1 · empiezas → empieza
+    1 · Puedes → Puede
+    1 · tuya → suya
+    1 · alcanzaste → alcanzó
+    1 · dime → dígame
+    1 · tienes tu → tiene su
+    1 · Pagas → Paga
+
+Los 9 pares (de las 64 frases de la tabla) donde cambia algo más que la persona del verbo o el pronombre: se quita una
+muletilla o se cambia un verbo por otro equivalente; ninguno toca un dato, un cobro ni un compromiso.
+  «Listo. Para bajar grasa…»                          → «Muy bien. Para bajar grasa…» · «arrancas desde cero» → «empieza desde cero»
+  «¿Vas a ir por primera vez?»                        → «¿Va a venir por primera vez?»
+  «…donde entrenas con acompañamiento…»               → «…donde se entrena con acompañamiento…»
+  «Listo, tranquilo. No hay problema. Si después…»    → «Entendido, no hay problema. Si después…» (de tres frases a dos; es la única)
+  «Tranquilo, lo dejo marcado para que el equipo revise tu caso de pago con cuidado. La membresía solo queda activa cuando
+   el pago está confirmado. ¿Quieres que te ayude con algo más mientras tanto?»
+                                                      → «Entiendo, lo dejo marcado para que el equipo revise su caso de pago con cuidado. La membresía solo queda activa
+                                                         cuando el pago está confirmado. ¿Le ayudo con algo más mientras tanto?»
+  «De una, tranquilo. Si más adelante quieres…»       → «Con gusto. Si más adelante quiere…»
+  «…¿Cuántos días a la semana crees que podrías ir sin complicarte?» → «…cree que podría venir sin complicarse?»
+  «Tranquilo, puedes pensarlo con calma…»             → «Por supuesto, puede pensarlo con calma…»
+  «…¿Qué te preocupa más: ir solo o no saber qué hacer?» → «…¿Qué le preocupa más: venir solo o no saber qué hacer?»
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+2. LOS RESPALDOS NO SUSTITUYEN SISTEMÁTICAMENTE AL MODELO
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Por construcción (flujo S2, comprobado fuera de n8n; a4-evidencia/127): 226 comprobaciones y 22 recorridos con los nodos
+reales. Ningún camino pasa por más de 3 redactores ni 3 revisores. El texto fijo sale solo cuando el tercer borrador
+también es rechazado («Studio, el tercer borrador también lo rechaza el revisor (no hay cuarto)»), por una regla que no
+se puede corregir reescribiendo (dinero, no contactar, relevo a una persona, herramientas, el dato real de la visita) o por
+un fallo técnico. El commit no lee el resultado de la comprobación: vuelve a comprobarlo todo (última red).
+
+Medido en producción, con el flujo de hoy (una sola reescritura), línea base del 19-11: de 89 respuestas, el modelo
+escribió 67 (75,3 %); respaldos 18 (20,2 %: 14 tras dos rechazos del revisor, 3 por una regla de política, 1 último
+recurso); 4 la hora de la visita, que escribe el servidor con el dato del CRM. Hoy son 68 de 90 (a4-evidencia/145).
+
+Dos situaciones NUEVAS en las que puede salir un respaldo, y solo tras dos reescrituras fallidas: el borrador sigue
+tuteando con «profesional», o sigue sin dar bien la lista de planes. En la prueba real del 18-11 el modelo tuteó en 2 de 3
+respuestas: con el diseño anterior (A4-2) eso habría sido sustitución directa; ahora recibe antes la nota «reescribe de
+usted», hasta dos veces.
+
+LO QUE NO SE PUEDE CONFIRMAR ANTES DE EJECUTARLO: cuántas veces fallará el modelo los tres borradores. Aquí no corre
+ningún modelo. Se mide en el laboratorio de la versión 3 (antes de que el propietario la apruebe) y en la tercera prueba
+real, con ultron:origin-report (al primer intento, reescritas, respaldos y su causa). El 90 % es un objetivo.
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+3. LAS CONVERSACIONES FUERA DE LA CANARIA Y LA REVERSIÓN
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+3.1 Qué cambiaría el despliegue en producción (git diff e861e2c8 → rama, solo producto): 27 ficheros.
+  · 23 del motor (app/Services/Marketing/Ultron/: 12 modificados y 11 nuevos)
+  · app/Http/Controllers/Api/Internal/UltronController.php (la puerta interna que solo llama n8n)
+  · routes/marketing.php: UNA línea de código nueva, Route::post(ai/check, …); lo demás, comentarios
+  · dos órdenes de consola (UltronOriginReport, nueva; UltronPromptsN8n)
+  Migraciones: 0 · config/: 0 · dependencias: 0 · resources: 0. Los 5 commits que main lleva sobre producción son solo
+  documentos (0 ficheros de producto). No hay ningún fichero de OTP, Twilio, Wompi, Factus, Firebase, la API móvil, la voz,
+  membresías ni del agente anterior: la lista completa son esos 27.
+
+3.2 Lo único del motor que alcanzan flujos ajenos a la canaria, comparado función a función con producción:
+  · ConversationMemoryService::recordPaymentOutcome() (la usa MarketingPaymentOutcomeService, el resultado de un pago): IDÉNTICA
+  · UltronDecideService::ineligibleReason() (la usa el vigía, UltronTurnWatchdog): IDÉNTICA
+  · UltronDecideService::canOfferLink() (la llave de los enlaces de pago): IDÉNTICA
+  Las demás referencias desde fuera del motor son de las pantallas del Studio, de órdenes de consola o comentarios.
+
+3.3 El cerrojo que decide qué conversaciones llegan al motor: UltronEventEmitter.php (config marketing.ultron.
+  canary_conversation_id; si la conversación no es esa, «not_canary_conversation» antes de crear el evento). El fichero no
+  cambia, config/marketing.php no cambia y el despliegue no regenera la caché de configuración.
+  Leído en producción por la propia aplicación: {"canary_conversation_id":882,"tipo":"integer","config_en_cache":true,"rutas_en_cache":true}
+
+3.4 Datos de producción, últimos 30 días (solo conteos):
+  J1 · respuestas del motor por conversación: #273 → 15 (29-10 a 12-11) · #882 → 4 (18-11 a 20-11). Ninguna otra.
+  J2 · acciones reply por procedencia: inbound_message, con revisor: 19 acciones, 2 conversaciones.
+  M2 · entrantes: 2 672 mensajes de 307 conversaciones no canarias · 32 de las 2 canarias.
+  M3 · salientes: 19, todos en las 2 canarias. Ninguno en las otras 307.
+  M1 · qué deja el sistema en las no canarias: inbound_skipped/skipped/auto_analyze_disabled 2 070 (280 conversaciones) ·
+       unsupported_message/proposed/needs_human_review 417 (107) · unsupported_message_type 152 (47).
+  L1/L2 · por mes: septiembre, 187 salientes de la IA a 72 conversaciones; el último a una conversación no canaria, el
+       22-09-2026. Octubre y noviembre: la IA solo escribe en las canarias. Ningún saliente «human» desde el 07-08-2026.
+  Lectura: fuera de la canaria hoy no sale ninguna respuesta automática (ni del motor ni del agente anterior, que tiene el
+  análisis apagado: auto_analyze_disabled, en AnalyzeInboundMessage y MarketingInboundMessageRouter, sin cambios). Los
+  mensajes quedan guardados para atención humana. Es anterior a este trabajo y el despliegue no lo cambia.
+
+3.5 La reversión, por capas, y qué está probado de verdad:
+  (a) La versión («Revertir» en el Studio): EJECUTADA EN PRODUCCIÓN el 12-11 (versión en ROLLED_BACK, canaria en Legacy,
+      comprobado con publication-check y prompt-trace).
+  (b) n8n (despublicar un flujo y publicar el otro): la misma operación se EJECUTÓ EN PRODUCCIÓN una vez, de la reserva a
+      S1 (unos 15 s sin flujo publicado y ningún turno en el hueco; L9 del H9). La vuelta de S2 a S1 son las mismas dos
+      llamadas; S2 todavía no existe en n8n, así que esa en concreto no se ha ejecutado.
+  (c) El servidor (ops/deploy-a4-regenerar-backend.sh): ENSAYADA, NO EJECUTADA EN EL SERVIDOR REAL. 14 casos de las
+      comprobaciones previas (1 pasa, 13 se niegan); 10 casos del disparador de la vuelta atrás automática sobre route:list
+      reales de Laravel 12.58; 10 recorridos de los pasos 1–5 y de la vuelta atrás con dobles de sudo, supervisor, curl y
+      php, incluida la vuelta atrás manual (S3) y la automática (S4–S6) (ops/DEPLOY_A4_REGENERAR.md §9). Lo que no se puede
+      comprobar sin ejecutarlo está en su §10 (el bash y las utilidades del servidor, el FPM, los 14 workers reales).
+      Sin migraciones no hay nada que deshacer en la base.
+  Ensayo en seco de hoy sobre el commit final (banco local desechable; no toca producción):
+== deploy-a4-regenerar-backend.sh · ENSAYO EN SECO · 2026-11-22T03:02:58Z · banco <scratchpad>/banco-4h/prod · PREVIO=e861e2c8b2fe904499c99ab83c3a077d081994f8 · NUEVO=c6f09585f830858614da13f6e7207edc64b931c4 · lista <scratchpad>/banco-4h/lista.txt
+   (solo las comprobaciones de git del paso 0; las del servidor —workers, cachés, route:list, HTTP— no se ensayan aquí)
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción e861e2c8 limpia · origin/main c6f09585 · 31 commit(s) · 265 ficheros = la lista: 26 de backend/app · 1 de backend/routes (marketing.php) · 43 de backend/tests · 172 de backend/docs · 23 otros
+   ni migraciones, ni backend/config, ni composer, ni bootstrap; de backend/routes solo marketing.php: + «Route::post('ai/check', [UltronController::class, 'check']);» y, aparte, solo comentarios
+   las cuatro puertas declaradas una vez en el marketing.php nuevo (decide, check, commit, ultron/incidents)
+   constante de llamadas (VoiceCallPolicy): cerrada · de envíos (OutreachSendGate): cerrada · los dos ficheros sin cambios
+      …
+ENSAYO: COMPROBACIONES PREVIAS DE GIT EN VERDE (no se ha tocado nada)
+  Para tenerla probada en el servidor real: ejecutar dentro del despliegue «desplegar → comprobar → --vuelta-atras →
+  comprobar → desplegar otra vez». Es una decisión del propietario (dos reinicios más de los workers, unos 10 minutos).
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+4. LAS DOS PRUEBAS HISTÓRICAMENTE ROJAS
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Ejecutadas en la rama principal (origin/main = bc5167cb, sin nada de este trabajo), en el árbol limpio de la batería:
+
+(1) Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote → ROJA IGUAL QUE EN LA RAMA:
+      Expected response status code [201] but received 422.
+      "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason."
+    De dónde sale: PaymentController.php:386, una regla de caja del 08-09-2026 (commit c8c89c9b, ya en producción): el cobro
+    manual tiene que coincidir con el precio del plan o justificarse. La prueba es del 02-09-2026 y cobra un plan en modo
+    «base más impuesto» (80.000 + 19 % = 95.200). Es el servidor siendo más estricto, no un hueco.
+    Esta rama no toca ni la prueba ni ningún fichero de pagos (0 ficheros).
+    Producción, planes por modo de precio: legacy_inclusive 26 de 26 (13 activos). Ninguno usa «base más impuesto»: el caso de
+    la prueba no existe hoy en producción. Pendiente para el apartado 12 (pagos): si algún día se usa ese modo, la regla y
+    la prueba tienen que ponerse de acuerdo antes.
+
+(2) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+    En origin/main: OK (1 test, 15 assertions). En la rama: roja, y nombra 25 ficheros: los 23 del motor, su puerta interna
+    (UltronController) y routes/marketing.php. Ninguno de Legacy, OTP ni voz.
+    Es un detector de «alguien tocó el motor»: compara las zonas protegidas con origin/main y exige que no haya diferencia.
+    Aquí el motor se tocó a propósito y fichero a fichero (Enmiendas A4-2, fila A42-14, y A4-3, fila A43-11). La prueba no se
+    ha modificado (0 ficheros) y vuelve a verde sola cuando la rama esté en main.
+
+Lo demás: batería completa sobre 0400b267, 18 985 pruebas, sin ninguna otra roja (a4-evidencia/142); guardas estáticas,
+141 con esa única roja; revisión de seguridad APTO CON CONDICIONES, sin bloqueantes (las condiciones son para antes de
+ampliar más allá de la canaria: informe-security-a4-regenerar.md).
