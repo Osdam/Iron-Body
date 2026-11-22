@@ -145,6 +145,18 @@ return [
     'human_requested_days' => 30,
 
     /*
+    | Q1-8 (NB3 de la revisión de API): cuántas quejas puede registrar UNA
+    | cuenta del personal en un día de Bogotá (`POST commercial-automation/
+    | complaints`). Pasado el tope, 429 `complaint_daily_limit_reached` y no se
+    | escribe; repetir una petición ya hecha no cuenta. No es un techo de envío
+    | (frena el registro, la dirección contraria): vacío, 0 o ilegible → 20
+    | (`OutreachConfig::staffComplaintsPerAccountPerDay()`); como mucho 200.
+    */
+    'complaints' => [
+        'per_account_per_day' => $entero('COMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY', 0, 0, 200) ?: null,
+    ],
+
+    /*
     | Las pasadas (D9-8): ≤ 500 personas por estrategia y pasada; ≤ 50 trabajos
     | por pasada del despachador; un trabajo reclamado o en despacho con más de
     | 10 min es ambiguo (la conciliación).

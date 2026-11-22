@@ -14,6 +14,7 @@ use App\Services\Outreach\Core\PolicyLadder;
 use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Run\LadderInputBuilder;
 use App\Services\Outreach\Run\OutreachAccess;
+use App\Services\Outreach\Run\OutreachConfig;
 use App\Services\Outreach\Run\OutreachPlanner;
 use App\Services\Outreach\Run\OutreachReplay;
 use App\Support\Access\AuthorizationMap;
@@ -25,6 +26,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Mockery;
@@ -278,6 +280,102 @@ class OutreachComplaintsApiTest extends TestCase
         $this->app->instance(CommercialEventRecorder::class, Mockery::mock(CommercialEventRecorder::class, ['record' => null]));
         $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertStatus(503)->assertJsonPath('code', 'complaint_not_recorded');
         $this->assertSame([], self::quejas());
+    }
+
+    // ── NB3: el tope diario por cuenta y el registro ───────────────────────
+
+    /**
+     * NB3 (`informe-apisec-quejas.md`): una cuenta registra como mucho N quejas al día de Bogotá (20 por defecto,
+     * `outreach.complaints.per_account_per_day`). Pasado el tope, 429 `complaint_daily_limit_reached` y no escribe.
+     * Repetir una petición ya hecha no cuenta; otra cuenta tiene su propio tope; el día siguiente vuelve a empezar.
+     */
+    public function test_nb3_el_tope_diario_por_cuenta_429_sin_escribir_y_las_repeticiones_no_cuentan(): void
+    {
+        config(['outreach.complaints.per_account_per_day' => 3]);
+        $gente = [$this->socio(), $this->socio(), $this->socio(), $this->socio()];
+        $primera = self::queja('member', $gente[0]['member']);
+        $this->postJson(self::URL, $primera, $this->recepcion())->assertCreated();
+        foreach ([1, 2] as $i) {
+            $this->postJson(self::URL, self::queja('member', $gente[$i]['member']), $this->recepcion())->assertCreated();
+        }
+        $this->assertCount(3, self::quejas());
+
+        // La cuarta persona del día: 429, sin escribir y sin decir nada de la persona.
+        $this->postJson(self::URL, self::queja('member', $gente[3]['member']), $this->recepcion())->assertStatus(429)->assertExactJson([
+            'ok' => false, 'code' => 'complaint_daily_limit_reached', 'limit' => 3,
+            'message' => 'Ya registraste 3 quejas hoy, el tope diario de una cuenta. No se ha guardado nada: si hace falta registrar más, pídeselo a un Super Admin.',
+        ]);
+        $this->assertCount(3, self::quejas());
+        // Repetir una petición ya hecha no cuenta ni se bloquea: 200 `replayed`.
+        $this->postJson(self::URL, $primera, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true);
+        $this->assertCount(3, self::quejas());
+        // Otra cuenta: su propio tope.
+        $this->postJson(self::URL, self::queja('member', $gente[3]['member']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
+        $this->assertCount(4, self::quejas());
+        // 23:59:59 de Bogotá: el mismo día, sigue en el tope. 00:00 del 18: vuelve a empezar.
+        $this->reloj('2026-11-18 04:59:59');
+        $this->postJson(self::URL, self::queja('member', $gente[0]['member']), $this->recepcion())->assertStatus(429);
+        $this->reloj('2026-11-18 05:00:00');
+        $this->postJson(self::URL, self::queja('member', $gente[0]['member']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
+        $this->assertCount(5, self::quejas());
+    }
+
+    public function test_nb3_por_defecto_20_y_la_configuracion_no_quita_el_tope(): void
+    {
+        // Sin variable en el entorno, el fichero deja la clave en null y manda el defecto del código.
+        $this->assertNull((require base_path('config/outreach.php'))['complaints']['per_account_per_day']);
+        $this->assertNull(config('outreach.complaints.per_account_per_day'));
+        $this->assertSame(20, OutreachConfig::staffComplaintsPerAccountPerDay());
+        $this->assertStringContainsString("\nCOMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY=\n", (string) file_get_contents(base_path('.env.example')));
+        // Por la ruta: 20 al día, la 21 da 429.
+        for ($i = 0; $i < 20; $i++) {
+            $this->postJson(self::URL, self::queja('member', $this->socio()['member']), $this->recepcion())->assertCreated();
+        }
+        $this->postJson(self::URL, self::queja('member', $this->socio()['member']), $this->recepcion())->assertStatus(429)->assertJsonPath('limit', 20);
+        $this->assertCount(20, self::quejas());
+        // Un entero de 1 a 200 manda (más, 200); 0, un negativo, un texto o nada dejan los 20: no hay forma de quitarlo.
+        foreach ([[7, 7], [1, 1], [200, 200], [500, 200], [0, 20], [-3, 20], ['7', 20], [null, 20], [1.5, 20], [true, 20]] as [$valor, $esperado]) {
+            config(['outreach.complaints.per_account_per_day' => $valor]);
+            $this->assertSame($esperado, OutreachConfig::staffComplaintsPerAccountPerDay(), json_encode($valor));
+        }
+    }
+
+    /**
+     * NB3: dos peticiones a la vez de la misma cuenta no pasan el tope. Contar y registrar van en una transacción con
+     * la fila de la cuenta bloqueada: en PostgreSQL, `SELECT … FROM admins … FOR UPDATE` antes de contar y de insertar
+     * (SQLite no tiene `FOR UPDATE`: se comprueba sobre el SQL, como el resto de los bloqueos del repositorio).
+     */
+    public function test_nb3_solo_en_postgres_cuenta_y_registra_con_la_cuenta_bloqueada(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Solo PostgreSQL: SQLite no tiene FOR UPDATE.');
+        }
+        $s = $this->socio();
+        $sesion = $this->recepcion();
+        $sql = [];
+        DB::listen(function ($q) use (&$sql): void {
+            $sql[] = strtolower((string) $q->sql);
+        });
+        $this->postJson(self::URL, self::queja('member', $s['member']), $sesion)->assertCreated();
+        $bloqueo = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "admins"') && str_ends_with($q, 'for update')));
+        $cuenta = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "commercial_events"') && str_contains($q, '"occurred_at" <')));
+        $insercion = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with($q, 'insert into "commercial_events"')));
+        $this->assertNotNull($bloqueo, 'la cuenta se bloquea');
+        $this->assertTrue($bloqueo < $cuenta && $cuenta < $insercion, 'bloquear, contar y registrar, en ese orden');
+    }
+
+    /** NB3: el registro dice sobre quién fue por su identificador interno (la persona canónica), nunca su nombre ni su teléfono. */
+    public function test_nb3_el_registro_lleva_el_tipo_y_el_id_de_la_persona_y_nada_mas_de_ella(): void
+    {
+        $s = $this->socio();
+        $lead = $this->lead(['member_id' => $s['member'], 'phone' => '3009990001', 'name' => 'Persona Privada']);
+        $sesion = $this->recepcion();
+        Log::spy();
+        $this->postJson(self::URL, self::queja('lead', $lead, ['channel' => 'phone', 'category' => 'attention']), $sesion)->assertCreated();
+        $admin = (int) Admin::query()->where('name', 'Recepcion')->value('id');
+        Log::shouldHaveReceived('info')->with('commercial.complaint.staff_recorded', [
+            'channel' => 'phone', 'category' => 'attention', 'result' => 'recorded', 'by' => $admin, 'subject_type' => 'member', 'subject_id' => $s['member'],
+        ])->once();
     }
 
     // ── De extremo a extremo: la escalera ──────────────────────────────────

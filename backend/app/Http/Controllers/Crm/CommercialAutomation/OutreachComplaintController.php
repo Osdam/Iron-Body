@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm\CommercialAutomation;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\Member;
 use App\Observers\Commercial\ComplaintCommercialEmitter;
 use App\Services\Commercial\CommercialVocabulary;
@@ -15,6 +16,7 @@ use App\Services\Outreach\Run\OutreachException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
@@ -38,7 +40,10 @@ use Illuminate\Support\Facades\Validator;
  * IDEMPOTENTE por `clientRequestId` (200 `replayed`; con otro contenido, 409
  * `client_request_reused`). Una al día de Bogotá por persona: la segunda del
  * día responde igual que la primera (201) y no cambia la ventana; la respuesta
- * no dice si ya había otra (no es un oráculo de «quién se quejó»).
+ * no dice si ya había otra (no es un oráculo de «quién se quejó»). Un TOPE
+ * DIARIO POR CUENTA (NB3, `OutreachConfig::staffComplaintsPerAccountPerDay()`,
+ * 20 por defecto): pasado, 429 `complaint_daily_limit_reached` y no escribe;
+ * repetir una petición ya hecha no cuenta.
  */
 class OutreachComplaintController extends Controller
 {
@@ -110,14 +115,29 @@ class OutreachComplaintController extends Controller
         }
 
         $ahora = Carbon::now();
-        try {
-            $resultado = $emitter->recordStaffComplaint($p['recordsAs']['type'], $p['recordsAs']['id'], $canal, $categoria, $access->id(), $crid, $ahora);
-        } catch (\RuntimeException $e) {
-            Log::error('commercial.complaint.staff_record_failed', ['by' => $access->id(), 'exception' => class_basename($e)]);
+        $tope = OutreachConfig::staffComplaintsPerAccountPerDay();
+        // NB3: el tope diario POR CUENTA, contado y registrado con la fila de la cuenta bloqueada, para que dos
+        // peticiones a la vez de la misma cuenta no lo pasen. El registrador escribe en su punto de guardado: un
+        // duplicado del día no aborta esta transacción (PostgreSQL).
+        $resultado = DB::transaction(function () use ($emitter, $access, $p, $canal, $categoria, $crid, $ahora, $tope): string {
+            Admin::query()->whereKey($access->id())->lockForUpdate()->first(['id']);
+            if ($emitter->staffComplaintsRecordedBy($access->id(), $ahora) >= $tope) {
+                Log::warning('commercial.complaint.staff_daily_limit_reached', ['by' => $access->id(), 'limit' => $tope]);
 
-            throw new OutreachException('No se pudo registrar la queja. Inténtalo de nuevo en un momento.', 'complaint_not_recorded', 503);
-        }
-        Log::info('commercial.complaint.staff_recorded', ['channel' => $canal, 'category' => $categoria, 'result' => $resultado, 'by' => $access->id()]);
+                throw new OutreachException("Ya registraste {$tope} quejas hoy, el tope diario de una cuenta. No se ha guardado nada: si hace falta registrar más, pídeselo a un Super Admin.",
+                    'complaint_daily_limit_reached', 429, ['limit' => $tope]);
+            }
+            try {
+                return $emitter->recordStaffComplaint($p['recordsAs']['type'], $p['recordsAs']['id'], $canal, $categoria, $access->id(), $crid, $ahora);
+            } catch (\RuntimeException $e) {
+                Log::error('commercial.complaint.staff_record_failed', ['by' => $access->id(), 'exception' => class_basename($e)]);
+
+                throw new OutreachException('No se pudo registrar la queja. Inténtalo de nuevo en un momento.', 'complaint_not_recorded', 503);
+            }
+        });
+        // NB3: sobre quién fue, con su identificador interno (tipo e id de la persona canónica); nunca nombre ni teléfono.
+        Log::info('commercial.complaint.staff_recorded', ['channel' => $canal, 'category' => $categoria, 'result' => $resultado, 'by' => $access->id(),
+            'subject_type' => $p['recordsAs']['type'], 'subject_id' => $p['recordsAs']['id']]);
 
         return self::respond($p, $canal, $categoria, $ahora, false, 201);
     }

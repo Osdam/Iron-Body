@@ -114,6 +114,27 @@ class ComplaintCommercialEmitter
     }
 
     /**
+     * NB3 (Q1-8): cuántas quejas del personal registró ESTA cuenta en el día de
+     * Bogotá de `$at` (filas nuevas: una fusionada con la del día de esa persona
+     * no deja fila). La carga se compara en PHP para no depender de cómo cada
+     * motor compara un número dentro del JSON; son las quejas del personal de
+     * un solo día (decenas).
+     */
+    public function staffComplaintsRecordedBy(int $adminId, Carbon $at): int
+    {
+        $desde = $at->copy()->setTimezone(Member::BUSINESS_TZ)->startOfDay()->utc();
+
+        return CommercialEvent::query()
+            ->where('event', V::EV_COMPLAINT_CREATED)
+            ->where('payload->source', V::COMPLAINT_SOURCE_STAFF)
+            ->where('occurred_at', '>=', $desde)
+            ->where('occurred_at', '<', $desde->copy()->addDay())
+            ->get(['payload'])
+            ->filter(static fn (CommercialEvent $f): bool => is_array($f->payload) && ($f->payload['recorded_by'] ?? null) === $adminId)
+            ->count();
+    }
+
+    /**
      * Registra la queja que trae una persona del gimnasio. `$personType` y
      * `$personId` son la persona CANÓNICA (el socio si el prospecto es de un
      * socio). Devuelve `recorded` (fila nueva) o `merged` (ya había una queja
