@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use PgSql\Connection as PgConnection;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use Tests\Feature\Commercial\CommercialSuppression1581Test;
@@ -32,6 +33,10 @@ use Tests\TestCase;
  *     admite y se queda encendida); el de quien registró, no.
  *  4. Después, la guarda sigue: ni el dueño cambia lo redactado, y la
  *     aplicación sigue sin UPDATE.
+ *  5. N-B3 (informe-db-cierre): una autorización de la persona EN VUELO (otra
+ *     conexión la inserta y no confirma) cuando empieza la redacción: el
+ *     cerrojo del bloque la espera y la redacta también. Sin él, la supresión
+ *     terminaba sin verla y la fila quedaba sin redactar al confirmarse.
  *
  * Al terminar se marca la base para que la siguiente prueba con RefreshDatabase
  * migre desde cero. Solo PostgreSQL (en SQLite no hay psql, roles ni DO).
@@ -88,6 +93,7 @@ class OutreachConsentSuppression1581Test extends TestCase
         $this->stepRepeatingFindsNothing();
         $this->stepStaffNameByAdminId();
         $this->stepTheGuardStaysAfterwards();
+        $this->stepAnInsertInFlightWaitsAndIsRedactedToo();
     }
 
     // ── 0 · en seco ─────────────────────────────────────────────────────────
@@ -223,6 +229,54 @@ class OutreachConsentSuppression1581Test extends TestCase
         $this->assertSame([0, 0], [(int) $p->u, (int) $p->d], '4 · la aplicación sigue sin UPDATE ni DELETE');
     }
 
+    // ── 5 · una inserción en vuelo de la misma persona (N-B3) ───────────────
+
+    private function stepAnInsertInFlightWaitsAndIsRedactedToo(): void
+    {
+        $c = config('database.connections.'.config('database.default'));
+        $partes = ['host='.$c['host'], 'port='.$c['port'], 'dbname='.$c['database'], 'user='.$c['username'], 'gssencmode=disable', 'application_name=c9_1581_en_vuelo'];
+        if ((string) ($c['password'] ?? '') !== '') {
+            $partes[] = "password='".addcslashes((string) $c['password'], "'\\")."'";
+        }
+        $vuelo = pg_connect(implode(' ', $partes), PGSQL_CONNECT_FORCE_NEW);
+        $this->assertInstanceOf(PgConnection::class, $vuelo);
+        try {
+            // La aplicación registra otra retirada de la persona A (la palabra de baja, con un número nuevo) y aún no confirma.
+            $this->assertNotFalse(pg_query($vuelo, 'BEGIN'));
+            $r = pg_query_params($vuelo, "INSERT INTO public.outreach_consents (uuid, client_request_id, subject_key, member_id, purpose, channel, kind, source, evidence,
+                    phone_ref, actor_type, recorded_by_name, created_at)
+                VALUES ($1, $2, $3, $4, 'commercial', 'whatsapp', 'revoked', 'member_request', 'Respondió BAJA al último mensaje', $5, 'system', 'Sistema', now()) RETURNING id",
+                [(string) Str::uuid(), (string) Str::uuid(), $this->s['ka'], $this->s['ma'], hash('sha256', 'c9-1581-A3')]);
+            $this->assertNotFalse($r, (string) pg_last_error($vuelo));
+            $id = (int) pg_fetch_result($r, 0, 0);
+
+            $proceso = $this->scriptProcess('05-en-vuelo', $this->params(['subject' => $this->s['ka'], 'dry' => '0']), asOwner: true);
+            $proceso->start();
+            $espero = false;
+            for ($i = 0; $i < 400 && $proceso->isRunning() && ! $espero; $i++) {
+                usleep(25000);
+                $espero = (int) DB::scalar("SELECT count(*) FROM pg_stat_activity WHERE application_name = 'supresion-1581-c9-prueba' AND ?::int = ANY (pg_blocking_pids(pid))",
+                    [pg_get_pid($vuelo)]) > 0;
+            }
+            $this->assertNotFalse(pg_query($vuelo, 'COMMIT'));
+            $proceso->wait();
+            $out = $proceso->getOutput().$proceso->getErrorOutput();
+            $this->logScript('05-en-vuelo', $proceso, $out);
+        } finally {
+            @pg_query($vuelo, 'ROLLBACK');
+            pg_close($vuelo);
+        }
+
+        $this->assertSame(0, (int) $proceso->getExitCode(), "5 · {$out}");
+        $f = DB::table('outreach_consents')->where('id', $id)->first();
+        $this->assertSame(['x:'.$id, null, null, '[suprimido]'], [$f->subject_key, $f->member_id, $f->phone_ref, $f->evidence],
+            '5 · la autorización que la aplicación confirmó a mitad de la supresión también queda redactada');
+        $this->assertTrue($espero, '5 · la supresión esperó a la inserción en vuelo (LOCK TABLE … IN SHARE MODE)');
+        $this->assertStringContainsString('outreach_consents · 1 fila(s) a la forma suprimida', $out);
+        $this->assertSame(0, DB::table('outreach_consents')->where('subject_key', $this->s['ka'])->count(), '5 · no queda ninguna fila con la clave');
+        $this->assertNoPersonalData($out, '5');
+    }
+
     // ── Preparación ─────────────────────────────────────────────────────────
 
     private function prepareProductionLikeDatabase(): void
@@ -311,6 +365,17 @@ class OutreachConsentSuppression1581Test extends TestCase
      */
     private function runScript(string $nombre, array $params, bool $asOwner = false): array
     {
+        $proceso = $this->scriptProcess($nombre, $params, $asOwner);
+        $proceso->run();
+        $salida = $proceso->getOutput().$proceso->getErrorOutput();
+        $this->logScript($nombre, $proceso, $salida);
+
+        return [(int) $proceso->getExitCode(), $salida];
+    }
+
+    /** @param  array<string, string>  $params  el proceso de psql con el guion por la entrada estándar, sin lanzar */
+    private function scriptProcess(string $nombre, array $params, bool $asOwner = false): Process
+    {
         $lineas = [];
         foreach ($params as $clave => $valor) {
             $this->assertDoesNotMatchRegularExpression('/[\\\\\n\r]/', $valor, "parámetro {$clave}");
@@ -324,14 +389,16 @@ class OutreachConsentSuppression1581Test extends TestCase
         );
         $proceso->setInput(implode("\n", $lineas)."\n".file_get_contents(base_path(self::SCRIPT)));
         $proceso->setTimeout(180);
-        $proceso->run();
-        $salida = $proceso->getOutput().$proceso->getErrorOutput();
+
+        return $proceso;
+    }
+
+    private function logScript(string $nombre, Process $proceso, string $salida): void
+    {
         $dir = getenv('SUPRESION_1581_LOG_DIR');
         if (is_string($dir) && $dir !== '' && is_dir($dir)) {
             file_put_contents($dir.'/c9-'.$nombre.'.log', "rc={$proceso->getExitCode()}\n".$salida);
         }
-
-        return [(int) $proceso->getExitCode(), $salida];
     }
 
     // ── Fotos y comprobaciones ──────────────────────────────────────────────

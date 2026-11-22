@@ -105,6 +105,10 @@
 --   · Su guarda (outreach_consent_forbid y sus outreach_consent_chk_*) DEJA PASAR esas dos redacciones y nada más: no se
 --     apaga ningún disparador de esta tabla (los dos bloques la saltan). Si lo escrito no fuera la forma suprimida, la
 --     guarda salta y se deshace todo.
+--   · Con :dry 0, el bloque B toma LOCK TABLE outreach_consents IN SHARE MODE antes de leerla (N-B3 de
+--     plans/informes-cierre/informe-db-cierre.md): espera a las inserciones de la aplicación en vuelo (≤ 5 s) y frena las
+--     nuevas hasta el COMMIT; las lecturas siguen. Sin él, una autorización de la persona que se confirmara a mitad
+--     quedaría sin redactar.
 --
 -- HITO 8 · LA VOZ (B-T3 del cierre integral, database-specialist, 10-11-2026; contrato H8 D8-17 y D8-18; H-24 de
 -- ULTRON_STUDIO_H8_PREPARACION_PLAN_PAGO.md). Integra, con las correcciones de su informe, la propuesta de OPS8-d
@@ -967,6 +971,14 @@ BEGIN
                 RAISE EXCEPTION 'supresión H9: :phone_refs lleva un valor que no son 64 hexadecimales (los seudónimos los calcula la aplicación)' USING ERRCODE = '22023';
             END IF;
         END LOOP;
+    END IF;
+    -- C9-1 · N-B3 (informe-db-cierre): el cerrojo del libro ANTES de leerlo. En READ COMMITTED, una autorización de la
+    -- persona que la aplicación está insertando (sin confirmar todavía) no la ven ni el recuento, ni el UPDATE, ni la
+    -- comprobación final: si confirma después, queda sin redactar y la supresión dice «0 filas». SHARE espera a esas
+    -- inserciones en vuelo (como mucho lock_timeout, 5 s: si no, aborta entero y se repite), frena las nuevas hasta el
+    -- COMMIT y deja leer. En seco no se toma: solo cuenta, y no frena a la aplicación.
+    IF v_consents AND NOT v_dry THEN
+        LOCK TABLE public.outreach_consents IN SHARE MODE;
     END IF;
     -- Los seudónimos de teléfono de SUS trabajos, leídos ANTES de redactar (después ya no se pueden saber).
     SELECT coalesce(array_agg(DISTINCT phone_ref::text), '{}') INTO v_scopes FROM public.outreach_jobs WHERE subject_key = v_subject AND phone_ref IS NOT NULL;
