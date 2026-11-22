@@ -23,7 +23,7 @@ interface ReplyClassifierTransport
     /** Los fallos en los que la petición NO llegó al proveedor (no se cobró). Ante la duda, se cobró. */
     public const NOT_SENT = ['not_configured', 'connection'];
 
-    /** ¿Puede llamar? (su clave propia presente y distinta de la compartida). No hace red ni devuelve la clave. */
+    /** ¿Puede llamar? (su clave propia presente y distinta de cualquier otra clave del proveedor que ya use el sistema). No hace red ni devuelve la clave. */
     public function configured(): bool;
 
     /**

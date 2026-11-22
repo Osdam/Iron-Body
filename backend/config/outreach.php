@@ -117,8 +117,10 @@ return [
     | en CERO: sin cupo ni presupuesto, sin modelo y sin precios no llama
     | nunca. CINCO CERROJOS, independientes: la bandera, el cupo diario de
     | llamadas, el techo diario en US$, el modelo con sus dos precios y el
-    | transporte enlazado con su clave PROPIA (otra que la compartida de la
-    | IA del CRM). Un fallo de cualquier tipo deja la respuesta como hoy.
+    | transporte enlazado con su clave PROPIA (otra que cualquiera de las que
+    | ya usa el sistema: la compartida de la IA del CRM, la del copiloto y la
+    | del laboratorio del Studio). Un fallo de cualquier tipo deja la
+    | respuesta como hoy.
     */
     'classifier' => [
         'enabled' => filter_var(env('COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED', false), FILTER_VALIDATE_BOOLEAN),

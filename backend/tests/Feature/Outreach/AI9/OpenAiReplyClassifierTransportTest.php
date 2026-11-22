@@ -107,6 +107,37 @@ class OpenAiReplyClassifierTransportTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function clavesAjenas(): iterable
+    {
+        foreach (OpenAiReplyClassifierTransport::FOREIGN_KEYS as $ruta) {
+            yield $ruta => [$ruta];
+        }
+    }
+
+    /**
+     * M4 de security: ninguna clave de OpenAI que ya use otra parte del
+     * sistema vale como la del clasificador (compartiría proyecto y
+     * presupuesto), también con espacios alrededor; y con otra distinta en
+     * ese sitio, la propia sí vale (la comparación no es un «no» fijo).
+     */
+    #[DataProvider('clavesAjenas')]
+    public function test_con_la_clave_de_otra_parte_del_sistema_no_esta_configurado_y_no_sale_nada(string $ruta): void
+    {
+        Http::fake();
+        config(['services.openai.api_key' => null, 'iron_crm.api_key' => null, 'ultron_studio.lab.openai.api_key' => null]);
+        config([$ruta => ' '.self::OWN_KEY."\n"]);
+
+        $this->assertFalse((new OpenAiReplyClassifierTransport)->configured(), "con la clave de {$ruta}");
+        $r = $this->classify();
+        $this->assertSame(['not_configured', null, null], [$r['error'], $r['output'], $r['usage']]);
+        $this->assertStringNotContainsString(self::OWN_KEY, (string) json_encode($r), 'no devuelve la clave');
+
+        config([$ruta => 'sk-otra-clave-de-'.str_replace('.', '-', $ruta)]);
+        $this->assertTrue((new OpenAiReplyClassifierTransport)->configured(), 'con otra distinta en ese sitio, la propia vale');
+        Http::assertNothingSent();
+    }
+
     /** @return iterable<string, array{int, mixed, string}> */
     public static function fallos(): iterable
     {
