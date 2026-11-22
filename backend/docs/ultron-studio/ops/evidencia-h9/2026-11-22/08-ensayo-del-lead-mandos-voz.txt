@@ -1,0 +1,148 @@
+PT-04 · ENSAYO PROPIO DEL LEAD DE LOS MANDOS DE LA VOZ EN EL BANCO LOCAL · 22-11-2026, 17:26–17:32 UTC
+Nada de producción ni de red: el banco OPS8-f (~/.cache/ironbody-banco-h8-ops8f-pt04), con los simuladores de Twilio y de ElevenLabs en 127.0.0.1 y la valla.
+Mando: ops/h8-voice-scope.sh de integracion/voz b1f66c32 (sha256 15135fba99f4a03c…), el que corrige B-1 de la revisión de seguridad de los mandos.
+RESULTADO: 109 OK · 0 FALLO. Los casos nuevos de B-1: (a) con la identidad admitida y las salientes encendidas, «numero-compartido off» las apaga en la MISMA escritura y lo dice;
+(b) con las salientes ya apagadas, el fichero y la salida quedan como con el mando de antes; (c) la vuelta atrás exacta funciona. Con el mando de antes, el caso (a) deja las salientes encendidas.
+AVISO: un primer intento del lead (17:24 UTC, registro ensayo-ops8f-20261122-172446.txt) NO es válido: el propio lead paró el banco mientras el ensayo corría y los fallos de ese registro
+(«respondió 000») son de servicios parados, no del mando. Se avisó al agente de seguridad y se repitió sin tocarlo: es el que sigue.
+Además: devops, 109 OK · 0 FALLO dos veces, y 103 OK · 6 FALLO con el mando de antes; seguridad, su propio ensayo, 109 OK · 0 FALLO.
+
+── RESUMEN DE LA EJECUCIÓN ──
+ENSAYO DEL LEAD (2, sin interferencias) · mandos de la voz (PT-04) · mando sha256 15135fba99f4a03c… · empieza 17:26:58 UTC
+puertos ocupados antes: 0
+banco OPS8-f en marcha: valla :8464 · Twilio :8463 · ElevenLabs :8462 · API :8461 (401 sin token) · Studio: ELEVENLABS_VERIFIED
+--- arrancar: 0
+--- ensayar: 0
+líneas OK: 109
+OK      B-1 (a) · estado: la declaración retirada (not_declared)…  [código 0]
+OK      B-1 (a) · …y «salientes: no»
+OK      B-1 (c) · la vuelta atrás EXACTA de ese «off» devuelve byte a byte el fichero de antes (salientes y declaración)
+OK      B-1 (c) · estado tras la vuelta exacta: ADMITIDA otra vez…  [código 0]
+OK      B-1 (c) · …y «salientes: sí»
+OK      B-1 · el mando de ANTES (6bd98ae2…) en el mismo punto: numero-compartido off → APLICADO  [código 0]
+OK      B-1 · el mando de ANTES solo retira la declaración (el defecto de B-1: no apaga las salientes)
+OK      B-1 · tras el mando de ANTES: la declaración retirada (not_declared)…  [código 0]
+OK      B-1 · …con «salientes: sí» (lo que el caso (a) no deja)
+OK      B-1 · la vuelta exacta del mando de antes devuelve el fichero con las salientes encendidas
+OK      B-1 (b) · con las salientes ya apagadas, el antes → después es solo shared_declared
+OK      B-1 (b) · y no dice que apague las salientes
+OK      B-1 (b) · el mando de ANTES desde el mismo fichero → APLICADO  [código 0]
+OK      B-1 (b) · el fichero de entorno queda byte a byte como con el mando de antes
+OK      B-1 (b) · y la salida es la misma línea a línea (salvo la fecha de la copia y el nombre del mando)
+109 OK · 0 FALLO · registro ~/.cache/ironbody-banco-h8-ops8f-pt04/logs/ensayo-ops8f-20261122-172701.txt
+banco OPS8-f parado
+--- parar: 0 · puertos ocupados después: 0
+termina 17:32:52 UTC
+
+── SALIDA COMPLETA DEL ENSAYO ──
+== ensayo OPS8-f (enmienda 20) · banco ~/.cache/ironbody-banco-h8-ops8f-pt04 · código 36a17c2c · registro ~/.cache/ironbody-banco-h8-ops8f-pt04/logs/ensayo-ops8f-20261122-172701.txt
+OK      estado inicial: identidad compartida no declarada; el servidor dice not_declared  [código 0]
+OK      estado inicial: la línea de la identidad compartida dice «no declarada»
+OK      fase 2 set VOICE_NUMBER_SHARED_WITH_MESSAGING=true → se niega (solo por numero-compartido)  [código 2]
+OK      numero-compartido on sin --autorizacion → se niega  [código 2]
+OK      numero-compartido on con una referencia fuera de forma → se niega  [código 2]
+OK      numero-compartido on sin el número «Outbound Only» declarado → se niega  [código 2]
+OK      fase 2 set del visible de WhatsApp SIN la declaración → se niega (protección 6)  [código 2]
+OK      fase 2 set de OTRO número protegido → se niega (nunca se admite)  [código 2]
+OK      fase 2 secreto --terminal sin una terminal → se niega  [código 2]
+OK      fase 2 secreto --terminal con un Account SID en vez de la key → se niega sin tocar nada  [código 2]
+OK      fase 2 secreto --terminal con la key restringida → APLICADO  [código 0]
+OK      fase 2 secreto --terminal: ni el SID ni el secreto aparecen en la terminal (sin eco)
+OK      fase 2 secreto --terminal: el fichero de entorno tiene exactamente el par tecleado y ningún token de firma
+OK      fase 2 set «Outbound Only», la cuenta, el id importado y la base de los webhooks → APLICADO  [código 0]
+OK      numero-compartido on --autorizacion=… → APLICADO con la cita  [código 0]
+OK      numero-compartido on: avisa de que la declaración sola no admite nada
+OK      numero-compartido on: el antes → después es solo shared_declared
+OK      estado: DECLARADA y el servidor NO la admite todavía (not_business_number: el número de voz no está puesto)  [código 0]
+OK      estado: la línea dice DECLARADA
+OK      numero-compartido on otra vez → nada que escribir  [código 0]
+OK      fase 2 set del visible con VOICE_NUMBER_INBOUND_CAPABLE=true → se niega  [código 2]
+OK      fase 2 set de otro protegido con la declaración puesta → se niega igual  [código 2]
+OK      fase 2 set del visible con la declaración y «Outbound Only» → APLICADO, PENDIENTE de conciliar (aviso, no desvío)  [código 0]
+OK      fase 2 set del visible: el aviso de «pendiente de la conciliación del número»
+OK      estado: declarada sin observar → observation_unverified; whatsapp=CHOCA  [código 0]
+OK      estado: el resumen del doctor dice whatsapp=CHOCA (no admitida)
+OK      estado: TWILIO_VOICE_FROM es el visible de WhatsApp: sí
+OK      twilio · cuenta principal, key restringida, caller ID = el visible declarado → APTA · cuenta principal (código 0)  [código 0]
+OK      twilio · el visible como identidad compartida declarada es INFO, no FALLO
+OK      twilio · dice que NO comprueba lo que verá el destino (Colombia, Non-guaranteed)
+OK      twilio · avisa de la credencial de la importación (la confirma el propietario)
+OK      twilio · una llamada ajena en la ventana → no apta para la cuenta principal (código 3)  [código 3]
+OK      twilio · una key que puede leer mensajes → NO APTA (no es la restringida de voz)  [código 3]
+OK      twilio · el FALLO dice que la key PUEDE leer mensajes
+OK      twilio · con TWILIO_VOICE_SIGNING_TOKEN en la cuenta principal → no apta (código 3)  [código 3]
+OK      twilio · un Account SID en lugar de la key → NO APTA  [código 3]
+OK      twilio · el visible como número COMPRADO de la cuenta → FALLO (nunca se compra ni porta)  [código 3]
+OK      twilio · regresión: la subcuenta dedicada sigue APTA  [código 0]
+OK      monitor on · importado sin supports_inbound → se niega: echaría number_is_messaging (observed_inbound)  [código 2]
+OK      monitor on · importado que admite entrantes → se niega (observed_inbound)  [código 2]
+OK      monitor on · importado con un agente asignado → se niega (observed_agent)  [código 2]
+OK      monitor on · importado que no es el visible → se niega (number_mismatch, observation_unverified)  [código 2]
+OK      monitor on · importado = el visible, solo saliente y sin agente → no frenaría (admitida) → APLICADO  [código 0]
+OK      monitor on · la conciliación en seco dice outbound_only y compartida=admitida
+OK      estado tras monitor on: en seco no se guarda nada → sigue observation_unverified  [código 0]
+OK      salientes on · declarada sin observar → se niega (observation_unverified)  [código 2]
+OK      conciliación real del número con un agente asignado → number_is_messaging y freno (el lado seguro)  [{"ok":true,"at":"2026-11-22T17:29:11Z","result":"number_is_messaging","matchesFrom":true,"brakeOpened":true,"policy":"verified"}]
+OK      estado · observada con agente → NO admitida (observed_agent)  [código 0]
+OK      salientes on · observada con agente → se niega (observed_agent)  [código 2]
+OK      estado · observada como entrante → NO admitida (observed_inbound)  [código 0]
+OK      salientes on · observada como entrante → se niega (observed_inbound)  [código 2]
+OK      conciliación real del número = el visible, solo saliente y sin agente → outbound_only sin freno nuevo  [{"ok":true,"at":"2026-11-22T17:29:19Z","result":"outbound_only","matchesFrom":true,"brakeOpened":false,"policy":"verified"}]
+OK      estado · ADMITIDA por el servidor; el doctor dice whatsapp=COMPARTIDO  [código 0]
+OK      estado · whatsapp=COMPARTIDO en el resumen del doctor
+OK      salientes on --cupo=1 --presupuesto=2.00 con la identidad ADMITIDA → APLICADO (todo lo de antes se sigue exigiendo)  [código 0]
+OK      salientes on · lo dice: número de voz = el visible, ADMITIDA
+OK      salientes on · la reserva de la puerta se sigue comprobando (C-1)
+OK      salientes on · el presupuesto que no cubre la reserva se sigue negando con la identidad admitida  [código 2]
+OK      entrantes on · con la identidad compartida declarada → se niega por su nombre  [código 2]
+OK      B-1 (a) · identidad ADMITIDA y salientes on: numero-compartido off → APLICADO  [código 0]
+OK      B-1 (a) · lo dice: las salientes están encendidas y esta orden las APAGA en la misma escritura
+OK      B-1 (a) · el antes → después: salientes, cupo, presupuesto, Twilio Voice y la declaración, en una sola escritura
+OK      B-1 (a) · avisa de que no cuelga una llamada en curso (voice:hangup)
+OK      B-1 (a) · avisa de reconocer la huella de voz del Studio (H-25)
+OK      B-1 (a) · una sola escritura: UNA copia previa nueva (la de numero-compartido-off), que es el fichero con las salientes encendidas  [56 copias previas (antes 55)]
+OK      B-1 (a) · el fichero: VOICE_OUTBOUND_ENABLED=false, TWILIO_VOICE_DAILY_CALL_CAP=0, VOICE_DAILY_BUDGET_USD=0, TWILIO_VOICE_ENABLED=false y la declaración en false
+OK      B-1 (a) · estado: la declaración retirada (not_declared)…  [código 0]
+OK      B-1 (a) · …y «salientes: no»
+OK      B-1 (c) · la vuelta atrás EXACTA de ese «off» devuelve byte a byte el fichero de antes (salientes y declaración)
+OK      B-1 (c) · estado tras la vuelta exacta: ADMITIDA otra vez…  [código 0]
+OK      B-1 (c) · …y «salientes: sí»
+OK      B-1 · el mando de ANTES (6bd98ae2…) en el mismo punto: numero-compartido off → APLICADO  [código 0]
+OK      B-1 · el mando de ANTES solo retira la declaración (el defecto de B-1: no apaga las salientes)
+OK      B-1 · tras el mando de ANTES: la declaración retirada (not_declared)…  [código 0]
+OK      B-1 · …con «salientes: sí» (lo que el caso (a) no deja)
+OK      B-1 · la vuelta exacta del mando de antes devuelve el fichero con las salientes encendidas
+OK      salientes off → APLICADO  [código 0]
+OK      numero-compartido off → APLICADO (la política vuelve a negar el visible)  [código 0]
+OK      numero-compartido off · lo dice: declaración RETIRADA, la política deniega por nombre
+OK      numero-compartido off · avisa del freno de la siguiente conciliación
+OK      estado · tras off: no declarada (not_declared) y whatsapp=CHOCA  [código 0]
+OK      estado · tras off: whatsapp=CHOCA
+OK      salientes on · tras off → se niega (not_declared)  [código 2]
+OK      twilio · tras off: el visible sin la declaración vuelve a ser FALLO  [código 3]
+OK      la vuelta atrás EXACTA que imprime «off» deja el fichero byte a byte como su copia previa
+OK      estado · tras la vuelta exacta: DECLARADA otra vez y ADMITIDA (la observación sigue fresca)  [código 0]
+OK      numero-compartido off otra vez → APLICADO  [código 0]
+OK      B-1 (b) · con las salientes ya apagadas, el antes → después es solo shared_declared
+OK      B-1 (b) · y no dice que apague las salientes
+OK      B-1 (b) · el mando de ANTES desde el mismo fichero → APLICADO  [código 0]
+OK      B-1 (b) · el fichero de entorno queda byte a byte como con el mando de antes
+OK      B-1 (b) · y la salida es la misma línea a línea (salvo la fecha de la copia y el nombre del mando)
+OK      código anterior · estado: el código no lee la declaración y no tiene la identidad compartida  [código 0]
+OK      código anterior · estado: «el código desplegado no la lee»
+OK      código anterior · fase 2 set «Outbound Only», la cuenta y el id importado → APLICADO (lo de siempre)  [código 0]
+OK      código anterior · numero-compartido on → se niega (el código no la lee)  [código 2]
+OK      código anterior · fase 2 set del visible → se niega (protección 6 de siempre)  [código 2]
+OK      código anterior · fase 2 set del número dedicado → APLICADO sin desvíos (regresión)  [código 0]
+OK      código anterior · el antes → después del número dedicado (solo sus cuatro últimas cifras)
+OK      código anterior · twilio: la subcuenta con el número dedicado sigue APTA (regresión)  [código 0]
+OK      código anterior · twilio: el visible sin la identidad compartida → FALLO (y la comprobación no se rompe)  [código 3]
+OK      código anterior · el clon vuelve a su commit
+OK      estado final: constante cerrada, salientes y entrantes apagadas  [código 0]
+OK      estado final: salientes no y entrantes no
+OK      cierre · 0 violaciones nuevas en el simulador de ElevenLabs  [0 {}]
+OK      cierre · 0 violaciones nuevas en el simulador de Twilio  [0 {}]
+OK      cierre · la valla no vio ningún host de fuera  [ninguno]
+OK      cierre · el registro del ensayo no lleva ningún secreto de las piezas  [ninguno]
+OK      cierre · el registro del ensayo no lleva ningún teléfono completo (solo las cuatro últimas cifras)  [0 líneas]
+109 OK · 0 FALLO · registro ~/.cache/ironbody-banco-h8-ops8f-pt04/logs/ensayo-ops8f-20261122-172701.txt

@@ -65,7 +65,7 @@ APARTADOS = {
         ("Instrucciones del Studio aplicadas a la voz, vistas en una llamada real", 20, 0.00, "", "o"),
     ]),
     7: (0.30, [
-        ("Origen de las salientes: el número empresarial compartido (código, mandos, seguridad)", 25, 0.32, "backend (ronda 2) y seguridad hechos: apto con condiciones; faltan los mandos (en curso)", "c"),
+        ("Origen de las salientes: el número empresarial compartido (código, mandos, seguridad)", 25, 0.40, "código, mandos y runbook hechos y revisados por seguridad (0 bloqueantes el 22-11; PT-04 cerrado); batería completa sin regresiones; falta la revisión final del lote 3", "c"),
         ("Clave restringida, importación en ElevenLabs y piezas de la fase 2", 15, 0.00, "acción del propietario", "o"),
         ("Apertura de la constante de llamadas y su despliegue", 15, 0.20, "pruebas de la apertura listas sobre la punta", "c"),
         ("Robustez de la llamada: plazo del job y salida de la que no llegó a iniciarse", 15, 0.40, "implementado y revisado por seguridad (C-0 y C-3 cerrados en la voz)", "c"),
