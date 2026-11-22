@@ -62,23 +62,24 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $parte = (new Lector)->partFor($this->canario);
         $this->assertSame([Lector::APPLIED, Lector::CONTRACT_V2], [$parte['state'], $parte['contract']]);
         $this->assertSame(['gratis', 'te lo regalo'], $parte['governed'][UltronPromptCompiler::PHRASES], 'la lista llega como lista, en su orden');
-        $this->assertSame(4, $parte['prompts']['compiler']);
+        $this->assertSame(5, $parte['prompts']['compiler']);
 
         $o = $this->oferta()['response'];
-        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 4], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
+        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 5], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
         $this->assertStringContainsString('FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: "gratis", "te lo regalo".', $o['roles']['composer']);
         $this->assertStringContainsString('Las frases: "gratis", "te lo regalo".', $o['roles']['critic_retry']);
         $this->assertSame(['m' => 'studio', 'h' => $canaria['prompts']['bundleHash']], array_intersect_key($this->oferta()['sp'], ['m' => 1, 'h' => 1]));
     }
 
-    public function test_el_compilador_4_sin_frases_ofrece_la_huella_de_sus_textos(): void
+    public function test_el_compilador_5_sin_frases_ofrece_la_huella_de_sus_textos(): void
     {
         $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), null);
 
         $o = $this->oferta()['response'];
         // compile-cases.json, c074; con los compiladores 1 y 2 era 702890f7…311c; con el 3, af9e0d23…4d51;
-        // con el 4 antes del parche del motor de la lista de planes, 7b09b89c…cc35.
-        $this->assertSame(['studio', '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'], [$o['mode'], $o['bundle_hash']]);
+        // con el 4 antes del parche del motor de la lista de planes, 7b09b89c…cc35; con el 4 y su motor
+        // (lo que firmó la v3), 26d57565…1075; con el 5 (Enmienda A4-5), 2eb9be6f…09c0.
+        $this->assertSame(['studio', '2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0'], [$o['mode'], $o['bundle_hash']]);
         $this->assertStringNotContainsString('FRASES PROHIBIDAS', implode("\n", $o['roles']));
     }
 
@@ -161,7 +162,7 @@ class UltronPublishedConfigPhrasesTest extends TestCase
 
     public function test_un_compilador_posterior_con_las_cinco_claves_se_lee_y_cae_a_compiler_changed(): void
     {
-        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => 5]), null);
+        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => 6]), null);
 
         $this->assertSame(Lector::APPLIED, (new Lector)->forConversation($this->canario)['state']);
         $this->assertSame(['legacy', 'compiler_changed'], [$this->oferta()['response']['mode'], $this->oferta()['response']['reason']]);
