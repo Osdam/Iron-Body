@@ -5,7 +5,10 @@ namespace Tests\Feature\Outreach\Run;
 use App\Models\Admin;
 use App\Models\AdminRole;
 use App\Models\MarketingAiAction;
+use App\Models\MarketingConversation;
 use App\Models\RolePermission;
+use App\Services\Marketing\MarketingStaffReviewService;
+use App\Services\Marketing\StaffReviewComplaintException;
 use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Run\LadderInputBuilder;
 use App\Services\Outreach\Run\OutreachAccess;
@@ -31,6 +34,13 @@ use Tests\TestCase;
  * `complaint_dismissed`, la revisión sigue pendiente y la queja sigue
  * frenando. Confirmarla, «otra» y resolver sin categoría siguen EXACTAMENTE
  * como antes para todos: esa ruta la usa el personal a diario.
+ *
+ * DEFENSA EN PROFUNDIDAD (última tanda del lote 4): la misma llave la exige
+ * también `MarketingStaffReviewService::resolveComplaint()` con la cuenta que
+ * actúa (la que queda como quien lo decidió), antes de abrir la transacción,
+ * con su propia excepción (`StaffReviewComplaintException` 403 `forbidden`):
+ * un llamador futuro del servicio no se la salta. La ruta sigue respondiendo
+ * su 403 antes (con `required_permission`, que la excepción no lleva).
  *
  * Sobre las clases REALES: la puerta (`AuthorizationMap`, `marketing.manage`),
  * la capacidad del Inbox por rol, `CrmPermission` con la política persistida,
@@ -124,6 +134,16 @@ class H9ComplaintDismissAuthorityTest extends TestCase
      */
     private function resolver(int $conversacion, array $sesion, array $cuerpo): array
     {
+        $this->escuchar();
+        $antes = count($this->escrituras);
+        $r = $this->postJson("/api/admin/marketing/inbox/conversations/{$conversacion}/staff-review/resolve", $cuerpo, $sesion);
+
+        return [$r->status(), $r->json(), array_slice($this->escrituras, $antes)];
+    }
+
+    /** Cada INSERT, UPDATE o DELETE desde aquí («verbo tabla [columnas]»), sin las tablas de la sesión. */
+    private function escuchar(): void
+    {
         if (! $this->escuchando) {
             $this->escuchando = true;
             DB::listen(function (QueryExecuted $q): void {
@@ -141,10 +161,24 @@ class H9ComplaintDismissAuthorityTest extends TestCase
                 }
             });
         }
-        $antes = count($this->escrituras);
-        $r = $this->postJson("/api/admin/marketing/inbox/conversations/{$conversacion}/staff-review/resolve", $cuerpo, $sesion);
+    }
 
-        return [$r->status(), $r->json(), array_slice($this->escrituras, $antes)];
+    /**
+     * El SERVICIO, llamado directamente (como lo haría un llamador futuro que no pase por la ruta del Inbox).
+     *
+     * @return array{0: int|StaffReviewComplaintException, 1: list<string>} lo que devuelve (o lanza) y lo que escribió
+     */
+    private function servicio(int $conversacion, ?int $adminId, string $categoria, ?string $nota = null): array
+    {
+        $this->escuchar();
+        $antes = count($this->escrituras);
+        try {
+            $r = app(MarketingStaffReviewService::class)->resolveComplaint(MarketingConversation::query()->findOrFail($conversacion), $adminId, $categoria, $nota);
+        } catch (StaffReviewComplaintException $e) {
+            $r = $e;
+        }
+
+        return [$r, array_slice($this->escrituras, $antes)];
     }
 
     /** @return array{0: bool, 1: ?int, 2: int} pendiente, quién resolvió y cuántos descartes hay */
@@ -250,6 +284,50 @@ class H9ComplaintDismissAuthorityTest extends TestCase
                     $this->assertTrue($this->frena($q['key']), "{$etiqueta}: la queja sigue frenando");
                 }
             }
+        }
+    }
+
+    /**
+     * Defensa en profundidad: el servicio exige la llave con la cuenta que actúa. Sin ella (los tres roles de la
+     * negativa de B1, una cuenta inactiva que la tenía y una que no existe), `StaffReviewComplaintException` 403
+     * `forbidden` ANTES de abrir la transacción: nada escrito, la revisión pendiente y la queja frenando. Con ella,
+     * descarta. Y `complaint_confirmed` u `other` sin la llave, como siempre. Hasta esta tanda, el servicio descartaba
+     * con cualquier cuenta: la llave solo vivía en el controlador.
+     */
+    public function test_el_servicio_tambien_exige_la_llave_con_la_cuenta_que_actua(): void
+    {
+        [$inactiva] = $this->cuenta(Admin::ROLE_SUPER_ADMIN);
+        $inactiva->forceFill(['status' => 'inactive'])->save();
+        $sinLlave = [
+            'Administrador' => (int) $this->cuenta(Admin::ROLE_ADMINISTRADOR)[0]->id,
+            'Recepción + marketing.manage' => (int) $this->cuenta(Admin::ROLE_RECEPCION, ['marketing.manage'])[0]->id,
+            'Ventas + marketing.manage' => (int) $this->cuenta('Ventas', ['marketing.manage'])[0]->id,
+            'Super Admin inactiva' => (int) $inactiva->id,
+            'una cuenta que no existe' => 999999,
+        ];
+        foreach ($sinLlave as $quien => $id) {
+            $q = $this->quejaPendiente();
+            [$r, $escrito] = $this->servicio($q['conversation'], $id, 'not_a_complaint', 'no lo era');
+            $this->assertInstanceOf(StaffReviewComplaintException::class, $r, "{$quien}: el servicio no descarta sin la llave");
+            $this->assertSame([403, 'forbidden'], [$r->status, $r->errorCode], $quien);
+            $this->assertSame([], $escrito, "{$quien}: nada escrito (ni la revisión, ni la nota, ni un descarte)");
+            $this->assertSame([true, null, 0], self::estado($q['conversation']), "{$quien}: la revisión sigue pendiente");
+            $this->assertTrue($this->frena($q['key']), "{$quien}: la queja sigue frenando");
+        }
+
+        [$superAdmin] = $this->cuenta(Admin::ROLE_SUPER_ADMIN);
+        $q = $this->quejaPendiente();
+        $this->assertSame(1, $this->servicio($q['conversation'], (int) $superAdmin->id, 'not_a_complaint')[0], 'con la llave, descarta');
+        $this->assertSame([false, (int) $superAdmin->id, 1], self::estado($q['conversation']));
+        $this->assertFalse($this->frena($q['key']));
+
+        // Confirmarla u «otra», sin la llave: como siempre (resuelve, no descarta, la queja sigue frenando).
+        $resolverLaRevision = 'update marketing_conversations [staff_review_pending,staff_review_resolved_at,staff_review_resolved_by,updated_at]';
+        foreach (['complaint_confirmed', 'other'] as $categoria) {
+            $q = $this->quejaPendiente();
+            $this->assertSame([0, [$resolverLaRevision]], $this->servicio($q['conversation'], $sinLlave['Administrador'], $categoria), $categoria);
+            $this->assertSame([false, $sinLlave['Administrador'], 1], self::estado($q['conversation']), $categoria);
+            $this->assertTrue($this->frena($q['key']), "{$categoria}: la queja sigue frenando");
         }
     }
 

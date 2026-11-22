@@ -2,11 +2,14 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\Admin;
 use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Observers\Commercial\ComplaintCommercialEmitter;
 use App\Observers\Commercial\MarketingAiActionCommercialObserver;
 use App\Services\Observability\ChannelLog;
+use App\Services\Outreach\Run\OutreachAccess;
+use App\Support\Access\CrmPermission;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -46,7 +49,10 @@ class MarketingStaffReviewService
      *    desde la resolución anterior de su revisión (lo ya resuelto no se
      *    toca) dejan de frenar: `complaint_dismissed` por cada una, con quién lo
      *    decidió. No borra nada. Las quejas posteriores, las del personal y las
-     *    de otra conversación siguen frenando. Solo con la revisión PENDIENTE
+     *    de otra conversación siguen frenando. Solo si la cuenta que actúa tiene
+     *    la llave `commercial_automation.complaints_dismiss` (si no, 403
+     *    `forbidden`, B1, sin abrir la transacción; la ruta del Inbox ya la
+     *    comprueba antes con su propia respuesta) y con la revisión PENDIENTE
      *    (si no, 409 `staff_review_not_pending`, NB1). Con `$lastSeenAiActionId`
      *    (la acción de la IA más reciente que vio quien decide), si la IA marcó
      *    después otra queja en esta conversación, 409 `complaint_newer_than_seen`
@@ -69,6 +75,13 @@ class MarketingStaffReviewService
         }
         if (! in_array($category, ComplaintCommercialEmitter::REVIEW_CATEGORIES, true)) {
             throw new StaffReviewComplaintException('complaint_category_invalid', 422, 'La categoría no es válida.');
+        }
+        // B1 (Q1-8), defensa en profundidad: «No era una queja» SUELTA el freno de las quejas de la IA. La ruta del Inbox
+        // ya responde su 403 antes de llegar aquí; esto para a cualquier otro llamador. Con la cuenta que actúa, la que
+        // queda como quien lo decidió (sin cuenta activa, sin la llave), y antes de abrir la transacción: nada escrito.
+        if ($category === ComplaintCommercialEmitter::NOT_A_COMPLAINT
+            && ! CrmPermission::allows(Admin::query()->find($adminId), OutreachAccess::COMPLAINTS_DISMISS)) {
+            throw new StaffReviewComplaintException('forbidden', 403, 'No tienes permiso para esta acción.');
         }
 
         $descartadas = DB::transaction(function () use ($conversation, $adminId, $category, $lastSeenAiActionId): int {
