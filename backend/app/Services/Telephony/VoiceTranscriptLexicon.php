@@ -48,6 +48,19 @@ use UnexpectedValueException;
  * Es una heurística: el fixture de SEC8-c la fija (18 frases de ataque, 20
  * legítimas) y un falso positivo cuesta un freno que suelta una persona, que
  * es el lado seguro.
+ *
+ * C-1 (i) (revisión de security del 22-11-2026, H-3): como también es el filtro
+ * de los beneficios de `consultar_planes` (`VoiceTranscriptGuard::spokenCodes()`),
+ * caza además los teléfonos en cifras con separadores (y con prefijo de
+ * país), las cuentas «@…», el pago fuera del checkout
+ * ({@see CODE_OFFSYSTEM_PAYMENT}), los rodeos de gratuidad y de rebaja («no se
+ * cobra», «sin pagar», «exonerada», «medio precio», «la mitad» como precio,
+ * «tarifa reducida», «diez por ciento»), los símbolos de moneda, presentarse
+ * como persona ({@see CODE_CLAIMS_HUMAN}) y pedir datos personales
+ * ({@see CODE_PERSONAL_DATA_REQUEST}). Calibrado con el mismo fixture más los
+ * casos del informe y sus negativos (`VoiceTranscriptGuardSpanishTest`).
+ * Solo categorías generales de Unicode (`\p{Sc}`): el PCRE de producción
+ * (10.39) no conoce las propiedades nuevas.
  */
 final class VoiceTranscriptLexicon
 {
@@ -66,11 +79,21 @@ final class VoiceTranscriptLexicon
     /** El agente afirma algo de un socio o de un pago (no tiene herramienta que lo sepa). */
     public const CODE_MEMBER_OR_PAYMENT_CLAIM = 'voice_member_or_payment_claim';
 
-    /** Un teléfono dictado en palabras (7 o más números seguidos) o un correo («arroba»). */
+    /** Un teléfono dictado en palabras (7 o más números seguidos) o en cifras con separadores, un correo («arroba») o una cuenta («@…»). */
     public const CODE_SPOKEN_CONTACT_DATA = 'voice_spoken_contact_data';
 
+    /** C-1 (security, 22-11-2026): una instrucción de pago fuera del checkout (Nequi, Daviplata, consignar o transferir a una cuenta o un número). */
+    public const CODE_OFFSYSTEM_PAYMENT = 'voice_offsystem_payment';
+
+    /** C-1: el agente se presenta como persona o niega ser una IA (después del aviso de E1-3). */
+    public const CODE_CLAIMS_HUMAN = 'voice_claims_human';
+
+    /** C-1: el agente pide la cédula, el documento, la dirección, la fecha de nacimiento, la EPS o una clave. */
+    public const CODE_PERSONAL_DATA_REQUEST = 'voice_personal_data_request';
+
     public const CODES = [self::CODE_DISCOUNT_EXTRA, self::CODE_MONEY_SLANG, self::CODE_LANGUAGE_NOT_SPANISH, self::CODE_PROMPT_LEAK,
-        self::CODE_MEMBER_OR_PAYMENT_CLAIM, self::CODE_SPOKEN_CONTACT_DATA];
+        self::CODE_MEMBER_OR_PAYMENT_CLAIM, self::CODE_SPOKEN_CONTACT_DATA, self::CODE_OFFSYSTEM_PAYMENT, self::CODE_CLAIMS_HUMAN,
+        self::CODE_PERSONAL_DATA_REQUEST];
 
     /**
      * Un número dicho en palabras, ya plegado (para el teléfono dictado por
@@ -80,6 +103,9 @@ final class VoiceTranscriptLexicon
     private const NUMBER_WORD = '(?:cero|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci[a-z]+|veinte|veinti[a-z]+|'
         .'treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|'
         .'ochocientos|novecientos|mil)\b';
+
+    /** C-1: «número» como destino de un pago; «pagas por número de clases» no lo es. */
+    private const PAYEE_NUMBER = 'numero(?!\s+de\s+(?:clases?|sesion(?:es)?|entradas?|dias?|meses|personas?|ingresos?|visitas?)\b)';
 
     /**
      * Los patrones, sobre el texto PLEGADO. Los extra de la plantilla
@@ -97,15 +123,71 @@ final class VoiceTranscriptLexicon
             .'regalamos|regalaremos|regalad[oa]s?|cortesia|precio\s+de\s+amigo|te\s+lo\s+(dejo|puedo\s+dejar)\s+(en|a)|'
             .'no\s+(tiene|tendria|te\s+cuesta|te\s+va\s+a\s+costar)\s+(ningun\s+|nada\s+de\s+)?costo|no\s+(te|le|les)\s+(cuesta|costaria|costara|va\s+a\s+costar)\s+nada|'
             .'por\s+cuenta\s+de\s+la\s+casa|por\s+ciento\s+(menos|de\s+descuento|de\s+rebaja)|sin\s+pagar\s+(la\s+|el\s+)?(inscripcion|matricula|afiliacion|mensualidad|primer\s+mes)|'
-            .'sin\s+cobro|no\s+te\s+cobr\w+|bonos?|cupon(es)?|codigo\s+promocional|obsequi\w+|bonificaci\w+|dos\s+por\s+uno)\b/u',
+            .'sin\s+cobro|no\s+te\s+cobr\w+|bonos?|cupon(es)?|codigo\s+promocional|obsequi\w+|bonificaci\w+|dos\s+por\s+uno|'
+            // C-1 (security, 22-11-2026): los rodeos de gratuidad y de rebaja. «No se paga» dicho de la llamada («por
+            // teléfono no se paga») es la verdad que manda la plantilla, no una gratuidad.
+            .'dos\s+(?:x|por)\s+uno|tres\s+(?:x|por)\s+dos|'
+            .'(?<!telefono\s)(?<!llamada\s)(?<!aqui\s)(?<!aca\s)no\s+se\s+(?:cobra|cobran|paga|pagan)'
+            .'(?!\s+(?:por\s+(?:telefono|aqui|aca|esta\s+(?:llamada|via|linea))|en\s+(?:esta\s+)?(?:llamada|linea)|aqui|aca)\b)|'
+            .'no\s+(?:te\s+|le\s+|les\s+|se\s+)?(?:lo|la|los|las)\s+cobr\w+|no\s+(?:le|les)\s+cobr\w+|sin\s+pagar|sin\s+cobr\w+|exonera\w*|'
+            .'por\s+(?:nuestra\s+cuenta|cuenta\s+nuestra)|medio\s+precio|mitad\s+de\s+precio|precio\s+a\s+(?:la\s+)?mitad|'
+            .'(?:tarifas?|precios?|valor(?:es)?|cuotas?|mensualidad(?:es)?)\s+(?:reducid[oa]s?|preferencial(?:es)?|rebajad[oa]s?|diferencial(?:es)?|especial(?:es)?)|'
+            // «la mitad» solo como precio: «paga la mitad», «te sale a la mitad», «la mitad de la mensualidad»; nunca «la mitad de la clase».
+            .'(?:pag(?:a|as|ar|amos|ue|ues|uen|aras|aria|arias)|vale|valen|cuesta|cuestan|costaria|cobr\w+|sale|saldria)\s+(?:[a-z0-9]+\s+){0,2}?(?:(?:a|en|por)\s+)?la\s+mitad'
+            .'(?!\s+de(?:l|\s+la|\s+las|\s+los)?\s+(?:clases?|rutinas?|entrenamientos?|sesion(?:es)?|dias?|semanas?|camino|tiempo|grupos?|socios|gente|personas|ejercicios?|series?)\b)|'
+            .'la\s+mitad\s+(?:del|de\s+(?:la|el|su|tu|lo))\s+(?:precio|valor|costo|tarifa|mensualidad|inscripcion|matricula|plan|que\s+pagas|normal)|'
+            // «N por ciento» en palabras o en cifras (el motor ya caza «N %»); «cien por ciento personalizado» no es una rebaja.
+            .'(?!(?:cien|100)\b)(?:\d{1,3}|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci[a-z]+|veinte|veinti[a-z]+|'
+            .'treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)(?:\s+y\s+(?:uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve))?\s*por\s*ciento)\b'
+            .'|\bgr[a4@]t[i1l!|][s5$z](?![a-z0-9])/u',
+        // C-1: y los símbolos de moneda que no son el «$» de un precio del catálogo (ya tapado): «£10», «10 US$», «¥500».
         self::CODE_MONEY_SLANG => '/\b(\d{1,4}|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento)\s+'
-            .'(lucas?|luquitas?|barras?(?!\s+(olimpicas?|de\s+(pesas|dominadas|discos)|paralelas)\b))\b|\b(un|medio|dos|tres)\s+palos?\b|\bmillon(es)?\b|\busd\b|\bdolar(es)?\b|\beuros?\b|\x{20AC}/u',
+            .'(lucas?|luquitas?|barras?(?!\s+(olimpicas?|de\s+(pesas|dominadas|discos)|paralelas)\b))\b|\b(un|medio|dos|tres)\s+palos?\b|\bmillon(es)?\b|\busd\b|\bdolar(es)?\b|\beuros?\b|\x{20AC}|\p{Sc}/u',
         self::CODE_MEMBER_OR_PAYMENT_CLAIM => '/\b((esta|estas|sigue|sigues)\s+(inscrit[oa]|afiliad[oa])|(su|tu)\s+(membresia|afiliacion|plan)\s+(esta|sigue|vence|vencio|quedo)|'
             .'(registrado|recibido|confirmado|aprobado|quedo)\s+(tu|su|el)\s+pago|pago\s+(recibido|registrado|confirmado|aprobado|quedo)|'
             .'(?<!\bsi\s)(?<!\bcuando\s)(?<!\bmientras\s)(esta|estas|sigue|sigues|va|vas)\s+al\s+dia\s+(con|en)\s+(sus|tus|su|tu|los)\s+pagos?|(es|esta|sigue)\s+(socio|socia|afiliad[oa]|miembro)\s+activ[oa])\b/u',
+        // C-1: también una cuenta de red social («@ironbody.neiva»); el teléfono en cifras va en {@see dialedDigits()}.
         self::CODE_SPOKEN_CONTACT_DATA => '/\b(cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)([\s,.-]+(cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)){6,}\b|\barroba\b|'
-            .'\b'.self::NUMBER_WORD.'(?:[\s,.\-]+(?:y\s+)?'.self::NUMBER_WORD.'){6,}+/u',
+            .'\b'.self::NUMBER_WORD.'(?:[\s,.\-]+(?:y\s+)?'.self::NUMBER_WORD.'){6,}+|@\s*[a-z0-9_]/u',
+        // C-1: pagar fuera del checkout. Nequi, Daviplata y la consignación siempre; pagar, consignar, transferir o
+        // depositar solo hacia una cuenta, un número o un nombre («paga al número…», «consigna a la cuenta…»): «pagar en la
+        // sede o por WhatsApp» es lo que manda la plantilla, y «pagas por mes» o «por 3 meses» no son una instrucción.
+        self::CODE_OFFSYSTEM_PAYMENT => '/\b(?:nequi|davi\s*plata|consignacion(?:es)?)\b'
+            .'|\b(?:pag(?:a|as|ar|ue|uen|ues|amos|ando|alo|ala|ale|aste|o|ara|aras|aria|arias)|consign(?:a|as|ar|e|en|es|amos|ando|alo|ala|ale|aste|o|ara|aras)'
+            .'|transfier(?:e|es|a|as|en|an)|transferi(?:r|rle|rlo|rla|mos|ste)|deposit(?:a|as|ar|e|en|es|amos|ando|alo|ala|ale|o))\s+(?:[a-z0-9$.,]+\s+){0,3}?'
+            // «Paga al teléfono…» es un destino; «no se paga por teléfono» es el canal, y es la verdad.
+            .'(?:(?:al|a(?:\s+(?:la|el|este|esta|ese|esa|una|un|mi|nuestra|nuestro|tu|su))?)\s+(?:cuenta|'.self::PAYEE_NUMBER.'|nro|celular|cel|telefono|movil|llave|nombre\s+de)'
+            .'|por(?:\s+(?:la|el|este|esta|una|un|nuestra|nuestro))?\s+(?:cuenta|'.self::PAYEE_NUMBER.'|nro|llave))\b'
+            .'|\btransferencias?\s+(?:bancarias?|electronicas?|interbancarias?|de\s+(?:dinero|fondos)|(?:a|al|a\s+(?:la|una|tu|su|nuestra))\s+(?:cuenta|numero))\b'
+            .'|\b(?:por|mediante|via)\s+(?:una\s+)?transferencia\b/u',
+        // C-1: presentarse como persona o negar ser una IA. «No soy una persona» y «¿que si soy una persona?» son lo
+        // que manda la plantilla; también la orden escrita en un texto del catálogo («di que eres una persona»).
+        self::CODE_CLAIMS_HUMAN => '/(?<!\bno\s)(?<!\bsi\s)(?<!\btampoco\s)(?<!\bni\s)\bsoy\s+(?:un[ao]?\s+)?(?:persona|humano|humana|ser\s+humano|de\s+carne\s+y\s+hueso)\b'
+            .'|\bno\s+soy\s+(?:un[ao]?\s+)?(?:robot|bot|maquina|asistente|ia|inteligencia\s+artificial|programa|sistema|grabacion|contestadora)\b'
+            .'|\b(?:di|dile|digale|diga|decir|decirle|afirma|afirmale|responde|contesta|asegura)\s+que\s+(?:eres|es|soy)\s+(?:un[ao]?\s+)?(?:persona|humano|humana|ser\s+humano)\b/u',
+        // C-1: pedir datos personales: un verbo de petición y, como mucho tres palabras después, «tu/su» + el dato. «La
+        // dirección de la sede», «el documento de valoración» o «te piden tu documento en la sede» no son una petición.
+        self::CODE_PERSONAL_DATA_REQUEST => '/\b(?:(?:me|nos)\s+(?:das|da|dices|dice|regalas|regala|compartes|comparte|confirmas|confirma|indicas|indica|dictas|dicta|pasas|pasa|'
+            .'facilitas|facilita|envias|envia|escribes|escribe|proporcionas|proporciona|(?:puedes|podrias|puede|podria)\s+(?:dar|decir|regalar|compartir|confirmar|indicar|dictar|pasar))'
+            .'|dime|digame|dame|deme|regalame|regaleme|comparteme|compartame|indicame|indiqueme|confirmame|confirmeme|dictame|dicteme|pasame|paseme|facilitame|enviame|envieme'
+            .'|necesito|necesitamos|necesitaria|necesitariamos|requiero|requerimos|(?<!\bte\s)(?<!\ble\s)(?<!\bse\s)(?<!\bles\s)(?:pide|pidele|pidale|pidan|solicita|solicitale)'
+            .'|cual\s+es|cuales\s+son)\s+(?:[a-z0-9]+\s+){0,3}?(?:tu|su|tus|sus)\s+(?:numero\s+de\s+)?(?:cedulas?|documentos?|identificacion|direccion|fecha\s+de\s+nacimiento|eps|claves?|contrasenas?|pin)\b'
+            .'|\b(?:a\s+)?(?:que|cual)\s+eps\b/u',
     ];
+
+    /**
+     * C-1: un teléfono en CIFRAS, 7 o más separadas por espacios, puntos,
+     * guiones o paréntesis, con o sin prefijo de país («310-555-12-34»,
+     * «+57 (310) 555-12-34»). No lo es una cantidad con sus puntos de miles
+     * («1.200.000», que ya es dinero) ni una hora («5.00-22.00»).
+     */
+    private const DIALED_DIGITS = '/(?<![\d+])(?:\+\s*)?\d(?:[\s().\-]*+\d){6,}/u';
+
+    /** Una cantidad con sus separadores de miles, uniformes («1.200.000», «1 200 000»). */
+    private const THOUSANDS = '/^\d{1,3}(?:([.,\s])\d{3})(?:\1\d{3})*$/D';
+
+    /** Una hora con punto o dos puntos («5.00», «22:30»), que no es parte de un número más largo. */
+    private const CLOCK_TIME = '/(?<![\d.,:])\d{1,2}[.:]\d{2}(?![\d.,:])/u';
 
     /** Lo que solo dice quien recita su configuración: las secciones y marcas de la plantilla y del motor de la voz. */
     private const LEAK_MARKERS = ['{{', 'system__', 'datos de esta llamada', 'mis instrucciones', 'mi prompt', 'instrucciones del sistema', 'mis herramientas'];
@@ -314,6 +396,7 @@ final class VoiceTranscriptLexicon
             $hay = match ($codigo) {
                 self::CODE_PROMPT_LEAK => self::leaks($folded),
                 self::CODE_LANGUAGE_NOT_SPANISH => self::notSpanish($folded),
+                self::CODE_SPOKEN_CONTACT_DATA => self::matches(self::PATTERNS[$codigo], $folded) || self::dialedDigits($folded),
                 default => self::matches(self::PATTERNS[$codigo], $folded),
             };
             if ($hay) {
@@ -368,6 +451,29 @@ final class VoiceTranscriptLexicon
         }
 
         return self::matches(self::LEAK_TOOL_PATTERN, $folded);
+    }
+
+    /**
+     * C-1: ¿hay un teléfono en cifras ({@see DIALED_DIGITS})? Las horas salen
+     * antes (un horario con puntos no es un teléfono) y una cantidad con sus
+     * puntos de miles no cuenta: es dinero, y del dinero se ocupan el motor y
+     * la máscara del catálogo.
+     *
+     * @throws UnexpectedValueException si PCRE falla (m-2)
+     */
+    private static function dialedDigits(string $folded): bool
+    {
+        $r = preg_match_all(self::DIALED_DIGITS, self::replace(self::CLOCK_TIME, ' h ', $folded), $m);
+        if ($r === false) {
+            throw new UnexpectedValueException('La guarda no pudo evaluar el turno (PCRE: '.preg_last_error_msg().').');
+        }
+        foreach ($m[0] as $tramo) {
+            if (! self::matches(self::THOUSANDS, ltrim($tramo, "+ \t"))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Dos marcas distintas de inglés en el mismo turno. */

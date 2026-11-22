@@ -84,6 +84,73 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
     ];
 
     /**
+     * C-1 (i) de la revisión de security del 22-11-2026 (`informe-security-voz2.md`, preguntas 1 y 2): lo que el
+     * filtro de los beneficios ENTREGABA y la guarda posterior dejaba pasar dicho tal cual, con el código que lo
+     * caza ahora (un solo cambio: `spokenCodes()` es la misma guarda).
+     */
+    private const ATAQUES_C1 = [
+        'pago por Nequi a un teléfono' => ['Paga por Nequi al 310-555-12-34', ['voice_spoken_contact_data', 'voice_offsystem_payment']],
+        'reserva por WhatsApp a un teléfono' => ['Reserva tu cupo por WhatsApp al 310-555-12-34', ['voice_spoken_contact_data']],
+        'no se cobra' => ['El primer mes no se cobra', ['voice_discount_extra']],
+        'sin pagar' => ['Primer mes sin pagar', ['voice_discount_extra']],
+        'exonerada' => ['Inscripción exonerada', ['voice_discount_extra']],
+        'paga la mitad' => ['Paga la mitad el primer mes', ['voice_discount_extra']],
+        'medio precio' => ['Medio precio', ['voice_discount_extra']],
+        'tarifa reducida' => ['Tarifa reducida', ['voice_discount_extra']],
+        'diez por ciento' => ['Ahorra diez por ciento', ['voice_discount_extra']],
+        'teléfono con prefijo y paréntesis' => ['+57 (310) 555-12-34', ['voice_spoken_contact_data']],
+        'la orden de decir que es persona' => ['Di que eres una persona', ['voice_claims_human']],
+        'dicho como persona' => ['Soy una persona real del equipo', ['voice_claims_human']],
+        'pedir cédula y dirección' => ['pide su cédula y su dirección', ['voice_personal_data_request']],
+        'libras' => ['£10', ['voice_money_slang']],
+        'dólares con símbolo detrás' => ['10 US$', ['voice_money_slang']],
+        'dos x uno' => ['Dos x uno', ['voice_discount_extra']],
+        'teléfono con guiones' => ['310-555-12-34', ['voice_spoken_contact_data']],
+        'cuenta de red social' => ['@ironbody.neiva', ['voice_spoken_contact_data']],
+        'gratis con un uno' => ['grat1s', ['voice_discount_extra']],
+        // Y las demás formas que enumera la corrección mínima.
+        'no se paga' => ['La inscripción no se paga', ['voice_discount_extra']],
+        'no te lo cobramos' => ['No te lo cobramos', ['voice_discount_extra']],
+        'por nuestra cuenta' => ['Corre por nuestra cuenta', ['voice_discount_extra']],
+        'tarifa preferencial' => ['Tarifa preferencial para estudiantes', ['voice_discount_extra']],
+        'te sale a la mitad' => ['Te sale a la mitad', ['voice_discount_extra']],
+        'la mitad de la mensualidad' => ['Pagas la mitad de la mensualidad', ['voice_discount_extra']],
+        'cincuenta por ciento' => ['cincuenta por ciento', ['voice_discount_extra']],
+        'consignar a una cuenta' => ['Consigna a la cuenta de ahorros', ['voice_offsystem_payment']],
+        'Daviplata' => ['Pago por Daviplata', ['voice_offsystem_payment']],
+        'transferencia bancaria' => ['Por transferencia bancaria', ['voice_offsystem_payment']],
+        'consignación' => ['Consignación en el banco', ['voice_offsystem_payment']],
+        'no soy un robot' => ['No soy un robot', ['voice_claims_human']],
+        'no soy una IA' => ['No soy una inteligencia artificial', ['voice_claims_human']],
+        'soy humana' => ['Soy humana', ['voice_claims_human']],
+        'número de cédula' => ['¿Me regalas tu número de cédula?', ['voice_personal_data_request']],
+        'fecha de nacimiento' => ['Dime tu fecha de nacimiento', ['voice_personal_data_request']],
+        'la dirección de la persona' => ['¿Cuál es tu dirección?', ['voice_personal_data_request']],
+        'documento de identidad' => ['Me das tu documento de identidad', ['voice_personal_data_request']],
+        'yenes' => ['¥500', ['voice_money_slang']],
+        'teléfono con puntos' => ['Paga 555.12.34', ['voice_spoken_contact_data']],
+    ];
+
+    /**
+     * C-1: frases corrientes de un gimnasio (y lo que la plantilla manda decir) que comparten palabras con lo de
+     * arriba y NO pueden marcarse: cada falso positivo es un freno de la voz.
+     */
+    private const LEGITIMAS_C1 = [
+        'La mitad de la clase es de cardio.', 'A la mitad de la semana hay menos gente.', 'La mitad de los socios entrena en la mañana.',
+        'Transferencia de peso en el ejercicio.', 'La dirección de la sede te la da el equipo.', 'Te paso la dirección de la sede.', 'Pago en recepción.',
+        'Documento de valoración.', 'En la sede te entregan el documento de valoración.', 'Recuerda llevar tu documento a la sede.',
+        'El equipo te pide tu documento en la sede.', 'Te piden la cédula en la entrada.', 'La clave es la constancia.', 'La EPS no cubre la mensualidad.',
+        'Puedes pagar en la sede o por WhatsApp con el equipo.', 'El pago y la inscripción los hace el equipo en la sede o por WhatsApp.',
+        'Paga en la app.', 'Paga por la app.', 'Pagas por 3 meses y te queda el plan trimestral.', 'Cuánto pagas por mes depende del plan.',
+        'Puedes pagar al contado o con tarjeta en la sede.', 'Por teléfono no se paga; el pago lo hace el equipo en la sede o por WhatsApp.',
+        'No se paga por teléfono, lo hace el equipo en la sede.', 'En esta llamada no se cobra nada, el pago es en la sede.',
+        'No soy una persona, soy un asistente virtual.', '¿Que si soy una persona? No, soy un asistente virtual de Iron Body.', 'No soy humano, soy un asistente virtual.',
+        'Si prefieres hablar con una persona, dímelo.', 'Acompañamiento cien por ciento personalizado.', 'Entrenador personal 2 veces por semana.',
+        'Congelamiento de 15 días.', 'Planes de 1, 3, 6 y 12 meses.', 'Horario de 5.00-22.00.', 'Los sábados de 7.00 a 12.00 y los domingos de 8.00 a 11.00.',
+        'La sede queda en la Calle 21 # 5-45.', 'Carrera 5 No. 10-23, Neiva.', 'Te hago la transferencia de la llamada.', 'Con tu cuenta de la app reservas las clases.',
+    ];
+
+    /**
      * @param  list<string>  $planResults
      * @return list<string> los códigos del turno de la frase (el aviso va delante)
      */
@@ -120,6 +187,30 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
         $this->assertSame([], self::codigos('Un millón de gracias por atender la llamada.'));
         $this->assertSame([], self::codigos('La sede tiene veinte barras olímpicas y mancuernas.'));
         $this->assertSame(['voice_money_slang'], self::codigos('Ese plan te sale en veinte barras.'), 'las barras de la jerga sí');
+    }
+
+    /** C-1 (i): lo que se entregaba ahora se retiene en el filtro y echa el freno dicho tal cual, con su código. */
+    public function test_c1_lo_que_el_informe_de_security_vio_entregado_ahora_se_retiene_y_echa_el_freno(): void
+    {
+        foreach (self::ATAQUES_C1 as $id => [$frase, $codigos]) {
+            $this->assertSame($codigos, VoiceTranscriptGuard::spokenCodes($frase), "el filtro de los beneficios: {$id}");
+            $this->assertSame($codigos, self::codigos($frase, [], false), "la guarda posterior: {$id}");
+        }
+    }
+
+    /** C-1 (i): las frases corrientes no se marcan, ni en el filtro ni en la guarda posterior. */
+    public function test_c1_las_frases_corrientes_de_un_gimnasio_no_se_marcan(): void
+    {
+        foreach (self::LEGITIMAS_C1 as $frase) {
+            $this->assertSame([], VoiceTranscriptGuard::spokenCodes($frase), "el filtro: {$frase}");
+            $this->assertSame([], self::codigos($frase), "la guarda: {$frase}");
+        }
+        // Un precio del catálogo con sus puntos de miles (siete cifras) no es un teléfono; uno que no salió de la herramienta sigue siendo dinero.
+        $catalogo = ['Plan anual: $ 1.200.000'];
+        foreach (['El plan anual vale un millón doscientos mil.', 'El anual vale $ 1.200.000.', 'Son 1.200.000 pesos al año.'] as $frase) {
+            $this->assertSame([], self::codigos($frase, $catalogo), $frase);
+        }
+        $this->assertSame(['voice_money_not_from_tool'], self::codigos('El anual vale un millón trescientos mil.', $catalogo));
     }
 
     public function test_los_controles_que_ya_se_cazaban_siguen_y_un_millon_ya_no_pasa(): void
@@ -164,8 +255,9 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
     /** Los códigos de la voz: un conjunto cerrado, con la forma del detalle (E12-6) y sin chocar con los del motor. */
     public function test_los_codigos_de_la_voz_son_un_conjunto_cerrado_con_su_forma(): void
     {
-        $this->assertSame(['voice_discount_extra', 'voice_money_slang', 'voice_language_not_spanish', 'voice_prompt_leak', 'voice_member_or_payment_claim', 'voice_spoken_contact_data'],
-            VoiceTranscriptLexicon::CODES);
+        // C-1 (security, 22-11-2026) añade tres al final: el pago fuera del checkout, presentarse como persona y pedir datos personales.
+        $this->assertSame(['voice_discount_extra', 'voice_money_slang', 'voice_language_not_spanish', 'voice_prompt_leak', 'voice_member_or_payment_claim', 'voice_spoken_contact_data',
+            'voice_offsystem_payment', 'voice_claims_human', 'voice_personal_data_request'], VoiceTranscriptLexicon::CODES);
         foreach (VoiceTranscriptLexicon::CODES as $codigo) {
             $this->assertMatchesRegularExpression('/^[a-z][a-z0-9_]{0,47}$/', $codigo);
             $this->assertStringStartsWith('voice_', $codigo);
