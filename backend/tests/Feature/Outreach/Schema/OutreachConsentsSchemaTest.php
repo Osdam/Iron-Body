@@ -357,6 +357,9 @@ class OutreachConsentsSchemaTest extends TestCase
             'siete dígitos seguidos' => 'Pidió que le escriban al 3001234 por la mañana',
             'un celular entero' => 'Su número es 3001234567',
             'vacía' => '   ',
+            // M-7: sin marcado, en los dos motores.
+            'una etiqueta' => '<script>alert(1)</script> firmado',
+            'un mayor que' => 'Firmó en recepción > ayer',
         ];
         if ($this->isPostgres()) {
             // Lo que GLOB no expresa, solo en PG (la puerta PG es obligatoria): la serie con separadores, un correo, un control.

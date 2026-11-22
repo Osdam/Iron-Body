@@ -534,6 +534,10 @@ class OutreachConsentsApiTest extends TestCase
             'separador de línea' => ["Formulario\u{2028}firmado", 'invalid'],
             'control C1' => ["Formulario\u{0085}firmado", 'invalid'],
             'invisible' => ["Formulario\u{200B}firmado", 'invalid'],
+            // M-7: la evidencia es texto, no marcado.
+            'una etiqueta' => ['<script>alert(1)</script> firmado', 'invalid'],
+            'un menor que' => ['Firmó en recepción < 5 min', 'invalid'],
+            'un mayor que' => ['Firmó en recepción > ayer', 'invalid'],
             'demasiado larga' => [str_repeat('a', 301), 'invalid'],
             'demasiado corta' => ['ab', 'length'],
             'solo espacios' => ['     ', 'invalid'],
@@ -550,7 +554,7 @@ class OutreachConsentsApiTest extends TestCase
         $this->postJson(self::BASE.'consents', ['evidence' => 'Formulario firmado en recepción el 22 de noviembre, carpeta 12 (Ana)'] + $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertCreated();
         // Lo que la base también rechaza, insertado a mano, la base lo rechaza (no es una regla solo del servicio).
         if ($this->isPostgres()) {
-            foreach (['Tel 300 123 45 67', 'ana@ejemplo.com', "a\tb"] as $texto) {
+            foreach (['Tel 300 123 45 67', 'ana@ejemplo.com', "a\tb", '<b>firmado</b>'] as $texto) {
                 try {
                     DB::transaction(fn () => $this->requestConsent(['member_id' => $p['member'], 'evidence' => $texto]));
                     $this->fail("la base admitió «{$texto}»");

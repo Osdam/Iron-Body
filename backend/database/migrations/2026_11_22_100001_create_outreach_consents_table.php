@@ -45,7 +45,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * DATOS PERSONALES (Ley 1581). La persona es su `subject_key` (`m:<id>` |
  * `l:<id>`) con sus referencias; el número, su seudónimo; la evidencia, ≤ 300
- * de texto plano sin teléfonos ni correos (CHECK). Los únicos nombres son los
+ * de texto plano sin marcado, teléfonos ni correos (CHECK). Los únicos nombres son los
  * del personal. LA ÚNICA MUTACIÓN es la SUPRESIÓN 1581, una vez y entera
  * (`ocon_redaction_only`): `subject_key` = 'x:<id>', sin socio ni lead,
  * `phone_ref` a NULL, `evidence` = '[suprimido]' y `redacted_at`; y, por
@@ -245,15 +245,16 @@ return new class extends Migration
         $telefono = static fn (string $hex): string => "(redacted_at IS NULL AND ((kind IN ('requested', 'granted') AND phone_ref IS NOT NULL AND {$hex}) "
             ."OR (kind = 'revoked' AND (phone_ref IS NULL OR {$hex})) "
             ."OR (kind NOT IN ('requested', 'granted', 'revoked') AND phone_ref IS NULL))) OR (redacted_at IS NOT NULL AND phone_ref IS NULL)";
-        // Texto plano sin datos de contacto: sin controles, sin 7 dígitos seguidos, sin la serie de 8 con separadores
-        // de StudioCanaryPhone::CONTACT_DIGIT_RUN y sin correos (CONTACT_EMAIL); o la marca de la supresión.
-        $evidenciaPg = "(redacted_at IS NULL AND ".$filled('evidence')." AND evidence !~ '[[:cntrl:]]' AND evidence !~ '[0-9]{7,}' "
+        // Texto plano sin datos de contacto: sin controles, sin marcado (`<` ni `>`, M-7 de la revisión de API), sin 7
+        // dígitos seguidos, sin la serie de 8 con separadores de StudioCanaryPhone::CONTACT_DIGIT_RUN y sin correos
+        // (CONTACT_EMAIL); o la marca de la supresión.
+        $evidenciaPg = '(redacted_at IS NULL AND '.$filled('evidence')." AND evidence !~ '[[:cntrl:]]' AND evidence !~ '[<>]' AND evidence !~ '[0-9]{7,}' "
             ."AND evidence !~ '[0-9]([^[:alpha:][:digit:]]{0,3}[0-9]){7,}' AND evidence !~ '[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+') "
-            ."OR (redacted_at IS NOT NULL AND evidence = ".self::literal(self::REDACTED).')';
+            .'OR (redacted_at IS NOT NULL AND evidence = '.self::literal(self::REDACTED).')';
         // SQLite no aplica el varchar(300): la longitud va aquí.
-        $evidenciaLite = "(redacted_at IS NULL AND ".$filled('evidence').' AND length(evidence) <= '.self::EVIDENCE_MAX
-            ." AND evidence NOT GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*') "
-            ."OR (redacted_at IS NOT NULL AND evidence = ".self::literal(self::REDACTED).')';
+        $evidenciaLite = '(redacted_at IS NULL AND '.$filled('evidence').' AND length(evidence) <= '.self::EVIDENCE_MAX
+            ." AND evidence NOT GLOB '*[<>]*' AND evidence NOT GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*') "
+            .'OR (redacted_at IS NOT NULL AND evidence = '.self::literal(self::REDACTED).')';
 
         return [
             'ocon_kind_chk' => $dominio('kind', self::KINDS),
@@ -270,7 +271,7 @@ return new class extends Migration
                 'una petición y su confirmación llevan la versión y el sha256 del texto legal aceptado; un rechazo y una retirada, no'],
             'ocon_phone_chk' => [$telefono($hexPg('phone_ref')), $telefono($hexLite('phone_ref')),
                 'una petición y su confirmación llevan el seudónimo del número (64 hex), nunca el número; una retirada, el suyo si lo tenía; un rechazo, no'],
-            'ocon_evidence_chk' => [$evidenciaPg, $evidenciaLite, 'la evidencia es texto plano de 1 a 300 sin teléfonos ni correos'],
+            'ocon_evidence_chk' => [$evidenciaPg, $evidenciaLite, 'la evidencia es texto plano de 1 a 300, sin marcado, teléfonos ni correos'],
         ];
     }
 

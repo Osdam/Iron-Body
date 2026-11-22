@@ -62,7 +62,7 @@ use Illuminate\Support\Str;
  * para lo mismo pueden quedar las dos pendientes: inofensivo.
  *
  * LA EVIDENCIA se valida con TODO lo que la base rechazaría (`ocon_evidence_chk`):
- * nunca un 500 por un CHECK. El registro (`Log`) lleva el uuid, la finalidad,
+ * nunca un 500 por un CHECK. Sin marcado (`<` ni `>`: 422 `invalid`). El registro (`Log`) lleva el uuid, la finalidad,
  * la fuente y la cuenta; nunca la persona, su número, nombres ni la evidencia.
  */
 final class OutreachConsents
@@ -103,6 +103,9 @@ final class OutreachConsents
 
     /** Los controles de `[[:cntrl:]]` en cualquier idioma de la base (C0, DEL, C1 y los separadores de línea y párrafo). */
     private const CONTROLS = '/[\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]/u';
+
+    /** El marcado de `ocon_evidence_chk` (M-7 de la revisión de API): ni `<` ni `>`; la evidencia es texto, no HTML. */
+    private const MARKUP = '/[<>]/';
 
     private const COLUMNS = [
         'id', 'uuid', 'client_request_id', 'subject_key', 'member_id', 'lead_id', 'purpose', 'channel', 'kind', 'request_uuid', 'source',
@@ -436,7 +439,7 @@ final class OutreachConsents
             return [$field => ['invalid']];
         }
         $v = Validator::make([$field => $evidence], [$field => ['required', 'string', 'max:'.self::EVIDENCE_MAX, new PlainText(strict: true)]]);
-        if ($v->fails() || ! mb_check_encoding($evidence, 'UTF-8') || preg_match(self::CONTROLS, $evidence) !== 0) {
+        if ($v->fails() || ! mb_check_encoding($evidence, 'UTF-8') || preg_match(self::CONTROLS, $evidence) !== 0 || preg_match(self::MARKUP, $evidence) !== 0) {
             return [$field => ['invalid']];
         }
         if (mb_strlen(trim($evidence), 'UTF-8') < self::EVIDENCE_MIN || mb_strlen($evidence, 'UTF-8') > self::EVIDENCE_MAX) {
