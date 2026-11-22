@@ -82,7 +82,7 @@ class UltronA4NotasDelServidorTest extends TestCase
     /** El borrador 3 de la prueba real, sin expandir (200 caracteres): repite `{{PLAN_3}}`. */
     private const BORRADOR_3 = 'Le comento que tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. Por ejemplo, el {{PLAN_3}} incluye acceso ilimitado, asesoría y seguimiento con entrenador. ¿Qué busca lograr con su entrenamiento?';
 
-    /** Lo que el servidor le dice al redactor de ese borrador: las dos notas con el presupuesto, unidas por un espacio (469 caracteres). */
+    /** Lo que el servidor le dice al redactor de ese borrador: las dos notas con el presupuesto, unidas por un espacio (462 caracteres; 469 en el peor caso). */
     private const NOTAS_DEL_BORRADOR_3 = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. DEMASIADO LARGO: mide 251 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.';
 
     /** La lista fija de hoy con el tope de la canaria (la de `UltronA4ListaDelModeloTest`): la que le llegó a la persona en la prueba. */
