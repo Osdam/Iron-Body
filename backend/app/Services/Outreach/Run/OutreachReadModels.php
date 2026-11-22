@@ -48,9 +48,12 @@ final class OutreachReadModels
         }
         $cursores = DB::table(OutreachTables::CURSORS)->get(['source', 'last_id', 'updated_at'])->map(static fn (object $c): array => ['source' => (string) $c->source, 'lastId' => (int) $c->last_id, 'updatedAt' => self::iso($c->updated_at)])->all();
         $modo = OutreachConfig::active() ? OutreachConfig::mode() : null;
+        $config = OutreachConfig::status();
+        // Aditivo (AI9), dentro de su bloque: lo que el clasificador lleva hoy (día de Bogotá). Las claves de primer nivel no cambian.
+        $config['classifierSetup']['today'] = $this->classifierToday($now);
 
         return [
-            'config' => OutreachConfig::status(),
+            'config' => $config,
             'brakes' => [
                 'own' => $this->stop->openScopes(),
                 'open' => array_values(array_filter($this->stop->list(50), static fn (array $b): bool => ! $b['released'])),
@@ -74,6 +77,24 @@ final class OutreachReadModels
             'can' => $access->capabilities(),
             'at' => RelativeTime::format($now),
         ];
+    }
+
+    /**
+     * AI9: el contador del clasificador del día de Bogotá (modo `live`, el
+     * único en el que clasifica): llamadas y micros reservados o gastados, y
+     * los techos con los que nació la fila (los de ahora están en
+     * `config.classifierSetup`). Sin fila, ceros.
+     *
+     * @return array{day: string, calls: int, micros: int, capUnits: int|null, capMicros: int|null}
+     */
+    private function classifierToday(DateTimeImmutable $now): array
+    {
+        $dia = RelativeTime::bogotaDate($now);
+        $b = DB::table(OutreachTables::BUDGETS)->where('budget_day', $dia)->where('mode', OutreachConfig::MODE_LIVE)->where('scope', BudgetReservations::SCOPE_CLASSIFIER)
+            ->first(['cap_units', 'cap_micros', 'reserved_units', 'reserved_micros']);
+
+        return ['day' => $dia, 'calls' => $b === null ? 0 : (int) $b->reserved_units, 'micros' => $b === null ? 0 : (int) $b->reserved_micros,
+            'capUnits' => $b === null ? null : (int) $b->cap_units, 'capMicros' => $b === null ? null : (int) $b->cap_micros];
     }
 
     // ── E2 · metrics ────────────────────────────────────────────────────────

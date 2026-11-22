@@ -6,9 +6,12 @@ use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\RelativeTime;
 use App\Services\Outreach\Facts\WhatsappRecipient;
 use App\Services\Outreach\Facts\WhatsappSignals;
+use App\Services\Outreach\Run\Classifier\ReplyClassifier;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * W9 · LOS NORMALIZADORES DE WHATSAPP (contrato H9, D9-8 etapa 8, D9-10;
@@ -37,7 +40,13 @@ use Illuminate\Support\Facades\DB;
  *    aunque la estrategia mande `replied` → `end_exit`), y mientras tanto
  *    {@see SubjectSuppressions} la cuenta como baja de la finalidad. Nunca
  *    interpreta el texto: la baja segura es una lista cerrada y la posible, un
- *    detector conservador; clasificar una respuesta es AI9.
+ *    detector conservador; clasificar una respuesta es AI9;
+ *  - `classifier` (AI9, {@see ReplyClassifier}, apagado por defecto): SOLO
+ *    para una respuesta que no resolvieron las señales deterministas y que
+ *    esta pasada acaba de registrar como `replied` (la inscripción ya quedó
+ *    cerrada), después de confirmarla: puede AÑADIR un freno
+ *    (`opted_out`, `wrong_person`, `not_interested`, `human_requested` o
+ *    `callback_requested`), nunca un contacto. Si falla, queda como hoy.
  *
  * Concilia también los trabajos `ambiguous` (el proceso murió después de que
  * la puerta creara el mensaje): los une a su mensaje por la CORRELACIÓN (el
@@ -61,18 +70,22 @@ final class WhatsappTemplateOutcomes
     /** El orden real de la entrega (el de `MarketingMessageStatus::RANKS`): se registran en este orden. */
     private const RANK = ['sent' => 1, 'failed' => 1, 'delivered' => 2, 'read' => 3];
 
+    /** El prefijo de los recuentos del clasificador en lo que devuelve {@see forJob()}. */
+    private const CLASSIFIER_COUNT = 'classifier.';
+
     public function __construct(
         private readonly OutcomeRecorder $outcomes = new OutcomeRecorder,
         private readonly OutreachStore $store = new OutreachStore,
         private readonly WhatsappSignals $signals = new WhatsappSignals,
         private readonly WhatsappRecipient $recipients = new WhatsappRecipient,
+        private readonly ?ReplyClassifier $classifier = null,
     ) {}
 
     /** @return array<string, mixed> */
     public function run(DateTimeInterface $now, ?int $limit = null): array
     {
         $ahora = RelativeTime::utc($now);
-        $cero = ['jobs' => 0, 'recorded' => [], 'duplicates' => 0, 'ignored' => 0, 'linked' => 0, 'unmatched' => 0];
+        $cero = ['jobs' => 0, 'recorded' => [], 'duplicates' => 0, 'ignored' => 0, 'linked' => 0, 'unmatched' => 0, 'classifier' => []];
         if (! OutreachConfig::active()) {
             return ['skipped' => true, 'reason' => OutreachConfig::enabled() ? 'mode_off' : 'master_flag_off'] + $cero;
         }
@@ -93,6 +106,10 @@ final class WhatsappTemplateOutcomes
             foreach ($this->forJob($trabajo, $siguiente, $ahora) as $clave => $n) {
                 if (in_array($clave, ['duplicates', 'ignored', 'linked', 'unmatched'], true)) {
                     $r[$clave] += $n;
+                } elseif (str_starts_with($clave, self::CLASSIFIER_COUNT)) {
+                    // AI9: lo que hizo el clasificador (llamadas, coste y por qué no registró), aparte de los resultados.
+                    $k = substr($clave, strlen(self::CLASSIFIER_COUNT));
+                    $r['classifier'][$k] = ($r['classifier'][$k] ?? 0) + $n;
                 } else {
                     $r['recorded'][$clave] = ($r['recorded'][$clave] ?? 0) + $n;
                 }
@@ -107,7 +124,7 @@ final class WhatsappTemplateOutcomes
      * el instante del siguiente saliente del H9 a la misma persona (las
      * respuestas después de él son de ese otro contacto).
      *
-     * @return array<string, int> recuentos por resultado registrado y `duplicates`, `ignored`, `linked`, `unmatched`
+     * @return array<string, int> recuentos por resultado registrado y `duplicates`, `ignored`, `linked`, `unmatched` (y los de AI9, con el prefijo `classifier.`)
      */
     public function forJob(object $job, ?DateTimeImmutable $next, DateTimeInterface $now): array
     {
@@ -130,7 +147,7 @@ final class WhatsappTemplateOutcomes
             $c['linked'] = $unido ? 1 : 0;
             $job = $this->store->job((int) $job->id) ?? $job;
         }
-        $registrar = function (string $outcome, string $source, string $suffix, ?DateTimeImmutable $at, ?string $detail = null) use (&$c, &$e, $job, $ahora): void {
+        $registrar = function (string $outcome, string $source, string $suffix, ?DateTimeImmutable $at, ?string $detail = null) use (&$c, &$e, $job, $ahora): string {
             $o = ['job' => $job, 'occurredAt' => $at ?? $ahora];
             if ($detail !== null) {
                 $o['detailCode'] = $detail;
@@ -144,6 +161,8 @@ final class WhatsappTemplateOutcomes
             $c[$clave] = ($c[$clave] ?? 0) + 1;
             // La inscripción pudo cambiar (paso, estado, cierre): el siguiente resultado la lee de nuevo.
             $e = $this->store->enrollment((int) $e->id) ?? $e;
+
+            return (string) $r['result'];
         };
 
         // Los estados de Meta, una vez cada uno, en el orden real de la entrega.
@@ -166,7 +185,8 @@ final class WhatsappTemplateOutcomes
         }
 
         // Las respuestas: entre este saliente y el siguiente del H9 a la persona.
-        $entrantes = $this->signals->inboundBetween($this->recipients->leadIdsOf((string) $e->subject_key), $salida['createdAt'], $next);
+        $prospectos = $this->recipients->leadIdsOf((string) $e->subject_key);
+        $entrantes = $this->signals->inboundBetween($prospectos, $salida['createdAt'], $next);
         $baja = null;
         $posible = null;
         foreach ($entrantes as $m) {
@@ -183,10 +203,46 @@ final class WhatsappTemplateOutcomes
             // SC-2: una POSIBLE baja no es una baja segura ni una respuesta cualquiera: una persona la revisa.
             $registrar('human_requested', 'inbound_message', 'possible_opt_out', $posible['at'], SubjectSuppressions::OPT_OUT_WORD_DETAIL);
         } elseif ($entrantes !== []) {
-            $registrar('replied', 'inbound_message', 'replied', $entrantes[0]['at']);
+            // Como hoy. AI9 solo mira la respuesta si ESTA pasada acaba de registrarla (ganó la clave única): una vez por respuesta.
+            if ($registrar('replied', 'inbound_message', 'replied', $entrantes[0]['at']) === OutcomeRecorder::RESULT_RECORDED && OutreachConfig::classifierEnabled()) {
+                $this->classifyAfterCommit($job, (int) $e->id, $entrantes[0], $prospectos, $ahora, $c);
+            }
         }
 
         return $c;
+    }
+
+    /**
+     * AI9 · el clasificador, DESPUÉS de confirmar el `replied` (con
+     * `DB::afterCommit`; sin transacción abierta corre en el acto): nunca
+     * dentro de la transacción que registró la respuesta, nunca con la red
+     * dentro de una transacción de otro y nunca si esa transacción se
+     * deshace. El `try` va dentro: una excepción no llega a quien confirmó.
+     *
+     * @param  array{id: int, at: DateTimeImmutable}  $reply
+     * @param  list<int>  $leadIds
+     * @param  array<string, int>  $counts
+     */
+    private function classifyAfterCommit(object $job, int $enrollmentId, array $reply, array $leadIds, DateTimeImmutable $now, array &$counts): void
+    {
+        $clasificador = $this->classifier ?? new ReplyClassifier;
+        DB::afterCommit(function () use ($clasificador, $job, $enrollmentId, $reply, $leadIds, $now, &$counts): void {
+            try {
+                $r = $clasificador->classifyReply($job, $enrollmentId, (int) $reply['id'], $leadIds, $reply['at'], $now);
+            } catch (Throwable $e) {
+                Log::warning('outreach.classifier.failed', ['job' => (string) $job->uuid, 'error_class' => $e::class]);
+                $r = ['state' => ReplyClassifier::STATE_ERROR, 'reason' => 'exception', 'outcome' => null, 'calls' => 0, 'costMicros' => 0];
+            }
+            $suma = static function (string $k, int $n) use (&$counts): void {
+                $counts[self::CLASSIFIER_COUNT.$k] = ($counts[self::CLASSIFIER_COUNT.$k] ?? 0) + $n;
+            };
+            $suma('calls', $r['calls']);
+            $suma('costMicros', $r['costMicros']);
+            $suma($r['state'].'.'.$r['reason'], 1);
+            if ($r['outcome'] !== null) {
+                $counts[$r['outcome']] = ($counts[$r['outcome']] ?? 0) + 1;
+            }
+        });
     }
 
     /**

@@ -19,7 +19,7 @@
 | `assisted.{enabled,daily_cap}`, `whatsapp.{enabled,daily_cap,daily_budget_usd}`,
 | `voice.{enabled,daily_cap,daily_budget_usd,reserve_usd_per_call}`,
 | `classifier.enabled` y `own_hours`. Cambiarlas de nombre rompe el mando: se
-| cambian a la vez o no se cambian.
+| cambian a la vez o no se cambian. AI9 añade el resto de `classifier.*`.
 |
 | Encima de todas estas banderas está la CONSTANTE DE CÓDIGO
 | `App\Services\Outreach\Run\OutreachSendGate::SENDS_ENABLED_IN_CODE = false`
@@ -111,9 +111,31 @@ return [
         'reserve_usd_per_call' => $dolares('COMMERCIAL_AUTOMATION_VOICE_RESERVE_USD'),
     ],
 
-    // El clasificador de respuestas (AI9): solo frena o deriva. Apagado.
+    /*
+    | El clasificador de respuestas (AI9): solo AÑADE un freno a una respuesta
+    | que ya se registró como hoy (`replied`); nunca abre contacto. Apagado y
+    | en CERO: sin cupo ni presupuesto, sin modelo y sin precios no llama
+    | nunca. CINCO CERROJOS, independientes: la bandera, el cupo diario de
+    | llamadas, el techo diario en US$, el modelo con sus dos precios y el
+    | transporte enlazado con su clave PROPIA (otra que la compartida de la
+    | IA del CRM). Un fallo de cualquier tipo deja la respuesta como hoy.
+    */
     'classifier' => [
         'enabled' => filter_var(env('COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Llamadas al día (0–2000; 0 = no clasifica).
+        'daily_cap' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_CAP', 0, 0, 2000),
+        // Techo diario en dólares (0 = no clasifica). Se reserva el máximo de cada llamada antes de hacerla.
+        'daily_budget_usd' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_BUDGET_USD'),
+        // El modelo lo elige el propietario con la página oficial de precios; vacío = no clasifica.
+        'model' => trim((string) env('COMMERCIAL_AUTOMATION_CLASSIFIER_MODEL', '')),
+        // US$ por millón de tokens de entrada y de salida (0 = sin precio = no clasifica).
+        'price_input_usd_per_mtok' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_INPUT_USD_PER_MTOK'),
+        'price_output_usd_per_mtok' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_OUTPUT_USD_PER_MTOK'),
+        // Tiempo máximo de la llamada (2–10 s) y tokens de salida (16–256, incluido el razonamiento). Sin reintentos.
+        'timeout_seconds' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS', 5, 2, 10),
+        'max_output_tokens' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS', 64, 16, 256),
+        // La clave PROPIA del clasificador. Solo la lee su transporte (fuera del H9), en el momento de llamar.
+        'api_key' => env('COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY'),
     ],
 
     /*
