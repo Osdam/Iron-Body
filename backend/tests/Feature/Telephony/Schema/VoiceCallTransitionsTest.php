@@ -40,10 +40,13 @@ class VoiceCallTransitionsTest extends TestCase
 
     private const STATUSES = ['requested', 'canceled', 'failed_to_start', 'ambiguous', 'dialing', 'active', 'denied', 'completed', 'busy', 'no_answer', 'failed', 'hung_up'];
 
-    /** Las salientes: D8-13, DF-S2 (el webhook antes que el job), DF-S3 (la ambigua se resuelve hacia delante) y E1-1. */
+    /**
+     * Las salientes: D8-13, DF-S2 (el webhook antes que el job), DF-S3 (la ambigua se resuelve hacia delante), E1-1 y
+     * E19-3 (22-11-2026: la ambigua que no llegó a iniciarse, a `failed_to_start`; migración 2026_11_22_100002).
+     */
     private const OUTBOUND_GRAPH = [
         'requested' => ['canceled', 'failed_to_start', 'ambiguous', 'dialing', 'completed', 'busy', 'no_answer', 'failed'],
-        'ambiguous' => ['dialing', 'completed', 'busy', 'no_answer', 'failed'],
+        'ambiguous' => ['dialing', 'completed', 'busy', 'no_answer', 'failed', 'failed_to_start'],
         'dialing' => ['active', 'completed', 'busy', 'no_answer', 'failed', 'hung_up'],
         'active' => ['completed', 'failed', 'hung_up'],
         'canceled' => [], 'failed_to_start' => [], 'completed' => [], 'busy' => [], 'no_answer' => [], 'failed' => [], 'hung_up' => [],

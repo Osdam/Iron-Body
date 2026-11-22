@@ -56,11 +56,15 @@ class VoiceCall extends Model
     public const FINAL = [self::STATUS_CANCELED, self::STATUS_FAILED_TO_START, self::STATUS_DENIED, self::STATUS_COMPLETED,
         self::STATUS_BUSY, self::STATUS_NO_ANSWER, self::STATUS_FAILED, self::STATUS_HUNG_UP];
 
-    /** El grafo de D8-13 (el mismo del disparador de DB8 y del fixture `state-transitions.json`). */
+    /**
+     * El grafo de D8-13 (el mismo del disparador `vc_status_forward` y del fixture `state-transitions.json`): el de DB8
+     * más, desde E19-3 (migración 2026_11_22_100002), `ambiguous → failed_to_start`, la que no llegó a iniciarse.
+     */
     public const TRANSITIONS = [
         self::STATUS_REQUESTED => [self::STATUS_CANCELED, self::STATUS_FAILED_TO_START, self::STATUS_AMBIGUOUS, self::STATUS_DIALING,
             self::STATUS_COMPLETED, self::STATUS_BUSY, self::STATUS_NO_ANSWER, self::STATUS_FAILED],
-        self::STATUS_AMBIGUOUS => [self::STATUS_DIALING, self::STATUS_COMPLETED, self::STATUS_BUSY, self::STATUS_NO_ANSWER, self::STATUS_FAILED],
+        self::STATUS_AMBIGUOUS => [self::STATUS_DIALING, self::STATUS_COMPLETED, self::STATUS_BUSY, self::STATUS_NO_ANSWER, self::STATUS_FAILED,
+            self::STATUS_FAILED_TO_START],
         self::STATUS_DIALING => [self::STATUS_ACTIVE, self::STATUS_COMPLETED, self::STATUS_BUSY, self::STATUS_NO_ANSWER, self::STATUS_FAILED, self::STATUS_HUNG_UP],
         self::STATUS_ACTIVE => [self::STATUS_COMPLETED, self::STATUS_FAILED, self::STATUS_HUNG_UP],
     ];

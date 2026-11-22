@@ -7,6 +7,7 @@ use App\Models\Voice\VoiceBrakeEntry;
 use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Services\Telephony\VoiceAmbiguousResolution;
+use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Telephony\VoiceEvents;
 use App\Services\Telephony\VoiceReconciler;
 use App\Services\Voice\Dto\CarrierCall;
@@ -31,11 +32,12 @@ use Tests\TestCase;
  * conciliación con un operador falso (sus páginas), la orden de consola y el
  * webhook post-llamada FIRMADO. Sin red.
  *
- * EL ESQUEMA TODAVÍA NO ADMITE LA TRANSICIÓN (DB8, `vc_status_forward`;
- * DF-S3): estas pruebas fijan que, hasta la migración E19-3, ninguna salida
- * cambia nada (falla cerrado) y cada duda deja la fila `ambiguous` con su
- * motivo. Cuando llegue la migración, la que dice `schema_pending` pasa a
- * fijar la salida (el informe `informe-be-voz2.md` lo dice).
+ * EL ESQUEMA ADMITE LA TRANSICIÓN desde la migración E19-3
+ * (`2026_11_22_100002`, que rehace `vc_status_forward` de DB8 con
+ * `ambiguous → failed_to_start`): la salida, de punta a punta, en los dos
+ * motores (antes era una simulación local que no se confirmó; su evidencia,
+ * `ops/evidencia-h8/2026-11-22/cierre-voz2/e19-3-simulacion.txt`). Cada duda
+ * deja la fila `ambiguous` con su motivo (falla cerrado).
  */
 class VoiceAmbiguousResolutionTest extends TestCase
 {
@@ -62,22 +64,54 @@ class VoiceAmbiguousResolutionTest extends TestCase
         $this->assertSame(VoiceCall::STATUS_FAILED_TO_START, VoiceAmbiguousResolution::FINAL, 'D8-13: «no llegó a iniciarse»');
     }
 
-    public function test_con_una_pasada_completa_y_limpia_la_fila_vieja_solo_la_retiene_el_esquema_y_sigue_viva(): void
+    /**
+     * La salida de punta a punta con el esquema de E19-3 (la simulación del autor, ahora de verdad): en seco, lo que
+     * haría sin escribir; la de consola sobre una; la automática sobre otra, que libera su reserva y deja de contar como
+     * viva; y si después llega su post-llamada, la anomalía y el freno, sin resucitarla.
+     */
+    public function test_con_una_pasada_completa_y_limpia_la_fila_vieja_pasa_a_failed_to_start_y_libera_su_reserva(): void
     {
-        $fila = $this->ambiguousCall();
+        $this->assertTrue(VoiceAmbiguousResolution::schemaAllows(), 'E19-3: el grafo admite ambiguous → failed_to_start');
+        $a = $this->ambiguousCall('+573000000086');
+        $b = $this->ambiguousCall('+573000000087');
+        $dia = (string) $a->budget_day;
+        $reservado = VoiceCostGuard::committedMicros($dia);
+        $this->assertGreaterThan(0, $reservado);
         $this->travel(VoiceAmbiguousResolution::GRACE_MINUTES + 1)->minutes();
-        $eventos = $this->events($fila);
 
-        $this->assertFalse(VoiceAmbiguousResolution::schemaAllows(), 'DB8 (DF-S3): ambiguous → failed_to_start espera la migración E19-3');
-        $resumen = $this->pass();
-        $this->assertSame(['resolved' => 0, 'held' => [VoiceAmbiguousResolution::HELD_SCHEMA => 1]], $resumen['ambiguous']);
-        $this->assertSame(VoiceCall::STATUS_AMBIGUOUS, VoiceCall::query()->findOrFail($fila->id)->status, 'falla cerrado: sigue ambiguous');
-        $this->assertSame(1, VoiceCall::query()->whereIn('status', VoiceCall::LIVE)->count(), 'y sigue contando como viva para la concurrencia');
-        $this->assertSame($eventos, $this->events($fila), 'ningún evento nuevo');
+        // En seco: lo que haría, sin escribir nada.
+        $conciliacion = app(VoiceReconciler::class);
+        $seco = $conciliacion->run($this->carrier([[]]), new NullVoiceAgentDeployer, now()->subHours(48), true);
+        $informe = $conciliacion->dryRunReport();
+        $this->assertSame([['reconciled' => 2], 2], [$informe['would']['events'], $informe['would']['transitions']]);
+        $this->assertSame(['resolved' => 2, 'held' => []], $seco['ambiguous']);
+        $this->assertSame(2, VoiceCall::query()->where('status', VoiceCall::STATUS_AMBIGUOUS)->count(), 'en seco no cambia nada');
+        $this->assertSame(0, VoiceCallEvent::query()->where('kind', 'reconciled')->count());
 
-        // En seco, lo mismo.
-        $seco = app(VoiceReconciler::class)->run($this->carrier([[]]), new NullVoiceAgentDeployer, now()->subHours(48), true);
-        $this->assertSame($resumen['ambiguous'], $seco['ambiguous']);
+        // La de consola, sobre b.
+        $this->assertSame(0, Artisan::call('voice:resolve-ambiguous', ['call' => $b->uuid, '--confirm' => true, '--reason' => 'Comprobado en Twilio: ninguna llamada a esa hora']), Artisan::output());
+        $mb = VoiceCallEvent::query()->where('call_id', $b->id)->where('kind', 'reconciled')->sole();
+        $this->assertSame(['ambiguous_resolved', 'system', 'Consola (voice:resolve-ambiguous)', 'console'], [$mb->outcome, $mb->actor_type, $mb->actor_name, $mb->codes['by']]);
+        $this->assertSame(VoiceCall::STATUS_FAILED_TO_START, VoiceCall::query()->findOrFail($b->id)->status);
+
+        // La automática, sobre a.
+        $resumen = app(VoiceReconciler::class)->run($this->carrier([[]]), new NullVoiceAgentDeployer, now()->subHours(48));
+        $this->assertSame(['resolved' => 1, 'held' => []], $resumen['ambiguous']);
+        $fa = VoiceCall::query()->findOrFail($a->id);
+        $this->assertSame([VoiceCall::STATUS_FAILED_TO_START, null, null], [$fa->status, $fa->provider_call_sid, $fa->provider_conversation_id]);
+        $this->assertNotNull($fa->ended_at);
+        $ev = VoiceCallEvent::query()->where('call_id', $a->id)->where('kind', 'reconciled')->sole();
+        $this->assertSame('ambiguous_resolved', $ev->outcome);
+        $this->assertSame(['listed', 0, 1], [$ev->codes['pass']['carrier'], $ev->codes['pass']['unknown'], $ev->codes['pass']['pages']]);
+        $this->assertSame(60, $ev->codes['window']['graceMinutes']);
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia), 'la reserva se libera (RELEASED_STATUSES)');
+        $this->assertSame(0, VoiceCall::query()->whereIn('status', VoiceCall::LIVE)->count(), 'ya no bloquea la concurrencia');
+        $this->assertSame(['resolved' => 0, 'held' => []], $this->pass()['ambiguous'], 'otra pasada no encuentra nada');
+
+        // Y si después llega su post-llamada: anomalía y freno, sin resucitarla.
+        $this->signed($this->postCallBody($fa, 'conv_h8fx_0960'))->assertOk()->assertJson(['status' => 'failed_to_start', 'anomaly' => 'resolved_call_reappeared']);
+        $this->assertSame(VoiceCall::STATUS_FAILED_TO_START, VoiceCall::query()->findOrFail($a->id)->status);
+        $this->assertSame(['unknown_provider_call'], VoiceBrakeEntry::query()->pluck('reason')->all());
     }
 
     public function test_cada_duda_la_deja_ambiguous_con_su_motivo(): void
@@ -126,7 +160,7 @@ class VoiceAmbiguousResolutionTest extends TestCase
         $this->assertSame(VoiceCall::STATUS_AMBIGUOUS, VoiceCall::query()->findOrFail($joven->id)->status);
     }
 
-    public function test_la_orden_de_consola_se_niega_sin_confirmar_sin_motivo_joven_no_ambigua_y_mientras_falte_la_migracion(): void
+    public function test_la_orden_de_consola_se_niega_sin_confirmar_sin_motivo_joven_o_no_ambigua_y_cierra_la_vieja(): void
     {
         $fila = $this->ambiguousCall();
         $motivo = 'Comprobado en la consola de Twilio: ninguna llamada a esa hora';
@@ -140,11 +174,24 @@ class VoiceAmbiguousResolutionTest extends TestCase
         $this->assertSame(1, $orden(['call' => $fila->uuid, '--confirm' => true, '--reason' => $motivo]), 'más joven que el plazo de gracia');
         $this->assertStringContainsString('plazo de gracia', Artisan::output());
 
-        $this->travel(VoiceAmbiguousResolution::GRACE_MINUTES + 1)->minutes();
-        $this->assertSame(1, $orden(['call' => $fila->uuid, '--confirm' => true, '--reason' => $motivo]), 'el esquema aún no la admite');
-        $this->assertStringContainsString('E19-3', Artisan::output());
         $this->assertSame(VoiceCall::STATUS_AMBIGUOUS, VoiceCall::query()->findOrFail($fila->id)->status);
-        $this->assertSame(0, VoiceCallEvent::query()->where('kind', 'reconciled')->count(), 'ningún evento');
+        $this->assertSame(0, VoiceCallEvent::query()->where('kind', 'reconciled')->count(), 'ningún evento mientras se niega');
+
+        // Pasado el plazo, con --confirm y un motivo con forma: la cierra (E19-3), con su evento, una sola vez.
+        $this->travel(VoiceAmbiguousResolution::GRACE_MINUTES + 1)->minutes();
+        $codigo = $orden(['call' => $fila->uuid, '--confirm' => true, '--reason' => $motivo]);
+        $salida = Artisan::output();   // fetch() vacía el búfer: se lee una vez
+        $this->assertSame(0, $codigo, $salida);
+        $this->assertStringContainsString('ambiguous → failed_to_start', $salida);
+        $cerrada = VoiceCall::query()->findOrFail($fila->id);
+        $this->assertSame(VoiceCall::STATUS_FAILED_TO_START, $cerrada->status);
+        $this->assertNotNull($cerrada->ended_at);
+        $evento = VoiceCallEvent::query()->where('call_id', $fila->id)->where('kind', 'reconciled')->sole();
+        $this->assertSame(['ambiguous_resolved', 'manual:'.$fila->uuid, $motivo, 'ambiguous', 'failed_to_start'],
+            [$evento->outcome, $evento->provider_event_key, $evento->codes['reason'], $evento->codes['before'], $evento->codes['after']]);
+        $this->assertSame(1, $orden(['call' => $fila->uuid, '--confirm' => true, '--reason' => $motivo]), 'otra vez: ya no es ambiguous');
+        $this->assertStringContainsString('No es una saliente ambiguous', Artisan::output());
+        $this->assertSame(1, VoiceCallEvent::query()->where('kind', 'reconciled')->count());
 
         $otra = $this->voiceCall('outbound', 'completed', ['provider_call_sid' => self::sid(3), 'remote' => '+573000000082']);
         $this->assertSame(1, $orden(['call' => $otra->uuid, '--confirm' => true, '--reason' => $motivo]));
@@ -206,13 +253,14 @@ class VoiceAmbiguousResolutionTest extends TestCase
     }
 
     /**
-     * Una saliente cerrada como «no llegó a iniciarse», tal como la deja la salida de E19-3: `failed_to_start` y su
-     * `reconciled` (`ambiguous_resolved`). Hasta la migración, el esquema no deja llegar ahí desde `ambiguous`: la fila
-     * llega por `requested → failed_to_start`, que sí admite; lo que mira la post-llamada (el estado y el evento) es el mismo.
+     * Una saliente cerrada como «no llegó a iniciarse», tal como la deja la salida de E19-3: de `ambiguous` a
+     * `failed_to_start` (la transición real que admite la migración 2026_11_22_100002) y su `reconciled`
+     * (`ambiguous_resolved`).
      */
     private function resolvedAsUnstarted(string $remoto): VoiceCall
     {
-        $fila = $this->voiceCall('outbound', 'failed_to_start', ['remote' => $remoto]);
+        $fila = $this->ambiguousCall($remoto);
+        $this->assertTrue(VoiceCall::transition((int) $fila->id, [VoiceCall::STATUS_AMBIGUOUS], VoiceAmbiguousResolution::FINAL, VoiceAmbiguousResolution::transitionValues()));
         VoiceEvents::record('reconciled', (int) $fila->id, VoiceCallEvent::PROVIDER_LARAVEL, 'unstarted:'.$fila->uuid, [
             'outcome' => VoiceAmbiguousResolution::OUTCOME, 'codes' => ['before' => 'ambiguous', 'after' => 'failed_to_start'],
         ]);

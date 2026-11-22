@@ -829,10 +829,10 @@ class TelephonyIsolationTest extends TestCase
         return array_values(array_unique($out));
     }
 
-    /** @return array<string,string> las migraciones del H8 que nombran la voz (DB8: `2026_11_1*_*voice*`) */
+    /** @return array<string,string> las migraciones de la voz (DB8 y sus enmiendas: `2026_11_*_*voice*`, también E19-3 del 22-11) */
     private function migracionesDeVoz(): array
     {
-        return $this->glob('database/migrations/2026_11_1*voice*.php');
+        return $this->glob('database/migrations/2026_11_*voice*.php');
     }
 
     /** @return list<string> las claves literales que se leen de la configuración (`(no literal)` si no lo es) */
