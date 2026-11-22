@@ -64,7 +64,7 @@ class VoiceCommandsTest extends TestCase
         $this->assertStringContainsString('Webhook    : sin comprobar', $texto);
         $this->assertSame(['state' => 'missing', 'verifiedAt' => null, 'expiresAt' => null], $json['telefonia']['providerVerification']);
         // B8-h (REV8-c M-1): `checkReason`, aditivo, dice por qué.
-        $this->assertSame(['configured', 'collidesWithMessaging', 'importedNumberIdConfigured', 'inboundCapable', 'observed', 'check', 'checkReason'], array_keys($json['telefonia']['number']));
+        $this->assertSame(['configured', 'collidesWithMessaging', 'importedNumberIdConfigured', 'inboundCapable', 'observed', 'check', 'checkReason', 'sharedWithMessaging'], array_keys($json['telefonia']['number']));
         $this->assertNull($json['telefonia']['number']['observed'], 'sin una conciliación del número, sin observar');
         $this->assertSame('unverified', $json['telefonia']['number']['check'], 'y la puerta lo da por no vigilado (falla cerrado)');
         $this->assertSame('no_observation', $json['telefonia']['number']['checkReason']);

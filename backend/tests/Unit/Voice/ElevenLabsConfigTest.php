@@ -203,7 +203,8 @@ class ElevenLabsConfigTest extends TestCase
             // H8 (D8-11, D8-12 y D8-15): TODO APAGADO; los límites son techos, que no encienden nada.
             'webhook_base_url' => null,
             // B8-g: lo DECLARADO del número importado (¿admite entrantes?): sin declarar, null (no es una bandera).
-            'number' => ['inbound_capable' => null],
+            // Enmienda del 22-11-2026: la identidad compartida con la mensajería, APAGADA (protección 1).
+            'number' => ['inbound_capable' => null, 'shared_with_messaging' => false],
             'inbound' => ['enabled' => false, 'scope' => 'canary', 'daily_cap' => 0],
             'outbound' => [
                 'enabled' => false, 'scope' => 'canary',
@@ -239,6 +240,12 @@ class ElevenLabsConfigTest extends TestCase
         foreach (['' => null, ' ' => null, 'si' => null, 'quizá' => null, 'false' => false, '0' => false, 'off' => false, 'no' => false,
             'true' => true, '1' => true, 'on' => true, 'yes' => true] as $valor => $esperado) {
             $this->assertSame($esperado, self::evaluar(['VOICE_NUMBER_INBOUND_CAPABLE' => (string) $valor])['number']['inbound_capable'], "VOICE_NUMBER_INBOUND_CAPABLE={$valor}");
+        }
+        // Enmienda del 22-11-2026: `VOICE_NUMBER_SHARED_WITH_MESSAGING` es una bandera: solo true/1/on/yes la encienden;
+        // vacía, ilegible o ausente es false (la guarda del número como siempre).
+        foreach (['' => false, ' ' => false, 'si' => false, 'false' => false, '0' => false, 'off' => false, 'no' => false,
+            'true' => true, '1' => true, 'on' => true, 'yes' => true] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_NUMBER_SHARED_WITH_MESSAGING' => (string) $valor])['number']['shared_with_messaging'], "VOICE_NUMBER_SHARED_WITH_MESSAGING={$valor}");
         }
 
         // E4-1: VOICE_PUBLISHING_ENABLED ya no se lee aquí (una sola bandera de publicar, la del Studio).
@@ -347,7 +354,9 @@ class ElevenLabsConfigTest extends TestCase
             // en el entorno del proceso y se filtraba a las pruebas siguientes (el doctor y la deriva lo leían como declarado).
             'VOICE_NUMBER_INBOUND_CAPABLE',
             // Auditoría B-T4: la bandera de los contactos (si faltara aquí, el último valor del bucle se filtraría como en B8-h).
-            'VOICE_CONTACTS_ENABLED'];
+            'VOICE_CONTACTS_ENABLED',
+            // Enmienda del 22-11-2026: la identidad compartida (por la misma razón: el último valor, «yes», se filtraría).
+            'VOICE_NUMBER_SHARED_WITH_MESSAGING'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];
