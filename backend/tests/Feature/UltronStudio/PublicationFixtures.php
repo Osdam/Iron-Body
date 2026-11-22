@@ -15,7 +15,9 @@ use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVersionReview;
 use App\Services\Marketing\Ultron\UltronPublishedConfig;
 use App\Services\UltronStudio\StudioGraphValidator;
+use App\Services\UltronStudio\StudioLabEngineFlow;
 use App\Services\UltronStudio\StudioLabPrompts;
+use App\Services\UltronStudio\StudioPromptBundle;
 use App\Services\UltronStudio\StudioPublicationDeclaration as D;
 use App\Services\UltronStudio\StudioVersions;
 use App\Support\Access\RolePermissionPolicy;
@@ -220,9 +222,19 @@ trait PublicationFixtures
     /**
      * Un veredicto del laboratorio sobre una ejecución de esta versión, sembrado
      * (el laboratorio de verdad lo prueba su propia suite).
+     *
+     * Una ejecución del recorrido del motor (`motor-…`) congela, como la de
+     * verdad (`StudioLabRuns::withEngine()`), la huella del paquete de prompts
+     * que probó (`target_snapshot.engine.bundleHash`): la de ESTA versión
+     * compilada hoy, u otra si se pasa `$engineBundleHash` (NB2: con la llave
+     * en `engine`, la puerta la compara). La de la simulación no cambia.
      */
-    protected function labVerdict(StudioVersion $version, string $decision, string $promptVersion = StudioLabPrompts::PROMPT_VERSION): StudioLabVerdict
+    protected function labVerdict(StudioVersion $version, string $decision, string $promptVersion = StudioLabPrompts::PROMPT_VERSION, ?string $engineBundleHash = null): StudioLabVerdict
     {
+        $instantanea = ['kind' => 'version', 'uuid' => $version->uuid];
+        if (StudioLabEngineFlow::isEnginePromptVersion($promptVersion)) {
+            $instantanea['engine'] = ['bundleHash' => $engineBundleHash ?? StudioPromptBundle::compile(StudioPromptBundle::governedFrom($version->content))['prompts']['bundleHash']];
+        }
         $juez = $this->person(Admin::ROLE_SUPER_ADMIN, 'Juez del laboratorio');
         $run = StudioLabRun::query()->forceCreate([
             'client_request_id' => (string) Str::uuid(),
@@ -230,7 +242,7 @@ trait PublicationFixtures
             'target_version_id' => $version->id,
             'target_label' => mb_substr((string) $version->label, 0, 80),
             'target_content_hash' => $version->content_hash,
-            'target_snapshot' => ['kind' => 'version', 'uuid' => $version->uuid],
+            'target_snapshot' => $instantanea,
             'catalog_version' => $version->catalog_version,
             'mode' => 'openai',
             'model' => 'gpt-lab-pruebas',
