@@ -3,6 +3,7 @@
 namespace Tests\Feature\Outreach\Run;
 
 use App\Services\Outreach\Facts\SubjectKey;
+use App\Support\Privacy\PhoneFingerprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -51,8 +52,8 @@ class H9AssistedClaimRaceTest extends TestCase
 
     private int $identidadesAntes = 0;
 
-    /** @var array<string, list<int>> tabla → ids de la persona sembrada (se borran solo esas filas) */
-    private array $personas = ['users' => [], 'members' => [], 'marketing_leads' => [], 'marketing_conversations' => []];
+    /** @var array<string, list<int|string>> tabla → claves de la persona sembrada (se borran solo esas filas) */
+    private array $personas = ['users' => [], 'members' => [], 'marketing_leads' => [], 'marketing_conversations' => [], 'ultron_studio_canary_numbers' => []];
 
     protected function setUp(): void
     {
@@ -88,6 +89,7 @@ class H9AssistedClaimRaceTest extends TestCase
                     $tabla === self::T_CURSORS ? $c->table($tabla)->delete() : $c->table($tabla)->where('id', '>', 0)->delete();
                 }
                 $c->table('identities')->where('id', '>', $this->identidadesAntes)->delete();
+                $c->table('ultron_studio_canary_numbers')->whereIn('phone_hash', $this->personas['ultron_studio_canary_numbers'])->delete();
                 foreach (['marketing_conversations', 'marketing_leads', 'members', 'users'] as $tabla) {
                     if ($this->personas[$tabla] !== []) {
                         $c->table($tabla)->whereIn('id', $this->personas[$tabla])->delete();
@@ -269,6 +271,16 @@ class H9AssistedClaimRaceTest extends TestCase
         $this->personas['members'][] = $member;
         $this->personas['marketing_leads'][] = $lead;
         $this->personas['marketing_conversations'][] = $conversacion;
+        // F-2: su número, canario ACTIVO de WhatsApp (la parte canario y la línea base «solo canario» solo salen a eso).
+        $huella = PhoneFingerprint::of('+57'.$phone);
+        $c->table('ultron_studio_canary_numbers')->insert([
+            'uuid' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'channel' => 'whatsapp', 'alias' => 'Canario carrera',
+            'phone_hash' => $huella, 'phone_last4' => substr($phone, -4), 'country_code' => 'CO', 'phone_encrypted' => null, 'status' => 'active',
+            'consent_attested' => true, 'registered_by_admin_id' => 1, 'registered_by_name' => 'Ana', 'authorized_by_admin_id' => 2, 'authorized_by_name' => 'Beto',
+            'authorized_at' => '2026-11-01 12:00:00', 'activated_by_admin_id' => 2, 'activated_by_name' => 'Beto', 'activated_at' => '2026-11-01 12:00:00',
+            'status_changed_at' => '2026-11-01 12:00:00', 'created_at' => '2026-11-01 12:00:00', 'updated_at' => '2026-11-01 12:00:00',
+        ]);
+        $this->personas['ultron_studio_canary_numbers'][] = $huella;
 
         return ['member' => $member, 'lead' => $lead, 'key' => SubjectKey::member($member)];
     }
