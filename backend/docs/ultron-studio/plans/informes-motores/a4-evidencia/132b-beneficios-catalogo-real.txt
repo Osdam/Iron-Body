@@ -1,0 +1,16 @@
+LA REGLA DE BENEFICIOS (P-4, policy_benefit_misattributed) CONTRA EL CATÁLOGO REAL · 22-11-2026 01:32 UTC
+Catálogo: leído en producción en SOLO LECTURA (ops/comprobacion-produccion/catalogo-beneficios.php: id, nombre, duración y beneficios de los 12 planes vendibles; sin precios ni personas).
+Regla: la clase UltronBenefitAttribution de la rama (cd431e20), ejecutada en LOCAL con ese catálogo (ops/comprobacion-produccion/beneficios-contra-catalogo.php).
+
+beneficios propios probados: 129 · falsos positivos: 0
+beneficios ajenos probados: 1077 · cazados: 1077
+borrador real del 18-11: []
+lista típica: []
+recomendación típica: []
+
+LECTURA DEL LEAD
+- Cada beneficio de cada plan, dicho de SU plan (129 frases): 0 falsos positivos.
+- Cada beneficio que solo tienen otros planes, dicho de un plan que no lo tiene (1 077 frases): cazadas las 1 077.
+- El borrador real del 18-11, la lista típica y una recomendación típica: sin marcar.
+- Cierra la duda [S] del revisor sobre falsos positivos con los beneficios reales (punto 10 de su informe), dentro del límite declarado de la regla (literal: no ve paráfrasis).
+- HALLAZGO ADYACENTE (datos del CRM, no se toca): los beneficios de «Plan Semana» (#2) y «Plan Mensual» (#4) están guardados con comillas sobrantes, y el primero de «Plan Mensual» con un corchete («["Acceso ilimitado al gimnasio"»): parecen una lista JSON pegada como texto. El modelo los recibe así. Se corrige editando esos dos planes en el CRM.
