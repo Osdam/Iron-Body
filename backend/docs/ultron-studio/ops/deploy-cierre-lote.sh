@@ -1,5 +1,5 @@
 #!/bin/bash
-# Despliegue POR LOTES del cierre de ULTRON STUDIO (lotes 2, 3 y 4; el lote 1 va por hotfix-backend.sh). Ficha de cada
+# Despliegue POR LOTES del cierre de ULTRON STUDIO (lotes 2 a 5; el lote 1 va por hotfix-backend.sh). Ficha de cada
 # lote, órdenes exactas, impacto y vuelta atrás: ops/DEPLOY_CIERRE_LOTES.md. Derivado de deploy-a4-regenerar-backend.sh
 # (la lista exacta, el respaldo, las cachés como www-data, la verificación sin credenciales y la vuelta atrás automática) y
 # de deploy-h9-backend-cierre.sh e iron-ia/ops/deploy-recuperacion-rutinas.sh (las migraciones con el rol dueño por
@@ -8,7 +8,7 @@
 # Uso (servidor, root; la lista y las declaraciones las sube el lead desde el Mac: DEPLOY_CIERRE_LOTES.md §2):
 #   bash /root/deploy-cierre-lote.sh <commit que sirve producción> <commit nuevo = origin/main> <lista>
 #        [--migraciones=<fichero> --orden=migracion-primero|codigo-primero] [--config=<fichero>] [--rutas=<fichero>]
-#        [--programador=<fichero>] [--solo-comprobar]
+#        [--programador=<fichero>] [--sin-filas=<fichero>] [--solo-comprobar]
 #   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo>
 # Las declaraciones (una línea por entrada; «#» al principio de línea es comentario):
 #   --migraciones  «nombre tipo tabla objeto marca privilegios vuelta», en el orden de aplicación (el de los nombres):
@@ -16,14 +16,21 @@
 #                  tipo transicion → objeto = el disparador de avance de estado; marca = «desde>hasta» (la transición
 #                                    que se añade a la cláusula de OLD.<col> = 'desde')
 #                  tipo tabla      → objeto «-»; marca = el prefijo de sus funciones propias (o «-»); privilegios = los
-#                                    de la aplicación en la tabla nueva (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE)
+#                                    de la aplicación en la tabla nueva, uno a uno y en este orden (r SELECT · a INSERT ·
+#                                    w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER; r a w x, también por
+#                                    columna); con «a», además, USAGE en todas sus secuencias
+#                  tipo columna    → objeto = la columna nueva, NULA y SIN DEFECTO (solo catálogo); marca = su tipo
+#                                    (json, text…); privilegios «-»; vuelta SIEMPRE «conservar»
 #                  vuelta          → deshacer (la vuelta atrás la deshace si la base lo admite: un CHECK que las filas
 #                                    cumplen, un disparador que no mira filas, una tabla vacía) · conservar (no se toca)
-#   --config       «clave.con.puntos=valor» (false · true · null · vacia · un número): lo que tiene que valer en la caché de
-#                  configuración después; el valor nunca se imprime salvo esas formas (una cadena sale como «cadena»).
+#   --config       «clave.con.puntos=valor» (false · true · null · vacia · un número · texto:<palabra>): lo que tiene que
+#                  valer en la caché de configuración después; el valor nunca se imprime salvo esas formas (una cadena
+#                  sale como «cadena»; con «texto:<palabra>», como «texto:<palabra>» solo si es exactamente esa palabra).
 #   --rutas        la diferencia EXACTA de route:list: «+MÉTODO uri» / «-MÉTODO uri».
 #   --programador  la diferencia EXACTA de schedule:list («+línea» / «-línea», con la forma que imprime el paso 0) y
 #                  «ausente <texto>» / «presente <texto>».
+#   --sin-filas    «tabla columna valor[,valor…]»: el paso 0, y otra vez justo antes del primer cambio, exigen que no
+#                  haya ninguna fila con esos valores (lote 5: ninguna ejecución del laboratorio en curso).
 # Los commits, en hexadecimal (7 a 40 cifras): se resuelven y se comparan enteros.
 #
 # 0. Comprobaciones previas (si una falla: «ABORTA (no se ha tocado nada)», código 1; con --solo-comprobar termina aquí):
@@ -69,6 +76,10 @@
 # previo) · 5 PARAR: vuelta atrás incompleta o salida inesperada a medias (DEPLOY_CIERRE_LOTES.md §6).
 set -euo pipefail
 export LC_ALL=C
+# m5 (rev-guion): el umask fijo, como deploy-h9-backend-cierre.sh. git (fetch, merge, checkout) corre como root y deja los
+# ficheros legibles por www-data solo con 022 (memoria «umask-077-y-git-merge-en-el-vps»); lo restrictivo va SIEMPRE en
+# un subshell con su propio umask 077 (el respaldo, los registros, las cachés y el envoltorio de las migraciones).
+umask 022
 
 # ── Lo propio de producción (el banco sustituye estas líneas y ninguna otra) ──────────────────────────────────────────────
 APP=/var/www/api
@@ -98,10 +109,25 @@ OSG=backend/app/Services/Outreach/Run/OutreachSendGate.php
 RE_SENDS='^outreach\(sends-open\):'
 RE_CALLS='^voice\(calls-open\):'
 DIR_MIG=backend/database/migrations
-DECLS="migraciones config rutas programador"
+DECLS="migraciones config rutas programador sin_filas"
+# m2 (rev-guion): ninguna expresión de [[ =~ ]] lleva barras invertidas. Escrita en la línea, bash 5 entrega a regcomp
+# lo citado con una barra delante («\>»), y en glibc «\>» es «fin de palabra», no «>» (en el bash 3.2 del Mac, sí): la
+# marca «desde>hasta» no casaría nunca. Cada expresión va en una variable, sin citar al usarla (llega tal cual a
+# regcomp), y lo literal va en una clase de caracteres ([>], [.], « » sin escapar).
+RE_COMMIT='^[0-9a-f]{7,40}$'
+RE_ID='^[a-z_][a-z0-9_]{0,62}$'
+RE_NOM_MIG='^[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{6}_[a-z0-9_]{1,120}$'
+RE_MARCA_CHECK='^[A-Za-z0-9_:.-]{1,64}$'
+RE_MARCA_TRANS='^[a-z_][a-z0-9_]{0,62}[>][a-z_][a-z0-9_]{0,62}$'
+RE_TIPO_COL='^[a-z][a-z0-9_]{0,30}$'
+RE_PRIV='^(-|r?a?w?d?D?x?t?)$'
+RE_CONFIG='^[a-z0-9_]+([.][a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+([.][0-9]+)?|texto:[a-z][a-z0-9_-]{0,31})$'
+RE_RUTA='^[+-][A-Z|]+ [^ ]+( @[^ ]+)?$'
+RE_PROG='^([+-].+|(ausente|presente) .+)$'
+RE_SIN_FILAS='^[a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,30}(,[a-z_][a-z0-9_]{0,30})*$'
 
 uso() {
-  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--solo-comprobar]"
+  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--solo-comprobar]"
   echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo>"
 }
 
@@ -109,14 +135,14 @@ uso() {
 [ "$#" -ge 3 ] || { uso; echo "no se ha tocado nada"; exit 2; }
 PREVIO=$1; NUEVO=$2; LISTA=$3; shift 3
 MODO=despliegue; BK=""; ORDEN=""
-F_migraciones=""; F_config=""; F_rutas=""; F_programador=""
+F_migraciones=""; F_config=""; F_rutas=""; F_programador=""; F_sin_filas=""
 for a in "$@"; do
   case "$a" in
     --solo-comprobar) [ "$MODO" = despliegue ] || { uso; echo "--solo-comprobar y --vuelta-atras no van juntos; no se ha tocado nada"; exit 2; }; MODO=comprobar ;;
     --vuelta-atras=?*) [ "$MODO" = despliegue ] || { uso; echo "--vuelta-atras va sola; no se ha tocado nada"; exit 2; }; MODO=vuelta; BK=${a#--vuelta-atras=} ;;
     --orden=migracion-primero|--orden=codigo-primero) [ -z "$ORDEN" ] || { echo "--orden repetido; no se ha tocado nada"; exit 2; }; ORDEN=${a#--orden=} ;;
-    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*)
-      k=${a%%=*}; k=${k#--}; v=${a#*=}
+    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*|--sin-filas=?*)
+      k=${a%%=*}; k=${k#--}; k=${k//-/_}; v=${a#*=}
       eval "[ -z \"\$F_$k\" ]" || { echo "--$k repetido; no se ha tocado nada"; exit 2; }
       case "$v" in /*) ;; *) v="$PWD/$v" ;; esac
       [ -f "$v" ] && [ -r "$v" ] || { echo "no se puede leer el fichero de --$k: $v; no se ha tocado nada"; exit 2; }
@@ -124,10 +150,10 @@ for a in "$@"; do
     *) uso; echo "argumento desconocido: $a; no se ha tocado nada"; exit 2 ;;
   esac
 done
-[[ "$PREVIO" =~ ^[0-9a-f]{7,40}$ ]] && [[ "$NUEVO" =~ ^[0-9a-f]{7,40}$ ]] || { echo "los commits van en hexadecimal, de 7 a 40 cifras (git rev-parse --short=8 …); no se ha tocado nada"; exit 2; }
+[[ "$PREVIO" =~ $RE_COMMIT ]] && [[ "$NUEVO" =~ $RE_COMMIT ]] || { echo "los commits van en hexadecimal, de 7 a 40 cifras (git rev-parse --short=8 …); no se ha tocado nada"; exit 2; }
 case "$LISTA" in /*) ;; *) LISTA="$PWD/$LISTA" ;; esac
 if [ "$MODO" = vuelta ]; then
-  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
+  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador$F_sin_filas" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
 else
   if [ -n "$F_migraciones" ]; then [ -n "$ORDEN" ] || { echo "--migraciones exige --orden=migracion-primero|codigo-primero (la ficha del lote lo dice); no se ha tocado nada"; exit 2; }
   else [ -z "$ORDEN" ] || { echo "--orden solo va con --migraciones; no se ha tocado nada"; exit 2; }; fi
@@ -162,18 +188,19 @@ sin_comentarios() { grep -vE '^[[:space:]]*(//|/\*|\*|#)' | grep -v '^[[:space:]
 # ── Las declaraciones ─────────────────────────────────────────────────────────────────────────────────────────────────────
 NM=0
 lee_migraciones() { # <fichero> → M_NOM M_TIPO M_TABLA M_OBJ M_MARCA M_PRIV M_VUELTA (0..NM-1); el motivo si no vale
-  local nom tipo tabla obj marca priv vuelta resto ant="" id='^[a-z_][a-z0-9_]{0,62}$'
+  local nom tipo tabla obj marca priv vuelta resto ant=""
   NM=0
   while read -r nom tipo tabla obj marca priv vuelta resto; do
     [ -n "${vuelta:-}" ] && [ -z "${resto:-}" ] || { echo "la línea de $nom no tiene 7 campos (nombre tipo tabla objeto marca privilegios vuelta)"; return 1; }
-    [[ "$nom" =~ ^[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{6}_[a-z0-9_]{1,120}$ ]] || { echo "nombre de migración no válido: $nom"; return 1; }
-    [[ "$tabla" =~ $id ]] || { echo "$nom: tabla no válida ($tabla)"; return 1; }
+    [[ "$nom" =~ $RE_NOM_MIG ]] || { echo "nombre de migración no válido: $nom"; return 1; }
+    [[ "$tabla" =~ $RE_ID ]] || { echo "$nom: tabla no válida ($tabla)"; return 1; }
     case "$vuelta" in deshacer|conservar) ;; *) echo "$nom: vuelta «$vuelta» (deshacer | conservar)"; return 1 ;; esac
     case "$tipo" in
-      check) [[ "$obj" =~ $id ]] && [[ "$marca" =~ ^[A-Za-z0-9_:.-]{1,64}$ ]] && [ "$priv" = - ] || { echo "$nom: check exige objeto (el CHECK), una marca literal y privilegios «-»"; return 1; } ;;
-      transicion) [[ "$obj" =~ $id ]] && [[ "$marca" =~ ^[a-z_][a-z0-9_]{0,62}\>[a-z_][a-z0-9_]{0,62}$ ]] && [ "$priv" = - ] || { echo "$nom: transicion exige objeto (el disparador), marca «desde>hasta» y privilegios «-»"; return 1; } ;;
-      tabla) [ "$obj" = - ] && { [ "$marca" = - ] || [[ "$marca" =~ $id ]]; } && [[ "$priv" =~ ^(-|[rawdD]{1,5})$ ]] || { echo "$nom: tabla exige objeto «-», marca = prefijo de sus funciones (o «-») y privilegios en r a w d D (o «-»)"; return 1; } ;;
-      *) echo "$nom: tipo «$tipo» (check | transicion | tabla)"; return 1 ;;
+      check) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_MARCA_CHECK ]] && [ "$priv" = - ] || { echo "$nom: check exige objeto (el CHECK), una marca literal y privilegios «-»"; return 1; } ;;
+      transicion) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_MARCA_TRANS ]] && [ "$priv" = - ] || { echo "$nom: transicion exige objeto (el disparador), marca «desde>hasta» y privilegios «-»"; return 1; } ;;
+      tabla) [ "$obj" = - ] && { [ "$marca" = - ] || [[ "$marca" =~ $RE_ID ]]; } && [[ "$priv" =~ $RE_PRIV ]] || { echo "$nom: tabla exige objeto «-», marca = prefijo de sus funciones (o «-») y privilegios en el orden r a w d D x t (o «-»)"; return 1; } ;;
+      columna) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_TIPO_COL ]] && [ "$priv" = - ] && [ "$vuelta" = conservar ] || { echo "$nom: columna exige objeto (la columna), marca = su tipo (json, text…), privilegios «-» y vuelta «conservar» (quitar una columna con filas pierde datos: este guion nunca la quita)"; return 1; } ;;
+      *) echo "$nom: tipo «$tipo» (check | transicion | tabla | columna)"; return 1 ;;
     esac
     [ -z "$ant" ] || [[ "$ant" < "$nom" ]] || { echo "las migraciones van en el orden de sus nombres, sin repetir ($ant antes que $nom): es el orden en que las prueban las baterías"; return 1; }
     ant=$nom
@@ -185,13 +212,32 @@ lee_migraciones() { # <fichero> → M_NOM M_TIPO M_TABLA M_OBJ M_MARCA M_PRIV M_
 valida_config() { # <fichero> → 0 si cada línea es clave=valor con las formas admitidas
   local l n=0
   while IFS= read -r l; do
-    [[ "$l" =~ ^[a-z0-9_]+(\.[a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+(\.[0-9]+)?)$ ]] || { echo "línea de --config no válida: «$l» (clave.con.puntos=false|true|null|vacia|número)"; return 1; }
+    [[ "$l" =~ $RE_CONFIG ]] || { echo "línea de --config no válida: «$l» (clave.con.puntos=false|true|null|vacia|número|texto:<palabra>)"; return 1; }
     n=$((n + 1))
   done < <(decl "$1")
   [ "$n" -gt 0 ] || { echo "el fichero de --config no declara ninguna bandera"; return 1; }
 }
-valida_rutas() { local l; while IFS= read -r l; do [[ "$l" =~ ^[+-][A-Z|]+\ [^\ ]+(\ @[^\ ]+)?$ ]] || { echo "línea de --rutas no válida: «$l» (+MÉTODO uri / -MÉTODO uri)"; return 1; }; done < <(decl "$1"); }
-valida_programador() { local l; while IFS= read -r l; do [[ "$l" =~ ^([+-].+|(ausente|presente)\ .+)$ ]] || { echo "línea de --programador no válida: «$l» (+línea / -línea / ausente <texto> / presente <texto>)"; return 1; }; done < <(decl "$1"); }
+valida_rutas() { local l; while IFS= read -r l; do [[ "$l" =~ $RE_RUTA ]] || { echo "línea de --rutas no válida: «$l» (+MÉTODO uri / -MÉTODO uri)"; return 1; }; done < <(decl "$1"); }
+valida_programador() { local l; while IFS= read -r l; do [[ "$l" =~ $RE_PROG ]] || { echo "línea de --programador no válida: «$l» (+línea / -línea / ausente <texto> / presente <texto>)"; return 1; }; done < <(decl "$1"); }
+valida_sin_filas() { # <fichero> → 0 si cada línea es «tabla columna valor[,valor…]»
+  local l n=0
+  while IFS= read -r l; do
+    [[ "$l" =~ $RE_SIN_FILAS ]] || { echo "línea de --sin-filas no válida: «$l» (tabla columna valor[,valor…])"; return 1; }
+    n=$((n + 1))
+  done < <(decl "$1")
+  [ "$n" -gt 0 ] || { echo "el fichero de --sin-filas no declara ninguna"; return 1; }
+}
+# Las filas «vivas» que el lote exige que no haya (p. ej. ejecuciones del laboratorio en curso): una línea «tabla columna
+# [valores] n» por declaración; 0 si todas dan 0. Solo SELECT, con identificadores y valores ya validados.
+filas_vivas() { # <fichero --sin-filas>
+  local t c v n ok=0
+  while read -r t c v; do
+    n=$(q "SELECT count(*) FROM public.$t WHERE $c::text IN ('$(printf '%s' "$v" | sed "s/,/','/g")')") || n="?"
+    echo "$t.$c en [$v]: $n"
+    [ "$n" = 0 ] || ok=1
+  done < <(decl "$1")
+  return "$ok"
+}
 
 # ── Lo del servidor ───────────────────────────────────────────────────────────────────────────────────────────────────────
 # 13 programas de producción y el de la voz si está instalado (14 desde el 11-11-2026), como deploy-a4-regenerar-backend.sh.
@@ -310,12 +356,14 @@ lee_tareas() { TAREAS_JSON=$(artisan schedule:list --json 2>/dev/null) || TAREAS
 # Las banderas de --config leídas de la caché de configuración, como www-data: «clave forma» (false · true · null · vacia ·
 # un número · cadena · lista:N · ausente). Una cadena NUNCA se imprime: solo «cadena». Un número (o una cadena numérica,
 # como los importes de config/outreach.php) solo sale si tiene como mucho 6 cifras enteras: uno más largo podría ser un
-# teléfono y sale como «número largo».
+# teléfono y sale como «número largo». Una cadena declarada «texto:<palabra>» sale como «texto:<palabra>» SOLO si es
+# exactamente esa palabra (que ya está escrita en la declaración); si no, «cadena», como siempre.
 banderas() { # <fichero --config> → una línea por clave, en su orden
-  decl "$1" | sed 's/=.*$//' | ( cd "$APP/backend" && sudo -u "$WWW" php -r '
+  decl "$1" | ( cd "$APP/backend" && sudo -u "$WWW" php -r '
 $c = @include "bootstrap/cache/config.php";
 if (! is_array($c)) { fwrite(STDERR, "sin caché de configuración\n"); exit(3); }
-foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $k) {
+foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $l) {
+    [$k, $esperado] = explode("=", $l, 2) + [1 => ""];
     $v = $c; $hay = true;
     foreach (explode(".", $k) as $p) { if (is_array($v) && array_key_exists($p, $v)) { $v = $v[$p]; } else { $hay = false; break; } }
     if (! $hay) { $f = "ausente"; }
@@ -327,6 +375,7 @@ foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $
         if (strpos($s, ".") !== false) { $s = rtrim(rtrim($s, "0"), "."); }
         $f = preg_match("/^-?[0-9]{1,6}(\\.[0-9]+)?\$/", $s) === 1 ? $s : "número largo";
     }
+    elseif (is_string($v) && strncmp($esperado, "texto:", 6) === 0 && $v === substr($esperado, 6)) { $f = $esperado; }
     elseif (is_string($v)) { $f = "cadena"; }
     elseif (is_array($v)) { $f = "lista:" . count($v); }
     else { $f = "otro"; }
@@ -354,16 +403,39 @@ estado_mig() {
          FROM pg_trigger tg JOIN pg_class r ON r.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace JOIN pg_proc p ON p.oid = tg.tgfoid
          WHERE NOT tg.tgisinternal AND n.nspname = 'public' AND r.relname = '$t' AND tg.tgname = '$o'" ;;
     tabla)
+      # Los privilegios de la aplicación, UNO A UNO (has_table_privilege con varios a la vez dice true si tiene CUALQUIERA:
+      # memoria «migraciones-produccion-rol-dueno»), con las letras de PostgreSQL en su orden: r SELECT · a INSERT ·
+      # w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER. Los que admiten columnas, también por columna
+      # (has_any_column_privilege: un GRANT UPDATE (col) también escribe).
       q "SELECT CASE WHEN to_regclass('public.$t') IS NULL THEN 'ausente - -' ELSE 'presente '
            || (SELECT ro.rolname FROM pg_class c JOIN pg_roles ro ON ro.oid = c.relowner WHERE c.oid = to_regclass('public.$t')) || ' '
-           || coalesce(nullif(concat(CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'SELECT') THEN 'r' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'INSERT') THEN 'a' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'UPDATE') THEN 'w' END,
+           || coalesce(nullif(concat(CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'SELECT') THEN 'r' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'INSERT') THEN 'a' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'UPDATE') THEN 'w' END,
                                      CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'DELETE') THEN 'd' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRUNCATE') THEN 'D' END), ''), '-') END
+                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRUNCATE') THEN 'D' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'REFERENCES') THEN 'x' END,
+                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRIGGER') THEN 't' END), ''), '-') END
            || ' ' || (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                       WHERE n.nspname = 'public' AND '$m' <> '-' AND left(p.proname, length('$m')) = '$m')" ;;
+    columna)
+      # «número de columnas con ese nombre · tipo · null|notnull · defecto|-»: antes «0 - - -», después «1 <tipo> null -».
+      q "SELECT count(*) || ' ' || coalesce(string_agg(format_type(a.atttypid, a.atttypmod) || ' ' || CASE WHEN a.attnotnull THEN 'notnull' ELSE 'null' END
+                                                       || ' ' || CASE WHEN a.atthasdef THEN 'defecto' ELSE '-' END, ','), '- - -')
+         FROM pg_attribute a WHERE a.attrelid = to_regclass('public.$t') AND a.attname = '$o' AND a.attnum > 0 AND NOT a.attisdropped" ;;
   esac
+}
+# Para el paso 4 de una tabla nueva: sus privilegios uno a uno, en palabras, y USAGE de la aplicación en sus secuencias
+# (sin él, un INSERT con id serial da 42501). Deja PRIV_TEXTO y SEQ («secuencias con USAGE»).
+privilegios_uno_a_uno() { # <i> <estado>
+  local p=${2#presente * } l n
+  p=${p%% *}
+  PRIV_TEXTO=""
+  for l in r:SELECT a:INSERT w:UPDATE d:DELETE D:TRUNCATE x:REFERENCES t:TRIGGER; do
+    case "$p" in *"${l%%:*}"*) n=sí ;; *) n=no ;; esac
+    PRIV_TEXTO="$PRIV_TEXTO${PRIV_TEXTO:+ · }${l#*:} $n"
+  done
+  SEQ=$(q "SELECT count(*) || ' ' || count(*) FILTER (WHERE has_sequence_privilege('$APP_BD', s.oid, 'USAGE')) FROM pg_depend d JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S' WHERE d.classid = 'pg_class'::regclass AND d.refobjid = to_regclass('public.${M_TABLA[$1]}') AND d.deptype IN ('a', 'i')" 2>/dev/null) || SEQ="?"
 }
 clase_mig() { # <i> <estado> [<estado de antes, del respaldo>]
   local i=$1 e=$2 a=${3:-}
@@ -382,6 +454,7 @@ clase_mig() { # <i> <estado> [<estado de antes, del respaldo>]
         "presente $DUENO_BD ${M_PRIV[$i]} "*) if [ "${M_MARCA[$i]}" = - ] || [ "${e##* }" -gt 0 ]; then echo despues; else echo otro; fi ;;
         *) echo otro ;;
       esac ;;
+    columna) case "$e" in "0 - - -") echo antes ;; "1 ${M_MARCA[$i]} null -") echo despues ;; *) echo otro ;; esac ;;
   esac
 }
 def_mig() { # <i> → la definición exacta del objeto (para el respaldo y la vuelta atrás), en una línea
@@ -390,6 +463,7 @@ def_mig() { # <i> → la definición exacta del objeto (para el respaldo y la vu
     check) q "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = 'public' AND r.relname = '$t' AND c.conname = '$o' AND c.contype = 'c'" ;;
     transicion) q "SELECT pg_get_triggerdef(tg.oid) FROM pg_trigger tg JOIN pg_class r ON r.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE NOT tg.tgisinternal AND n.nspname = 'public' AND r.relname = '$t' AND tg.tgname = '$o'" ;;
     tabla) q "SELECT coalesce(string_agg(p.proname, ' ' ORDER BY p.proname), '') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND '$m' <> '-' AND left(p.proname, length('$m')) = '$m'" ;;
+    columna) estado_mig "$i" ;;   # no se deshace nunca: queda como constancia (la tabla entera, en su pg_dump --schema-only)
   esac
 }
 registrada() { [ "$(q "SELECT count(*) FROM migrations WHERE migration = '$1'")" = 1 ]; }
@@ -583,6 +657,7 @@ if [ -n "$F_migraciones" ]; then m=$(lee_migraciones "$F_migraciones") || aborta
 if [ -n "$F_config" ]; then m=$(valida_config "$F_config") || aborta "--config: $m"; fi
 if [ -n "$F_rutas" ]; then m=$(valida_rutas "$F_rutas") || aborta "--rutas: $m"; fi
 if [ -n "$F_programador" ]; then m=$(valida_programador "$F_programador") || aborta "--programador: $m"; fi
+if [ -n "$F_sin_filas" ]; then m=$(valida_sin_filas "$F_sin_filas") || aborta "--sin-filas: $m"; fi
 g rev-parse --is-inside-work-tree > /dev/null 2>&1 || aborta "$APP no es un checkout de git"
 say "0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):"
 P=$(g rev-parse -q --verify "${PREVIO}^{commit}" 2>/dev/null) || aborta "el commit previo $PREVIO no existe en $APP"
@@ -710,7 +785,7 @@ for ((i = 0; i < NM; i++)); do
     # Informativo: lo que la tabla nueva heredará del dueño (memoria «migraciones-produccion-rol-dueno»); el paso 4 exige
     # después exactamente lo declarado, ya con los REVOKE que haga la propia migración.
     dp=$(q "SELECT coalesce(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '-') FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a JOIN pg_roles o ON o.oid = d.defaclrole JOIN pg_roles r ON r.oid = a.grantee WHERE o.rolname = '$DUENO_BD' AND r.rolname = '$APP_BD' AND d.defaclobjtype = 'r'" 2>/dev/null) || dp="?"
-    say "      privilegios por defecto de $DUENO_BD para $APP_BD en tablas nuevas: [$dp] · después se exige «${M_PRIV[$i]}» (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE)"
+    say "      privilegios por defecto de $DUENO_BD para $APP_BD en tablas nuevas: [$dp] · después se exige «${M_PRIV[$i]}» (uno a uno: r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER)"
   fi
 done
 [ "$PEND_N" = "${ESPERADAS# }" ] || aborta "migraciones pendientes frente a origin/main [$PEND_N], distintas de las declaradas que faltan [${ESPERADAS# }]: lo ajeno se despliega antes por su vía"
@@ -730,6 +805,12 @@ if [ "$NM" -gt 0 ]; then
   [ "$BLOQ" = 0 ] || say "   AVISO: hay cerrojos sobre las tablas de las migraciones (lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces)"
 else
   say "   pendientes frente a origin/main: ninguna (el lote no migra)"
+fi
+if [ -n "$F_sin_filas" ]; then
+  # Lo que el lote exige que no haya mientras se despliega (lote 5: ninguna ejecución del laboratorio en curso). Se mira
+  # aquí y otra vez justo antes del primer cambio.
+  SF=$(filas_vivas "$F_sin_filas") || aborta "--sin-filas: hay filas que el lote exige que no haya [$(printf '%s\n' "$SF" | paste -sd '|' -)]: esperar a que terminen (o pararlas por su vía) y repetir"
+  say "   sin filas vivas (--sin-filas): $(printf '%s\n' "$SF" | paste -sd '|' -)"
 fi
 lee_rutas; [ "$RUTAS" != "?" ] || aborta "route:list --json (como $WWW) no se puede leer"
 RUTAS0=$RUTAS; RUTAS0_JSON=$RUTAS_JSON
@@ -868,6 +949,10 @@ paso_caches() {
   fi
   echo "K. cachés: $([ -n "$F_config" ] && echo "config:cache" || echo "configuración sin regenerar") · $([ -n "$F_rutas" ] && echo "route:cache" || echo "rutas sin regenerar") (como $WWW, umask 077) · $(stat -c '%U %a' "$APP/backend/$CACHE_CONFIG") / $(stat -c '%U %a' "$APP/backend/$CACHE_RUTAS")"
 }
+if [ -n "$F_sin_filas" ]; then
+  SF=$(filas_vivas "$F_sin_filas") || { ETAPA=fin; echo "ABORTA (no se ha tocado nada; el respaldo $BK queda): --sin-filas, justo antes del primer cambio: [$(printf '%s\n' "$SF" | paste -sd '|' -)]: esperar y repetir"; exit 1; }
+  echo "   sin filas vivas, justo antes del primer cambio: $(printf '%s\n' "$SF" | paste -sd '|' -)"
+fi
 echo "2. $PLAN:"
 if [ "$NM" -gt 0 ] && [ "$ORDEN" = migracion-primero ]; then paso_migraciones; paso_codigo
 elif [ "$NM" -gt 0 ]; then paso_codigo; paso_migraciones
@@ -905,6 +990,11 @@ for ((i = 0; i < NM; i++)); do
   e=$(estado_mig "$i" 2>/dev/null) || e="?"; c=$(clase_mig "$i" "$e" "${M_E0[$i]}")
   echo "   esquema de $(nombre_corto "${M_NOM[$i]}"): [$e] = $c"
   [ "$c" = despues ] || falla "el esquema de ${M_NOM[$i]} es [$e], no el de después"
+  if [ "${M_TIPO[$i]}" = tabla ] && [ "${e%% *}" = presente ]; then
+    privilegios_uno_a_uno "$i" "$e"
+    echo "      $APP_BD en ${M_TABLA[$i]}, uno a uno: $PRIV_TEXTO · sus secuencias (total · con USAGE): [$SEQ] (declarado «${M_PRIV[$i]}»)"
+    case "${M_PRIV[$i]}" in *a*) [ "$SEQ" != "?" ] && [ "${SEQ%% *}" = "${SEQ##* }" ] || falla "$APP_BD tiene INSERT en ${M_TABLA[$i]} y no USAGE en todas sus secuencias [$SEQ]: el INSERT daría 42501" ;; esac
+  fi
 done
 lee_tareas
 if [ "$TAREAS" = "?" ]; then falla "schedule:list no se puede leer"
