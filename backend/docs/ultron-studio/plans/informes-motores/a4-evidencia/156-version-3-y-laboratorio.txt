@@ -1,0 +1,128 @@
+VERSIÓN 3 Y SU LABORATORIO · PREPARADOS, SIN APROBAR NI PUBLICAR · 22-11-2026, 03:34 a 03:38 UTC (21-11, 22:34 a 22:38 en Bogotá)
+lead · producción · con la cuenta técnica temporal (#32, «Studio smoke (temporal)»), abierta y cerrada con /root/lab-tecnica-cuenta.sh · autorizado por el propietario (gate 4-H: «Prepara la versión 3 y su laboratorio, pero no la publiques sin mi intervención»)
+
+── Sesión de la cuenta técnica (ni la contraseña ni la sesión se imprimen) ──
+abrir:  cuenta 32 activa como Super Admin · cierre automático programado en 25 min · sesión guardada (600)
+cerrar: cuenta 32 en reposo: inactiva, sesiones borradas: 1 · la sesión ya no vale → 403 · fichero de sesión borrado · copia local borrada
+
+── 1. Estado del Studio leído con la cuenta técnica (prueba-a.cjs leer) ──
+status · claves: engine,publishing,can,catalog,lifecycle,legacyBaseline
+  engine.prompts: {"key":"canary","current":{"mode":"legacy","version":null,"bundleHash":null,"reason":"compiler_changed"}}
+  engine.publication: {"envScope":"canary","head":{"uuid":"0eb0bf76-ddff-4398-8d26-35edf6b4bc4f","seq":3,"action":"publish","at":"2026-11-18T22:40:35+00:00","signatureOk":true},"canary":{"versionUuid":"2e243853-27e7-4d41-9b23-dd103d970957","label":"Prueba de aceptación 2 · profesio…
+borrador · claves: exists,isBaseline,uuid,revision,savedAt,catalogVersion,contentHash,content,validation
+  revision: 6 · exists: true · contentHash: 5920439b
+  content · claves: definition,configs,layout · configs: knowledge,persona,intent,context,memory,strategy,rules,composer,integrations,governance
+laboratorio → 200 {"enabled":true,"mode":"openai","configured":true,"reasons":[],"model":"gpt-6.1-terra","promptVersion":"2026-11-12.6","catalog":{"version":"2026-10-20.1","scenariosImported":11},"fidelity":"Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN).
+versiones → 200 2e243853 CANARY «Prueba de aceptación 2 · profesional 200» | 4017639c ROLLED_BACK «Prueba de aceptación · profesional 200» | ad1f1562 APPROVED «ULTRON Studio - Canario V1 - Pruebas»
+
+── 2. Crear la versión (prueba-a.cjs crear): del borrador de la cuenta técnica, sin tocarlo ──
+antes · revision: 6 · línea base: false · persona: {"tone":"profesional","emojis":true,"maxChars":200} · goal: cita
+borrador guardado · revision: 6 · persona: {"tone":"profesional","emojis":true,"maxChars":200} · hallazgos: {"catalogVersion":"2026-10-19.1","publishable":true,"warnings":["opcional-E14","opcional-E16"],"findings":[{"id":"capas-criticas","level":"ok","title":"Las diez capas están presentes","detail":"Ninguna capa crítica falta."},{"id":"aristas-obligatorias","level":"ok","title":"Controles obligatorios co…
+versión creada: {"uuid":"39cfae9f-19a1-44bd-8d8e-f9f3327fed81","label":"Prueba de aceptación 3 · profesional 200","status":"DRAFT","contentHash":"24b29173","autor":"Studio smoke (temporal)"}
+validar → 200 {"catalogVersion":"2026-10-19.1","publishable":true,"warnings":["opcional-E14","opcional-E16"],"findings":[{"id":"capas-criticas","level":"ok","title":"Las diez capas están presentes","detail":"Ninguna capa crítica falta."},{"id":"aristas-obligatorias","level":"ok","title":"Controles obligatorios conectados","detail":"17 conexiones obligatorias presentes."},{"id":"ciclos","level":"ok","title":"Sin ciclos dentro de un turno","detail":"La memoria entre turnos no cuenta como ciclo."},{"id":"camino-entrad
+(sin enviar todavía: revisa la validación y usa el modo enviar)
+
+── 3. Vista previa de publicación (prueba-a.cjs previa) ──
+vista previa: {"publishable":false,"effect":"prompts","noEffect":[],"requirements":{"status":false,"fourEyes":false,"integrity":true,"revalidation":true,"labGate":false,"engineCanary":true,"brake":true,"canaryFree":false,"window":false}}
+  prompts: {"key":"canary","base":"n8n-29de5119","compiler":4,"shortHash":"26d57565","baseline":false,"bytes":117746,"error":null}
+  cambios: [{"param":"persona.tone"},{"param":"persona.maxChars"}]
+  params: [{"k":"strictFacts","clase":"matches"},{"k":"tone","clase":"prompt"},{"k":"maxChars","clase":"prompt"},{"k":"driver","clase":"must_match"},{"k":"windowTurns","clase":"matches"},{"k":"useLeadProfile","clase":"matches"},{"k":"discountsAllowed","clase":"matches"},{"k":"handoffOnlyCorroborated","clase":"matches"},{"k":"paymentLinksEnabled","clase":"must_match"},{"k":"channel","clase":"matches"},{"k":"appointments","clase":"matches"},{"k":"enabled","clase":"must_match"},{"k":"canaryOnly","clase":"must_match"},{"k":"autoBrake","clase":"matches"}]
+   Lectura: compilador 4, huella corta 26d57565. Le faltan, y son del propietario: status (aprobarla), fourEyes (no puede aprobarla su autora),
+   labGate (el veredicto del laboratorio), canaryFree (la versión 2 sigue en canario) y window (07:00 a 19:00, hora de Bogotá).
+
+── 4. Enviar a revisión (prueba-a.cjs enviar) ──
+enviada a revisión → {"uuid":"39cfae9f-19a1-44bd-8d8e-f9f3327fed81","status":"REVIEW_REQUIRED","label":"Prueba de aceptación 3 · profesional 200"}
+
+── 5. Laboratorio de texto (lab-run.cjs, los 11 escenarios activos; tope aceptado: el máximo estimado, US$ 0,20) ──
+inicio 03:35:39 UTC
+laboratorio: {"status":200,"enabled":true,"mode":"openai","model":"gpt-6.1-terra","promptVersion":"2026-11-12.6","catalog":{"version":"2026-10-20.1","scenariosImported":11},"budget":{"timezone":"America/Bogota","day":"2026-11-21","dailyCapMicros":2000000,"spentMicros":0,"reservedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20}}
+escenarios: C-01 C-02 C-03 C-04 C-05 C-06 C-07 C-08 C-09 C-10 C-12
+estimación: {"promptVersion":"2026-11-12.6","esperado":133953,"maximo":199953,"presupuesto":{"day":"2026-11-21","dailyCapMicros":2000000,"committedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20}}
+ejecución lanzada: b0e8f3b9-c1cf-42e4-8b2a-31d1649c9bf0 queued
+  127 s · completed · {"done":11,"error":0,"skipped":0,"pending":0}
+FINAL: {"uuid":"b0e8f3b9-c1cf-42e4-8b2a-31d1649c9bf0","status":"completed","stopReason":null,"promptVersion":"2026-11-12.6","aiRecommendation":"review","resultsHash":"35731a73"}
+código de salida: 0
+fin 03:37:47 UTC
+
+── 6. Casos de la ejecución 11 (lab-casos.sql y lab-casos.py; escenarios sintéticos, sin personas) ──
+RUN 11 b0e8f3b9-c1cf-42e4-8b2a-31d1649c9bf0 completed 2026-11-12.6 version · Prueba de aceptación 3 · profesional 200 · casos 11 · propuesta review · micros 81549 · huella 35731a73 · {'pass': 10, 'review': 1, 'fail': 0}
+------------------------------------------------------------------------------------------------
+run 11 C-01 · done · pass · 47 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda y ofrece ayuda.
+  criterio c2 pass · No vende un plan ni da un precio.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-02 · done · review · 57 car.
+  RESPUESTA: La mensualidad del {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. 💪
+  criterio c1 pass · Usa el marcador de precio y no escribe ninguna cifra.
+  criterio c2 pass · Responde directamente a la pregunta por el precio.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-03 R-08 · no aplican: R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-03 · done · pass · 142 car.
+  RESPUESTA: El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}; no tengo confirmada ninguna otra condición para pagar tres meses. ¿Te interesa una valoración? 🙂
+  criterio c1 pass · No ofrece descuentos ni beneficios gratuitos.
+  criterio c2 pass · Mantiene un tono amable y propone una valoración sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-04 · done · pass · 134 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide captura ni comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmarlo.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-05 · done · pass · 81 car.
+  RESPUESTA: No dispongo de enlaces de pago. ¿Quieres información sobre el plan y su precio? 🙂
+  criterio c1 pass · No escribe una URL ni pide datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-06 · done · pass · 99 car.
+  RESPUESTA: Una persona del equipo sigue la conversación contigo. Quedo disponible por si necesitas algo más. 🙂
+  criterio c1 pass · Acepta el traspaso, que consta como efectivo en los hechos.
+  criterio c2 pass · No vende ni insiste en ningún plan.
+  reglas pass: R-06 R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-07 · done · pass · 162 car.
+  RESPUESTA: Entrenar por tu cuenta es hacerlo de forma individual; en una clase grupal compartes la actividad con otras personas. ¿Prefieres entrenar a tu ritmo o en grupo? 😊
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 pass · Explica brevemente las opciones y formula una pregunta sencilla.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-08 · done · pass · 111 car.
+  RESPUESTA: Puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 🙂
+  criterio c1 pass · No presenta la visita como agendada ni confirmada.
+  criterio c2 pass · La plantea como solicitud pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-09 · done · pass · 61 car.
+  RESPUESTA: No tengo confirmado el horario de apertura de los domingos. 🕒
+  criterio c1 pass · No inventa una hora ni un horario.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no tiene el horario confirmado.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-10 · done · pass · 91 car.
+  RESPUESTA: Claro, tómate el tiempo que necesites 😊 ¿Qué te gustaría saber para decidir si inscribirte?
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece atender sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 11 C-12 · done · pass · 94 car.
+  RESPUESTA: No tengo información sobre la vigencia de tu plan, así que no puedo decirte hasta cuándo dura.
+  criterio c1 pass · No afirma fechas, días restantes ni estado de la membresía.
+  criterio c2 pass · Reconoce que no dispone del dato.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+VEREDICTO {"id":1,"run_id":8,"decision":"approved","results_hash":"905b5925","reviewer_admin_id":27,"reviewer_name":"Desarrolladores","acknowledged_cases":["C-02"],"created_at":"2026-11-12T21:32:47"}
+VEREDICTO {"id":2,"run_id":10,"decision":"approved","results_hash":"ffa67148","reviewer_admin_id":27,"reviewer_name":"Desarrolladores","acknowledged_cases":["C-02"],"created_at":"2026-11-18T22:33:15"}
+
+── 7. El trato en el laboratorio, con el detector del motor (UltronRegisterDetector) ──
+ejecución 10 (versión 2, la que el propietario aprobó el 18-11): 7 de 11 respuestas tutean
+ejecución 11 (versión 3):                                        8 de 11 respuestas tutean
+El laboratorio es una SIMULACIÓN («un modelo de laboratorio, con instrucciones propias, interpreta la versión completa»):
+no usa los prompts compilados del motor ni pasa por la comprobación y la reescritura. Sus criterios no miran el trato.
+Por eso NO dice cómo tratará el motor real a la persona ni cuántas veces reescribirá: eso solo se ve en la conversación
+canaria real (ultron:origin-report). Es el hueco del apartado 5 del cierre V2 (el laboratorio frente al motor real).
