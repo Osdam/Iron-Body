@@ -18,6 +18,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Feature\Outreach\AI9\Support\AI9World;
@@ -254,6 +256,60 @@ class ReplyClassifierEndToEndTest extends TestCase
         $this->assertSame(1, $r['classifier'][$etiqueta === 'none' ? 'discarded.no_brake' : 'discarded.low_confidence']);
         $this->assertSame(0, $this->classifierOutcomes()->count());
         $this->assertSame(1, (int) $this->classifierCounter()->reserved_units, 'la llamada se hizo y cuenta');
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function descartes(): iterable
+    {
+        yield 'bajo el umbral' => [FakeReplyTransport::says('opted_out', 49), 'low_confidence'];
+        yield 'sin freno' => [FakeReplyTransport::says('none', 100), 'no_brake'];
+        yield 'fuera del esquema' => [['error' => null, 'output' => ['label' => 'interested', 'confidence' => 99], 'usage' => null, 'latencyMs' => 3], 'invalid_output'];
+        yield 'fallo del proveedor' => [FakeReplyTransport::fails('quota'), 'provider_quota'];
+    }
+
+    /**
+     * M5 de security: al descartar, el registro dice POR QUÉ (y la traza
+     * técnica) pero no lleva la etiqueta ni la confianza junto al uuid del
+     * trabajo, que serían un dato indirecto de la persona en un log. Lista
+     * cerrada de claves.
+     *
+     * @param  array<string, mixed>  $reply
+     */
+    #[DataProvider('descartes')]
+    public function test_al_descartar_el_registro_lleva_el_motivo_y_ni_la_etiqueta_ni_la_confianza(array $reply, string $motivo): void
+    {
+        $this->classifierOn(new FakeReplyTransport($reply));
+        $s = $this->sentTemplate();
+        $this->inbound($s['member']['lead'], 'mmm no sé, ya veremos');
+        Log::spy();
+
+        (new WhatsappTemplateOutcomes)->run(now());
+
+        $contexto = null;
+        Log::shouldHaveReceived('info')->once()->with('outreach.classifier.discarded', Mockery::capture($contexto));
+        Log::shouldNotHaveReceived('info', ['outreach.classifier.recorded', Mockery::any()]);
+        $this->assertIsArray($contexto);
+        $claves = array_keys($contexto);
+        sort($claves);
+        $this->assertSame(['cost_micros', 'job', 'latency_ms', 'model', 'prompt_ref', 'reason', 'version'], $claves, 'el motivo y la traza técnica, nada más');
+        $this->assertSame([$motivo, (string) $s['job']->uuid], [$contexto['reason'], $contexto['job']]);
+        $this->assertStringNotContainsString('ya veremos', (string) json_encode($contexto), 'ni el texto');
+    }
+
+    public function test_al_registrar_el_freno_el_registro_lleva_la_etiqueta_y_la_confianza_como_la_fila_del_libro(): void
+    {
+        $this->classifierOn(new FakeReplyTransport(FakeReplyTransport::says('not_interested', 95)));
+        $s = $this->sentTemplate();
+        $this->inbound($s['member']['lead'], 'No me interesa, gracias');
+        Log::spy();
+
+        (new WhatsappTemplateOutcomes)->run(now());
+
+        $contexto = null;
+        Log::shouldHaveReceived('info')->once()->with('outreach.classifier.recorded', Mockery::capture($contexto));
+        Log::shouldNotHaveReceived('info', ['outreach.classifier.discarded', Mockery::any()]);
+        $this->assertSame(['not_interested', 95, 'recorded'], [$contexto['label'], $contexto['confidence'], $contexto['result']]);
+        $this->assertSame(1, $this->classifierOutcomes()->count(), 'lo mismo que ya guarda el libro');
     }
 
     // ── Las señales deterministas van primero ───────────────────────────────

@@ -52,7 +52,9 @@ use Throwable;
  * TRAZA: el resultado lleva `source = classifier`, su confianza y la clave
  * `job:<uuid>:ai9:<versión>:<huella del prompt>:<modelo>`; el coste del día,
  * en el contador. Los registros llevan la clase de lo ocurrido, la versión,
- * la huella, el modelo, la confianza, el coste y la latencia; nunca el texto.
+ * la huella, el modelo, el coste y la latencia; la etiqueta y la confianza,
+ * SOLO cuando el resultado se registra (lo mismo que la fila del libro): al
+ * descartar, el motivo y nada más (M5 de security). Nunca el texto.
  */
 final class ReplyClassifier
 {
@@ -155,7 +157,7 @@ final class ReplyClassifier
             return self::result(self::STATE_DISCARDED, 'invalid_output', null, $llamadas, $coste);
         }
         [$etiqueta, $confianza] = $leido;
-        $traza += ['label' => $etiqueta, 'confidence' => $confianza];
+        // M5 de security: al descartar, el registro lleva el motivo y NO la etiqueta ni la confianza junto al trabajo.
         if ($etiqueta === ReplyClassifierPrompt::NONE) {
             Log::info('outreach.classifier.discarded', $traza + ['reason' => 'no_brake']);
 
@@ -173,7 +175,7 @@ final class ReplyClassifier
         }
         $registro = $this->outcomes->record($inscripcion, $etiqueta, OutcomeTable::SOURCE_CLASSIFIER, self::sourceKey((string) $job->uuid, $modelo), $now,
             ['job' => $job, 'confidence' => $confianza, 'occurredAt' => $replyAt]);
-        Log::info('outreach.classifier.recorded', $traza + ['result' => $registro['result'], 'transition' => $registro['transition']]);
+        Log::info('outreach.classifier.recorded', $traza + ['label' => $etiqueta, 'confidence' => $confianza, 'result' => $registro['result'], 'transition' => $registro['transition']]);
 
         return match ($registro['result']) {
             OutcomeRecorder::RESULT_RECORDED => self::result(self::STATE_RECORDED, 'recorded', $etiqueta, $llamadas, $coste),
