@@ -795,7 +795,7 @@ CC = Fixture("conditions-cases.json", header(
         "DF-C8": "contact.last_outcome es el resultado del contacto más reciente que casa (empate de instante: el último de la lista); si ese contacto aún no tiene resultado, desconocido.",
         "DF-C9": "Filtros de contactos: channel y purpose por igualdad; strategy = self cuenta solo los de esta estrategia y other todos los demás (también los de fuera del H9); sin strategy, todos.",
         "DF-C10": "Un count solo admite los operadores enteros (no is_known/is_unknown) y su valor va de 0 a 100; un evento solo exists/absent; una transición no lleva operador.",
-        "DF-C11": "Un evento en una condición solo puede ser uno de los 27 del vocabulario (clase crm_fact); los periódicos, de resultado o de integración dan unknown_event. `within` es obligatorio en eventos, recuentos y transiciones.",
+        "DF-C11": "Un evento en una condición solo puede ser uno de los 28 del vocabulario (clase crm_fact); los periódicos, de resultado o de integración dan unknown_event. `within` es obligatorio en eventos, recuentos y transiciones.",
     },
 ))
 CC.extra["errorCodes"] = ERROR_CODES

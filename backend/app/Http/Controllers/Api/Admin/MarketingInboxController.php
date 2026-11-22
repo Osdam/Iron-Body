@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\MarketingConversation;
+use App\Observers\Commercial\ComplaintCommercialEmitter;
 use App\Services\Marketing\InboxContextService;
 use App\Services\Marketing\MarketingConversationAssignmentService;
 use App\Services\Marketing\MarketingConversationNoteService;
@@ -465,16 +466,27 @@ class MarketingInboxController extends Controller
             return $r;
         }
 
-        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            // Q1-8: la categoría cerrada al resolver una revisión marcada como queja. Opcional: sin ella, todo como siempre.
+            'complaint_category' => ['nullable', 'string', Rule::in(ComplaintCommercialEmitter::REVIEW_CATEGORIES)],
+        ]);
 
         $conversation = $this->findConversation($id);
         if (! $conversation) {
             return $this->notFound();
         }
 
-        $staffReview->resolve($conversation, $this->adminId($request), $data['note'] ?? null);
+        $categoria = $data['complaint_category'] ?? null;
+        if ($categoria === null) {
+            $staffReview->resolve($conversation, $this->adminId($request), $data['note'] ?? null);
 
-        return response()->json(['ok' => true, 'staff_review_pending' => false]);
+            return response()->json(['ok' => true, 'staff_review_pending' => false]);
+        }
+
+        $descartadas = $staffReview->resolveComplaint($conversation, $this->adminId($request), $categoria, $data['note'] ?? null);
+
+        return response()->json(['ok' => true, 'staff_review_pending' => false, 'complaint' => ['category' => $categoria, 'dismissed' => $descartadas]]);
     }
 
     // ── 11. Métricas ──────────────────────────────────────────────────────────────

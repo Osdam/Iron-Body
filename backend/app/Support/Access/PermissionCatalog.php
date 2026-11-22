@@ -184,6 +184,8 @@ final class PermissionCatalog
         // C9 (Enmienda C9 del H9): las autorizaciones de contacto por WhatsApp, a cuatro ojos.
         'commercial_automation.consents_record' => 'Registrar y retirar autorizaciones de contacto por WhatsApp',
         'commercial_automation.consents_confirm' => 'Confirmar o rechazar autorizaciones de contacto por WhatsApp',
+        // Q1-8 (Enmienda Q1-8 del H9): la queja presencial o por teléfono.
+        'commercial_automation.complaints_record' => 'Registrar una queja presencial o por teléfono',
     ];
 
     /**
@@ -271,6 +273,7 @@ final class PermissionCatalog
         'commercial_automation.release' => 'Soltar un freno con una nota (cuatro ojos: no lo suelta quien lo echó). Solo Super Admin por defecto.',
         'commercial_automation.consents_record' => 'Registrar que un socio o prospecto autorizó que le escriban por WhatsApp para una finalidad (comercial, cobranza o servicio), con la evidencia y el texto legal que aceptó, y retirar esa autorización cuando la persona lo pida. No vale hasta que otra persona la confirme. Son datos personales: también hace falta poder ver a la persona. No llega por defecto al Administrador.',
         'commercial_automation.consents_confirm' => 'Confirmar o rechazar una autorización de contacto que registró OTRA cuenta (cuatro ojos: nadie confirma la suya), y retirarla. Al confirmarla, la automatización comercial puede escribir a esa persona por WhatsApp para esa finalidad. No llega por defecto al Administrador.',
+        'commercial_automation.complaints_record' => 'Registrar que un socio o prospecto se quejó en recepción, por teléfono o por otro medio, con el medio y una categoría (sin texto). Para el contacto automático comercial y de cobranza a esa persona durante la ventana de quejas (30 días); el servicio no cambia. Una al día por persona; no se descarta: caduca sola. Es un dato personal: también hace falta poder ver a la persona. No llega por defecto al Administrador.',
     ];
 
     /**
@@ -375,7 +378,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'voice_manage' => 8.5, 'voice_lab_run' => 8.55, 'voice_publish' => 8.6, 'call_place' => 2, 'contacts_manage' => 8.7, 'manage_availability' => 8, 'manage_settings' => 8.5, 'strategies_edit' => 8.62, 'strategies_rollback' => 8.64, 'strategies_publish' => 8.66, 'person_bindings_manage' => 8.68, 'meta_templates_submit' => 8.69, 'timeline_view' => 0.8, 'simulate_real' => 1.5, 'assisted_work' => 2.5, 'consents_record' => 2.6, 'consents_confirm' => 2.7, 'stop' => 4.6, 'release' => 8.8, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'voice_manage' => 8.5, 'voice_lab_run' => 8.55, 'voice_publish' => 8.6, 'call_place' => 2, 'contacts_manage' => 8.7, 'manage_availability' => 8, 'manage_settings' => 8.5, 'strategies_edit' => 8.62, 'strategies_rollback' => 8.64, 'strategies_publish' => 8.66, 'person_bindings_manage' => 8.68, 'meta_templates_submit' => 8.69, 'timeline_view' => 0.8, 'simulate_real' => 1.5, 'assisted_work' => 2.5, 'consents_record' => 2.6, 'consents_confirm' => 2.7, 'complaints_record' => 2.65, 'stop' => 4.6, 'release' => 8.8, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

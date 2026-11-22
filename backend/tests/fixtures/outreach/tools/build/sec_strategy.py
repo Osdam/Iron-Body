@@ -499,6 +499,8 @@ SINVALID("disparador que solo detiene (human_requested)", mut(["trigger"], {"eve
          ref="D9-3 (human_requested solo puede detener)")
 SINVALID("una queja (complaint_created) no abre un contacto automático", mut(["trigger"], {"event": "complaint_created"}),
          [("content.trigger.event", "trigger_not_allowed")], basis="decision-fixture", decision="DF-K4")
+SINVALID("un descarte de queja (complaint_dismissed, Q1-8) no abre un contacto automático", mut(["trigger"], {"event": "complaint_dismissed"}),
+         [("content.trigger.event", "trigger_not_allowed")], basis="decision-fixture", decision="DF-K4")
 SINVALID("disparador de integración (W9) el 15-11", mut(["trigger"], {"event": "integration.meta_status"}), [("content.trigger.event", "trigger_not_allowed")],
          basis="decision-fixture", decision="DF-E3")
 SINVALID("disparador sin emisor (customer_satisfied, no disponible: I-5) → trigger_not_allowed", mut(["trigger"], {"event": "customer_satisfied"}),

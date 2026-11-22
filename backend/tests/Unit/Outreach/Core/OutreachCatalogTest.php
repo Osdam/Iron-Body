@@ -31,6 +31,7 @@ class OutreachCatalogTest extends TestCase
         'outreach-catalog/2026-11-10.2' => 'ce5fcdab1e1265b70a1e7133b3eeccbd62bb2ab690acfa11a700ad6779a13039',
         'outreach-catalog/2026-11-11.1' => '079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11',
         'outreach-catalog/2026-11-11.2' => '49b7d57e1097d7b930bc58b4816830b139e9042dbb504159f627f4f7bbca39c7',
+        'outreach-catalog/2026-11-22.1' => '4dc263fab79b04ba9be7700686f31e07db039c6de232b2fd2a3ff46e387f7d7b',
     ];
 
     public function test_el_export_es_el_catalogo_del_fixture_byte_a_byte(): void
@@ -59,17 +60,17 @@ class OutreachCatalogTest extends TestCase
     public function test_los_conjuntos_del_contrato(): void
     {
         $c = OutreachCatalog::export();
-        $this->assertCount(41, $c['events']);
+        $this->assertCount(42, $c['events']);
         $this->assertCount(42, $c['facts']);
         $this->assertSame(OutcomeTable::sortedOutcomes(), array_column($c['outcomes'], 'code'));
         $this->assertCount(18, $c['outcomes']);
         $this->assertSame(['days', 'hours', 'weeks'], OutreachCatalog::UNITS);
         $this->assertSame(['class_types', 'plans'], $c['dynamicDomains']);
-        // Los 27 del vocabulario, todos utilizables en condiciones; no disparan human_requested y complaint_created (DF-K4) ni los cinco
-        // que hoy nadie emite (I-5: no disponibles hasta que tengan emisor).
+        // Los 28 del vocabulario, todos utilizables en condiciones; no disparan human_requested, complaint_created (DF-K4) y
+        // complaint_dismissed (Q1-8) ni los cinco que hoy nadie emite (I-5: no disponibles hasta que tengan emisor).
         $crm = array_filter($c['events'], static fn (array $e): bool => $e['class'] === 'crm_fact');
-        $this->assertCount(27, $crm);
-        $this->assertSame(['complaint_created', 'customer_satisfied', 'human_requested', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'],
+        $this->assertCount(28, $crm);
+        $this->assertSame(['complaint_created', 'complaint_dismissed', 'customer_satisfied', 'human_requested', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'],
             array_values(array_column(array_filter($crm, static fn (array $e): bool => ! $e['triggerable']), 'key')));
         // I-5: no están disponibles los tres de integración (W9/V9) y los cinco del vocabulario sin emisor (complaint_created
         // tiene emisor desde Q1-2); el constructor ofrece como disparador solo lo disparable Y disponible: 20 del vocabulario
@@ -80,6 +81,9 @@ class OutreachCatalogTest extends TestCase
         // Q1-2: la queja tiene emisor y se puede leer, pero nunca abre un contacto (sin finalidad, DF-K4).
         $queja = OutreachCatalog::event('complaint_created');
         $this->assertSame([true, false, [], true], [$queja['available'], $queja['triggerable'], $queja['purposes'], $queja['conditionUsable']]);
+        // Q1-8: el descarte de una queja de la IA, igual: tiene emisor, se puede leer y nunca abre un contacto.
+        $descarte = OutreachCatalog::event('complaint_dismissed');
+        $this->assertSame([true, false, [], true], [$descarte['available'], $descarte['triggerable'], $descarte['purposes'], $descarte['conditionUsable']]);
         $ofrecidos = array_filter($c['events'], static fn (array $e): bool => $e['triggerable'] && $e['available']);
         $this->assertSame([20, 8], [count(array_filter($ofrecidos, static fn (array $e): bool => $e['class'] === 'crm_fact')), count(array_filter($ofrecidos, static fn (array $e): bool => $e['class'] === 'periodic'))]);
         foreach (OutreachCatalog::EVENTS_WITHOUT_EMITTER as $k) {

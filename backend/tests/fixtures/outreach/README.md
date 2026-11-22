@@ -30,7 +30,7 @@ php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Outreach/Fixtu
 
 | Fichero | Para | Secciones (casos) | Contrato | Casos |
 |---|---|---|---|---|
-| `catalog-snapshot.json` | B9-core `OutreachCatalog` (exportación y huella), API #1, FE9 | `compatibility` 7, `cycleKeys` 15; y `catalog` (27 + 8 + 3 + 3 eventos, 42 hechos), `catalogHash`, `annotations`, `policyInputs` | D9-3, D9-4, D9-5, D9-10 | 22 |
+| `catalog-snapshot.json` | B9-core `OutreachCatalog` (exportación y huella), API #1, FE9 | `compatibility` 7, `cycleKeys` 15; y `catalog` (28 + 8 + 3 + 3 eventos, 42 hechos), `catalogHash`, `annotations`, `policyInputs` | D9-3, D9-4, D9-5, D9-10 | 22 |
 | `conditions-cases.json` | B9-core `ConditionCanonicalizer` y `ConditionEvaluator`; FE9 `commercial-automation-conditions.ts` (solo la forma) | `canonicalize` 49, `equivalence` 10, `reject` 79, `evaluate` 80, `bogotaDays` 8 | D9-5, T10, T11, T12 | 226 |
 | `calendar-cases.json` | B9-core (N1, N5 del horario propio y el primer hueco), B9-run (`not_before`) | `holidays` 3, `window` 27, `nextSlot` 18 | D9-7 N1, L9-15, #17, §13.3 | 48 |
 | `contact-budget-cases.json` | B9-core `ContactBudget` (y la paridad T9 con `ContactPolicy`) | `effectiveLimits` 9, `check` 26, `parity` 50 (10 a mano + 40 generados con semilla) | D9-7, P9-8, T9 | 85 |
@@ -39,10 +39,10 @@ php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Outreach/Fixtu
 | `priority-cases.json` | B9-core `PriorityArbiter` | `arbitrate` 14 | D9-8 etapa 3, P9-7, #5, #12 | 14 |
 | `outcome-transitions.json` | B9-core `OutcomeTable`; B9-run (ingesta); S9 (validar `on`) | `matrix` 108 (18 × 6), `resolve` 41 | D9-10, #10, #21, #22, T14 | 149 |
 | `followup-cases.json` | B9-core `FollowUpMachine` | `apply` 22 | D9-8 etapa 9, D9-10, T23 | 22 |
-| `strategy-content-cases.json` | B9-core `StrategyContent`; S9 `StrategyValidator` | `valid` 13, `invalid` 41, `versions` 5 | D9-6, D9-11.4, L9-20 | 59 |
+| `strategy-content-cases.json` | B9-core `StrategyContent`; S9 `StrategyValidator` | `valid` 13, `invalid` 42, `versions` 5 | D9-6, D9-11.4, L9-20 | 60 |
 | `strategy-chain-vectors.json` | B9-core `StrategyChainSignature`; B9-run `OutreachPublishedStrategies`; S9 | `chain` 7, `subkey` 4, `verify` 35 | D9-11.3, T1 | 46 |
 
-**Total: 825 casos.** Por base: `contrato` 383, `decision-fixture` 380, `supuesto-lead` 36, `ley` 21, `codigo-existente` 5. Hay 90 decisiones DF-… escritas en las cabeceras; las que el lead ratificó citan su L9-n (L9-8 a L9-25 del contrato), y los casos que dependen de los ajustes del lead (L9-15, L9-20, L9-21 y la queja reciente de Q1-3, DF-L14) van como `supuesto-lead`.
+**Total: 826 casos.** Por base: `contrato` 383, `decision-fixture` 381, `supuesto-lead` 36, `ley` 21, `codigo-existente` 5. Hay 90 decisiones DF-… escritas en las cabeceras; las que el lead ratificó citan su L9-n (L9-8 a L9-25 del contrato), y los casos que dependen de los ajustes del lead (L9-15, L9-20, L9-21 y la queja reciente de Q1-3, DF-L14) van como `supuesto-lead`.
 
 **Nombres (L9-8).** El encargo pedía `outcome-cases.json` y `chain-vectors.json`; el contrato (D9-10 y §11) los llama `outcome-transitions.json` y `strategy-chain-vectors.json`, y así se entregan (B9-core lee el contrato). `followup-cases.json` es del encargo (el contrato lo incluía dentro de `outcome-transitions.json`) y `calendar-cases.json` es del contrato (§11).
 
@@ -121,3 +121,10 @@ No queda ninguna pregunta abierta de TEST9-a. El lead aceptó tal cual las propu
 - **Escalera.** `baseInput.context` gana `complaintRecently: false`, que entra en la entrada de los 123 casos anteriores; sus salidas no cambian. 13 casos nuevos: `n6` +7, `precedence` +4, `shadow` +2.
 - **Ficheros.** Cambian `catalog-snapshot.json`, `conditions-cases.json` (solo la cabecera), `strategy-content-cases.json` (solo la cabecera y DF-K4) y `policy-ladder-cases.json`. Fuera de este directorio, `tests/Unit/Outreach/Core/fixtures/trace-text-cases.json` cambia su `catalogVersion`, gana los textos de `complaint_recent` y `exit_complaint` (por eso cambia su `dictionaryHash`) y un caso de `explain`.
 - **Generador.** `sec_catalog.py` (`NO_EMITTER`, `CATALOG_VERSION`) y `sec_ladder.py` (`N_ORDER`, `BASE`, la referencia de N6 y su efecto, DF-L8, DF-L14 y los casos).
+
+**Regeneración del 22-11-2026 (Q1-8 del plan de quejas, autorizada por el lead; Enmienda Q1-8 del contrato):**
+- **Qué cambia.** El vocabulario gana `complaint_dismissed` (una persona del gimnasio descartó una queja que marcó la IA). Tiene emisor (`ComplaintCommercialEmitter`, que también registra las quejas del personal con `complaint_created` y `source = staff`): `available: true`, `triggerable: false` y sin finalidad, como `complaint_created` (DF-K4). Legible en condiciones. La queja descartada deja de leerse (`EngineFacts::events()`); la escalera no cambia.
+- **Catálogo.** Pasa a `outreach-catalog/2026-11-22.1`, con la huella `4dc263fab79b04ba9be7700686f31e07db039c6de232b2fd2a3ff46e387f7d7b`, la que fija ahora `OutreachCatalog::VERSION`. 28 eventos del vocabulario (42 en total). DF-K4, DF-C11 y las notas de `complaint_created` y `complaint_dismissed` lo recogen.
+- **Casos nuevos.** Uno `invalid` de contenido: `complaint_dismissed` como disparador → `trigger_not_allowed` (DF-K4).
+- **Ficheros.** Cambian `catalog-snapshot.json`, `conditions-cases.json` (la cabecera y DF-C11) y `strategy-content-cases.json` (la cabecera, DF-K4 y el caso nuevo); `policy-ladder-cases.json` y los demás salen byte a byte iguales. Fuera de este directorio, `tests/Unit/Outreach/Core/fixtures/trace-text-cases.json` cambia solo su `catalogVersion` (su `dictionaryHash` no cambia).
+- **Generador.** `sec_catalog.py` (`CATALOG_VERSION`, `VOCAB_EVENTS`, `NOT_TRIGGERABLE`, las notas y DF-K4), `sec_conditions.py` (DF-C11) y `sec_strategy.py` (el caso). Antes de tocarlo, `build.py` reprodujo byte a byte los 11 vigentes.

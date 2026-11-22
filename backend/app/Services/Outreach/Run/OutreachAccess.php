@@ -35,8 +35,12 @@ final class OutreachAccess
     /** C9-3: confirmar (otra cuenta) y rechazar autorizaciones de contacto, y retirarlas. Solo Super Admin por defecto. */
     public const CONSENTS_CONFIRM = 'commercial_automation.consents_confirm';
 
+    /** Q1-8: registrar una queja presencial, por teléfono u otra (frena el contacto automático). Solo Super Admin por defecto. */
+    public const COMPLAINTS_RECORD = 'commercial_automation.complaints_record';
+
     public const PERMISSIONS = [self::VIEW, self::SIMULATE_REAL, self::TIMELINE_VIEW, self::ASSISTED_WORK, self::STOP, self::RELEASE,
-        self::CONSENTS_RECORD, self::CONSENTS_CONFIRM];
+        self::CONSENTS_RECORD, self::CONSENTS_CONFIRM,
+        self::COMPLAINTS_RECORD];
 
     /** El dominio que el token compartido nunca obtiene (D9-13). */
     public const DOMAIN = 'commercial_automation';

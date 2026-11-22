@@ -40,8 +40,8 @@
     }
   ],
   "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
-  "catalogVersion": "outreach-catalog/2026-11-11.2",
-  "catalogHash": "49b7d57e1097d7b930bc58b4816830b139e9042dbb504159f627f4f7bbca39c7",
+  "catalogVersion": "outreach-catalog/2026-11-22.1",
+  "catalogHash": "4dc263fab79b04ba9be7700686f31e07db039c6de232b2fd2a3ff46e387f7d7b",
   "grammar": "outreach-conditions/1",
   "dynamicDomains": {
     "class_types": [
@@ -169,7 +169,7 @@
     "DF-C8": "contact.last_outcome es el resultado del contacto más reciente que casa (empate de instante: el último de la lista); si ese contacto aún no tiene resultado, desconocido.",
     "DF-C9": "Filtros de contactos: channel y purpose por igualdad; strategy = self cuenta solo los de esta estrategia y other todos los demás (también los de fuera del H9); sin strategy, todos.",
     "DF-C10": "Un count solo admite los operadores enteros (no is_known/is_unknown) y su valor va de 0 a 100; un evento solo exists/absent; una transición no lleva operador.",
-    "DF-C11": "Un evento en una condición solo puede ser uno de los 27 del vocabulario (clase crm_fact); los periódicos, de resultado o de integración dan unknown_event. `within` es obligatorio en eventos, recuentos y transiciones.",
+    "DF-C11": "Un evento en una condición solo puede ser uno de los 28 del vocabulario (clase crm_fact); los periódicos, de resultado o de integración dan unknown_event. `within` es obligatorio en eventos, recuentos y transiciones.",
     "DF-G1": "Los errores son pares {key, code} de un conjunto cerrado (errorCodes); key es la ruta con puntos desde la raíz «conditions» (all.0, not, args.within.n…); el llamador sustituye la raíz por su campo (audience, exclusions, success, sequence.N.guard).",
     "DF-G2": "Un objeto es lo que json_decode(…, true) da como array asociativo o como array VACÍO: {} y [] son lo mismo (así lo ve PHP). En la posición de un nodo, {} y [] son unknown_node; un array no vacío o un escalar, not_an_object.",
     "DF-G3": "Dependencias entre comprobaciones: un hecho o evento desconocido no deja comprobar su operador ni su valor (sí sus claves de más y, en los eventos, la ventana); un operador inválido no deja comprobar el valor; un nodo de más profundidad que el límite no se recorre. Todo lo demás se acumula.",
