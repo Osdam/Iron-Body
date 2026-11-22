@@ -127,6 +127,8 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
         'fecha de nacimiento' => ['Dime tu fecha de nacimiento', ['voice_personal_data_request']],
         'la dirección de la persona' => ['¿Cuál es tu dirección?', ['voice_personal_data_request']],
         'documento de identidad' => ['Me das tu documento de identidad', ['voice_personal_data_request']],
+        'infinitivo con pronombre' => ['¿Podrías darme tu número de cédula?', ['voice_personal_data_request']],
+        'me podrías confirmar' => ['¿Me podrías confirmar tu fecha de nacimiento?', ['voice_personal_data_request']],
         'yenes' => ['¥500', ['voice_money_slang']],
         'teléfono con puntos' => ['Paga 555.12.34', ['voice_spoken_contact_data']],
     ];
@@ -148,6 +150,7 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
         'Si prefieres hablar con una persona, dímelo.', 'Acompañamiento cien por ciento personalizado.', 'Entrenador personal 2 veces por semana.',
         'Congelamiento de 15 días.', 'Planes de 1, 3, 6 y 12 meses.', 'Horario de 5.00-22.00.', 'Los sábados de 7.00 a 12.00 y los domingos de 8.00 a 11.00.',
         'La sede queda en la Calle 21 # 5-45.', 'Carrera 5 No. 10-23, Neiva.', 'Te hago la transferencia de la llamada.', 'Con tu cuenta de la app reservas las clases.',
+        '¿Me puedes dar un momento para revisar los planes?', '¿Podrías decirme tu objetivo de entrenamiento?',
     ];
 
     /**

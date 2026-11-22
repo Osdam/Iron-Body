@@ -172,6 +172,8 @@ final class VoiceTranscriptLexicon
         // dirección de la sede», «el documento de valoración» o «te piden tu documento en la sede» no son una petición.
         self::CODE_PERSONAL_DATA_REQUEST => '/\b(?:(?:me|nos)\s+(?:das|da|dices|dice|regalas|regala|compartes|comparte|confirmas|confirma|indicas|indica|dictas|dicta|pasas|pasa|'
             .'facilitas|facilita|envias|envia|escribes|escribe|proporcionas|proporciona|(?:puedes|podrias|puede|podria)\s+(?:dar|decir|regalar|compartir|confirmar|indicar|dictar|pasar))'
+            // El infinitivo con el pronombre pegado: «¿podrías darme tu cédula?», «necesito que me confirmes…» va por «necesito».
+            .'|(?:puedes|podrias|puede|podria|quieres|quiere)\s+(?:dar|decir|regalar|compartir|confirmar|indicar|dictar|pasar|facilitar|enviar)(?:me|nos)'
             .'|dime|digame|dame|deme|regalame|regaleme|comparteme|compartame|indicame|indiqueme|confirmame|confirmeme|dictame|dicteme|pasame|paseme|facilitame|enviame|envieme'
             .'|necesito|necesitamos|necesitaria|necesitariamos|requiero|requerimos|(?<!\bte\s)(?<!\ble\s)(?<!\bse\s)(?<!\bles\s)(?:pide|pidele|pidale|pidan|solicita|solicitale)'
             .'|cual\s+es|cuales\s+son)\s+(?:[a-z0-9]+\s+){0,3}?(?:tu|su|tus|sus)\s+(?:numero\s+de\s+)?(?:cedulas?|documentos?|identificacion|direccion|fecha\s+de\s+nacimiento|eps|claves?|contrasenas?|pin)\b'
