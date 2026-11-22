@@ -117,8 +117,13 @@ return [
         // puerta ni el job (`twilio_voice_disabled`).
         'enabled' => filter_var(env('TWILIO_VOICE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
-        // E.164: número de voz o caller ID verificado. Nunca el número
-        // productivo de WhatsApp.
+        // E.164: número de voz o caller ID verificado. El número productivo de
+        // WhatsApp (`WHATSAPP_DISPLAY_PHONE`), solo desde la enmienda 20 del
+        // contrato H8 (22-11-2026) y solo con la identidad compartida
+        // declarada (`number.shared_with_messaging`) y ADMITIDA (las siete
+        // condiciones de `VoiceNumberGuard::sharedVerdict()`); si no, la puerta
+        // y el job dicen `voice_number_is_whatsapp`. Otro número protegido de
+        // la mensajería, nunca.
         'from' => env('TWILIO_VOICE_FROM'),
 
         // Llamadas al día; entero recortado a 0–20. Con 0 la política dice `daily_cap_zero`.
