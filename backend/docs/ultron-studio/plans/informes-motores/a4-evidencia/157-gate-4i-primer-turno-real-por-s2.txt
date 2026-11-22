@@ -1,0 +1,63 @@
+GATE 4-I · EL PRIMER TURNO REAL POR EL FLUJO NUEVO (S2) · 22-11-2026, 03:44 UTC (21-11, 22:44 en Bogotá)
+lead · producción, todo en SOLO LECTURA · el propietario envió «Hola» desde su WhatsApp canario y recibió respuesta; pidió verificar que pasó por el flujo nuevo, su traza, que no hubo errores y que no se usó la ruta anterior
+
+── 1. Los mensajes y las acciones del turno (conversación canaria #882, la del propietario) ──
+T1 · mensajes de la última hora | 8595 | 03:44:28 | inbound | lead |  | 4 | Hola
+T1 · mensajes de la última hora | 8596 | 03:44:40 | outbound | ai | read | 130 | Perfecto, recibí tu saludo. Seguimos atentos para acompañarte en lo que necesites avanzar con tu entrenamiento en Iron Body Neiva.
+T2 · acciones de la última hora | 8399 | 03:44:29 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones de la última hora | 8400 | 03:44:40 | reply | executed | greeting | inbound_message
+
+── 2. La fila de la respuesta (8400): quién la escribió ──
+critic: verdict pass · attempt 2 · score 0.95 · sin issues → la escribió el modelo; el revisor interno rechazó el primer borrador y aprobó el segundo
+respaldo (fallback_mode): ninguno · política: ninguna · recovery: ninguno · regeneration: ninguno (en modo Legacy el flujo S2 hace lo mismo que S1)
+origen: ultron · intención: greeting · fase: DISCOVERY → DISCOVERY · enviado: sí (mensaje 8596, leído)
+
+── 3. Los prompts del turno (metadata.studio_prompts de la fila 8400) ──
+T4 · studio_prompts de la fila 8400 | {"v": 1, "state": "legacy", "offered": {"seq": null, "mode": "legacy", "entry": null, "reason": "compiler_changed", "version": null, "bundleHash": null, "contentHash": null}, "observed": {"mode": "legacy", "reason": "offered_compiler_changed", "flowRev": "S2", "execution": "1078399", "bundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902"}}
+   Lectura: ofrecido legacy · compiler_changed (esperado hasta publicar la versión 3); observado legacy, huella 3f6a5674…c902 (la base de siempre),
+   flowRev S2 y ejecución de n8n 1078399.
+
+── 4. n8n (leído en su base de datos) ──
+── ejecuciones en la última hora, por flujo, modo y estado ──
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | manual | success | 9 | 03:28:44 | 03:32:15
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | webhook | success | 1 | 03:44:28 | 03:44:41
+── las ejecuciones por webhook (las de verdad) ──
+1078399 | 4CIwgGbPRneqUjLF | webhook | success | 03:44:28.685 | 03:44:41.613 | 12.9 s
+── estado de los flujos y del webhook ──
+QSklqHlsDIxucRfk | Iron Body - ULTRON - Commercial Advisor (Studio S1) | inactivo | versión 01fecf7a | activa (ninguna) | 25 nodos | md5 e85b5b17b3 | fijados: ninguno | 11-11 11:46:38
+YspRwsXnqt33NouP | Iron Body - ULTRON - Commercial Advisor | inactivo | versión 29de5119 | activa (ninguna) | 24 nodos | md5 0a6ae07d48 | fijados: ninguno | 30-09 02:28:21
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | PUBLICADO | versión a68cf2bc | activa a68cf2bc | 39 nodos | md5 9233a5218d | fijados: ninguno | 22-11 03:24:32
+webhook: POST iron-body-ultron → 4CIwgGbPRneqUjLF
+ejecuciones de la copia S2: 10 (manual/success, webhook/success)
+   Lectura: una ejecución por webhook, en el flujo S2, con éxito y 12,9 s. Ninguna en la copia S1 ni en la reserva: la ruta anterior no se usó.
+
+── 5. El servidor ──
+hora (UTC): 03:47:30 · commit servido: 66b14467
+── puertas internas en el access.log entre las 03:40 y las 03:50 (minuto, ruta, respuesta) ──
+      2 03:41 /api/internal/marketing/ai/check 401
+      2 03:41 /api/internal/marketing/ai/decide 401
+      1 03:44 /api/internal/marketing/ai/commit 200
+      1 03:44 /api/internal/marketing/ai/decide 200
+── 5xx en toda la API desde las 03:40: 0
+── log de Laravel desde las 03:40 UTC ──
+production.ERROR: 0 · production.WARNING: 2
+avisos de ULTRON desde las 03:40 (solo el nombre del aviso):
+── procesos:      14 RUNNING · facturación: active
+── ultron:prompt-trace --last=2 ──
+ULTRON · prompts del motor (solo lectura)
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo compiler_changed
+
++-------------------+------------------+---------------------------+--------------------+---------+
+| Minuto (UTC)      | Declarada        | Ofrecida                  | Observada          | Estado  |
++-------------------+------------------+---------------------------+--------------------+---------+
+| 2026-11-20T00:11Z | applied 2e243853 | studio 2e243853 af9e0d23  | studio af9e0d23 S1 | applied |
+| 2026-11-22T03:44Z | applied 2e243853 | legacy   compiler_changed | legacy 3f6a5674 S2 | legacy  |
++-------------------+------------------+---------------------------+--------------------+---------+
+trabajos fallidos desde las 03:40 | 0
+salientes a conversaciones no canarias desde las 03:00 | 0
+incidentes de ULTRON desde las 03:00 | 0
+   Las dos peticiones 401 de las 03:41 a decide y a check son las sondas sin credencial del lead (la comprobación de salud).
+   Los dos avisos del log son billing.emission_blocked, de las 03:45:05: un aviso programado de facturación que sale dos veces cada seis
+   horas (03, 09, 15 y 21 UTC) desde el 29-07-2026 (9 499 en total). No es de este turno ni de este despliegue.
