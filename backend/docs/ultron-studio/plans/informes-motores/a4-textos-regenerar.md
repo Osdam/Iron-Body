@@ -120,6 +120,31 @@ Entre llaves, en la plantilla, lo que rellena el servidor; debajo, un ejemplo ya
 
 - **Texto** (171 caracteres): «PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.»
 
+## 2 bis. Con la lista y el tope: el esqueleto y el presupuesto
+
+Cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. K es cuántos planes tiene la lista; X, lo que miden juntos sus marcadores ya expandidos (el servidor lo calcula con el catálogo de ese momento; el modelo nunca ve un precio); M, lo que se le pide al redactor; R = M − X, lo que le queda para todo lo demás. Sin tope, o sin lista, salen las de arriba tal cual. El código y el `issue` son los de la nota de arriba. El ejemplo es el turno 2 de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200).
+
+### 2 bis.1 La longitud, con la lista (`length_over_cap`, `progressive_disclosure`)
+
+**Cuándo sale:** con la lista y el tope, en lugar de la de la longitud de arriba: cuando el borrador expandido pasa del tope.
+
+- **Plantilla:** «DEMASIADO LARGO: mide {L} caracteres y el limite publicado es {N}. Reescribelo en unos {M}: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan {X}: quedan {R}. Si no caben, dos planes; una pregunta corta o ninguna.»
+- **Texto** (233 caracteres): «DEMASIADO LARGO: mide 251 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.»
+
+### 2 bis.2 La lista: falta la lista, con el presupuesto (`plans_overview/missing`, `relevance`)
+
+**Cuándo sale:** con la lista y el tope, en lugar de «falta la lista» de arriba.
+
+- **Plantilla:** «FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_{K} entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan {X} caracteres: quedan {R} de {M}. Si no caben, dos; una pregunta corta o ninguna.»
+- **Texto** (257 caracteres): «FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.»
+
+### 2 bis.3 La lista: marcador repetido o mezclado, con el presupuesto (`plans_overview/mixed`, `relevance`)
+
+**Cuándo sale:** con la lista y el tope, en lugar de «marcadores mezclados» de arriba: el borrador repite un marcador de la lista o lo mezcla con PLAN_NAME, PLAN_PRICE o PLAN_DURATION.
+
+- **Plantilla:** «MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_{K} entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan {X} caracteres: quedan {R} de {M}.»
+- **Texto** (228 caracteres): «MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160.»
+
 ## 3. La expansión de la lista (lo que lee la persona)
 
 Cuando el borrador nombra los planes de la lista con sus marcadores (`{{PLAN_1}}` a `{{PLAN_3}}`), el commit sustituye cada uno por el nombre y el precio del plan leídos del catálogo en ese momento. Si el plan es de un mes (28 a 31 días), sin duración; si no, con la duración en las palabras de la lista fija («7 días», «tres meses», «un año»…) y «1 día» en singular. El nombre sale sin llaves (si alguien escribe una en el CRM, no se convierte en un marcador), y si lo que sale tiene aún forma de marcador, no sale: va el último recurso de siempre.

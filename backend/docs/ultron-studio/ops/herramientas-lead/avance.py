@@ -52,7 +52,7 @@ BLOQUES_4 = [
 APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
-        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.28, "B0 a B6 y B8 hechos y probados en los dos motores; faltan T8 y T9, seguridad y revisión final", "c"),
+        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.34, "backend completo y probado en los dos motores, con el recorrido de punta a punta; en revisión de seguridad y de base de datos", "c"),
         ("CRM: lanzar y ver una ejecución del motor", 15, 0.00, "espera al backend", "c"),
         ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
     ]),
@@ -73,14 +73,14 @@ APARTADOS = {
         ("Entrantes: necesidad de enrutamiento documentada", 5, 1.00, "documentado; no resuelto por diseño", "t"),
     ]),
     8: (0.50, [
-        ("Clasificador de respuestas", 30, 0.40, "implementado, revisado y endurecido", "c"),
+        ("Clasificador de respuestas", 30, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Sombra con estrategias reales (observación de siete días)", 35, 0.00, "exige dos personas vinculadas", "o"),
         ("WhatsApp automático en canario real", 25, 0.00, "exige plantilla aprobada por Meta", "o"),
         ("Voz por estrategia en canario real", 10, 0.00, "depende del apartado 7", "o"),
     ]),
     9: (0.60, [
         ("Seguridad R3 de la bandeja (R3-1 a R3-3, F-1 a F-3, m-1 y m-2)", 60, 0.70, "desplegado y verificado en producción el 22-11 (lote 1, 45b53023)", "c"),
-        ("CRM: los once motivos y el aviso del reclamo", 15, 0.50, "implementado, probado y aprobado en la revisión final (0 bloqueantes); falta desplegar", "c"),
+        ("CRM: los once motivos y el aviso del reclamo", 15, 0.70, "publicado y verificado desde fuera el 22-11 (CRM a9e7e7a); falta verlo con una sesión real", "c"),
         ("Decisión D-3 (frenos ajenos)", 5, 0.00, "decisión del propietario", "o"),
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
     ]),
@@ -89,7 +89,7 @@ APARTADOS = {
         ("CRM: pantalla de autorizaciones de contacto", 10, 0.00, "", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
         ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.30, "implementado y probado en los dos motores; en revisión de seguridad de API", "c"),
-        ("Cuatro ojos por regla", 20, 0.40, "implementado y revisado por seguridad de API", "c"),
+        ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Dos personas reales vinculadas", 15, 0.00, "acción del propietario", "o"),
     ]),
     11: (0.45, [
@@ -101,7 +101,7 @@ APARTADOS = {
     ]),
     12: (0.45, [
         ("Análisis de los tres asuntos, contrastado con producción", 20, 1.00, "0 pagos aprobados sin activar", "t"),
-        ("Aviso automático de pago aprobado sin membresía", 40, 0.30, "implementado y probado en los dos motores (apagado por su bandera); falta la revisión final", "c"),
+        ("Aviso automático de pago aprobado sin membresía", 40, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Corrección del cobro manual con IVA adicional", 25, 0.00, "decisión del propietario (núcleo de pagos)", "c"),
         ("Decisión sobre el activador de membresías", 15, 0.00, "recomendado no tocar; lo decide el propietario", "o"),
     ]),

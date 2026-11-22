@@ -182,6 +182,8 @@ class UltronOriginReportCommandTest extends TestCase
             'count' => 3, 'pct' => 37.5,
             'by_reason' => [UltronReplyOrigin::REASON_CRITIC => 1, UltronReplyOrigin::REASON_RECOVERY => 1, UltronReplyOrigin::REASON_LAST_RESORT => 1],
             'policy_codes' => [], 'recovery_reasons' => ['critic_unavailable' => 1],
+            // Corrección (1b): la del revisor es una fila de antes, sin la comprobación del borrador descartado.
+            'critic_server' => ['by' => [UltronReplyOrigin::SERVER_UNKNOWN => 1], 'codes' => []],
         ], $informe['fallbacks']);
         // Latencias 6, 7, 8, 9, 9, 10, 30 (la rendición, sin saliente): rango más cercano.
         $this->assertSame(['samples' => 7, 'p50' => 9, 'p95' => 30, 'max' => 30], $informe['latency_s']);
@@ -300,6 +302,46 @@ class UltronOriginReportCommandTest extends TestCase
         $this->assertStringContainsString('Texto del servidor en el camino del modelo (no cuenta como IA): 6 (visit_hour: 1, price_realigned_fallback: 1, payment_link_message: 1, price_excuse_emptied: 1, marker_leak: 1, length_overflow: 1)', $texto);
     }
 
+    /**
+     * CORRECCIÓN (1b) DEL TURNO 2 DE LA TERCERA PRUEBA REAL (22-11-2026): el
+     * rechazo del revisor se separa por lo que la comprobación del servidor le
+     * encontró al borrador descartado (`metadata.discarded_draft_check`): lo
+     * habría aceptado (solo el revisor), tampoco (con sus códigos), o la fila
+     * es de antes y no lo dice (sin dato, sin adivinar). Lo que no es del
+     * vocabulario cerrado no sale.
+     */
+    public function test_el_rechazo_del_revisor_separa_lo_que_el_servidor_habria_aceptado(): void
+    {
+        $c = $this->conversacion('3150537002');
+        $falla3 = ['verdict' => 'fail', 'attempt' => 3, 'score' => 0.4, 'issues' => ['relevance']];
+        $respaldo = ['critic' => $falla3, 'fallback_mode' => 'SAFE_CURATED_REPLY', 'discarded_draft' => 'Le comento que tenemos…'];
+        // Solo el revisor: el servidor lo habría aceptado.
+        $this->turno($c, $respaldo + ['discarded_draft_check' => ['pass' => true, 'codes' => [], 'length' => 120]]);
+        // El revisor y el servidor: la prueba real (la lista repetida y 251 caracteres) y otra con el tuteo.
+        $this->turno($c, $respaldo + ['discarded_draft_check' => ['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251]]);
+        $this->turno($c, $respaldo + ['discarded_draft_check' => ['pass' => false, 'codes' => ['register_tuteo', 'Ramiro 3209876543', 'plans_overview/otro'], 'length' => 140]]);
+        // Una fila de antes (S1, sin la clave) y una con una forma que no es la suya: sin dato.
+        $this->turno($c, ['critic' => ['verdict' => 'fail', 'attempt' => 2], 'fallback_mode' => 'SAFE_CURATED_REPLY']);
+        $this->turno($c, $respaldo + ['discarded_draft_check' => ['pass' => true, 'codes' => ['length_over_cap']]]);
+        // Lo que no es del revisor no entra en este reparto.
+        $this->turno($c, ['fallback_mode' => 'SAFE_CURATED_REPLY', 'recovery' => ['reason' => 'critic_unavailable', 'attempt' => 2], 'discarded_draft_check' => ['pass' => true, 'codes' => [], 'length' => 9]]);
+
+        [$informe] = $this->informe(['--json' => true]);
+        $this->assertSame([UltronReplyOrigin::REASON_CRITIC => 5, UltronReplyOrigin::REASON_RECOVERY => 1], $informe['fallbacks']['by_reason'], 'el reparto por causa, como hasta ahora');
+        $this->assertSame([
+            'by' => [UltronReplyOrigin::SERVER_WOULD_ACCEPT => 1, UltronReplyOrigin::SERVER_WOULD_REJECT => 2, UltronReplyOrigin::SERVER_UNKNOWN => 2],
+            'codes' => ['length_over_cap' => 1, 'plans_overview/mixed' => 1, 'register_tuteo' => 1],
+        ], $informe['fallbacks']['critic_server']);
+
+        [, $texto] = $this->informe([]);
+        $this->assertStringContainsString('el revisor rechazó el último borrador: 5 (el servidor lo habría aceptado: 1 · el servidor tampoco lo habría aceptado: 2 (length_over_cap: 1, plans_overview/mixed: 1, register_tuteo: 1) · sin dato: 2)', $texto);
+        $this->assertStringNotContainsString('todos los intentos', $texto);
+        foreach (['Ramiro', '3209876543', 'plans_overview/otro', 'Le comento'] as $privado) {
+            $this->assertStringNotContainsString($privado, $texto);
+            $this->assertStringNotContainsString($privado, (string) json_encode($informe, JSON_UNESCAPED_UNICODE));
+        }
+    }
+
     public function test_la_salida_de_texto(): void
     {
         [$a, $b] = $this->lineaBase();
@@ -314,7 +356,8 @@ class UltronOriginReportCommandTest extends TestCase
             'Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 71 de 88 (80,7 %)',
             'al primer intento: 56 (62,9 %) · regeneradas: 11 (12,4 %) · intento sin dato: 4 (4,5 %)',
             'Respaldos: 18 de 89 (20,2 %)',
-            'el revisor rechazó todos los intentos: 12',
+            // Corrección (1b): el revisor solo juzga el último borrador, y las filas de antes no dicen si el servidor lo aceptaba.
+            'el revisor rechazó el último borrador: 12 (sin dato: 12)',
             'la rendición: 2 (critic_unavailable: 2)',
             'la política del commit: 3 (policy_greeting_sells: 2, policy_active_goal_lost: 1)',
             'el último recurso: 1',

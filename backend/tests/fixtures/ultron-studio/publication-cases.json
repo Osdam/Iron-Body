@@ -7770,6 +7770,124 @@
       }
     },
     {
+      "name": "gates · publish · quien publica escribió frases de una regla que la versión copia (la creó otra persona) → 403 four_eyes_required rule_phrase_author antes que el estado",
+      "kind": "publish",
+      "facts": {
+        "actor": {
+          "person": true,
+          "permissions": [
+            "ultron.view",
+            "ultron.publish",
+            "ultron.manage_rules"
+          ],
+          "isAuthor": false,
+          "isRulePhraseAuthor": true
+        },
+        "studioPublishingEnabled": true,
+        "engineScope": "canary",
+        "clientRequest": "new",
+        "version": {
+          "exists": true,
+          "status": "VALIDATED",
+          "integrityOk": true
+        },
+        "revalidation": "ok",
+        "labGate": {
+          "mode": "required",
+          "latest": "approved"
+        },
+        "classification": {
+          "mismatches": [],
+          "engineReadingUnavailable": [],
+          "noEffect": [
+            "persona.tone",
+            "rule:S-001",
+            "rule:S-002"
+          ]
+        },
+        "acknowledgedNoEffect": [
+          "persona.tone",
+          "rule:S-001",
+          "rule:S-002"
+        ],
+        "previewHash": {
+          "sent": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+          "current": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+        },
+        "engineCanaryConfigured": true,
+        "brakeEngaged": false,
+        "otherVersionInCanary": false,
+        "now": "2026-11-03T15:00:00Z",
+        "window": "07:00-19:00"
+      },
+      "expected": {
+        "status": 403,
+        "code": "four_eyes_required",
+        "payload": {
+          "detail": "rule_phrase_author"
+        }
+      }
+    },
+    {
+      "name": "gates · publish · todas las demás puertas abiertas y quien publica escribió frases de una regla de la versión → 403 four_eyes_required rule_phrase_author",
+      "kind": "publish",
+      "facts": {
+        "actor": {
+          "person": true,
+          "permissions": [
+            "ultron.view",
+            "ultron.publish",
+            "ultron.manage_rules"
+          ],
+          "isAuthor": false,
+          "isRulePhraseAuthor": true
+        },
+        "studioPublishingEnabled": true,
+        "engineScope": "canary",
+        "clientRequest": "new",
+        "version": {
+          "exists": true,
+          "status": "APPROVED",
+          "integrityOk": true
+        },
+        "revalidation": "ok",
+        "labGate": {
+          "mode": "required",
+          "latest": "approved"
+        },
+        "classification": {
+          "mismatches": [],
+          "engineReadingUnavailable": [],
+          "noEffect": [
+            "persona.tone",
+            "rule:S-001",
+            "rule:S-002"
+          ]
+        },
+        "acknowledgedNoEffect": [
+          "persona.tone",
+          "rule:S-001",
+          "rule:S-002"
+        ],
+        "previewHash": {
+          "sent": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+          "current": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+        },
+        "engineCanaryConfigured": true,
+        "brakeEngaged": false,
+        "otherVersionInCanary": false,
+        "now": "2026-11-03T15:00:00Z",
+        "window": "07:00-19:00"
+      },
+      "expected": {
+        "status": 403,
+        "code": "four_eyes_required",
+        "payload": {
+          "detail": "rule_phrase_author"
+        }
+      }
+    },
+    {
       "name": "gates · publish · versión en REVIEW_REQUIRED → invalid_transition con allowedFrom [APPROVED]",
       "kind": "publish",
       "facts": {
@@ -9727,6 +9845,48 @@
       "expected": {
         "status": 403,
         "code": "four_eyes_required"
+      }
+    },
+    {
+      "name": "gates · promote · quien promueve escribió frases de una regla de la versión, con el motor en canary → four_eyes_required rule_phrase_author antes que scope_not_allowed",
+      "kind": "promote",
+      "facts": {
+        "actor": {
+          "person": true,
+          "permissions": [
+            "ultron.view",
+            "ultron.publish",
+            "ultron.manage_rules"
+          ],
+          "isAuthor": false,
+          "isRulePhraseAuthor": true
+        },
+        "studioPublishingEnabled": true,
+        "engineScope": "canary",
+        "clientRequest": "new",
+        "version": {
+          "exists": true,
+          "status": "CANARY",
+          "integrityOk": true
+        },
+        "evidence": {
+          "passes": true,
+          "failing": []
+        },
+        "evidenceHash": {
+          "sent": "1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e",
+          "current": "1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e"
+        },
+        "brakeEngaged": false,
+        "now": "2026-11-04T16:30:00Z",
+        "window": "07:00-19:00"
+      },
+      "expected": {
+        "status": 403,
+        "code": "four_eyes_required",
+        "payload": {
+          "detail": "rule_phrase_author"
+        }
       }
     },
     {

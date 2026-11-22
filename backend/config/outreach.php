@@ -19,7 +19,7 @@
 | `assisted.{enabled,daily_cap}`, `whatsapp.{enabled,daily_cap,daily_budget_usd}`,
 | `voice.{enabled,daily_cap,daily_budget_usd,reserve_usd_per_call}`,
 | `classifier.enabled` y `own_hours`. Cambiarlas de nombre rompe el mando: se
-| cambian a la vez o no se cambian.
+| cambian a la vez o no se cambian. AI9 añade el resto de `classifier.*`.
 |
 | Encima de todas estas banderas está la CONSTANTE DE CÓDIGO
 | `App\Services\Outreach\Run\OutreachSendGate::SENDS_ENABLED_IN_CODE = false`
@@ -81,6 +81,10 @@ return [
         'failure_threshold_permille' => $entero('COMMERCIAL_AUTOMATION_FAILURE_PERMILLE', 200, 1, 1000),
         // Mínimo de trabajos que salieron en 24 h para que una tasa signifique algo (una muestra de 1 no abre frenos).
         'min_sample' => $entero('COMMERCIAL_AUTOMATION_MONITOR_MIN_SAMPLE', 5, 1, 1000),
+        // AI9 (C4 de security): llamadas SEGUIDAS del clasificador sin salida usable (la clave, la cuota, el límite de
+        // peticiones, una caída...) a partir de las que el monitor abre un incidente. Sin freno: el clasificador ya falla
+        // cerrado. 5 por defecto, como la muestra mínima: un corte suelto no llega; una clave revocada, en 5 respuestas.
+        'classifier_failures' => $entero('COMMERCIAL_AUTOMATION_MONITOR_CLASSIFIER_FAILURES', 5, 1, 1000),
     ],
 
     // El canal asistido (una persona ejecuta lo que ULTRON decidió), solo en `live`.
@@ -111,9 +115,44 @@ return [
         'reserve_usd_per_call' => $dolares('COMMERCIAL_AUTOMATION_VOICE_RESERVE_USD'),
     ],
 
-    // El clasificador de respuestas (AI9): solo frena o deriva. Apagado.
+    /*
+    | El clasificador de respuestas (AI9): solo AÑADE un freno a una respuesta
+    | que ya se registró como hoy (`replied`); nunca abre contacto. Apagado y
+    | en CERO: sin cupo ni presupuesto, sin modelo y sin precios no llama
+    | nunca. CINCO CERROJOS, independientes: la bandera, el cupo diario de
+    | llamadas, el techo diario en US$, el modelo con sus dos precios y el
+    | transporte enlazado con su clave PROPIA (otra que cualquiera de las que
+    | ya usa el sistema: la compartida de la IA del CRM, la del copiloto y la
+    | del laboratorio del Studio). Un fallo de cualquier tipo deja la
+    | respuesta como hoy.
+    */
     'classifier' => [
         'enabled' => filter_var(env('COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // Llamadas al día (0–2000; 0 = no clasifica).
+        'daily_cap' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_CAP', 0, 0, 2000),
+        // Techo diario en dólares (0 = no clasifica). Se reserva el máximo de cada llamada antes de hacerla.
+        'daily_budget_usd' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_BUDGET_USD'),
+        // El modelo lo elige el propietario con la página oficial de precios; vacío = no clasifica.
+        'model' => trim((string) env('COMMERCIAL_AUTOMATION_CLASSIFIER_MODEL', '')),
+        // US$ por millón de tokens de entrada y de salida (0 = sin precio = no clasifica).
+        'price_input_usd_per_mtok' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_INPUT_USD_PER_MTOK'),
+        'price_output_usd_per_mtok' => $dolares('COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_OUTPUT_USD_PER_MTOK'),
+        // Tiempo máximo de la llamada (2–10 s) y tokens de salida (16–256, incluido el razonamiento). Sin reintentos.
+        'timeout_seconds' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS', 5, 2, 10),
+        'max_output_tokens' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS', 64, 16, 256),
+        // Respuestas que se le pasan al clasificador en UNA pasada de `outreach:whatsapp-outcomes` (0–40; 0 = ninguna).
+        // La pasada corre cada minuto, en el proceso del programador y antes del despacho, y cada llamada espera como
+        // mucho su tiempo máximo: con 10 y 5 s, ≤ 50 s aunque todas agoten el tiempo (cabe en el minuto); con 40 y 10 s,
+        // ≤ 400 s, lejos de los 10 min de `withoutOverlapping`. Lo que pasa del tope queda como hoy (`replied`) y NO se
+        // clasifica después: la única puerta es ganar la inserción de ese `replied` (M2 de security).
+        'max_per_pass' => $entero('COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS', 10, 0, 40),
+        // La clave PROPIA del clasificador. Solo la lee su transporte (fuera del H9), en el momento de llamar.
+        'api_key' => env('COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY'),
+        // M4 de security: la huella (sha256) de la clave del laboratorio del Studio, que el transporte NO puede usar.
+        // Fuera del Studio nadie nombra su configuración (UltronEngineIsolationTest), así que se calcula aquí desde el
+        // entorno, como hace el laboratorio con la compartida (`forbidden_key_sha256`): la caché de configuración lleva
+        // la huella y nunca la clave. Solo sirve para comparar.
+        'foreign_key_sha256' => ($laboratorio = trim((string) env('ULTRON_STUDIO_LAB_OPENAI_API_KEY', ''))) !== '' ? [hash('sha256', $laboratorio)] : [],
     ],
 
     /*

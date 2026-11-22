@@ -1,0 +1,4 @@
+# Lote 2 · --migraciones (deploy-cierre-lote.sh): nombre tipo tabla objeto marca privilegios vuelta
+# cierre/motores (AI9): amplía obud_scope_chk con el alcance classifier:reply. Su down() se niega con filas classifier:*;
+# la vuelta atrás del guion devuelve el CHECK del respaldo y la base se niega igual si alguna fila no lo cumple.
+2026_11_22_100001_allow_classifier_budget_scope check outreach_budget_counters obud_scope_chk classifier:reply - deshacer

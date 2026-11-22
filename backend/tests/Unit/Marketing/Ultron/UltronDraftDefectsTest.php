@@ -52,7 +52,8 @@ class UltronDraftDefectsTest extends TestCase
     {
         $expandido = O::expand($borrador, self::TEXTOS, $po)['text'];
 
-        return D::of(['reply_draft' => $borrador, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $sp, $po, self::catalogo(), $entrante);
+        // Con los textos de la lista, como los pasa `ai/check` (22-11-2026: el presupuesto de las notas).
+        return D::of(['reply_draft' => $borrador, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $sp, $po, self::catalogo(), $entrante, array_intersect_key(self::TEXTOS, array_flip($po)));
     }
 
     /** @param list<array{code:string,detail:?string}> $d */
@@ -113,8 +114,12 @@ class UltronDraftDefectsTest extends TestCase
         foreach ($casos as $detalle => $borrador) {
             $d = self::defectos($borrador);
             $this->assertSame('plans_overview/'.$detalle, self::codigos($d)[0] ?? null, $detalle);
-            $params = $detalle === O::UNKNOWN_MARKER ? ['K' => 3] : [];
-            $this->assertSame(N::note(N::PLANS_OVERVIEW, $detalle, $params), $d[0]['note'], $detalle);
+            // 22-11-2026: con la lista y el tope, la que falta y la mezclada llevan el esqueleto y el presupuesto (71 de los tres; 160 − 71 = 89).
+            $this->assertSame(match ($detalle) {
+                O::MISSING, O::MIXED => N::budgetNote(N::PLANS_OVERVIEW, $detalle, ['K' => 3, 'X' => 71, 'R' => 89, 'M' => 160]),
+                O::UNKNOWN_MARKER => N::note(N::PLANS_OVERVIEW, $detalle, ['K' => 3]),
+                default => N::note(N::PLANS_OVERVIEW, $detalle),
+            }, $d[0]['note'], $detalle);
         }
         $this->assertStringContainsString('solo tiene PLAN_1 a PLAN_2.', self::defectos('{{PLAN_1}} y {{PLAN_3}}', po: [3, 4])[0]['note'], 'K = count(po)');
     }
@@ -185,7 +190,8 @@ class UltronDraftDefectsTest extends TestCase
 
         $d = self::defectos($borrador);
         $this->assertSame(['length_over_cap'], self::codigos($d));
-        $this->assertSame(N::note(N::LENGTH_OVER_CAP, null, ['L' => mb_strlen($expandido), 'N' => 200, 'M' => 160]), $d[0]['note']);
+        // 22-11-2026: con la lista, la nota de la longitud lleva su presupuesto.
+        $this->assertSame(N::budgetNote(N::LENGTH_OVER_CAP, null, ['L' => mb_strlen($expandido), 'N' => 200, 'M' => 160, 'X' => 71, 'R' => 89]), $d[0]['note']);
 
         $this->assertSame([], self::defectos($borrador, array_diff_key(self::SP, ['n' => 1])), 'sin tope firmado no se mide');
         $this->assertSame([], self::defectos($borrador, ['n' => 999] + self::SP), 'un tope fuera del rango del compilador no se mide');

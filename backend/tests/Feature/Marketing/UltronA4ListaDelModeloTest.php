@@ -139,10 +139,11 @@ class UltronA4ListaDelModeloTest extends TestCase
 
         $this->assertSame(1, $this->spDe($decide)['o'] ?? null, 'el paquete ofrecido lleva el parche del motor');
         $this->assertSame([
+            // 22-11-2026, corrección (3): cada uno con los beneficios de su plan, los de `active_plans`.
             'plans' => [
-                ['marker' => '{{PLAN_1}}', 'plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30],
-                ['marker' => '{{PLAN_2}}', 'plan_id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30],
-                ['marker' => '{{PLAN_3}}', 'plan_id' => 8, 'name' => 'Élite', 'duration_days' => 30],
+                ['marker' => '{{PLAN_1}}', 'plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
+                ['marker' => '{{PLAN_2}}', 'plan_id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
+                ['marker' => '{{PLAN_3}}', 'plan_id' => 8, 'name' => 'Élite', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
             ],
             'price_asked' => true,
         ], $decide['context']['commercial_turn_policy']['plans_overview']);

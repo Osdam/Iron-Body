@@ -4,6 +4,7 @@ namespace App\Services\UltronStudio;
 
 use App\Models\UltronStudio\StudioVersion;
 use Carbon\CarbonImmutable;
+use Closure;
 use DateTimeInterface;
 
 /**
@@ -259,9 +260,16 @@ final class StudioPublishing
      * la vista previa o la evidencia, y el servidor lo vuelve a comprobar todo
      * al actuar.
      *
-     * @return array{publish:array{allowed:bool,code?:string,message?:string},promote:array{allowed:bool,code?:string,message?:string},rollback:array{allowed:bool,code?:string,message?:string}}
+     * B-2: `$phraseAuthors` (si se da) dice las reglas con frases que quien
+     * mira escribió en la versión ({@see StudioRulePhraseAuthors::of()}); con
+     * alguna, publicar y promover son `four_eyes_required` con `detail:
+     * rule_phrase_author`, justo después de los cuatro ojos de la versión,
+     * como en el servidor. Solo se llama si se llega a esa puerta.
+     *
+     * @param  (Closure(): list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>)|null  $phraseAuthors
+     * @return array{publish:array{allowed:bool,code?:string,message?:string,detail?:string},promote:array{allowed:bool,code?:string,message?:string,detail?:string},rollback:array{allowed:bool,code?:string,message?:string}}
      */
-    public static function actions(StudioAccess $access, StudioVersion $version): array
+    public static function actions(StudioAccess $access, StudioVersion $version, ?Closure $phraseAuthors = null): array
     {
         $estado = $version->statusEnum();
         $mia = $access->isCreator($version);
@@ -273,6 +281,7 @@ final class StudioPublishing
             ! $access->can(StudioAccess::PUBLISH) => $no('forbidden', 'Hace falta el permiso «Publicar versiones».'),
             $llavePublicar !== null => $no($llavePublicar['code'], $llavePublicar['message']),
             $mia => $no('four_eyes_required', 'Nadie publica lo que creó: tiene que publicarla otra persona.'),
+            ($suyas = $phraseAuthors !== null ? $phraseAuthors() : []) !== [] => $no('four_eyes_required', StudioRulePhraseAuthors::message($suyas, StudioPublicationDeclaration::ACTION_PUBLISH)) + ['detail' => StudioRulePhraseAuthors::DETAIL],
             $estado !== StudioVersionStatus::Approved => $no('invalid_transition', 'Solo se publica una versión aprobada.'),
             default => ['allowed' => true],
         };
@@ -281,6 +290,7 @@ final class StudioPublishing
             ! $access->can(StudioAccess::PUBLISH) => $no('forbidden', 'Hace falta el permiso «Publicar versiones».'),
             $llavePromover !== null => $no($llavePromover['code'], $llavePromover['message']),
             $mia => $no('four_eyes_required', 'Nadie promueve lo que creó: tiene que promoverla otra persona.'),
+            ($suyas = $phraseAuthors !== null ? $phraseAuthors() : []) !== [] => $no('four_eyes_required', StudioRulePhraseAuthors::message($suyas, StudioPublicationDeclaration::ACTION_PROMOTE)) + ['detail' => StudioRulePhraseAuthors::DETAIL],
             self::engineScope() !== self::SCOPE_ALL => $no(self::CODE_SCOPE_NOT_ALLOWED, 'Promover exige que el motor lea la cadena en todas las conversaciones (su llave en «all»).'),
             $estado !== StudioVersionStatus::Canary => $no('invalid_transition', 'Solo se promueve la versión en canario.'),
             default => ['allowed' => true],
