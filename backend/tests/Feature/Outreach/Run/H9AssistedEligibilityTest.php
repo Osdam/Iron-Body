@@ -229,10 +229,12 @@ class H9AssistedEligibilityTest extends TestCase
      * Lo común a toda retención por la persona: lo libre no se ofrece (ni en `unclaimed` ni en `all`), se cuenta en
      * `withheld`, `claim()` da 409 `not_in_queue` con el motivo al registro; el reclamante, en `mine`, en `all` y en
      * la repetición, recibe `person: null`, `script: null` y el motivo; la otra persona no ve el motivo; nada se
-     * escribe y no sale ningún teléfono.
+     * escribe y no sale ningún teléfono: ni el del contacto de voz ni el de la ficha del socio (m-4 de
+     * `informe-security-bandeja-r3.md`), cada uno en `$phones` (un fragmento común a los dos trabajos vale).
      */
-    private function assertWithheldEverywhere(AssistedQueue $cola, string $mio, string $libre, string $motivo, string $phoneFragment): void
+    private function assertWithheldEverywhere(AssistedQueue $cola, string $mio, string $libre, string $motivo, string ...$phones): void
     {
+        $this->assertNotSame([], $phones, 'qué teléfonos no pueden salir');
         $gente = $this->threePeople();
         $antes = self::rowsSnapshot();
         Log::spy();
@@ -251,7 +253,10 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertTrue($r['replayed']);
         $this->assertSame([null, false, $motivo], self::contact($r['job']), "{$motivo}: la repetición");
         $this->assertSame([null, false, null], self::contact(self::row($cola->queue($gente['beto'], 'all', 50), $mio)), 'a otra persona no se le cuenta');
-        $this->assertStringNotContainsString($phoneFragment, json_encode([$cola->queue($gente['ana'], 'all', 50), $cola->queue($gente['beto'], 'all', 50), $r]));
+        $salida = (string) json_encode([$cola->queue($gente['ana'], 'all', 50), $cola->queue($gente['beto'], 'all', 50), $r]);
+        foreach ($phones as $telefono) {
+            $this->assertStringNotContainsString($telefono, $salida, "{$motivo}: no sale ningún teléfono ({$telefono})");
+        }
         $this->assertSame($antes, self::rowsSnapshot(), 'la bandeja no escribe nada al retener');
     }
 
@@ -282,7 +287,7 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame(2, DB::table('voice_consents')->where('kind', 'revoked')->count());
 
         // La revocación CONSTA (`voice.consent_revoked`): lo pidió, `opted_out`.
-        $this->assertWithheldEverywhere($cola, $mio, $libre, 'opted_out', '555010');
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'opted_out', '555010', $uno['phone'], $dos['phone']);
         $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $whatsapp), 'el de WhatsApp de la misma persona sigue: R3-1 es del medio voz');
         $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
     }
@@ -321,7 +326,7 @@ class H9AssistedEligibilityTest extends TestCase
         $this->retireVoiceContact($uno['contact']['id']);
         $this->retireVoiceContact($dos['contact']['id']);
 
-        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '555010');
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '555010', $uno['phone'], $dos['phone']);
     }
 
     // ── R3-3 · El menor y la consulta al RNE que caduca ─────────────────────
@@ -373,7 +378,7 @@ class H9AssistedEligibilityTest extends TestCase
 
         // Las 16:30: la consulta ya no está vigente y el trabajo sigue en plazo.
         Carbon::setTestNow(Carbon::parse('2026-11-17 16:30:00', 'UTC'));
-        $this->assertWithheldEverywhere($cola, $mio, $libre, 'rne_check_missing', '555010');
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'rne_check_missing', '555010', $uno['phone'], $dos['phone']);
 
         // Una consulta nueva (`POST voice/rne-checks` deja esta fila): vuelve todo. Retenía el RNE y nada más.
         foreach ([$uno, $dos] as $p) {
