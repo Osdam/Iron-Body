@@ -956,7 +956,7 @@ echo "   $NIVEL_ERROR nuevos en laravel*.log desde el inicio: $ERR$([ "$REINTENT
 [ "$ERR" = 0 ] || falla "$ERR líneas $NIVEL_ERROR nuevas en el log desde el inicio del despliegue"
 if [ -n "$FALLOS" ]; then revertir_auto "comprobaciones posteriores${FALLOS}"; fi
 echo "   producción sirve $(corto HEAD) · respaldo $BK · registro $LOG"
-echo "   VIGILANCIA (15 min, solo lectura): supervisorctl status (los $RUN0 en RUNNING) · $NIVEL_ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §5)"
+echo "   VIGILANCIA (15 min, solo lectura): supervisorctl status (los $RUN0 en RUNNING) · $NIVEL_ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)"
 orden_vuelta
 ETAPA=fin
 echo "LOTE DESPLEGADO SIN DESVÍOS$([ "$AVISOS" = 0 ] || echo " (con $AVISOS aviso(s) arriba)")"
