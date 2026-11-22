@@ -198,12 +198,13 @@ final class StudioPublications
      */
     private function publishGated(StudioAccess $access, Request $request, string $uuid, string $clientRequestId, string $previewHash, array $acknowledgedNoEffect, ?string $note, array $cuerpo): array
     {
-        // 4: la versión y los cuatro ojos.
+        // 4: la versión y los cuatro ojos (de la versión y, B-2, de las frases
+        // de sus reglas: la autoría leída aquí es la que usan las puertas).
         $version = $this->versions->findByUuid($uuid);
-        $this->assertFourEyes($access, $request, $version, D::ACTION_PUBLISH);
+        $autoria = $this->assertFourEyes($access, $request, $version, D::ACTION_PUBLISH);
 
         // 5–11: sobre las puertas calculadas (lo mismo que enseña la vista previa).
-        $h = $this->facts($access, $version);
+        $h = $this->facts($access, $version, $autoria);
         $rechazo = self::publishRefusal($h, $acknowledgedNoEffect, $previewHash, (string) $version->uuid, (string) $version->content_hash);
         if ($rechazo !== null) {
             throw $rechazo;
@@ -593,7 +594,8 @@ final class StudioPublications
      */
     public function preview(StudioAccess $access, StudioVersion $version): array
     {
-        return self::previewFrom((string) $version->uuid, (string) $version->content_hash, $this->facts($access, $version));
+        return self::previewFrom((string) $version->uuid, (string) $version->content_hash,
+            $this->facts($access, $version, StudioRulePhraseAuthors::of(self::contentOf($version), $access->id())));
     }
 
     /**
@@ -951,7 +953,9 @@ final class StudioPublications
         $ventana = $h['window'];
         $requisitos = [
             'status' => self::requirement($estado === StudioVersionStatus::Approved, "La versión está en «{$estado->label()}»: solo se publica una aprobada.") + ['current' => $estado->value],
-            'fourEyes' => self::requirement($h['fourEyes'], 'Nadie publica lo que creó: tiene que publicarla otra persona.'),
+            'fourEyes' => ($h['fourEyesDetail'] ?? null) === StudioRulePhraseAuthors::DETAIL
+                ? ['ok' => false, 'message' => StudioRulePhraseAuthors::message($h['rulePhraseAuthor'], D::ACTION_PUBLISH), 'detail' => StudioRulePhraseAuthors::DETAIL]
+                : self::requirement($h['fourEyes'], 'Nadie publica lo que creó: tiene que publicarla otra persona.'),
             'integrity' => self::requirement($h['integrity'], 'La huella de la versión no coincide con su contenido.'),
             'revalidation' => self::requirement($h['revalidation'] === 'ok', $h['revalidation'] === 'changed'
                 ? 'Sus avisos con el catálogo actual no son los que se reconocieron al aprobar.'
@@ -963,6 +967,11 @@ final class StudioPublications
             'window' => self::requirement($ventana['open'], 'Fuera de la ventana de publicación ('.$ventana['label'].', hora de Bogotá).') + ['window' => $ventana['label']],
             'keys' => ['studio' => $h['keys']['studio'], 'engine' => $h['keys']['engine']],
         ];
+        // B-2, al final y SOLO si la versión lleva frases de reglas: sin ellas,
+        // la vista previa es la de siempre, clave por clave.
+        if (($h['rulePhraseAuthor'] ?? null) !== null) {
+            $requisitos['rulePhraseAuthor'] = StudioRulePhraseAuthors::requirement($h['rulePhraseAuthor'], D::ACTION_PUBLISH);
+        }
 
         $bloqueos = [];
         $si = static function (bool $falla, string $codigo) use (&$bloqueos): void {
@@ -1232,9 +1241,15 @@ final class StudioPublications
      * versión, para quien mira. Solo lee: la vista previa y publicar lo usan
      * igual, así que las dos dicen lo mismo.
      *
+     * `$rulePhraseAuthor` es lo que dio {@see StudioRulePhraseAuthors::of()}
+     * para quien mira (null: la versión no lleva frases de reglas). Los cuatro
+     * ojos fallan si creó la versión o si escribió alguna de esas frases (B-2).
+     * Nada de esto entra en `previewHash`, que no depende de quien mira (Q-4).
+     *
+     * @param  list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>|null  $rulePhraseAuthor
      * @return array<string,mixed>
      */
-    private function facts(StudioAccess $access, StudioVersion $version): array
+    private function facts(StudioAccess $access, StudioVersion $version, ?array $rulePhraseAuthor): array
     {
         $contenido = is_array($version->content) ? $version->content : [];
         $integridad = StudioVersions::integrityOk($version);
@@ -1319,7 +1334,9 @@ final class StudioPublications
         return [
             'canPublish' => $access->can(StudioAccess::PUBLISH),
             'status' => $version->statusEnum(),
-            'fourEyes' => ! $access->isCreator($version),
+            'fourEyes' => ! $access->isCreator($version) && ($rulePhraseAuthor ?? []) === [],
+            'fourEyesDetail' => ! $access->isCreator($version) && ($rulePhraseAuthor ?? []) !== [] ? StudioRulePhraseAuthors::DETAIL : null,
+            'rulePhraseAuthor' => $rulePhraseAuthor,
             'integrity' => $integridad,
             'revalidation' => $revalidacion,
             'findings' => $hallazgos,
@@ -2024,21 +2041,52 @@ final class StudioPublications
         throw UltronStudioException::publishingRefused($rechazo['code'], $rechazo['message']);
     }
 
-    /** Cuatro ojos al publicar y al promover, por IDENTIDAD: el intento queda en el libro. */
-    private function assertFourEyes(StudioAccess $access, Request $request, StudioVersion $version, string $action): void
+    /**
+     * Cuatro ojos al publicar y al promover, por IDENTIDAD: el intento queda en
+     * el libro.
+     *
+     * B-2 (Enmienda del 22-11-2026 al H5, A5.1 paso 4): tampoco quien escribió
+     * una revisión copiada de una regla que aporta frases a la versión
+     * ({@see StudioRulePhraseAuthors}), con el mismo 403, `detail:
+     * rule_phrase_author` y el mismo evento. Devuelve esa autoría (null: la
+     * versión no lleva frases de reglas; `[]`: no escribió ninguna) para que
+     * las puertas no vuelvan a leer el libro.
+     *
+     * @return list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>|null
+     */
+    private function assertFourEyes(StudioAccess $access, Request $request, StudioVersion $version, string $action): ?array
     {
-        if (! $access->isCreator($version)) {
-            return;
+        $verbo = $action === D::ACTION_PROMOTE ? 'Intentó promover' : 'Intentó publicar';
+        if ($access->isCreator($version)) {
+            $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
+                "{$verbo} su propia versión «{$version->label}»", [
+                    'fromStatus' => $version->status,
+                    'contentHash' => $version->content_hash,
+                    'diff' => ['action' => $action],
+                ]);
+
+            throw UltronStudioException::publicationFourEyesRequired($action);
+        }
+
+        $autoria = StudioRulePhraseAuthors::of(self::contentOf($version), $access->id());
+        if ($autoria === null || $autoria === []) {
+            return $autoria;
         }
 
         $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
-            ($action === D::ACTION_PROMOTE ? 'Intentó promover' : 'Intentó publicar')." su propia versión «{$version->label}»", [
+            "{$verbo} «{$version->label}», que copia ".StudioRulePhraseAuthors::auditReason($autoria), [
                 'fromStatus' => $version->status,
                 'contentHash' => $version->content_hash,
-                'diff' => ['action' => $action],
+                'diff' => ['action' => $action] + StudioRulePhraseAuthors::auditDiff($autoria),
             ]);
 
-        throw UltronStudioException::publicationFourEyesRequired($action);
+        throw StudioRulePhraseAuthors::refusal($autoria, $action);
+    }
+
+    /** @return array<string,mixed> */
+    private static function contentOf(StudioVersion $version): array
+    {
+        return is_array($version->content) ? $version->content : [];
     }
 
     /** `version.{publish|promote|rollback}_refused` `{code}`, deduplicado (§A8). */

@@ -1,0 +1,208 @@
+GATE 4-N · LA TERCERA PRUEBA REAL, LEÍDA EN PRODUCCIÓN (solo lectura) · 22-11-2026, 14:05–14:30 UTC (09:05–09:30 en Bogotá)
+lead · el propietario envió los tres mensajes del 18-11, de uno en uno, desde su WhatsApp canario, con la versión 3 (39cfae9f, huella 26d57565) publicada en canario
+
+RESULTADO: NO SUPERADA. Falla A4 (el turno 2 no lo escribió el modelo: salió el texto fijo de respaldo, SAFE_CURATED_REPLY, por critic_failed).
+Se cumplen A1 (tres turnos applied por S2 con la huella de la versión 3), A2 (contadores mecánicos en cero), A3 (126, 199 y 168 caracteres, tope 200, sin tuteo),
+A5 (regeneration presente y coherente: 2, 3 y 1 borradores; critic.attempt = drafts), A6 (16, 15 y 11 s; un intento del trabajo) y A7 (el respaldo, con su causa).
+A8 (propietario): turno 3, favorable; turno 2, NO APROBADO «por la sustitución innecesaria mediante texto fijo».
+Escrito por la IA: 2 de 3 (el 90 % se juzga con al menos 30 turnos). Precios (Plan Valera 65.000, Plan Mensual 80.000, Élite 180.000) y horario (lunes a viernes de
+5:00 a. m. a 10:00 p. m., ficha 20 aprobada), iguales a los del CRM. 0 production.ERROR, 0 trabajos fallidos, 0 salientes a conversaciones no canarias.
+
+CORRECCIÓN DEL LEAD: antes de la prueba dijo que la conversación canaria solo tenía el «Hola» del gate 4-I. No era cierto: es la conversación de la segunda prueba
+real (creada el 13-11-2026), con memoria del 18-11 (precio y dos beneficios del Plan Valera, el horario y la bienvenida ya entregados). El plan pedía una canaria limpia.
+
+TERCERA PRUEBA REAL (22-11-2026) · TURNOS 1 Y 2 · EVIDENCIA LEÍDA EN PRODUCCIÓN (solo lectura)
+Conversación canaria (la del propietario). Versión 3 del Studio (39cfae9f) publicada en canario a las 13:58:15 UTC; huella 26d57565; flujo S2 de n8n; compilador 4; tope 200; trato de usted.
+
+── Mensajes, acciones y metadata de los dos turnos ──
+T1 · mensajes desde la publicación (13:58 UTC) | 8607 | 14:05:27 | inbound | lead |  | 18 | Hola buenas tardes
+T1 · mensajes desde la publicación (13:58 UTC) | 8608 | 14:05:43 | outbound | ai | read | 126 | Bienvenido a Iron Body, un gusto atenderle. Seguimos atentos para acompañarle en lo que necesite avanzar con su entrenamiento.
+T1 · mensajes desde la publicación (13:58 UTC) | 8609 | 14:11:17 | inbound | lead |  | 50 | ¿Qué planes tienen y cuánto cuesta la mensualidad?
+T1 · mensajes desde la publicación (13:58 UTC) | 8610 | 14:11:32 | outbound | ai | read | 199 | Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+T2 · acciones desde la publicación | 8411 | 14:05:28 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la publicación | 8412 | 14:05:43 | reply | executed | greeting | inbound_message
+T2 · acciones desde la publicación | 8413 | 14:11:17 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la publicación | 8414 | 14:11:32 | reply | executed | critic_failed | inbound_message
+T3 · A1 prompts del Studio | 8412 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078444", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T3 · A1 prompts del Studio | 8414 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078446", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T4 · A3 longitud y registro | 8412 | length={"to": 126, "cap": 200, "from": 145, "action": "fit", "dropped": 0} | register={"found": [], "action": "ok", "expected": "usted"} | respaldo=- | fallback_mismatch=-
+T4 · A3 longitud y registro | 8414 | length={"to": 199, "cap": 200, "from": 199, "action": "fit", "dropped": 0} | register=- | respaldo=SAFE_CURATED_REPLY | fallback_mismatch=-
+T5 · A5 regeneración y crítico | 8412 | regeneration={"checks": 2, "drafts": 2, "tokens": null, "critics": 2, "rewrites": [{"by": "critic", "codes": [], "issues": ["naturalness", "context_use", "phase_alignment"]}], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje saluda cordialmente, usa un registro profesional y mantiene la conversación abierta sin presionar ni repetir información. No mezcla tuteo y trato de usted. Para mejorar, podría incluir una pregunta abierta concreta para invitar a continuar la conversación, por ejemplo, preguntando si desea conocer más sobre las instalaciones o los planes.", "score": 0.95, "issues": ["relevance", "empathy", "naturalness", "context_use", "pressure_control", "next_step", "question_discipline", "repetition"], "attempt": 2, "verdict": "pass", "hard_fail": null}
+T5 · A5 regeneración y crítico | 8414 | regeneration={"checks": 2, "drafts": 3, "tokens": null, "critics": 1, "rewrites": [{"by": "server", "codes": ["plans_overview"], "issues": ["relevance"]}, {"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje mezcla trato de usted con '¿Qué busca lograr?', que es tuteo; debe pasar todo a usted para mantener registro profesional. Además, ya se entregó precio y beneficios del plan 3, por lo que repetirlos sin aportar nuevos beneficios baja la novedad y naturalidad. Se mencionan tres planes sin que se haya pedido detalle, lo que es exceso de información. Finalmente, se hace una pregunta abierta cuando la estrategia pide solo una pregunta y no repetir lo ya preguntado; mejor dejar un paso sigu", "score": 0.4, "issues": ["naturalness", "progressive_disclosure", "question_discipline", "context_use"], "attempt": 3, "verdict": "fail", "hard_fail": null}
+T6 · A4 panorama de planes y política | 8412 | plans_overview=- | politica=- | origen="ultron" | intent=greeting
+T6 · A4 panorama de planes y política | 8414 | plans_overview=- | politica=- | origen="ultron" | intent=pricing_question
+T7 · claves de la metadata | 8412 | critic,customer_lifecycle,intent,knowledge_version,lead_temperature,length,message_id,needs_staff_review,next_best_action,next_phase,novelty_max_similarity,origin,outbound,plans_mentioned,previous_phase,price_enriched,reference_resolution,regeneration,register,risk_flags,source,strategy,strategy_goal,strategy_hints,studio,studio_prompts,tools_requested
+T7 · claves de la metadata | 8414 | critic,discarded_draft,fallback_mode,intent,knowledge_version,length,message_id,needs_staff_review,next_best_action,next_phase,origin,outbound,previous_phase,regeneration,risk_flags,strategy_goal,studio,studio_prompts,tools_requested
+T8 · trabajos fallidos, salientes a no canarias e incidentes desde las 13:58 | 0 | 0 | 0
+T9 · hora del servidor (UTC y Bogotá) | 14:11:48 | 09:11:48
+
+── Turno 1: texto exacto y contexto ──
+X1 · texto original entre corchetes | 8608 | [Bienvenido a Iron Body, un gusto atenderle. Seguimos atentos para acompañarle en lo que necesite avanzar con su entrenamiento.]
+X2 · medidas | 8608 | 126 | 127 | 3719eeae91a2bc3bc293319f40665599 | f | f | f | []
+X3 · estado de entrega | 8608 | read | 14:05:43 | 14:05:46
+X4 · el mensaje entrante, exacto | 8607 | [Hola buenas tardes] | 18
+X5 · longitud, estrategia y lo que anotó el motor | 8412 | length={"to": 126, "cap": 200, "from": 145, "action": "fit", "dropped": 0} | strategy={"buying_signal": "none", "response_goal": "saludar cordialmente y dejar abierta la conversación para que el cliente pregunte o comente", "question_needed": false, "conversation_goal": "understand", "information_needed": [], "closing_opportunity": false, "payment_opportunity": false, "recommendation | strategy_goal=understand | fases=DISCOVERY → DISCOVERY | novelty=0.18 | risk=[] | revision=false
+X6 · studio (sello de la configuración) | 8412 | {"v": 1, "env": "canary", "seq": 5, "part": "canary", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "state": "applied", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}
+X7 · la respuesta anterior en esta conversación (el turno de comprobación de anoche), para comparar | 8596 | 22-11 03:44:40 | [Perfecto, recibí tu saludo. Seguimos atentos para acompañarte en lo que necesites avanzar con tu entrenamiento en Iron Body Neiva.]
+
+── Turno 2: texto enviado, borrador descartado, notas del revisor ──
+Y1 · texto enviado, exacto | 8610 | 199 | [Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?]
+Y2 · borrador descartado (el tercero del modelo) | 8414 | "Le comento que tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. Por ejemplo, el {{PLAN_3}} incluye acceso ilimitado, asesoría y seguimiento con entrenador. ¿Qué busca lograr con su entrenamiento?"
+Y3 · notas completas del revisor | 8414 | El mensaje mezcla trato de usted con '¿Qué busca lograr?', que es tuteo; debe pasar todo a usted para mantener registro profesional. Además, ya se entregó precio y beneficios del plan 3, por lo que repetirlos sin aportar nuevos beneficios baja la novedad y naturalidad. Se mencionan tres planes sin que se haya pedido detalle, lo que es exceso de información. Finalmente, se hace una pregunta abierta cuando la estrategia pide solo una pregunta y no repetir lo ya preguntado; mejor dejar un paso sigu
+Y4 · siguiente acción, herramientas, fases, objetivo | 8414 | next_best_action="ask_discovery" | tools=[] | fases=DISCOVERY → DISCOVERY | strategy_goal=collect_data | revision=false | risk=["critic_failed"]
+Y5 · outbound de la fila | 8414 | {"sent": true, "dry_run": false, "message_id": 8610, "provider_message_id": "wamid.(omitido)"}
+psql:<stdin>:15: ERROR:  column "status" does not exist
+LINE 1: ...$$ as q, id, name, price, duration_days, coalesce(status::te...
+                                                             ^
+Y7 · columnas de plans | id, name, price, duration_days, benefits, access_classes, reservations_limit, access_locations, restrictions, active, created_at, updated_at, original_price, is_recommended, badge, sort_order, features, tier, tax_rate_id, price_includes_tax, unspsc_code, pricing_mode, billing_enabled, sellable, access_mode, entry_credits, access_days, access_windows, visible_in_app, archived_at, archived_by, archive_reason, benefit_only, counter_sellable
+
+── Turno 2: registro del servidor (comprobaciones de cada borrador y el commit) ──
+{"message":"ultron.presence.sent","context":{"event":"ultron.presence.sent","service":"iron-channel","environment":"production","host":"srv1728633","correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882,"message_id":8609,"ok":true,"http_status":200,"reason":null},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:17.676514+00:00","extra":{"correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882}}
+{"message":"ultron.event.queued","context":{"event":"ultron.event.queued","service":"iron-channel","environment":"production","host":"srv1728633","correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882,"event_id":200,"message_id":8609},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:17.679219+00:00","extra":{"correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882}}
+{"message":"ultron.check.result","context":{"event":"ultron.check.result","service":"iron-channel","environment":"production","host":"srv1728633","conversation_id":882,"attempt":1,"codes":["plans_overview/missing"],"may_rewrite":true,"rewrite":true,"reason":null,"elapsed_s":5},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:24.455539+00:00","extra":{}}
+{"message":"ultron.check.result","context":{"event":"ultron.check.result","service":"iron-channel","environment":"production","host":"srv1728633","conversation_id":882,"attempt":2,"codes":["plans_overview/mixed","length_over_cap"],"may_rewrite":true,"rewrite":true,"reason":null,"elapsed_s":7},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:26.389844+00:00","extra":{}}
+{"message":"ultron.commit.critic_failed","context":{"event":"ultron.commit.critic_failed","service":"iron-channel","environment":"production","host":"srv1728633","conversation_id":882,"ai_action_id":8414,"mode":"SAFE_CURATED_REPLY","outcome":"curated_fallback"},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:33.544385+00:00","extra":{"conversation_id":882}}
+{"message":"ultron.event.sent","context":{"event":"ultron.event.sent","service":"iron-channel","environment":"production","host":"srv1728633","correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882,"event_id":200,"status_code":200,"attempts":1},"level":200,"level_name":"INFO","channel":"production","datetime":"2026-11-22T14:11:33.560837+00:00","extra":{"correlation_id":"1b0314bc-8174-4487-9fee-85f461c8e8c8","conversation_id":882}}
+
+── Catálogo en ese momento ──
+Z1 · planes vendibles y activos de 28 a 31 días | 17 | MERRY CRHYSTMAS | 0.00 | 30 | f | f | t | 103 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 15 | TOTAL ACCESS ESPECIAL | 0.00 | 30 | f | f | t | 101 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 20 | Comisión de personalizados | 50000.00 | 30 | f | f | t | 106 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 3 | Plan Valera | 65000.00 | 30 | t | t | f | 2 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 14 | PROMO X4 | 75000.00 | 30 | t | t | f | 100 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 1 | mensual | 80000.00 | 30 | f | f | t | 0 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 4 | Plan Mensual | 80000.00 | 30 | t | t | f | 3 | lite
+Z1 · planes vendibles y activos de 28 a 31 días | 8 | Élite | 180000.00 | 30 | t | t | f | 7 | premium
+Z1 · planes vendibles y activos de 28 a 31 días | 22 | TOTAL ACCESS - ELITE | 180000.00 | 30 | f | f | t | 108 | lite
+Z2 · cuántos planes vendibles y activos hay, por duración | 1 | 1
+Z2 · cuántos planes vendibles y activos hay, por duración | 7 | 1
+Z2 · cuántos planes vendibles y activos hay, por duración | 30 | 4
+Z2 · cuántos planes vendibles y activos hay, por duración | 90 | 2
+Z2 · cuántos planes vendibles y activos hay, por duración | 180 | 2
+Z2 · cuántos planes vendibles y activos hay, por duración | 365 | 2
+Z3 · columnas de la conversación con memoria o estado | summary, commercial_phase, recommended_plan_id, memory
+Z4 · mensajes de la conversación canaria en toda su vida | 19 | 17-11 15:32 | 22-11 14:11
+
+── ultron:origin-report de la ventana ──
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde 2026-11-22T13:58:00+00:00 · hasta ahora · conversaciones: 1
+  Respuestas enviadas: 2 (con traza de regeneración: 2)
+  Escrito por la IA: 1 de 2 (50,0 %) · objetivo 90 %: NO
+    al primer intento: 0 (0,0 %) · regeneradas: 1 (50,0 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 0
+    Texto del servidor en el camino del modelo (no cuenta como IA): 0
+    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 1 de 2 (50,0 %)
+  Reescrituras: 3 (servidor: 2, revisor: 1)
+    por código: length_over_cap: 1, plans_overview: 2
+  Respaldos: 1 de 2 (50,0 %)
+    el revisor rechazó todos los intentos: 1
+  Latencia del entrante al saliente: p50 15 s · p95 16 s · máx 16 s (n = 2)
+  Llamadas al modelo por turno: media 5,0 · máx 5 (n = 2) · comprobaciones del servidor por turno: media 2,0 · máx 2 (n = 2)
+  Tokens: sin dato (n8n no los entrega todavía)
+  Reintentos del job: 0 de 2 turnos con evento (máx. intentos 1)
+  Fuera del reparto: nada
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 2.
+
+ADENDA A LA EVIDENCIA · TERCERA PRUEBA REAL (22-11-2026) · leída en producción (solo lectura) a las 14:25 UTC
+
+1. LA CONVERSACIÓN CANARIA NO ERA LIMPIA. Es la misma de la segunda prueba real (18-11): se creó el 13-11-2026 y su memoria, ANTES de los turnos de hoy, ya tenía:
+H6 · la conversación canaria: cuándo se creó y su estado | 13-11-2026 16:51 | open | DISCOVERY | 3
+H7 · memoria: lo entregado antes de hoy | [{"at": "2026-11-18T22:46:24+00:00", "plan_id": 3, "message_id": 8313}, {"at": "2026-11-22T14:11:33+00:00", "plan_id": 4, "message_id": 8610}, {"at": "2026-11-22T14:11:33+00:00", "plan_id": 8, "message_id": 8610}] | [{"at": "2026-11-18T22:46:24+00:00", "benefit": "Acceso ilimitado al gimnasio", "plan_id": 3}, {"at": "2026-11-18T22:46:24+00:00", "benefit": "Asesoría semi personalizada con entrenador de planta", "plan_id": 3}] | [{"at": "2026-11-18T22:47:23+00:00", "key": "kb:schedule:20", "message_id": 8315}] | {"at": "2026-11-18T22:44:23+00:00", "message_id": 8311} | {"at": "2026-11-18T22:44:23+00:00", "message_id": 8311}
+   (plan_id 3 = Plan Valera, 4 = Plan Mensual, 8 = Élite; las dos entradas del 22-11 14:11:33 las escribió el propio turno 2 de hoy, al salir el texto de respaldo).
+   Es decir: el 18-11 ya se había entregado el precio del Plan Valera, dos beneficios suyos («Acceso ilimitado al gimnasio», «Asesoría semi personalizada con entrenador de planta»), el horario (kb:schedule:20) y la bienvenida.
+
+2. EL TURNO 3 (después de tu evidencia): lo escribió el modelo al primer intento.
+T1 · mensajes desde la publicación (13:58 UTC) | 8612 | 14:22:36 | outbound | ai | read | 168 | Le confirmo que nuestro horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le interesa conocer las clases que ofrecemos en ese horario?
+T2 · acciones desde la publicación | 8416 | 14:22:36 | reply | executed | schedule_question | inbound_message
+T3 · A1 prompts del Studio | 8416 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078447", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T4 · A3 longitud y registro | 8416 | length={"to": 168, "cap": 200, "from": 168, "action": "fit", "dropped": 0} | register={"found": [], "action": "ok", "expected": "usted"} | respaldo=- | fallback_mismatch=-
+T5 · A5 regeneración y crítico | 8416 | regeneration={"checks": 1, "drafts": 1, "tokens": null, "critics": 1, "rewrites": [], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje responde claramente la pregunta sobre el horario y ofrece una pregunta abierta para continuar la conversación, lo cual es adecuado. Sin embargo, podría mejorar la naturalidad evitando la expresión 'Le confirmo' y usando un tono un poco más cercano dentro del registro profesional. Además, la pregunta final podría ser más concreta para facilitar la siguiente interacción.", "score": 0.95, "issues": ["naturalness", "next_step"], "attempt": 1, "verdict": "pass", "hard_fail": null}
+T6 · A4 panorama de planes y política | 8416 | plans_overview=- | politica=- | origen="ultron" | intent=schedule_question
+T7 · claves de la metadata | 8416 | critic,customer_lifecycle,intent,knowledge_version,lead_temperature,length,message_id,needs_staff_review,next_best_action,next_phase,novelty_max_similarity,origin,outbound,plans_mentioned,previous_phase,price_enriched,reference_resolution,regeneration,register,risk_flags,source,strategy,strategy_goal,strategy_hints,studio,studio_prompts,tools_requested
+
+3. EL HORARIO OFICIAL (base de conocimiento):
+H1 · fichas de horario | 19 | schedule | Horarios de atención | Horario real confirmado de Iron Body Neiva. | f | rejected | - | - | 10
+H1 · fichas de horario | 20 | schedule | Horario general de atencion | Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. | t | approved | - | - | 10
+
+4. INFORMES DE LOS TRES TURNOS
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde 2026-11-22T13:58:00+00:00 · hasta ahora · conversaciones: 1
+  Respuestas enviadas: 3 (con traza de regeneración: 3)
+  Escrito por la IA: 2 de 3 (66,7 %) · objetivo 90 %: NO
+    al primer intento: 1 (33,3 %) · regeneradas: 1 (33,3 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 0
+    Texto del servidor en el camino del modelo (no cuenta como IA): 0
+    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 2 de 3 (66,7 %)
+  Reescrituras: 3 (servidor: 2, revisor: 1)
+    por código: length_over_cap: 1, plans_overview: 2
+  Respaldos: 1 de 3 (33,3 %)
+    el revisor rechazó todos los intentos: 1
+  Latencia del entrante al saliente: p50 15 s · p95 16 s · máx 16 s (n = 3)
+  Llamadas al modelo por turno: media 4,3 · máx 5 (n = 3) · comprobaciones del servidor por turno: media 1,7 · máx 2 (n = 3)
+  Tokens: sin dato (n8n no los entrega todavía)
+  Reintentos del job: 0 de 3 turnos con evento (máx. intentos 1)
+  Fuera del reparto: nada
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 3.
+
+
++-------------------+------------------+--------------------------+--------------------+---------+
+| Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado  |
++-------------------+------------------+--------------------------+--------------------+---------+
+| 2026-11-22T14:05Z | applied 39cfae9f | studio 39cfae9f 26d57565 | studio 26d57565 S2 | applied |
+| 2026-11-22T14:11Z | applied 39cfae9f | studio 39cfae9f 26d57565 | studio 26d57565 S2 | applied |
+| 2026-11-22T14:22Z | applied 39cfae9f | studio 39cfae9f 26d57565 | studio 26d57565 S2 | applied |
+
+ACTA DEL CANARIO — conversación 882 · 3 turnos · desde 2026-11-22 13:58:00
+
+── TURNO 1 ── 2026-11-22T14:05:27+00:00 ── latencia 16s
+  entra    : Hola buenas tardes
+  decide   : intent=greeting · objetivo=understand · siguiente=check_in
+  contexto : referente=none · temp=WARM · ciclo=INTERESTED · fase=DISCOVERY → DISCOVERY
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje saluda cordialmente, usa un registro profesional y mantiene la conversación abierta sin presionar ni repetir información. No mezcla tuteo y trato de usted. Para mejorar, podría incluir una pregunta abierta concreta para invitar a continuar la conversación, por ejemplo, preguntando si desea conocer más sobre las instalaciones o los planes.","score":0.95,"issues":["relevance","empathy","naturalness","context_use","pressure_control","next_step","question_discipline","repetition"],"attempt":2,"verdict":"pass","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=[]
+  presencia: leido=sí escribiendo=sí en 783.14 ms · respuesta en 16000 ms
+  sale     : [reply] Bienvenido a Iron Body, un gusto atenderle. Seguimos atentos para acompañarle en lo que necesite avanzar con su entrenamiento.
+
+── TURNO 2 ── 2026-11-22T14:11:17+00:00 ── latencia 15s
+  entra    : ¿Qué planes tienen y cuánto cuesta la mensualidad?
+  decide   : intent=pricing_question · objetivo=collect_data · siguiente=ask_discovery
+  contexto : referente=- · temp=- · ciclo=- · fase=DISCOVERY → DISCOVERY
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje mezcla trato de usted con '¿Qué busca lograr?', que es tuteo; debe pasar todo a usted para mantener registro profesional. Además, ya se entregó precio y beneficios del plan 3, por lo que repetirlos sin aportar nuevos beneficios baja la novedad y naturalidad. Se mencionan tres planes sin que se haya pedido detalle, lo que es exceso de información. Finalmente, se hace una pregunta abierta cuando la estrategia pide solo una pregunta y no repetir lo ya preguntado; mejor dejar un paso sigu","score":0.4,"issues":["naturalness","progressive_disclosure","question_discipline","context_use"],"attempt":3,"verdict":"fail","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=["critic_failed"]
+  presencia: leido=sí escribiendo=sí en 603.8 ms · respuesta en 15000 ms
+  sale     : [reply] Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios...
+
+── TURNO 3 ── 2026-11-22T14:22:25+00:00 ── latencia 11s
+  entra    : ¿Cuál es el horario de atención entre semana?
+  decide   : intent=schedule_question · objetivo=understand · siguiente=check_in
+  contexto : referente=none · temp=WARM · ciclo=INTERESTED · fase=DISCOVERY → DISCOVERY
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje responde claramente la pregunta sobre el horario y ofrece una pregunta abierta para continuar la conversación, lo cual es adecuado. Sin embargo, podría mejorar la naturalidad evitando la expresión 'Le confirmo' y usando un tono un poco más cercano dentro del registro profesional. Además, la pregunta final podría ser más concreta para facilitar la siguiente interacción.","score":0.95,"issues":["naturalness","next_step"],"attempt":1,"verdict":"pass","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=[]
+  presencia: leido=sí escribiendo=sí en 644.37 ms · respuesta en 11000 ms
+  sale     : [reply] Le confirmo que nuestro horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le interesa conocer las clases que ofrecemos en e...
+
+LO QUE SE CUENTA (tiene que ser CERO)
+  traspasos_no_autorizados           0
+  horarios_aplazados_en_una_persona  0
+  planes_no_vendibles                0
+  precios_que_no_son_del_catalogo    0
+  enlaces_no_oficiales               0
+  datos_personales                   0
+  negaciones_de_un_cobro_disponible  0
+  (no se vigilan por ambiguos, su nombre está dentro de uno vendible: mensual)
+
+LO QUE JUZGA UNA PERSONA (evidencia, no nota)
+  veredictos_del_critic            : 3 turnos con veredicto
+     turno 1: {"notes":"El mensaje saluda cordialmente, usa un registro profesional y mantiene la conversación abierta sin presionar ni repetir información. No mezcla tuteo y trato de usted. Para mejorar, podría incluir una pregunta abierta concreta para invitar a continuar la conversación, por ejemplo, preguntando si desea conocer más sobre las instalaciones o los planes.","score":0.95,"issues":["relevance","empathy","naturalness","context_use","pressure_control","next_step","question_discipline","repetition"],"attempt":2,"verdict":"pass","hard_fail":null}
+     turno 2: {"notes":"El mensaje mezcla trato de usted con '¿Qué busca lograr?', que es tuteo; debe pasar todo a usted para mantener registro profesional. Además, ya se entregó precio y beneficios del plan 3, por lo que repetirlos sin aportar nuevos beneficios baja la novedad y naturalidad. Se mencionan tres planes sin que se haya pedido detalle, lo que es exceso de información. Finalmente, se hace una pregunta abierta cuando la estrategia pide solo una pregunta y no repetir lo ya preguntado; mejor dejar un paso sigu","score":0.4,"issues":["naturalness","progressive_disclosure","question_discipline","context_use"],"attempt":3,"verdict":"fail","hard_fail":null}
+     turno 3: {"notes":"El mensaje responde claramente la pregunta sobre el horario y ofrece una pregunta abierta para continuar la conversación, lo cual es adecuado. Sin embargo, podría mejorar la naturalidad evitando la expresión 'Le confirmo' y usando un tono un poco más cercano dentro del registro profesional. Además, la pregunta final podría ser más concreta para facilitar la siguiente interacción.","score":0.95,"issues":["naturalness","next_step"],"attempt":1,"verdict":"pass","hard_fail":null}
+  referentes_resueltos             : 1=none, 2=-, 3=none
+  similitud_con_respuestas_previas : 1=0.18, 3=0
+  turnos_con_revision_humana       : ninguno
+  traspasos_autorizados            : ninguno (los pidió la persona)
+  turnos_bloqueados                : ninguno
+
+CANARIO SIN HALLAZGOS MECANICOS. Falta la lectura humana de los 3 turnos.

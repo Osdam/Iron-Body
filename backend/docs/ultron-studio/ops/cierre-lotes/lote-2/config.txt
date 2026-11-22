@@ -1,0 +1,11 @@
+# Lote 2 · --config: lo que tiene que valer cada bandera en la caché de configuración DESPUÉS (todo apagado o en 0).
+# cierre/motores, config/outreach.php (el clasificador; producción no tiene ninguna de sus claves: valen los defectos)
+outreach.classifier.enabled=false
+outreach.classifier.daily_cap=0
+outreach.classifier.daily_budget_usd=0
+outreach.classifier.model=vacia
+outreach.classifier.price_input_usd_per_mtok=0
+outreach.classifier.price_output_usd_per_mtok=0
+outreach.classifier.api_key=null
+# cierre/pagos-aviso, config/observability.php (el aviso de «cobrado sin servicio»)
+observability.approved_unactivated.enabled=false

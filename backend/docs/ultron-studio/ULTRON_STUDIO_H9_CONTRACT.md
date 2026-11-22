@@ -629,23 +629,40 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
   - No se escribe nada: el trabajo y la inscripción siguen hasta el resultado o el fin de la ventana.
   - `human_requested` no retira nada (L9-66).
   - El motivo queda en el registro de la aplicación (`outreach.assisted.claim_withheld`, nivel `warning`: trabajo, motivo y si había datos), sin datos personales.
-- **La bandeja retiene también por los frenos, por el plazo, por la persona y por la estrategia (enmiendas aditivas del 12-11-2026: I-1 a I-4 de `informe-security-bandeja.md`, L9-117; N-1, N-2 y m-1 a m-8 de `informe-security-bandeja-condiciones.md`, L9-118).** Cada trabajo tiene como mucho un motivo, por este orden:
-  1. `brake`: la PARADA GLOBAL, el freno del canal `assisted` (también `legal_hold`) o el de la estrategia del trabajo, con la lectura de N2 (`OutreachStop::openScopes()`).
-  2. `strategy_stopped` (L9-118): la (versión, parte) de su inscripción ya no está en marcha en la cadena: pausada, apagada, revertida, archivada o ilegible. Se lee una vez por petición con `OutreachPublishedStrategies::liveStrategies()`.
-  3. `opted_out` (L9-118): se SABE una señal de «no contactar» de N1/N2, con la entrada de la escalera (`CoreProjection::policyInput()`):
+- **La bandeja retiene también por los frenos, por el plazo, por la persona y por la estrategia (enmiendas aditivas del 12-11-2026: I-1 a I-4 de `informe-security-bandeja.md`, L9-117; N-1, N-2 y m-1 a m-8 de `informe-security-bandeja-condiciones.md`, L9-118; y la enmienda del 22-11-2026, abajo).** Cada trabajo tiene como mucho un motivo. Son once (`AssistedQueue::WITHHELD_REASONS`) y van por este orden:
+  1. `brake`: la PARADA GLOBAL, el freno del canal `assisted` (también `legal_hold`) o el de la estrategia del trabajo, con la lectura de N2 (`OutreachStop::openScopes()`). También la configuración que ya no deja salir un asistido (F-1): el modo fuera de `live` (N2 `mode_off`, también la sombra) o el canal asistido apagado (N4 `channel_disabled`). Se lee en cada petición, así que al volver a encender vuelve.
+  2. `strategy_stopped` (L9-118): la (versión, parte) de su inscripción ya no está en marcha en la cadena: pausada, apagada, revertida, archivada o ilegible. También si la referencia del Studio de su versión ya no vale (N3 `studio_reference_invalid`, m-2): la versión del Studio no se encuentra, su huella es distinta, la línea base es la de otro catálogo o la referencia no se puede leer. Se lee una vez por petición con `OutreachPublishedStrategies::liveStrategies()`.
+  3. `template_not_approved` (F-3): su plantilla ya no está aprobada con la huella del sello del trabajo (N4). No hay guion que dar.
+  4. `opted_out` (L9-118): se SABE una señal de «no contactar» de N1/N2, con la entrada de la escalera (`CoreProjection::policyInput()`):
      - `do_not_contact`, suyo o de un prospecto con su número;
      - el *opt-out* comercial, con finalidad comercial;
-     - el consentimiento del medio denegado (`lead.consent_denied`). **La revocación del consentimiento de voz todavía NO retiene (R3-1 de `informe-security-bandeja-ronda3.md`): pendiente antes del asistido en vivo;**
+     - el consentimiento del medio denegado (`lead.consent_denied`);
+     - por voz, la revocación del consentimiento que consta (`voice.consent_revoked`: el último evento válido de algún contacto de voz activo es `revoked`; R3-1);
      - la exclusión de voz, en un trabajo por voz;
      - la supresión del libro (`SubjectSuppressions`), también la palabra de baja POSIBLE sin resolver (SC-2).
-  4. `complaint_recent`: N6, una queja dentro de la ventana.
-  5. `policy_unknown` (L9-118): lo del punto 3 no se puede comprobar: persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido.
-  6. `complaint_unknown`: N6 sin datos de eventos.
-  7. `expired`: `expires_at <= ahora`, el borde del despachador. La política se evaluó para ese plazo: pasado, no se contacta con esa decisión.
+  5. `complaint_recent`: N6, una queja dentro de la ventana.
+  6. `subject_minor` (R3-3): N1, se sabe que es menor. Retiene en cualquier medio y finalidad. Si la edad no se sabe, no retiene, igual que la escalera (D9-15: la edad no se infiere).
+  7. `rne_check_missing` (R3-3): N1, solo por voz. Algún contacto de voz activo no tiene una consulta al RNE vigente.
+  8. `canary_scope_mismatch` (F-2): en la parte canario (N5) o en una versión que declara «solo canario» (N3 `canary_only_declared`), su número ya no es un canario activo del medio del trabajo: se desactivó o se revocó después de salir.
+  9. `policy_unknown` (L9-118): lo de los puntos 4, 6, 7 u 8 no se puede comprobar. Puede ser una persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido. Por voz, también un consentimiento que ya no está concedido sin que conste una revocación, como un contacto retirado (R3-1).
+  10. `complaint_unknown`: N6 sin datos de eventos.
+  11. `expired`: `expires_at <= ahora`, el borde del despachador. La política se evaluó para ese plazo: pasado, no se contacta con esa decisión.
 
-  Si los frenos, la cadena, la foto o el libro no se pueden leer, la bandeja y la reclamación fallan cerrado. Los frenos ajenos al H9 no se miran aquí (D9-14; decisión D-3, pendiente del propietario), ni el RNE sin consulta vigente ni `subject_minor` (R3-3, ídem).
+  Si los frenos, la configuración, la cadena, la plantilla, la foto o el libro no se pueden leer, la bandeja y la reclamación fallan cerrado. Los frenos ajenos al H9 no se miran aquí (D9-14; decisión D-3, pendiente del propietario).
 
-  Un trabajo SIN reclamar con motivo no se ofrece y no se reclama: 409 `not_in_queue`. Uno YA reclamado se queda para que su reclamante registre el resultado (E13 no cambia), con `person` y `script` en null y `contactWithheld` = el motivo, que solo ve quien lo reclamó. La bandeja no escribe nada. Desde L9-118, la respuesta de una reclamación NUEVA también lleva `contactWithheld: 'brake'` si un freno se echó entre la comprobación y la escritura (se releen tras el `UPDATE`; solo los frenos: R3-2), y la REPETICIÓN de E12 con la inscripción cerrada responde 409 `enrollment_closed`.
+  Un trabajo SIN reclamar con motivo no se ofrece y no se reclama: 409 `not_in_queue`. Uno YA reclamado se queda para que su reclamante registre el resultado (E13 no cambia), con `person` y `script` en null y `contactWithheld` = el motivo, que solo ve quien lo reclamó. La bandeja no escribe nada. La REPETICIÓN de E12 con la inscripción cerrada responde 409 `enrollment_closed` (L9-118). Desde la enmienda del 22-11-2026, la reclamación NUEVA lo relee TODO tras el `UPDATE` (R3-2), así que cualquier motivo que llegue entre la comprobación y la escritura sale ya en el 201 como `contactWithheld`. Si lo que llega es el cierre de la inscripción, responde 409 `enrollment_closed`, como la repetición (m-1). La reclamación queda escrita: no se deshace nada.
+
+  **Enmienda del 22-11-2026, autorizada por el lead por la directiva definitiva del propietario (§8: seguridad R3).** Cierra lo que `informe-security-bandeja-ronda3.md` y `informe-security-bandeja-r3.md` encontraron. Solo retiene más, nunca menos, y no cambia ninguna decisión de la escalera ni nada de lo que se guarda:
+  - **R3-1:** la revocación del consentimiento de voz que consta retiene con `opted_out`. El consentimiento que deja de estar concedido sin una revocación que conste retiene con `policy_unknown`.
+  - **R3-2:** tras el `UPDATE`, la reclamación relee todo, no solo los frenos.
+  - **R3-3:** retienen `subject_minor` y `rne_check_missing` (directiva del propietario del 21-11-2026).
+  - **F-1:** el modo fuera de `live` o el canal asistido apagado retienen como un freno (`brake`).
+  - **F-2:** el canario desactivado o revocado después de salir retiene (`canary_scope_mismatch`).
+  - **F-3:** la plantilla que deja de estar aprobada retiene (`template_not_approved`).
+  - **m-1:** la inscripción que se cierra entre la comprobación y la escritura da 409 `enrollment_closed`.
+  - **m-2:** la referencia del Studio que deja de valer retiene (`strategy_stopped`).
+
+  Los cuatro códigos nuevos son `template_not_approved`, `subject_minor`, `rne_check_missing` y `canary_scope_mismatch`. Son aditivos: el CRM trata un motivo desconocido como «no contactes», y los textos que le faltan son C-1 de `informe-security-bandeja-r3.md`.
 
   La página se llena por detrás de lo retenido. Lo vencido, lo frenado y lo de una parte que no está en marcha, sin reclamar, se descarta en SQL. Lo de la persona va por tandas de 50, con una foto y una consulta de supresión por tanda, y un tope de 200 filas leídas. `meta.withheld` dice cuántos sin reclamar y no vencidos no se ofrecen, sin decir de quién: los frenados y los de estrategia parada, de forma exacta; lo de la persona, como cota inferior. `meta.scanCapped` (L9-118) dice si la lectura llegó al tope sin llenar la página. En `all` no sale lo reclamado por OTRA persona y ya vencido (L9-118).
 - La política aplicó horario, frecuencia y consentimiento **del medio** (WhatsApp o voz). La persona sigue siendo responsable del contacto real.
@@ -1068,8 +1085,8 @@ Un trabajo usa lo que tenía su versión al planificarse. Si la cadena cambia, s
 | E8 | `POST brakes` [M] | `commercial_automation.stop` | **PARADA GLOBAL** (`scope: global`), o por estrategia o canal; motivo obligatorio |
 | E9 | `POST brakes/{uuid}/release` [M] | `commercial_automation.release` + persona distinta de quien lo abrió | Nota obligatoria |
 | E10 | `GET people/{subjectRef}/timeline` [O] | `commercial_automation.timeline_view` | Queda en el libro |
-| E11 | `GET assisted/queue` [O] | `commercial_automation.assisted_work` | Sin teléfonos; con un enlace a la ficha; sin los trabajos sin reclamar retenidos (los siete motivos de D9-9.5; L9-116 a L9-118); `contactWithheld` en cada fila; `meta.withheld` y `meta.scanCapped` (aditivos); en `all`, sin lo reclamado por otra persona y ya vencido |
-| E12 | `POST assisted/{jobUuid}/claim` [O] | Ídem | Una vez; 409 `not_in_queue` con cualquier motivo de retención (D9-9.5); 409 `enrollment_closed` también en la repetición (L9-118); la respuesta lleva `contactWithheld` |
+| E11 | `GET assisted/queue` [O] | `commercial_automation.assisted_work` | Sin teléfonos; con un enlace a la ficha; sin los trabajos sin reclamar retenidos (los once motivos de D9-9.5, por este orden: `brake`, `strategy_stopped`, `template_not_approved`, `opted_out`, `complaint_recent`, `subject_minor`, `rne_check_missing`, `canary_scope_mismatch`, `policy_unknown`, `complaint_unknown` y `expired`; L9-116 a L9-118 y la enmienda del 22-11-2026); `contactWithheld` en cada fila, con uno de esos once; `meta.withheld` y `meta.scanCapped` (aditivos); en `all`, sin lo reclamado por otra persona y ya vencido |
+| E12 | `POST assisted/{jobUuid}/claim` [O] | Ídem | Una vez; 409 `not_in_queue` con cualquiera de los once motivos de retención (D9-9.5); 409 `enrollment_closed` también en la repetición (L9-118) y si la inscripción se cierra entre la comprobación y la escritura (m-1, enmienda del 22-11-2026); la respuesta lleva `contactWithheld`, también con el motivo que llegue entre la comprobación y la escritura (R3-2) |
 | E13 | `POST assisted/{jobUuid}/outcome` [O] | Ídem + quien reclamó | Resultado del conjunto cerrado; idempotente por `clientRequestId` |
 
 En total, **42 rutas**: 29 del Studio y 13 de ejecución. Con el compromiso mínimo (M), 36: 27 del Studio y 9 de ejecución. Ninguna es pública ni recibe webhooks el 15-11: los normalizadores de Meta y de voz (W9 y V9) leen tablas que ya existen.
@@ -1629,3 +1646,97 @@ Respuestas a las dudas que los paquetes dejan como «Q-n para el lead». Mandan 
 
 **Pruebas (T24, SSE):** con la bandera apagada, 409 y el CRM sondea; con ella, un evento del libro llega al cliente en menos de 2 s; `Last-Event-ID` no repite ni pierde; un tema sin permiso no emite ni se revela; un evento nunca lleva datos personales (prueba con una fila sembrada con teléfono, nombre y cuerpo); el latido y el cierre a los 55 s; el limitador por tique; cero red saliente; `auth:coverage --unmapped` vacío.
 
+## Enmienda AI9 (22-11-2026), autorizada por el lead por la directiva definitiva del propietario (§8: clasificador de respuestas)
+
+Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/informe-be-clasificador.md`). Donde esta enmienda dice otra cosa que D9-10, §4 o §9.1, manda esta. **Nace apagado y en cero**: con los valores por defecto no llama a nadie.
+
+**Dónde actúa y qué puede hacer.**
+- Solo en el normalizador de WhatsApp (`outreach:whatsapp-outcomes`), en vivo, y DESPUÉS de las señales deterministas. La baja segura (`opted_out`) y la posible baja (`human_requested` · `opt_out_word`) siguen igual y nunca pasan por la IA.
+- Cualquier otra respuesta se registra como hasta ahora, `replied` (`inbound_message`). Solo el proceso cuya inserción de ese `replied` ganó la clave única la manda al clasificador, después de confirmarla (`DB::afterCommit`). Una respuesta se clasifica como mucho UNA vez, también con dos procesos a la vez.
+- Se clasifica solo la PRIMERA respuesta de la persona a ese contacto. Lo que escriba después no se clasifica.
+- La inscripción ya está cerrada por `replied`, así que un resultado `classifier` no planifica nada. Solo añade sus efectos de freno: `opted_out` cancela lo pendiente de la persona en todas las estrategias y la suprime para su finalidad en ese medio; `wrong_person` la suprime en ese medio; `not_interested` y `human_requested` quedan registrados.
+- **`callback_requested` se registra (con `next_action = wait`) sin planificar ningún contacto.** Que la IA pueda dejar una llamada para después exige otra enmienda.
+
+**Etiquetas y umbrales.**
+- Exactamente las cinco de D9-10 para AI9: `callback_requested`, `human_requested`, `not_interested`, `opted_out` y `wrong_person`. Además `none` («ninguna»), que nunca se registra.
+- La salida está restringida por un esquema JSON estricto con `enum`, sin propiedades de más, y el clasificador la valida entera. Cualquier otra cosa se descarta. No hay etiqueta que avance la venta.
+- Los umbrales de L9-18 sobre 100: 50 para `opted_out` y 90 para el resto. **Por debajo del umbral, o con `none`, se descarta y la respuesta queda como `replied`.** No se registra `needs_review`; la regla de `OutcomeTable` sigue debajo como segunda barrera.
+- La versión del clasificador es la `1`, y la huella de las instrucciones y el esquema está fijada en una prueba.
+
+**Privacidad (encargado: OpenAI, Responses API).**
+- `store: false`, instrucciones fijas sin datos de nadie y un único mensaje con el texto de ESA respuesta.
+- El texto va enmascarado: teléfonos y cifras de 6 o más dígitos, documentos, correos y enlaces quedan ocultos; se quitan los invisibles y se corta a 500 caracteres.
+  - Desde la ronda 3 (M1 de security), también el correo escrito con espacios o con «arroba» y «punto» (solo si acaba en un dominio de primer nivel conocido), un dominio con ruta sin esquema (`instagram.com/usuario`) y una cuenta `@usuario`. Los dos últimos se ocultan como `[enlace]`, porque las instrucciones fijas solo nombran tres marcas. La huella del prompt no cambia.
+- Nunca `user`, `metadata` ni `safety_identifier`, ni el nombre, el teléfono o los identificadores de la persona.
+- El texto no se guarda ni se registra en los logs, que solo llevan la clase de lo ocurrido.
+- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). No vale ninguna clave de OpenAI que ya use otra parte del sistema (M4): ni la compartida de IRON IA, del cerebro legado y del copiloto del CRM (`OPENAI_API_KEY`, en `services.openai.api_key` y en `iron_crm.api_key`) ni la del laboratorio del Studio (`ULTRON_STUDIO_LAB_OPENAI_API_KEY`). Con cualquiera de ellas no llama.
+  - La comparación es por huella, sin devolver ni registrar ninguna clave.
+  - Las dos primeras se leen por su configuración: la lista cerrada `OpenAiReplyClassifierTransport::FOREIGN_KEYS`.
+  - La del laboratorio se lee por la huella que `config/outreach.php` calcula desde el entorno (`classifier.foreign_key_sha256`), porque fuera del Studio nadie nombra su configuración (`UltronEngineIsolationTest`). Es lo mismo que hace el laboratorio con la compartida.
+  - Una prueba de la guarda exige que entre las dos cubran todas las claves de OpenAI de `config/`.
+
+**Red.**
+- `App\Services\Outreach` sigue sin nombrar ni el proveedor ni `Http::` (§3.4): solo conoce el puerto `ReplyClassifierTransport`.
+- La petición la hace `App\Services\ReplyClassification\OpenAiReplyClassifierTransport`, enlazado en `AppServiceProvider`. URL fija `https://api.openai.com/v1/responses`, conexión 3 s, tiempo 2–10 s, sin redirecciones y sin reintentos.
+- Lo vigila `ReplyClassifierStaticGuardsTest`. Desde la ronda 3 (M3), es una barrera y no solo una alarma:
+  - el único implementador del puerto se busca resolviendo los nombres como PHP (alias, nombre completo, clase anónima y subinterfaz); el puerto no puede tener subinterfaces y nadie le hace `class_alias`;
+  - el adaptador no tiene otro camino de red: importaciones, funciones, métodos y llamadas con `::` en listas cerradas; ni `new`, ni `curl_*`, `file_get_contents`, `fopen`, `fsockopen` o `stream_socket_client` (tampoco nombrados en un texto);
+  - la URL es un único literal, sin concatenar ni interpolar, que solo usa `->post(self::URL, …)`.
+
+**Tope por pasada (ronda 3, M2).**
+- `outreach:whatsapp-outcomes` le pasa al clasificador como mucho `classifier.max_per_pass` respuestas por pasada: de 0 a 40, 10 por defecto, y 0 = ninguna. La plaza se toma al encolar.
+- Con 10 y 5 s, la pasada espera como mucho 50 s aunque todas agoten el tiempo, y cabe en su minuto. Con 40 y 10 s, 400 s, lejos de los 10 min de `withoutOverlapping`.
+- Lo que pasa del tope queda `replied` como hoy y **no se clasifica en una pasada posterior**. La única puerta sigue siendo haber ganado la inserción de ese `replied`. Dejarlo pendiente exigiría una de dos cosas:
+  - retrasar el `replied`: el canal de voz por estrategia no mira las respuestas pendientes, el de WhatsApp sí (`reply_pending`);
+  - una marca duradera nueva, que pide migración y con la que un descarte podría volver a llamar.
+- La pasada lo cuenta en `classifier.skipped.pass_cap` y lo deja en el registro `outreach.classifier.pass_cap`.
+
+**Fallo sostenido (ronda 3, C4).**
+- El clasificador cuenta las llamadas SEGUIDAS sin salida usable (cualquier clase de fallo del transporte, o una salida fuera del esquema), con la última clase y su instante.
+  - Una salida que se lee la vuelve a 0, también `none` o una confianza baja. Lo que no llega a llamar no la toca.
+  - Vive en la caché de la aplicación, no en una tabla: es un aviso, no una garantía.
+- `outreach:monitor` abre un incidente de IRON GUARD cuando la racha llega a `monitor.classifier_failures` (5 por defecto) y el clasificador está clasificando (`effective`). Fuente `outreach`, tipo `outreach_classifier`, gravedad media y una sola clase de incidente, que suma ocurrencias mientras siga.
+- **No echa ningún freno:** el clasificador ya falla cerrado. El incidente lleva solo códigos y cifras, nunca el texto ni la persona.
+
+**Presupuesto y migración.**
+- Contador propio en `outreach_budget_counters`, alcance `classifier:reply`, día de Bogotá y modo `live`.
+- Antes de llamar se reservan una llamada y su coste MÁXIMO (cada byte de entrada como un token, más el tope de salida) contra el cupo y el techo. Después se devuelve lo no gastado según el `usage`; si la petición no llegó a salir se devuelve todo, y un fallo que pudo cobrarse conserva la reserva.
+- Lo admite la migración `2026_11_22_100001_allow_classifier_budget_scope`: amplía `obud_scope_chk` en PostgreSQL. Es aditiva, y su `down()` se niega con filas del clasificador, así que es irreversible desde la primera llamada. La ida y vuelta de `100002` en las pruebas la vuelve a aplicar (lista cerrada `LATER_EXECUTION_MIGRATIONS`).
+
+**Falla cerrado, siempre como `replied`.**
+- Apagado, sin transporte, sin modelo o sin precios, sin clave propia.
+- Cupo o techo a 0, presupuesto agotado, sin texto.
+- Tiempo agotado, error del proveedor, negativa, salida incompleta o fuera del esquema.
+- Confianza baja.
+- Una excepción, que nunca sale de la pasada.
+
+**Traza.**
+- El resultado lleva `source = classifier`, su confianza (fracción de 0 a 1) y la clave `job:<uuid>:ai9:<versión>:<huella del prompt>:<modelo>`.
+- El coste y las llamadas del día están en el contador.
+- Registros (ronda 3, M5): al descartar, `outreach.classifier.discarded` lleva el motivo y la traza técnica (versión, huella, modelo, coste y latencia), **sin la etiqueta ni la confianza**. Las dos solo van en `outreach.classifier.recorded`, lo mismo que ya guarda la fila del libro.
+
+**Estado** (`GET outreach/status`, aditivo).
+- `config.classifier` sigue siendo la bandera.
+- `config.classifierSetup` lleva {`implemented`, `version`, `promptRef`, `labels`, `enabled`, `transport`, `configured`, `model`, `dailyCap`, `dailyBudgetMicros`, `timeoutSeconds`, `maxPerPass`, `effective`, `today` {`day`, `calls`, `micros`, `capUnits`, `capMicros`}, `providerFailures` {`consecutive`, `lastClass`, `lastAt`, `alertAfter`}}.
+  - `maxPerPass` y `providerFailures` son de la ronda 3.
+  - `effective` exige además `maxPerPass > 0`.
+  - `lastClass` es una clase del transporte o `unknown`, y `null` si no hubo fallos; `lastAt` va en `Y-m-d\TH:i:s\Z` o es `null`.
+
+**Variables** (§9.1; todas en `.env.example`, a 0 o vacías). Además de `COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED=false`:
+
+| Variable | Por defecto | Qué |
+|---|---|---|
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_CAP` | `0` | Llamadas al día (0–2000) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_BUDGET_USD` | `0` | Techo diario en US$ |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MODEL` | vacío | El modelo (≤ 36 caracteres `[a-z0-9._-]`) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_INPUT_USD_PER_MTOK` / `_PRICE_OUTPUT_USD_PER_MTOK` | `0` | Precios por millón de tokens |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS` | `5` | 2–10 s |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS` | `64` | 16–256, razonamiento incluido |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS` | `10` | Respuestas por pasada de W9 (0–40; ronda 3, M2) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY` | vacía | La clave propia (secreto); ninguna otra clave de OpenAI del sistema vale |
+| `COMMERCIAL_AUTOMATION_MONITOR_CLASSIFIER_FAILURES` | `5` | Fallos seguidos para el incidente del monitor, sin freno (1–1000; ronda 3, C4) |
+
+**Pendiente, fuera de esta enmienda.**
+- El mando (`clasificador on` con cupo, techo, modelo y precios, y que `apagar` ponga el cupo y el techo a 0) es de devops.
+- La comprobación con el modelo real la hace el lead, con autorización.
+- C1, C2, C3 y C5 de `informe-security-ai9.md` son decisiones del propietario o de operación: la ronda 3 no las toca.

@@ -110,7 +110,8 @@ class H9AssistedConditionsTest extends TestCase
         for ($i = 0; $i < $n; $i++) {
             $persona = [];
             if ($resolvable) {
-                $socio = $this->socio();
+                // F-2: con su número canario (lo que la parte canario y la línea base «solo canario» exigen para salir).
+                $socio = $this->canaryMember('whatsapp');
                 $persona = ['subject_key' => 'm:'.$socio['member'], 'member_id' => $socio['member']];
             }
             $e = $this->insertEnrollment($this->vivo, ['mode' => 'live'] + $persona);
@@ -391,7 +392,7 @@ class H9AssistedConditionsTest extends TestCase
         (new OutreachStop)->open('channel', 'assisted', 'legal_hold', 'Retención legal', $gente['beto'], (string) Str::uuid());
         $this->assertSame('brake', $motivo());
         // La lista completa (con `strategy_stopped`, `opted_out` y `policy_unknown`) la fija H9AssistedOptOutStrategyTest.
-        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'policy_unknown', 'complaint_unknown', 'expired']);
+        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired']);
     }
 
     // ── I-4 · La página que se llena ────────────────────────────────────────
@@ -445,7 +446,9 @@ class H9AssistedConditionsTest extends TestCase
         // estrategia (9: la estrategia, las 3 de la cadena, la estrategia y la persona de su entrada, las versiones y los 2
         // dominios del catálogo con que se relee el contenido). La foto de personas sin resolver no lee la política.
         $this->assertSame(1, $cuenta('select distinct "j"."strategy_id"'));
-        $this->assertCount(1 + (1 + 9) + 2 * $tandas, $sql, 'y nada más: '.json_encode($sql));
+        // F-3: la plantilla de los trabajos (todos la misma), UNA vez por página: ¿sigue aprobada con su huella?
+        $this->assertSame(1, $cuenta('"ultron_studio_message_templates"'));
+        $this->assertCount(1 + (1 + 9) + 1 + 2 * $tandas, $sql, 'y nada más: '.json_encode($sql));
         $this->assertLessThanOrEqual(BatchSnapshot::MAX_SUBJECTS, AssistedQueue::MAX_SCAN);
         $this->assertSame(AssistedQueue::MAX_PAGE, AssistedQueue::SCAN_BATCH);
     }

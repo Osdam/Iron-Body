@@ -5,6 +5,8 @@ namespace App\Services\Outreach\Run;
 use App\Services\Outreach\Core\ContactBudget;
 use App\Services\Outreach\Core\ContactCalendar;
 use App\Services\Outreach\Core\OutreachCatalog;
+use App\Services\Outreach\Run\Classifier\ReplyClassifierPrompt;
+use App\Services\Outreach\Run\Classifier\ReplyClassifierTransport;
 use App\Services\Telephony\OutboundSchedule;
 
 /**
@@ -13,8 +15,10 @@ use App\Services\Telephony\OutboundSchedule;
  * enciende nada; un modo desconocido es `off`; un horario ilegible cierra).
  *
  * TODO NACE APAGADO (protección 1). Esta clase no toca la base ni la red: es
- * el único lector de `config('outreach.*')` fuera de las pruebas. La
- * constante de código vive aparte, en {@see OutreachSendGate}.
+ * el único lector de `config('outreach.*')` fuera de las pruebas, salvo la
+ * clave del clasificador (AI9), que solo lee su transporte, fuera del H9, en
+ * el momento de llamar. La constante de código vive aparte, en
+ * {@see OutreachSendGate}.
  */
 final class OutreachConfig
 {
@@ -146,6 +150,92 @@ final class OutreachConfig
         return config('outreach.classifier.enabled') === true;
     }
 
+    /** AI9: llamadas al clasificador al día (0–2000; 0 = no clasifica). */
+    public static function classifierDailyCap(): int
+    {
+        return self::int('outreach.classifier.daily_cap', 0, 0, 2000);
+    }
+
+    /** AI9: el techo diario del clasificador en MICROS de dólar (0 = no clasifica). */
+    public static function classifierDailyBudgetMicros(): int
+    {
+        return self::micros(config('outreach.classifier.daily_budget_usd'));
+    }
+
+    /**
+     * AI9: el modelo, o null si no hay uno con forma de nombre de modelo
+     * (minúsculas, cifras, `.`, `_` y `-`, ≤ 36: viaja en la clave del
+     * resultado). Sin modelo no se clasifica.
+     */
+    public static function classifierModel(): ?string
+    {
+        $m = config('outreach.classifier.model');
+
+        return is_string($m) && preg_match('/^[a-z0-9][a-z0-9._-]{0,35}$/D', trim($m)) === 1 ? trim($m) : null;
+    }
+
+    /** AI9: el precio por millón de tokens de entrada (`input`) o de salida (`output`), en micros de dólar (0 = sin precio). */
+    public static function classifierPriceMicrosPerMtok(string $kind): int
+    {
+        return self::micros(config($kind === 'input' ? 'outreach.classifier.price_input_usd_per_mtok' : 'outreach.classifier.price_output_usd_per_mtok'));
+    }
+
+    /** AI9: el tiempo máximo de UNA llamada (2–10 s; sin reintentos). */
+    public static function classifierTimeoutSeconds(): int
+    {
+        return self::int('outreach.classifier.timeout_seconds', 5, 2, 10);
+    }
+
+    /** AI9: los tokens de salida de una llamada (16–256, incluido el razonamiento): el techo del coste de la salida. */
+    public static function classifierMaxOutputTokens(): int
+    {
+        return self::int('outreach.classifier.max_output_tokens', 64, 16, 256);
+    }
+
+    /**
+     * AI9 (M2 de security): las respuestas que una pasada de W9 le pasa al
+     * clasificador (0–40; 0 = ninguna). Acota lo que la pasada puede esperar
+     * a la red: el tope por el tiempo máximo de una llamada.
+     */
+    public static function classifierMaxPerPass(): int
+    {
+        return self::int('outreach.classifier.max_per_pass', 10, 0, 40);
+    }
+
+    /**
+     * AI9 · lo que dice el panel del clasificador (sin la base ni la red y sin
+     * secretos): que existe, su versión y su huella, la bandera, si hay
+     * transporte enlazado y configurado (clave propia), el modelo, los techos,
+     * el tope por pasada y si de verdad clasificaría ahora (`effective`: todo
+     * lo anterior, cupo, techo y tope por pasada distintos de 0, y la
+     * ejecución en vivo). El consumo del día lo añade la lectura del estado
+     * (`OutreachReadModels`).
+     *
+     * @return array<string, mixed>
+     */
+    public static function classifierSetup(): array
+    {
+        $enlazado = app()->bound(ReplyClassifierTransport::class);
+        $precios = self::classifierPriceMicrosPerMtok('input') > 0 && self::classifierPriceMicrosPerMtok('output') > 0;
+        $configurado = $enlazado && self::classifierModel() !== null && $precios && app(ReplyClassifierTransport::class)->configured();
+
+        return [
+            'implemented' => true,
+            'version' => ReplyClassifierPrompt::VERSION,
+            'promptRef' => ReplyClassifierPrompt::ref(),
+            'labels' => ReplyClassifierPrompt::LABELS,
+            'enabled' => self::classifierEnabled(),
+            'transport' => $enlazado,
+            'configured' => $configurado,
+            'model' => self::classifierModel(),
+            'dailyCap' => self::classifierDailyCap(),
+            'dailyBudgetMicros' => self::classifierDailyBudgetMicros(),
+            'timeoutSeconds' => self::classifierTimeoutSeconds(),
+            'maxPerPass' => self::classifierMaxPerPass(),
+            'effective' => self::classifierEnabled() && $configurado && self::classifierDailyCap() > 0 && self::classifierDailyBudgetMicros() > 0 && self::classifierMaxPerPass() > 0 && self::isLive(),
+        ];
+    }
+
     /** El texto del horario propio tal como está en la configuración (para el panel). */
     public static function ownHoursRaw(): string
     {
@@ -261,13 +351,20 @@ final class OutreachConfig
         return array_values(array_diff(OutreachCatalog::PURPOSES, [OutreachCatalog::PURPOSE_SERVICE]));
     }
 
-    /** @return array{optOutPermille: int, failurePermille: int, minSample: int} */
+    /**
+     * Los umbrales del monitor. `classifierFailures` (AI9, C4 de security):
+     * las llamadas SEGUIDAS del clasificador sin salida usable a partir de las
+     * que abre un incidente, sin freno.
+     *
+     * @return array{optOutPermille: int, failurePermille: int, minSample: int, classifierFailures: int}
+     */
     public static function monitorThresholds(): array
     {
         return [
             'optOutPermille' => self::int('outreach.monitor.opt_out_threshold_permille', 50, 1, 1000),
             'failurePermille' => self::int('outreach.monitor.failure_threshold_permille', 200, 1, 1000),
             'minSample' => self::int('outreach.monitor.min_sample', 5, 1, 1000),
+            'classifierFailures' => self::int('outreach.monitor.classifier_failures', 5, 1, 1000),
         ];
     }
 
@@ -328,6 +425,8 @@ final class OutreachConfig
                 'voice_call' => ['enabled' => self::voiceEnabled(), 'live' => OutreachSendGate::channelLive(OutreachCatalog::CHANNEL_VOICE_CALL)],
             ],
             'classifier' => self::classifierEnabled(),
+            // AI9 (aditivo): `classifier` sigue siendo la bandera; esto dice si existe, si está listo y con qué techos.
+            'classifierSetup' => self::classifierSetup(),
             'ownHours' => ['raw' => self::ownHoursRaw(), 'valid' => $horario !== ContactCalendar::OWN_INVALID, 'legal' => $horario === null],
             'limits' => self::effectiveLimits(),
             'collectionsBlockDays' => self::collectionsBlockDays(),

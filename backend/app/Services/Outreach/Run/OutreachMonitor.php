@@ -2,10 +2,14 @@
 
 namespace App\Services\Outreach\Run;
 
+use App\Models\Incident;
+use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Outreach\Core\RelativeTime;
+use App\Services\Outreach\Run\Classifier\ReplyClassifierHealth;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -22,6 +26,12 @@ use Throwable;
  *  | tasa de fallos de un canal > umbral en 24 h                 | del canal        |
  *  | gasto reservado hoy por encima del techo configurado        | del canal        |
  *  | un envío con metadatos del H9 sin su trabajo (unknown_send) | global (W9/V9)   |
+ *  | el clasificador (AI9) con N fallos SEGUIDOS del proveedor   | NINGUNO (C4)     |
+ *
+ * La última fila solo abre (o suma a) un incidente, fuente `outreach` y tipo
+ * {@see CLASSIFIER_INCIDENT_KIND}: el clasificador ya falla cerrado (las
+ * respuestas quedan como hoy) y lo que se pierde son sus frenos, así que no
+ * hay nada que parar; hay que verlo.
  *
  * Solo trabaja con su bandera (`outreach.monitor.enabled`) y la maestra
  * encendidas y un modo distinto de `off`: si no, no escribe nada y lo dice.
@@ -31,6 +41,9 @@ use Throwable;
 final class OutreachMonitor
 {
     public const WINDOW_HOURS = 24;
+
+    /** AI9 · C4: el tipo del incidente del clasificador que falla de forma sostenida (sin freno). */
+    public const CLASSIFIER_INCIDENT_KIND = 'outreach_classifier';
 
     public function __construct(
         private readonly OutreachPublishedStrategies $bridge = new OutreachPublishedStrategies,
@@ -61,6 +74,7 @@ final class OutreachMonitor
             $comprobaciones['optOut'] = $this->checkOptOutRates($ahora, $abiertos);
             $comprobaciones['failures'] = $this->checkFailureRates($ahora, $abiertos);
             $comprobaciones['budget'] = $this->checkBudgets($ahora, $abiertos);
+            $comprobaciones['classifier'] = $this->checkClassifier();
             $this->runs->complete($runId, $ahora, ['opened' => count($abiertos), 'checks' => array_map(static fn (array $c): int => (int) ($c['flagged'] ?? 0), $comprobaciones)]);
         } catch (Throwable $e) {
             $this->runs->fail($runId, $ahora, ['opened' => count($abiertos)], OutreachRuns::errorCode($e));
@@ -190,6 +204,46 @@ final class OutreachMonitor
         }
 
         return ['flagged' => $marcados];
+    }
+
+    /**
+     * AI9 · C4 de security: el clasificador lleva al menos el umbral de
+     * llamadas SEGUIDAS sin salida usable del proveedor
+     * ({@see ReplyClassifierHealth}) mientras clasificaría
+     * (`classifierSetup.effective`). NO echa ningún freno; abre un incidente
+     * de IRON GUARD (o le suma una ocurrencia, si sigue abierto: la clase es
+     * una, la clase del fallo va en la evidencia). Solo códigos y cifras.
+     * Apagado, sin cupo o en sombra no avisa: no está clasificando.
+     *
+     * @return array{flagged: int, consecutive: int, lastClass: string|null}
+     */
+    private function checkClassifier(): array
+    {
+        $racha = (new ReplyClassifierHealth)->read();
+        $umbral = OutreachConfig::monitorThresholds()['classifierFailures'];
+        $salida = ['flagged' => 0, 'consecutive' => $racha['consecutive'], 'lastClass' => $racha['lastClass']];
+        if ($racha['consecutive'] < $umbral || ! OutreachConfig::classifierSetup()['effective']) {
+            return $salida;
+        }
+        try {
+            app(IncidentRecorder::class)->record([
+                'source' => OutreachStop::INCIDENT_SOURCE,
+                'kind' => self::CLASSIFIER_INCIDENT_KIND,
+                'fingerprint_keys' => ['provider_failing'],
+                'title' => 'El clasificador de respuestas (AI9) falla de forma sostenida: las respuestas quedan como hoy, sin sus frenos. No se echó ningún freno.',
+                'severity' => Incident::SEVERITY_MEDIUM,
+                'evidence' => [
+                    'reason' => 'classifier_provider_failing', 'consecutive_failures' => $racha['consecutive'], 'last_failure_class' => $racha['lastClass'],
+                    'last_failure_at' => $racha['lastAt'], 'threshold' => $umbral, 'model' => OutreachConfig::classifierModel(),
+                    'runbook' => 'backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (Enmienda AI9)',
+                ],
+            ]);
+        } catch (Throwable $e) {
+            // El incidente es el aviso; lo que protege (fallar cerrado) ya está. Que el fallo del aviso quede en el registro.
+            Log::error('outreach.monitor.classifier_incident_failed', ['error_class' => $e::class]);
+        }
+
+        return ['flagged' => 1] + $salida;
     }
 
     /** @param  list<array{scope: string, scopeRef: string|null, reason: string}>  $abiertos */

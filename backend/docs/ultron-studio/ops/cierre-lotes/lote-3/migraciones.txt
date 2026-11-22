@@ -1,0 +1,6 @@
+# Lote 3 · --migraciones: nombre tipo tabla objeto marca privilegios vuelta. ORDEN DEMOSTRADO (cierre/voz): primero la
+# migración y después el código (--orden=migracion-primero); al volver, primero el código y después el disparador.
+# Rehace vc_status_forward (DB8) con la transición ambiguous → failed_to_start; ningún CHECK cambia. CREATE OR REPLACE
+# TRIGGER toma SHARE ROW EXCLUSIVE sobre voice_calls (frena a quien escribe, no a quien lee). Su down() devuelve el de DB8;
+# la vuelta atrás del guion pone la definición exacta del respaldo (el disparador no revisa filas: se puede deshacer).
+2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start transicion voice_calls vc_status_forward ambiguous>failed_to_start - deshacer

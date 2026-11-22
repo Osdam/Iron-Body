@@ -1,0 +1,8 @@
+# Lote 4 · --config (cierre/consent, config/outreach_consents.php): el texto legal NO EXISTE todavía (lo fija el
+# propietario con su asesoría); vacío, registrar y confirmar responden 409 y no escriben nada.
+outreach_consents.legal.commercial.version=null
+outreach_consents.legal.commercial.text=null
+outreach_consents.legal.collections.version=null
+outreach_consents.legal.collections.text=null
+outreach_consents.legal.service.version=null
+outreach_consents.legal.service.text=null

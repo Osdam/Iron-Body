@@ -38,6 +38,9 @@ trait RunWorld
     /** @var array<string, Admin> */
     private array $cuentas = [];
 
+    /** Cuántos socios canarios se han sembrado ({@see canaryMember()}). */
+    private int $canariosSembrados = 0;
+
     /**
      * Tres cuentas REALES con las personas verificadas del esquema: Ana, Beto y
      * Caro. Las filas del esquema vinculan las cuentas 1, 2 y 3 (números sin
@@ -273,6 +276,24 @@ trait RunWorld
         $r = $this->socio(['membership_end_date' => $fin, 'plan' => 'Mensual'] + $user, $member);
 
         return $r + ['key' => 'm:'.$r['member']];
+    }
+
+    /**
+     * Un socio con su número en la ficha y ese número dado de alta como canario ACTIVO de cada medio pedido: lo que N5
+     * (parte canario) y N3 (versión «solo canario», la línea base) exigen para que un trabajo suyo salga. Los números
+     * son sintéticos (`31…`), distintos de los de {@see qualifyingMember()} (`300…`).
+     *
+     * @return array{user: int, member: int, key: string, phone: string}
+     */
+    protected function canaryMember(string ...$mediums): array
+    {
+        $telefono = '31'.str_pad((string) (++$this->canariosSembrados), 8, '0', STR_PAD_LEFT);
+        $r = $this->socio([], ['phone' => $telefono]);
+        foreach ($mediums === [] ? ['whatsapp'] : $mediums as $medio) {
+            $this->canary('+57'.$telefono, $medio);
+        }
+
+        return $r + ['key' => 'm:'.$r['member'], 'phone' => $telefono];
     }
 
     /** La plantilla asistida aprobada (Ana la crea, Beto la aprueba), por las filas del esquema. */
