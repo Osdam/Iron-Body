@@ -50,10 +50,11 @@ class StudioLabIsolationTest extends TestCase
 
     /**
      * La persistencia y la orquestación (paso 3 del Hito 4). Apartado 5 del
-     * cierre: el lector de la comprobación del motor (lee el catálogo).
+     * cierre: los dos lectores del recorrido del motor (la comprobación y el
+     * contexto de `decide`), que leen el negocio.
      */
     private const PERSISTENCIA = [
-        'StudioLabEngineCheck.php', 'StudioLabEvents.php', 'StudioLabRunner.php', 'StudioLabRuns.php', 'StudioLabScenarios.php', 'StudioLabStepJob.php', 'StudioLabVerdicts.php',
+        'StudioLabEngineCheck.php', 'StudioLabEngineContext.php', 'StudioLabEvents.php', 'StudioLabRunner.php', 'StudioLabRuns.php', 'StudioLabScenarios.php', 'StudioLabStepJob.php', 'StudioLabVerdicts.php',
     ];
 
     /**
@@ -61,7 +62,7 @@ class StudioLabIsolationTest extends TestCase
      * guardas (Hito 4) y, por la Enmienda 9 de H4 (22-11-2026), los lectores
      * del recorrido del motor.
      */
-    private const NOMBRAN_EL_MOTOR = ['StudioLabEngineCheck.php', 'StudioLabEngineChecks.php'];
+    private const NOMBRAN_EL_MOTOR = ['StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php'];
 
     /** @return array<string,string> nombre → ruta */
     private static function ficheros(): array

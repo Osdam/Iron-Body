@@ -108,7 +108,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      */
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
-        'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
     ];
 
     /**
@@ -116,7 +116,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      * recorrido del motor en el laboratorio. Solo leen: ni una escritura, ni
      * una fachada que escriba, ni configuración.
      */
-    private const LAB_ENGINE_READERS = ['StudioLabEngineCheck.php'];
+    private const LAB_ENGINE_READERS = ['StudioLabEngineCheck.php', 'StudioLabEngineContext.php'];
 
     /** Enmienda M-1 (M1-6): lo único del motor que el Studio importa para los prompts. */
     private const PROMPT_COMPILER_CLASSES = [
