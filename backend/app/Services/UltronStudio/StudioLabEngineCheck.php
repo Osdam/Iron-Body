@@ -288,10 +288,13 @@ final class StudioLabEngineCheck
         $tools = array_values((array) ($draft['tools_requested'] ?? []));
         $po = $this->turnList($turn, $intent, $tools);
         $turno = $this->policyFor($turn, $intent);
-        $expandido = $this->expanded($turn, $draft, $turno['policy']);
+        // Los textos de TODOS los planes de la lista, una vez por borrador, como `UltronDraftCheck::check()`: con ellos
+        // se expande y de ellos saca `UltronDraftDefects::listBudget()` el presupuesto de las notas (Enmienda A4-4).
+        $textosDeLaLista = $this->listTexts($po);
+        $expandido = $this->expanded($turn, $draft, $turno['policy'], $textosDeLaLista);
 
         return array_slice([
-            ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound']),
+            ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound'], $textosDeLaLista),
             ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy'])),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
     }
@@ -335,8 +338,9 @@ final class StudioLabEngineCheck
      * @param  array<string,mixed>  $turn
      * @param  array<string,mixed>  $draft
      * @param  array<string,mixed>|null  $policy
+     * @param  array<int,string>|null  $listTexts  {@see self::listTexts()}; si no llegan, se leen aquí
      */
-    private function expanded(array $turn, array $draft, ?array $policy = null): string
+    private function expanded(array $turn, array $draft, ?array $policy = null, ?array $listTexts = null): string
     {
         $texto = (string) $draft['reply_draft'];
         $tools = array_values((array) ($draft['tools_requested'] ?? []));
@@ -345,14 +349,8 @@ final class StudioLabEngineCheck
         $planId = $draft['recommended_plan_id'] ?? null;
 
         if ($po !== []) {
-            $nombra = UltronPlansOverview::expand($texto, array_fill_keys($po, ''), $po)['used'];
-            $textos = [];
-            if ($nombra !== []) {
-                foreach (Plan::query()->sellable()->whereIn('id', $nombra)->get() as $plan) {
-                    $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
-                }
-            }
-            $texto = UltronPlansOverview::expand($texto, $textos, $po)['text'];
+            // Solo se sustituyen los marcadores que lleva el borrador: los demás textos de la lista no cambian nada.
+            $texto = UltronPlansOverview::expand($texto, $listTexts ?? $this->listTexts($po), $po)['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {
@@ -376,6 +374,28 @@ final class StudioLabEngineCheck
         }
 
         return $texto;
+    }
+
+    /**
+     * El texto de cada plan de la lista del turno que se vende AHORA
+     * ({@see UltronPlansOverview::item()}), en una sola consulta: el port de
+     * `UltronDraftCheck::textosDeLaLista()` (privado). De TODOS los
+     * ofrecidos, los nombre o no el borrador; el de un plan que ya no se
+     * vende falta. Vacío sin lista.
+     *
+     * @param  list<int>  $po
+     * @return array<int,string> plan_id → su texto
+     */
+    private function listTexts(array $po): array
+    {
+        $textos = [];
+        if ($po !== []) {
+            foreach (Plan::query()->sellable()->whereIn('id', $po)->get() as $plan) {
+                $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
+            }
+        }
+
+        return $textos;
     }
 
     /**
