@@ -1,10 +1,10 @@
 <?php
 
-// SONDA DEL REGISTRO Y DEL PANORAMA (lead, 19-11-2026; cierre V2, apartado 4, H4-9 y H4-10).
+// SONDA DEL MOTOR (lead, 19-11-2026; ampliada el 21-11 a «regenerar antes de sustituir»; cierre V2, apartado 4).
 //
-// Ejecuta en PHP a secas (sin artisan, sin base de datos, sin red) las clases NUEVAS del commit que se va a
-// desplegar, cargadas desde un directorio aparte ANTES de que el cargador de la aplicación resuelva las que están
-// desplegadas, e imprime:
+// Ejecuta en PHP a secas (sin artisan, sin base de datos, sin red) las clases NUEVAS O CAMBIADAS del commit que se
+// va a desplegar, cargadas desde un directorio aparte ANTES de que el cargador de la aplicación resuelva las que
+// están desplegadas, e imprime:
 //   1. si alguna expresión regular de esas clases NO COMPILA con el PCRE de la máquina;
 //   2. una huella de los resultados sobre un corpus fijo.
 // Se ejecuta igual en local y en el servidor ANTES de desplegar y se comparan las huellas: el PCRE de producción
@@ -12,10 +12,9 @@
 // (memoria: `\p{Extended_Pictographic}` compila en local y rompe producción). No escribe nada.
 //
 // Uso (desde el directorio `backend` de la aplicación, que pone el cargador y las clases que no cambian):
-//   CLASES=/ruta/con/los/ficheros php /ruta/sonda-registro-y-panorama.php
-// En CLASES van, planos, los ficheros del commit: UltronRegisterDetector.php, UltronFormalReplies.php,
-// UltronReplyFitter.php, CommercialTurnPolicy.php, StrategyContract.php, ConversationMemoryService.php,
-// UltronCommitService.php y UltronPromptCompiler.php.
+//   CLASES=/ruta php /ruta/sonda-registro-y-panorama.php
+// En CLASES va, con su estructura, `app/Services/Marketing/Ultron/**` del commit (todos sus `.php`):
+//   git archive <commit> backend/app/Services/Marketing/Ultron | tar -x -C /ruta --strip-components=1
 
 error_reporting(E_ALL);
 $avisos = [];
@@ -28,32 +27,47 @@ set_error_handler(static function (int $n, string $m, string $f, int $l) use (&$
 require getcwd().'/vendor/autoload.php';
 
 $dir = rtrim((string) getenv('CLASES'), '/');
+$raiz = $dir.'/app/Services/Marketing/Ultron';
 $ns = 'App\\Services\\Marketing\\Ultron\\';
-$nuevas = [
-    $ns.'Prompts\\UltronPromptCompiler' => 'UltronPromptCompiler.php',
-    $ns.'UltronRegisterDetector' => 'UltronRegisterDetector.php',
-    $ns.'UltronFormalReplies' => 'UltronFormalReplies.php',
-    $ns.'UltronReplyFitter' => 'UltronReplyFitter.php',
-    $ns.'CommercialTurnPolicy' => 'CommercialTurnPolicy.php',
-    $ns.'StrategyContract' => 'StrategyContract.php',
-    $ns.'ConversationMemoryService' => 'ConversationMemoryService.php',
-    $ns.'UltronCommitService' => 'UltronCommitService.php',
-];
-foreach ($nuevas as $clase => $fichero) {
-    if (class_exists($clase, false)) {
+$nuevas = [];
+$it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($raiz, FilesystemIterator::SKIP_DOTS));
+foreach ($it as $fichero) {
+    // Los `._*` son los ficheros de atributos que mete el tar de macOS: no son clases.
+    if ($fichero->getExtension() !== 'php' || str_starts_with($fichero->getFilename(), '.')) {
+        continue;
+    }
+    $relativa = substr($fichero->getPathname(), strlen($raiz) + 1, -4);
+    $nuevas[$ns.str_replace('/', '\\', $relativa)] = $fichero->getPathname();
+}
+ksort($nuevas);
+foreach ($nuevas as $clase => $ruta) {
+    if (class_exists($clase, false) || interface_exists($clase, false) || enum_exists($clase, false)) {
         fwrite(STDERR, "YA ESTABA CARGADA (no sería la del commit): {$clase}\n");
         exit(2);
     }
-    require_once $dir.'/'.$fichero;
+    require_once $ruta;
 }
 
-// 1. Todas las expresiones regulares de las clases nuevas compilan.
+// 1. Todas las expresiones regulares de las clases del commit compilan.
 $esRegex = static fn (mixed $v): bool => is_string($v) && preg_match('/^([\/#~]).+\1[a-zA-Z]*$/s', $v) === 1;
 $expresiones = 0;
 $rotas = [];
 foreach (array_keys($nuevas) as $clase) {
-    foreach ((new ReflectionClass($clase))->getReflectionConstants() as $constante) {
-        $valor = $constante->getValue();
+    if (! class_exists($clase, false)) {
+        continue;
+    }
+    $r = new ReflectionClass($clase);
+    foreach ($r->getReflectionConstants() as $constante) {
+        if ($constante->getDeclaringClass()->getName() !== $clase) {
+            continue;
+        }
+        try {
+            $valor = $constante->getValue();
+        } catch (Throwable $e) {
+            $rotas[] = $r->getShortName().'::'.$constante->getName().' → no se pudo leer: '.$e->getMessage();
+
+            continue;
+        }
         $valores = [$valor];
         if (is_array($valor)) {
             $valores = [];
@@ -67,7 +81,7 @@ foreach (array_keys($nuevas) as $clase) {
             }
             $expresiones++;
             if (@preg_match($v, 'una prueba cualquiera') === false) {
-                $rotas[] = (new ReflectionClass($clase))->getShortName().'::'.$constante->getName().' → '.preg_last_error_msg();
+                $rotas[] = $r->getShortName().'::'.$constante->getName().' → '.preg_last_error_msg();
             }
         }
     }
@@ -79,6 +93,11 @@ $F = $ns.'UltronFormalReplies';
 $A = $ns.'UltronReplyFitter';
 $P = $ns.'CommercialTurnPolicy';
 $S = $ns.'StrategyContract';
+$O = $ns.'UltronPlansOverview';
+$B = $ns.'UltronBenefitAttribution';
+$N = $ns.'UltronRegenerationNotes';
+$X = $ns.'UltronDraftDefects';
+$G = $ns.'UltronReplyOrigin';
 $oferta = new ReflectionMethod($ns.'ConversationMemoryService', 'offerKindOf');
 $memoria = (new ReflectionClass($ns.'ConversationMemoryService'))->newInstanceWithoutConstructor();
 
@@ -87,15 +106,12 @@ $borradores = [
     'Claro, el Plan Valera tiene una mensualidad de $65.000 COP y ofrece acceso ilimitado al gimnasio, asesoría semi personalizada y seguimiento en tus ejercicios.',
     'Te entiendo, quieres saber el horario entre semana. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Quieres que te cuente también sobre las clases o los planes que tenemos?',
     'Claro. ¿Quieres que te cuente qué clases tenemos esta semana?',
-    'Sí, claro. ¿Quieres que te pase la app para pagar desde ahí?',
-    '¡Hola, buenas tardes! ¿En qué te puedo ayudar hoy?',
-    'Es muy normal al inicio. ¿Qué es lo que más te preocupa?',
+    '¡Hola! Buenas tardes. ¿En qué te puedo ayudar hoy?',
     'Le cuento: el gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. Los sábados abre de 8:00 a. m. a 2:00 p. m. ¿Te sirve ese horario?',
     'Usted dijo «quiero algo para mí solo», y para eso el plan de un mes le sirve.',
     '"Anímate, ven a conocernos y cuéntame qué buscas"',
     'Venga cuando quiera. Tómese su tiempo y dígame qué días le quedan mejor.',
     'Cuando estés listo, pásate por la sede. Inscríbete en recepción cuando llegas.',
-    'Estas son las opciones. Un té después de entrenar no cae mal.',
     'Le dejo la app: Android: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 ¿Quieres que te ayude a instalarla?',
     'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?',
     'Dijo "quiero empezar ya y que sea rápido, sin tanta vuelta ni tanto papeleo, tú me dices',
@@ -118,10 +134,38 @@ $ofertas = [
 $laravel = [
     'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.',
     'Te entiendo. Más que pagar por pagar, la idea es que sientas que lo vas a aprovechar. ¿Quieres que te cuente para quién sí vale la pena el mensual?',
-    'El pago lo haces tú mismo desde la app Iron Body Workout: creas tu cuenta con tu documento y ahí pagas con Nequi, PSE, tarjeta o Daviplata. También puedes pagar en el gimnasio cuando vengas. ¿Quieres que te pase la app para descargarla?',
     'No tengo registrada una visita tuya. Dime el día y la hora que te sirven y la dejo solicitada.',
     'Un texto que no está en la tabla y que debe volver igual: $80.000 COP, https://ironbodyneiva.cloud',
 ];
+// «Regenerar antes de sustituir»: la lista del modelo, los beneficios, las notas y los defectos.
+$catalogo = [
+    ['id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => ['Acceso ilimitado al gimnasio', 'Asesoría de entrenador']],
+    ['id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30, 'benefits' => ['Clases grupales', 'Acceso ilimitado al gimnasio']],
+    ['id' => 8, 'name' => 'Élite', 'duration_days' => 30, 'benefits' => ['Clases grupales', 'Plan nutricional personalizado', 'Sauna']],
+    ['id' => 9, 'name' => 'Plan Semana', 'duration_days' => 7, 'benefits' => ['Siete días de acceso al gimnasio y clases grupales']],
+];
+$po = [3, 4, 8];
+$textos = [3 => 'Plan Valera ($65.000 COP)', 4 => 'Plan Mensual ($80.000 COP)', 8 => 'Élite ($180.000 COP)'];
+$listas = [
+    'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes. ¿Cuál le interesa más?',
+    'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes. ¿Cuál le interesa?',
+    'Claro. Tenemos {{PLAN_1}}. ¿Le cuento qué incluye?',
+    'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?',
+    'Claro. Tenemos el Plan Valera {{PLAN_1}} y {{PLAN_2}}. ¿Cuál le interesa?',
+    'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. El {{PLAN_NAME}} es el más pedido. ¿Cuál le interesa?',
+    'Claro. Tenemos {{PLAN_1}} y {{PLAN_1}}. ¿Cuál le interesa?',
+    'Claro. Tenemos {{PLAN_1}} por $65.000 y {{PLAN_2}}. ¿Cuál le interesa?',
+    'Claro. Tenemos {{ PLAN_1 }} y {{PLAN_2}}; ¿cuál te interesa más?',
+];
+$beneficios = [
+    'El Plan Valera incluye acceso ilimitado al gimnasio y asesoría de entrenador.',
+    'El Plan Valera incluye clases grupales y sauna.',
+    'El Plan Valera no incluye clases grupales.',
+    'Élite incluye plan nutricional personalizado; el Plan Valera, acceso ilimitado al gimnasio.',
+    'Con el Plan Mensual tiene CLASES GRUPALES y Sauna.',
+    'El Plan Semana trae siete días de acceso al gimnasio y clases grupales.',
+];
+$sp = ['m' => 'studio', 't' => 'profesional', 'n' => 200, 'o' => 1];
 
 $casos = [];
 foreach ($borradores as $i => $t) {
@@ -147,10 +191,32 @@ foreach ($ofertas as $t) {
 foreach ($laravel as $i => $t) {
     $casos["laravel {$i}"] = [$F::segun('profesional', $t), $F::segun('cercano', $t), $F::segun(null, $t), $F::aplica('profesional'), $F::aplica('entusiasta')];
 }
+foreach ($listas as $i => $t) {
+    $expandida = $O::expand($t, $textos, $po);
+    $casos["lista {$i}"] = [
+        'verifica' => $O::verify($t, $po, $catalogo),
+        'sin lista' => $O::verify($t, [], $catalogo),
+        'expandida' => $expandida,
+        'defectos' => $X::of(['reply_draft' => $t, 'intent' => 'pricing_question', 'recommended_plan_id' => 3, 'tools_requested' => []], (string) $expandida['text'], $sp, $po, $catalogo, '¿Qué planes tienen y cuánto cuestan?'),
+    ];
+}
+foreach ($beneficios as $i => $t) {
+    $casos["beneficio {$i}"] = $B::misattributed($t, $catalogo);
+}
+$casos['marcadores'] = [$O::markers(3), $O::signedList($po), $O::signedList([3, 3]), $O::signedList('x'), $O::isMoneyTurn('payment_link_request', []), $O::isMoneyTurn('pricing_question', ['payment_link_send'])];
+$casos['notas'] = array_map(static fn (array $e): array => [$e, $N::issue((string) ($e['code'] ?? $e[0] ?? ''), $e['detail'] ?? ($e[1] ?? null))], $N::entries());
+$casos['origen'] = [
+    $G::classify(['critic' => ['verdict' => 'pass', 'attempt' => 1]]),
+    $G::classify(['critic' => ['verdict' => 'fail', 'attempt' => 2], 'fallback_mode' => 'SAFE_CURATED_REPLY']),
+    $G::classify(['policy_violations' => ['policy_greeting_sells'], 'policy_discarded_draft' => 'x', 'critic' => ['verdict' => 'pass', 'attempt' => 1]]),
+    $G::classify(['visit_hour' => ['mode' => 'ask']]),
+    $G::classify(['critic' => ['verdict' => 'pass', 'attempt' => 3], 'regeneration' => ['drafts' => 3, 'critics' => 2, 'checks' => 2, 'rewrites' => [['by' => 'server', 'codes' => ['register_tuteo'], 'issues' => ['naturalness']], ['by' => 'critic', 'codes' => [], 'issues' => ['relevance']]]]]),
+];
 
 $j = static fn (mixed $v): string => (string) json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 echo 'PCRE '.PCRE_VERSION.' · PHP '.PHP_VERSION."\n";
-echo "expresiones regulares en las clases nuevas: {$expresiones} · no compilan: ".count($rotas)."\n";
+echo 'clases del commit cargadas: '.count($nuevas)."\n";
+echo "expresiones regulares en esas clases: {$expresiones} · no compilan: ".count($rotas)."\n";
 foreach ($rotas as $r) {
     echo "  ROTA {$r}\n";
 }
