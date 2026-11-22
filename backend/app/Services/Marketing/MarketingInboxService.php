@@ -265,6 +265,8 @@ class MarketingInboxService
             ->limit(20)
             ->get()
             ->map(fn ($a) => [
+                // NB2 (Q1-8): el CRM devuelve el mayor al descartar una queja (`last_seen_ai_action_id`).
+                'id' => $a->id,
                 'action_type' => $a->action_type,
                 'status' => $a->status,
                 'reason' => $a->reason,

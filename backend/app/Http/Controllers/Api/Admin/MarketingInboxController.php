@@ -473,6 +473,9 @@ class MarketingInboxController extends Controller
             'note' => ['nullable', 'string', 'max:500'],
             // Q1-8: la categoría cerrada al resolver una revisión marcada como queja. Opcional: sin ella, todo como siempre.
             'complaint_category' => ['nullable', 'string', Rule::in(ComplaintCommercialEmitter::REVIEW_CATEGORIES)],
+            // NB2 (Q1-8): la acción de la IA más reciente que vio quien decide (`ai_actions[].id` del detalle). Opcional;
+            // solo cuenta con `not_a_complaint`: si la IA marcó otra queja después, 409 y nada se descarta.
+            'last_seen_ai_action_id' => ['nullable', 'integer', 'min:1'],
         ]);
         $categoria = $data['complaint_category'] ?? null;
         // B1 (Q1-8): «No era una queja» SUELTA el freno de las quejas de la IA. Exige su propia llave, ANTES de leer
@@ -493,7 +496,8 @@ class MarketingInboxController extends Controller
             return response()->json(['ok' => true, 'staff_review_pending' => false]);
         }
 
-        $descartadas = $staffReview->resolveComplaint($conversation, $this->adminId($request), $categoria, $data['note'] ?? null);
+        $vista = isset($data['last_seen_ai_action_id']) ? (int) $data['last_seen_ai_action_id'] : null;
+        $descartadas = $staffReview->resolveComplaint($conversation, $this->adminId($request), $categoria, $data['note'] ?? null, $vista);
 
         return response()->json(['ok' => true, 'staff_review_pending' => false, 'complaint' => ['category' => $categoria, 'dismissed' => $descartadas]]);
     }

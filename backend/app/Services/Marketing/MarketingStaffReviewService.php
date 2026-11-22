@@ -2,8 +2,10 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Observers\Commercial\ComplaintCommercialEmitter;
+use App\Observers\Commercial\MarketingAiActionCommercialObserver;
 use App\Services\Observability\ChannelLog;
 use Illuminate\Support\Facades\DB;
 
@@ -45,7 +47,10 @@ class MarketingStaffReviewService
      *    toca) dejan de frenar: `complaint_dismissed` por cada una, con quién lo
      *    decidió. No borra nada. Las quejas posteriores, las del personal y las
      *    de otra conversación siguen frenando. Solo con la revisión PENDIENTE
-     *    (si no, 409 `staff_review_not_pending`, NB1).
+     *    (si no, 409 `staff_review_not_pending`, NB1). Con `$lastSeenAiActionId`
+     *    (la acción de la IA más reciente que vio quien decide), si la IA marcó
+     *    después otra queja en esta conversación, 409 `complaint_newer_than_seen`
+     *    (NB2): la queja nueva se fusiona con la del día y se descartaría a ciegas.
      *  - `complaint_confirmed` y `other`: siguen frenando; se resuelve como hoy.
      *
      * Todo o nada, con la fila de la conversación bloqueada: si un descarte no
@@ -57,7 +62,7 @@ class MarketingStaffReviewService
      *
      * @throws StaffReviewComplaintException
      */
-    public function resolveComplaint(MarketingConversation $conversation, ?int $adminId, string $category, ?string $note = null): int
+    public function resolveComplaint(MarketingConversation $conversation, ?int $adminId, string $category, ?string $note = null, ?int $lastSeenAiActionId = null): int
     {
         if ($adminId === null) {
             throw new StaffReviewComplaintException('person_required', 403, 'Descartar o confirmar una queja lo decide una persona: entra con tu cuenta del CRM.');
@@ -66,7 +71,7 @@ class MarketingStaffReviewService
             throw new StaffReviewComplaintException('complaint_category_invalid', 422, 'La categoría no es válida.');
         }
 
-        $descartadas = DB::transaction(function () use ($conversation, $adminId, $category): int {
+        $descartadas = DB::transaction(function () use ($conversation, $adminId, $category, $lastSeenAiActionId): int {
             $c = MarketingConversation::query()->lockForUpdate()->find($conversation->id);
             if ($c === null) {
                 throw new StaffReviewComplaintException('not_found', 404, 'Conversación no encontrada.');
@@ -83,6 +88,9 @@ class MarketingStaffReviewService
                 }
                 if (! ComplaintCommercialEmitter::enabled()) {
                     throw new StaffReviewComplaintException('commercial_events_disabled', 409, 'El registro de hechos comerciales está apagado en el servidor: la queja no se puede descartar ahora. La revisión sigue pendiente.');
+                }
+                if ($lastSeenAiActionId !== null && self::aiComplaintAfter((int) $c->id, $lastSeenAiActionId)) {
+                    throw new StaffReviewComplaintException('complaint_newer_than_seen', 409, 'La IA marcó otra queja en esta conversación después de lo que viste: vuelve a abrirla antes de decidir. La revisión sigue pendiente.');
                 }
                 try {
                     $n = app(ComplaintCommercialEmitter::class)->dismissAiComplaints((int) $c->id, (int) $c->lead_id, $c->staff_review_resolved_at, now(), $adminId);
@@ -112,5 +120,21 @@ class MarketingStaffReviewService
         }
 
         return $descartadas;
+    }
+
+    /**
+     * NB2: ¿marcó la IA una queja en esta conversación DESPUÉS de la acción que vio quien decide? Con el mismo
+     * criterio que el observador que la registra ({@see MarketingAiActionCommercialObserver::isComplaint()}: el
+     * motivo o la intención). Por las filas de la IA y no por `commercial_events`: la segunda queja del día se
+     * fusiona con la primera y no deja un hecho propio.
+     */
+    private static function aiComplaintAfter(int $conversationId, int $lastSeenAiActionId): bool
+    {
+        return MarketingAiAction::query()
+            ->where('conversation_id', $conversationId)
+            ->where('id', '>', $lastSeenAiActionId)
+            ->where(fn ($q) => $q->where('reason', MarketingAiActionCommercialObserver::COMPLAINT)
+                ->orWhere('metadata->intent', MarketingAiActionCommercialObserver::COMPLAINT))
+            ->exists();
     }
 }

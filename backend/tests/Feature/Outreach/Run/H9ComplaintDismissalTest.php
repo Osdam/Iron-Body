@@ -191,6 +191,79 @@ class H9ComplaintDismissalTest extends TestCase
         $this->assertTrue($this->frena($socio['key']));
     }
 
+    /** La id de la última fila de la IA de la conversación (lo que el CRM lee en `ai_actions[].id`). */
+    private static function ultimaAccion(int $conversacion): int
+    {
+        return (int) DB::table('marketing_ai_actions')->where('conversation_id', $conversacion)->max('id');
+    }
+
+    /**
+     * NB2 (`informe-apisec-quejas.md`): una segunda queja de la IA del mismo día y conversación se FUSIONA con la del
+     * día (no deja hecho propio). Si llega mientras alguien decide, «No era una queja» la descartaría a ciegas. Con
+     * `last_seen_ai_action_id` (la acción más reciente que vio quien decide), una queja de la IA posterior da 409
+     * `complaint_newer_than_seen`, sin escribir. Sin el campo, como hoy. Antes: el campo se ignoraba (200).
+     */
+    public function test_la_queja_que_llego_mientras_se_decidia_no_se_descarta_a_ciegas(): void
+    {
+        $socio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234567');
+        $c = $this->conversacionDe($socio['lead']);
+        $this->quejaDeLaIa($socio['lead'], $c);
+        // Lo que ve quien decide: el detalle de la conversación lleva la id de cada acción de la IA.
+        $detalle = $this->getJson("/api/admin/marketing/inbox/conversations/{$c}", $this->sesion)->assertOk();
+        $vista = (int) $detalle->json('data.ai_actions.0.id');
+        $this->assertSame(self::ultimaAccion($c), $vista);
+
+        // Mientras decide, la IA marca otra queja en la misma conversación: se fusiona con la del día.
+        $this->reloj('2026-11-17 15:20:00');
+        $this->quejaDeLaIa($socio['lead'], $c);
+        $this->assertCount(1, self::claves(), 'fusionada: un solo hecho');
+        $this->assertGreaterThan($vista, self::ultimaAccion($c));
+
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint', 'last_seen_ai_action_id' => $vista, 'note' => 'no lo era'])
+            ->assertStatus(409)->assertExactJson(['ok' => false, 'code' => 'complaint_newer_than_seen', 'message' => 'La IA marcó otra queja en esta conversación después de lo que viste: vuelve a abrirla antes de decidir. La revisión sigue pendiente.']);
+        $fila = DB::table('marketing_conversations')->where('id', $c)->first();
+        $this->assertSame([true, null], [(bool) $fila->staff_review_pending, $fila->staff_review_resolved_by], 'la revisión sigue pendiente');
+        $this->assertSame(0, DB::table('commercial_events')->where('event', 'complaint_dismissed')->count());
+        $this->assertSame(0, DB::table('marketing_conversation_notes')->count());
+        $this->assertTrue($this->frena($socio['key']));
+
+        // Lo que NO bloquea: una acción de la IA posterior que no es queja, y una queja posterior de OTRA conversación.
+        $vista = self::ultimaAccion($c);
+        MarketingAiAction::create(['lead_id' => $socio['lead'], 'conversation_id' => $c, 'action_type' => 'reply', 'reason' => 'pricing', 'status' => 'created', 'metadata' => ['intent' => 'pricing']]);
+        $otra = $this->conversation($socio['lead']);
+        $this->quejaDeLaIa($socio['lead'], $otra);
+        $this->assertGreaterThan($vista, self::ultimaAccion($otra));
+
+        // Habiendo visto la última queja, se descarta: la fusionada va con ella (es la misma clave del día).
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint', 'last_seen_ai_action_id' => $vista])
+            ->assertOk()->assertJsonPath('complaint', ['category' => 'not_a_complaint', 'dismissed' => 1]);
+        $this->assertSame(["conversation:{$c}:complaint:20261117"], array_map(static fn (string $k): string => substr($k, strlen('complaint_created:')), self::claves('complaint_dismissed')));
+    }
+
+    public function test_nb2_la_intencion_de_queja_tambien_cuenta_y_sin_el_campo_todo_como_hoy(): void
+    {
+        $socio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234567');
+        $c = $this->conversacionDe($socio['lead']);
+        $this->quejaDeLaIa($socio['lead'], $c);
+        $vista = self::ultimaAccion($c);
+        // Una fila posterior que marca la queja solo por la intención (sin el motivo): también es una queja de la IA.
+        MarketingAiAction::create(['lead_id' => $socio['lead'], 'conversation_id' => $c, 'action_type' => 'reply', 'reason' => 'other', 'status' => 'created', 'metadata' => ['intent' => 'complaint']]);
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint', 'last_seen_ai_action_id' => $vista])->assertStatus(409)->assertJsonPath('code', 'complaint_newer_than_seen');
+        // Tipos malos: 422 de validación, nada escrito.
+        foreach (['abc', 0, -1, 1.5, ['x']] as $malo) {
+            $this->resolver($c, ['complaint_category' => 'not_a_complaint', 'last_seen_ai_action_id' => $malo])->assertStatus(422)->assertJsonValidationErrors('last_seen_ai_action_id');
+        }
+        $this->assertSame(0, DB::table('commercial_events')->where('event', 'complaint_dismissed')->count());
+        $this->assertTrue((bool) DB::table('marketing_conversations')->where('id', $c)->value('staff_review_pending'));
+        // Sin el campo: como hoy (descarta lo de la conversación desde la resolución anterior).
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint'])->assertOk()->assertJsonPath('complaint.dismissed', 1);
+        // Con `complaint_confirmed` el campo no cambia nada.
+        $otro = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234568');
+        $c2 = $this->conversacionDe($otro['lead']);
+        $this->quejaDeLaIa($otro['lead'], $c2);
+        $this->resolver($c2, ['complaint_category' => 'complaint_confirmed', 'last_seen_ai_action_id' => 1])->assertOk()->assertJsonPath('complaint', ['category' => 'complaint_confirmed', 'dismissed' => 0]);
+    }
+
     public function test_complaint_confirmed_y_other_siguen_frenando(): void
     {
         foreach (['complaint_confirmed', 'other'] as $i => $categoria) {
