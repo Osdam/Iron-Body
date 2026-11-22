@@ -216,6 +216,34 @@ class VoiceToolsBenefitsTest extends TestCase
         $this->assertSame(['benefitsWithheld' => count($ataques), 'benefitsOmitted' => 0], VoiceCallEvent::query()->where('kind', 'tool_call')->sole()->codes);
     }
 
+    /**
+     * C-1 (ii): el NOMBRE del plan pasa por la misma guarda. Un plan cuyo nombre daría un código dicho tal cual no se
+     * entrega (ni su nombre ni su precio) y se cuenta; uno normal, sí. Si ninguno se puede entregar, la respuesta no
+     * dice que no haya planes: sin precios y que una persona le escriba.
+     */
+    public function test_c1_ii_un_plan_cuyo_nombre_da_un_codigo_no_se_entrega_y_se_cuenta(): void
+    {
+        $this->assertNotSame([], VoiceTranscriptGuard::spokenCodes('Promo 2x1'), 'leído tal cual, echaría el freno');
+        $this->assertSame([], VoiceTranscriptGuard::spokenCodes('Plan Valera'));
+        $this->plan('Promo 2x1', 51000, 1, json_encode(['Acceso ilimitado al gimnasio']));
+        $this->plan('Plan Valera', 65000, 2, json_encode(self::VALERA));
+        $lineas = $this->captureVoiceLines();
+
+        $cuerpo = $this->consultarPlanes();
+        $this->assertSame(['Plan Valera'], array_column($cuerpo['planes'], 'nombre'), 'solo el normal');
+        $this->assertSame(self::VALERA, $cuerpo['planes'][0]['beneficios']);
+        $texto = (string) json_encode($cuerpo, JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('Promo', $texto);
+        $this->assertStringNotContainsString('51.000', $texto, 'ni su precio');
+        $this->assertSame(['plansWithheld' => 1], VoiceCallEvent::query()->where('kind', 'tool_call')->sole()->codes, 'el recuento, en el evento');
+        $this->assertSame(1, $lineas()[0]['plans_withheld'] ?? null, 'y en la línea voice.tool');
+
+        // Todos los vendibles con un nombre retenido.
+        Plan::query()->where('name', 'Plan Valera')->update(['name' => 'Plan Valera gratis']);
+        $this->assertSame(['planes' => [], 'nota' => VoiceTools::NO_DELIVERABLE_PLANS_NOTE], $this->consultarPlanes());
+        $this->assertSame(['plansWithheld' => 2], VoiceCallEvent::query()->where('kind', 'tool_call')->orderByDesc('id')->first()?->codes);
+    }
+
     public function test_spoken_codes_es_la_misma_guarda_que_la_de_la_post_llamada(): void
     {
         foreach ([...self::VALERA, ...self::VIGILADOS, 'Te paso con un asesor', 'Asesoría con un asesor comercial', 'Bono de referido', 'Promoción especial',
