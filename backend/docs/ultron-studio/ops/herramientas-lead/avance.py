@@ -80,7 +80,7 @@ APARTADOS = {
     ]),
     9: (0.60, [
         ("Seguridad R3 de la bandeja (R3-1 a R3-3, F-1 a F-3, m-1 y m-2)", 60, 0.70, "desplegado y verificado en producción el 22-11 (lote 1, 45b53023)", "c"),
-        ("CRM: los once motivos y el aviso del reclamo", 15, 0.50, "implementado, probado y aprobado en la revisión final (0 bloqueantes); falta desplegar", "c"),
+        ("CRM: los once motivos y el aviso del reclamo", 15, 0.70, "publicado y verificado desde fuera el 22-11 (CRM a9e7e7a); falta verlo con una sesión real", "c"),
         ("Decisión D-3 (frenos ajenos)", 5, 0.00, "decisión del propietario", "o"),
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
     ]),

@@ -129,3 +129,15 @@ LECTURA: el lote 2 está DESPLEGADO y VERIFICADO EN PRODUCCIÓN. La versión 3 s
 El aviso de pagos, lanzado en seco en producción, lee y no encuentra ningún pago aprobado sin su membresía; su tarea NO está en el programador (bandera apagada).
 El clasificador está apagado (enabled false, cupo 0, presupuesto 0, sin modelo ni clave). Nada de esto está ACEPTADO con una prueba real: son funciones apagadas.
 VUELTA ATRÁS (no ha hecho falta): bash /root/deploy-cierre-lote.sh 45b53023 fddd3450 /root/cierre-lote-2/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261122-145816
+
+── VIGILANCIA DEL LOTE 2 Y DEL CRM · 22-11-2026 15:14 UTC (solo lectura) ──
+código: fddd3450 · procesos RUNNING: 14 · otros: 0
+production.ERROR hoy: 0
+trabajos fallidos en total: 2 · desde las 14:58 UTC: 0
+respuestas de la API desde las 14:58 UTC (por clase): 2xx=887 4xx=89 
+respuestas 5xx desde las 14:58 UTC: 0
+mensajes de WhatsApp desde las 14:58 UTC: entrantes 0 · salientes 0 · salientes fallidos 0
+publication-check: salida 0
+CRM público: {  "commit": "a9e7e7a",  "dirty": false,  "builtAt": "2026-11-22T15:02:01.283Z",  "inboxV2": true} · página del Studio: HTTP 200
+Lectura de la vigilancia: 15 minutos después, los 14 procesos siguen en marcha, 0 errores, 0 trabajos fallidos nuevos y 0 respuestas 5xx (887 respuestas 2xx y 89 4xx).
+No entró ni salió ningún mensaje de WhatsApp en ese rato (domingo por la mañana): el lote no toca ese camino y la cadena de publicaciones sigue verificando.
