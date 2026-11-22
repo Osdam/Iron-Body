@@ -226,7 +226,7 @@ class UltronA4NotasDelServidorTest extends TestCase
         $filaAprobada = $this->ultimaAccion();
         $this->assertSame(self::PRECIOS_200, $aprobado['reply_final']);
         $this->assertSame(['policy_length_exceeded', 'policy_plans_overview'], $filaAprobada->metadata['policy_violations']);
-        $this->assertSame(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'mixed'], $filaAprobada->metadata['plans_overview']);
+        $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'mixed'], $filaAprobada->metadata['plans_overview']);
         $this->assertSame(251, $filaAprobada->metadata['length']['from']);
         $this->assertArrayNotHasKey('discarded_draft_check', $filaAprobada->metadata, 'solo en el rechazo del revisor');
 
@@ -242,7 +242,7 @@ class UltronA4NotasDelServidorTest extends TestCase
         $this->assertSame($aprobado['reply_final'], $this->ultimoSaliente()?->body);
         $this->assertSame('SAFE_CURATED_REPLY', $fila->metadata['fallback_mode']);
         $this->assertSame([3, 'fail'], [$fila->metadata['critic']['attempt'], $fila->metadata['critic']['verdict']]);
-        $this->assertSame(['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251], $fila->metadata['discarded_draft_check']);
+        $this->assertMismaTraza(['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251], $fila->metadata['discarded_draft_check'] ?? null);
 
         $origen = UltronReplyOrigin::classify($fila->metadata);
         $this->assertSame([UltronReplyOrigin::FALLBACK, UltronReplyOrigin::REASON_CRITIC, UltronReplyOrigin::SERVER_WOULD_REJECT, ['plans_overview/mixed', 'length_over_cap']],
@@ -259,7 +259,7 @@ class UltronA4NotasDelServidorTest extends TestCase
         $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $referencia, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
         $fila = $this->ultimaAccion();
         $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el rechazo del revisor da el respaldo, como hoy');
-        $this->assertSame(['pass' => true, 'codes' => [], 'length' => 120], $fila->metadata['discarded_draft_check']);
+        $this->assertMismaTraza(['pass' => true, 'codes' => [], 'length' => 120], $fila->metadata['discarded_draft_check'] ?? null);
         $this->assertSame(UltronReplyOrigin::SERVER_WOULD_ACCEPT, UltronReplyOrigin::classify($fila->metadata)['server_verdict']);
 
         // Legacy (sin negociar los prompts): ni la comprobación ni la clave.
@@ -274,6 +274,26 @@ class UltronA4NotasDelServidorTest extends TestCase
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
+
+    /** La metadata es `jsonb` en PostgreSQL, que reordena las claves de un objeto: se compara sin su orden (las listas, en el suyo). */
+    private function assertMismaTraza(array $esperada, mixed $real): void
+    {
+        $this->assertIsArray($real);
+        $this->assertSame(self::sinOrdenDeClaves($esperada), self::sinOrdenDeClaves($real));
+    }
+
+    private static function sinOrdenDeClaves(mixed $valor): mixed
+    {
+        if (! is_array($valor)) {
+            return $valor;
+        }
+        $valor = array_map(self::sinOrdenDeClaves(...), $valor);
+        if (! array_is_list($valor)) {
+            ksort($valor);
+        }
+
+        return $valor;
+    }
 
     private function beneficiosDistintos(): void
     {
