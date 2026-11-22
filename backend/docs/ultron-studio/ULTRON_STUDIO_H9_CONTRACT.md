@@ -1629,3 +1629,67 @@ Respuestas a las dudas que los paquetes dejan como «Q-n para el lead». Mandan 
 
 **Pruebas (T24, SSE):** con la bandera apagada, 409 y el CRM sondea; con ella, un evento del libro llega al cliente en menos de 2 s; `Last-Event-ID` no repite ni pierde; un tema sin permiso no emite ni se revela; un evento nunca lleva datos personales (prueba con una fila sembrada con teléfono, nombre y cuerpo); el latido y el cierre a los 55 s; el limitador por tique; cero red saliente; `auth:coverage --unmapped` vacío.
 
+## Enmienda AI9 (22-11-2026), autorizada por el lead por la directiva definitiva del propietario (§8: clasificador de respuestas)
+
+Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/informe-be-clasificador.md`). Donde esta enmienda dice otra cosa que D9-10, §4 o §9.1, manda esta. **Nace apagado y en cero**: con los valores por defecto no llama a nadie.
+
+**Dónde actúa y qué puede hacer.**
+- Solo en el normalizador de WhatsApp (`outreach:whatsapp-outcomes`), en vivo, y DESPUÉS de las señales deterministas. La baja segura (`opted_out`) y la posible baja (`human_requested` · `opt_out_word`) siguen igual y nunca pasan por la IA.
+- Cualquier otra respuesta se registra como hasta ahora, `replied` (`inbound_message`). Solo el proceso cuya inserción de ese `replied` ganó la clave única la manda al clasificador, después de confirmarla (`DB::afterCommit`). Una respuesta se clasifica como mucho UNA vez, también con dos procesos a la vez.
+- Se clasifica solo la PRIMERA respuesta de la persona a ese contacto. Lo que escriba después no se clasifica.
+- La inscripción ya está cerrada por `replied`, así que un resultado `classifier` no planifica nada. Solo añade sus efectos de freno: `opted_out` cancela lo pendiente de la persona en todas las estrategias y la suprime para su finalidad en ese medio; `wrong_person` la suprime en ese medio; `not_interested` y `human_requested` quedan registrados.
+- **`callback_requested` se registra (con `next_action = wait`) sin planificar ningún contacto.** Que la IA pueda dejar una llamada para después exige otra enmienda.
+
+**Etiquetas y umbrales.**
+- Exactamente las cinco de D9-10 para AI9: `callback_requested`, `human_requested`, `not_interested`, `opted_out` y `wrong_person`. Además `none` («ninguna»), que nunca se registra.
+- La salida está restringida por un esquema JSON estricto con `enum`, sin propiedades de más, y el clasificador la valida entera. Cualquier otra cosa se descarta. No hay etiqueta que avance la venta.
+- Los umbrales de L9-18 sobre 100: 50 para `opted_out` y 90 para el resto. **Por debajo del umbral, o con `none`, se descarta y la respuesta queda como `replied`.** No se registra `needs_review`; la regla de `OutcomeTable` sigue debajo como segunda barrera.
+- La versión del clasificador es la `1`, y la huella de las instrucciones y el esquema está fijada en una prueba.
+
+**Privacidad (encargado: OpenAI, Responses API).**
+- `store: false`, instrucciones fijas sin datos de nadie y un único mensaje con el texto de ESA respuesta.
+- El texto va enmascarado: teléfonos y cifras de 6 o más dígitos, documentos, correos y enlaces quedan ocultos; se quitan los invisibles y se corta a 500 caracteres.
+- Nunca `user`, `metadata` ni `safety_identifier`, ni el nombre, el teléfono o los identificadores de la persona.
+- El texto no se guarda ni se registra en los logs, que solo llevan la clase de lo ocurrido.
+- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). La compartida de la IA del CRM (`OPENAI_API_KEY`) no vale: con la misma clave, no llama.
+
+**Red.**
+- `App\Services\Outreach` sigue sin nombrar ni el proveedor ni `Http::` (§3.4): solo conoce el puerto `ReplyClassifierTransport`.
+- La petición la hace `App\Services\ReplyClassification\OpenAiReplyClassifierTransport`, enlazado en `AppServiceProvider`. URL fija `https://api.openai.com/v1/responses`, conexión 3 s, tiempo 2–10 s, sin redirecciones y sin reintentos.
+- Lo vigila `ReplyClassifierStaticGuardsTest`.
+
+**Presupuesto y migración.**
+- Contador propio en `outreach_budget_counters`, alcance `classifier:reply`, día de Bogotá y modo `live`.
+- Antes de llamar se reservan una llamada y su coste MÁXIMO (cada byte de entrada como un token, más el tope de salida) contra el cupo y el techo. Después se devuelve lo no gastado según el `usage`; si la petición no llegó a salir se devuelve todo, y un fallo que pudo cobrarse conserva la reserva.
+- Lo admite la migración `2026_11_22_100001_allow_classifier_budget_scope`: amplía `obud_scope_chk` en PostgreSQL. Es aditiva, y su `down()` se niega con filas del clasificador, así que es irreversible desde la primera llamada. La ida y vuelta de `100002` en las pruebas la vuelve a aplicar (lista cerrada `LATER_EXECUTION_MIGRATIONS`).
+
+**Falla cerrado, siempre como `replied`.**
+- Apagado, sin transporte, sin modelo o sin precios, sin clave propia.
+- Cupo o techo a 0, presupuesto agotado, sin texto.
+- Tiempo agotado, error del proveedor, negativa, salida incompleta o fuera del esquema.
+- Confianza baja.
+- Una excepción, que nunca sale de la pasada.
+
+**Traza.**
+- El resultado lleva `source = classifier`, su confianza (fracción de 0 a 1) y la clave `job:<uuid>:ai9:<versión>:<huella del prompt>:<modelo>`.
+- El coste y las llamadas del día están en el contador.
+
+**Estado** (`GET outreach/status`, aditivo).
+- `config.classifier` sigue siendo la bandera.
+- `config.classifierSetup` lleva {`implemented`, `version`, `promptRef`, `labels`, `enabled`, `transport`, `configured`, `model`, `dailyCap`, `dailyBudgetMicros`, `timeoutSeconds`, `effective`, `today` {`day`, `calls`, `micros`, `capUnits`, `capMicros`}}.
+
+**Variables** (§9.1; todas en `.env.example`, a 0 o vacías). Además de `COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED=false`:
+
+| Variable | Por defecto | Qué |
+|---|---|---|
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_CAP` | `0` | Llamadas al día (0–2000) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_DAILY_BUDGET_USD` | `0` | Techo diario en US$ |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MODEL` | vacío | El modelo (≤ 36 caracteres `[a-z0-9._-]`) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_INPUT_USD_PER_MTOK` / `_PRICE_OUTPUT_USD_PER_MTOK` | `0` | Precios por millón de tokens |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS` | `5` | 2–10 s |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS` | `64` | 16–256, razonamiento incluido |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY` | vacía | La clave propia (secreto) |
+
+**Pendiente, fuera de esta enmienda.**
+- El mando (`clasificador on` con cupo, techo, modelo y precios, y que `apagar` ponga el cupo y el techo a 0) es de devops.
+- La comprobación con el modelo real la hace el lead, con autorización.
