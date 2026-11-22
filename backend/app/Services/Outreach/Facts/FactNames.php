@@ -91,7 +91,7 @@ final class FactNames
         'consent.voice_call.collections', 'consent.voice_call.commercial', 'consent.voice_call.service',
         'consent.whatsapp.collections', 'consent.whatsapp.commercial', 'consent.whatsapp.service',
         'lead.commercial_opt_out', 'lead.consent_denied', 'lead.do_not_contact', 'lead.do_not_contact_sibling',
-        'voice.excluded', 'voice.rne_check_missing',
+        'voice.consent_revoked', 'voice.excluded', 'voice.rne_check_missing',
     ];
 
     /** Los motivos globales de N2 ({@see OperationalBrakes}). */

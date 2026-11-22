@@ -40,18 +40,32 @@ use Illuminate\Support\Str;
  * MISMAS entradas de la escalera. Cada trabajo tiene, como mucho, UN motivo de
  * retención, por este orden ({@see WITHHELD_REASONS}):
  *  - `brake`: la PARADA GLOBAL, el freno del canal del trabajo o el de su
- *    estrategia, con la misma lectura que N2 ({@see OutreachStop::openScopes()});
+ *    estrategia, con la misma lectura que N2 ({@see OutreachStop::openScopes()}),
+ *    o la configuración que ya no deja salir un asistido: el modo fuera de
+ *    `live` o el canal asistido apagado (F-1, {@see openBrakes()});
  *  - `strategy_stopped`: la (versión, parte) de su inscripción ya no está en
  *    marcha en la cadena: pausada, apagada, revertida, retirada, archivada o
- *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
+ *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2), o la referencia
+ *    del Studio de su versión ya no vale (N3 `studio_reference_invalid`, m-2
+ *    de `informe-security-bandeja-r3.md`);
+ *  - `template_not_approved`: su plantilla ya no está aprobada con la huella
+ *    del sello (retirada después de salir): no hay guion que dar (N4, F-3);
  *  - `opted_out`: una señal de «no contactar» de N1/N2 que se SABE: el
  *    `do_not_contact` (suyo o de un prospecto con su número), el *opt-out*
- *    comercial, el consentimiento del medio denegado, la exclusión de voz y la
- *    supresión del libro ({@see CoreProjection::policyInput()},
- *    {@see SubjectSuppressions}; N-1);
+ *    comercial, el consentimiento del medio denegado, la revocación del de voz
+ *    (R3-1), la exclusión de voz y la supresión del libro
+ *    ({@see CoreProjection::policyInput()}, {@see SubjectSuppressions}; N-1);
  *  - `complaint_recent`: N6, una queja dentro de la ventana;
- *  - `policy_unknown`: lo de `opted_out` no se puede comprobar (persona sin
- *    resolver o clave que ya no es de una persona): falla cerrado;
+ *  - `subject_minor` y `rne_check_missing`: lo que N1 niega sin que la persona
+ *    lo pida (R3-3, directiva del propietario del 21-11-2026): es menor, o
+ *    (por voz) la consulta al RNE de algún contacto de voz ya no está vigente;
+ *  - `canary_scope_mismatch`: en la parte canario (N5) o en una versión que
+ *    declara «solo canario» (N3), su número ya no es un canario activo del
+ *    medio: se desactivó o se revocó después de salir (F-2);
+ *  - `policy_unknown`: lo de `opted_out` o lo de R3-3 no se puede comprobar
+ *    (persona sin resolver, clave que ya no es de una persona o, por voz, el
+ *    consentimiento que ya no está concedido sin que conste una revocación: un
+ *    contacto desactivado, R3-1): falla cerrado;
  *  - `complaint_unknown`: N6 sin datos de eventos (falla cerrado);
  *  - `expired`: el plazo del trabajo (`expires_at <= ahora`, el borde del
  *    despachador) ya pasó: la política se evaluó para ese plazo.
@@ -60,7 +74,11 @@ use Illuminate\Support\Str;
  * Un trabajo SIN reclamar con motivo no se ofrece ni se reclama (409
  * `not_in_queue`; el motivo, al registro). Uno YA reclamado se queda para que
  * su reclamante registre el resultado, pero sin `person` ni `script` y con
- * `contactWithheld` = el motivo (solo lo ve quien lo reclamó). No se escribe
+ * `contactWithheld` = el motivo (solo lo ve quien lo reclamó). La reclamación
+ * lo vuelve a mirar TODO después de escribir (R3-2): lo que llegue entre la
+ * comprobación y el `UPDATE` ya no entrega el contacto en el 201; y si lo que
+ * llega es el cierre de la inscripción, 409 `enrollment_closed`, como la
+ * repetición (m-1 de `informe-security-bandeja-r3.md`). No se escribe
  * nada: el trabajo y la inscripción siguen como estaban hasta el resultado o
  * el fin de la ventana. `human_requested` no se mira aquí (L9-66: una derivada
  * a persona sigue viva en la bandeja). Los frenos ajenos al H9 (cerrojo de
@@ -71,7 +89,9 @@ use Illuminate\Support\Str;
  * despachador) y se cuenta; lo de la persona, en PHP, por tandas de
  * {@see SCAN_BATCH} filas (una foto y una consulta de supresión por tanda)
  * hasta llenar `limit` o hasta {@see MAX_SCAN} filas leídas (`scanCapped`,
- * m-3). Cuántos se retuvieron va en `withheld`, sin decir de quién.
+ * m-3). Cuántos se retuvieron va en `withheld`, sin decir de quién. Lo que
+ * enseña cada fila (el objetivo, el motivo de la traza y el guion) se lee por
+ * página, no por fila ({@see dtos()}; m-1 de `informe-reviewer-ronda3.md`).
  */
 final class AssistedQueue
 {
@@ -87,9 +107,21 @@ final class AssistedQueue
 
     public const WITHHELD_STRATEGY_STOPPED = 'strategy_stopped';
 
+    /** F-3: N4 `template_not_approved` (la plantilla del trabajo ya no está aprobada con su huella: no hay guion que dar). */
+    public const WITHHELD_TEMPLATE_NOT_APPROVED = 'template_not_approved';
+
     public const WITHHELD_OPTED_OUT = 'opted_out';
 
     public const WITHHELD_COMPLAINT_RECENT = 'complaint_recent';
+
+    /** R3-3: N1 `subject_minor`. */
+    public const WITHHELD_SUBJECT_MINOR = 'subject_minor';
+
+    /** R3-3: N1 `rne_check_missing` (solo por voz). */
+    public const WITHHELD_RNE_CHECK_MISSING = 'rne_check_missing';
+
+    /** F-2: N5 `canary_scope_mismatch` y N3 `canary_only_declared` (su número ya no es un canario activo del medio). */
+    public const WITHHELD_CANARY_SCOPE_MISMATCH = 'canary_scope_mismatch';
 
     public const WITHHELD_POLICY_UNKNOWN = 'policy_unknown';
 
@@ -98,7 +130,8 @@ final class AssistedQueue
     public const WITHHELD_EXPIRED = 'expired';
 
     public const WITHHELD_REASONS = [
-        self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
+        self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_TEMPLATE_NOT_APPROVED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
+        self::WITHHELD_SUBJECT_MINOR, self::WITHHELD_RNE_CHECK_MISSING, self::WITHHELD_CANARY_SCOPE_MISMATCH,
         self::WITHHELD_POLICY_UNKNOWN, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED,
     ];
 
@@ -131,6 +164,9 @@ final class AssistedQueue
         private readonly SubjectSuppressions $suppressions = new SubjectSuppressions,
     ) {}
 
+    /** @var array<string, string|null> F-3: el guion de cada (plantilla, huella) leído en ESTA petición ({@see scriptOf()}); cada método público lo vacía. */
+    private array $guiones = [];
+
     /**
      * Los trabajos de la bandeja: `started`, asistidos, en vivo, sin resultado
      * del personal; `mine` = los que reclamó quien mira, `unclaimed` = sin
@@ -158,11 +194,12 @@ final class AssistedQueue
      */
     public function page(Admin $viewer, string $filter = 'all', int $limit = 20): array
     {
+        $this->guiones = [];
         $limite = max(1, min(self::MAX_PAGE, $limit));
         $yo = (int) $viewer->id;
         $ahora = self::now();
         // I-3: los frenos con la MISMA lectura que N2 (una consulta), lo primero. Si no se pueden leer, la excepción sube: falla cerrado, como el despachador.
-        $abiertos = $this->stop->openScopes();
+        $abiertos = $this->openBrakes();
         // N-2: la cadena de las estrategias de la vista, una vez por página (antes de leer ninguna fila).
         $partes = $this->viewParts($yo, $filter);
         $enMarcha = $this->runningParts(array_map(static fn (object $p): int => (int) $p->strategy_id, $partes));
@@ -188,7 +225,7 @@ final class AssistedQueue
 
                     continue;
                 }
-                $filas[] = $this->dto($j, $yo, $motivo);
+                $filas[] = [$j, $motivo];
                 if (count($filas) >= $limite) {
                     break 2;
                 }
@@ -199,7 +236,7 @@ final class AssistedQueue
         }
 
         return [
-            'items' => $filas,
+            'items' => $this->dtos($filas, $yo),
             'withheld' => $retenidos + $this->heldCount($yo, $filter, $ahora, $abiertos, $enMarcha, $hayParadas),
             // m-3: se leyeron MAX_SCAN filas (todas las tandas llenas) y la página no se llenó.
             'scanCapped' => $leidas >= self::MAX_SCAN && count($filas) < $limite,
@@ -209,6 +246,8 @@ final class AssistedQueue
     /** El detalle de un trabajo de la bandeja (404 si no es asistido en vivo). @return array<string, mixed> */
     public function show(string $jobUuid): array
     {
+        $this->guiones = [];
+
         return $this->dto($this->assistedJob($jobUuid));
     }
 
@@ -218,9 +257,12 @@ final class AssistedQueue
      * {@see WITHHELD_REASONS}), si su inscripción ya se cerró
      * (`enrollment_closed`, también en la repetición: m-1) o si ya lo reclamó
      * otra persona (`already_claimed`); idempotente para quien lo reclamó, con
-     * el contacto retenido si ahora hay un motivo (I-1). Si un freno se echa
-     * entre la comprobación y la escritura (m-2), la fila ya reclamada vuelve
-     * sin contacto (`contactWithheld: brake`); no se deshace nada.
+     * el contacto retenido si ahora hay un motivo (I-1). Si cualquier motivo
+     * llega entre la comprobación y la escritura (un freno, m-2; una pausa de
+     * la estrategia o un «no contactar», R3-2), la fila ya reclamada vuelve
+     * sin contacto (`contactWithheld` = el motivo); si lo que llega es el
+     * cierre de su inscripción, 409 `enrollment_closed`, como la repetición
+     * (m-1 de `informe-security-bandeja-r3.md`). No se deshace nada.
      *
      * @return array{job: array<string, mixed>, replayed: bool}
      */
@@ -229,12 +271,13 @@ final class AssistedQueue
         if (! Str::isUuid($clientRequestId)) {
             throw OutreachException::invalid(['clientRequestId' => ['uuid']]);
         }
+        $this->guiones = [];
         $trabajo = $this->assistedJob($jobUuid);
         if ((string) $trabajo->status !== 'started') {
             throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
         }
         // I-3: los frenos, ANTES de repetir o de reclamar. Si no se pueden leer, la excepción sube: no se entrega ni se reclama nada.
-        $abiertos = $this->stop->openScopes();
+        $abiertos = $this->openBrakes();
         $ahora = self::now();
         if ($trabajo->assisted_claimed_by_admin_id !== null) {
             if ((int) $trabajo->assisted_claimed_by_admin_id === (int) $by->id) {
@@ -257,10 +300,20 @@ final class AssistedQueue
         if ($cambiadas !== 1) {
             throw OutreachException::conflict('already_claimed', 'Otra persona ya reclamó ese trabajo.');
         }
-        // m-2: los frenos OTRA VEZ tras escribir (una consulta). Un freno echado entre la lectura y el UPDATE retiene el contacto ya en esta respuesta.
-        $frenado = in_array(true, OutreachStop::ladderBrakes($this->stop->openScopes(), (string) $trabajo->strategy_uuid, (string) $trabajo->channel), true);
+        // m-2 y R3-2: TODO otra vez tras escribir, con lecturas nuevas y en el mismo orden (frenos, cadena, foto y libro). Lo que llegue
+        // entre la comprobación y el UPDATE (un freno, una pausa, un «no contactar») retiene el contacto ya en esta respuesta.
+        $reclamado = $this->assistedJob($jobUuid);
+        // m-1 de `informe-security-bandeja-r3.md`: antes, el trabajo y su inscripción, con lo MISMO que respondería la repetición. Una
+        // inscripción que se cierra entre la comprobación y el UPDATE no entrega el contacto ni una vez (409 `enrollment_closed`, con la
+        // reclamación ya escrita: no se deshace nada). `started` es final y la base no lo deja cambiar; mirarlo no cuesta una consulta.
+        if ((string) $reclamado->status !== 'started') {
+            throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
+        }
+        $this->requireOpenEnrollment((int) $reclamado->enrollment_id);
+        $this->guiones = [];
+        $motivo = $this->withholdReasons([$reclamado], $ahora, $this->openBrakes(), $this->runningParts([(int) $reclamado->strategy_id]))[(int) $reclamado->id] ?? null;
 
-        return ['job' => $this->dto($this->assistedJob($jobUuid), (int) $by->id, $frenado ? self::WITHHELD_BRAKE : null), 'replayed' => false];
+        return ['job' => $this->dto($reclamado, (int) $by->id, $motivo), 'replayed' => false];
     }
 
     /**
@@ -323,6 +376,25 @@ final class AssistedQueue
 
     // ── Piezas ──────────────────────────────────────────────────────────────
 
+    /**
+     * Los frenos, con la MISMA lectura que N2 ({@see OutreachStop::openScopes()}; una consulta, lo primero), y F-1: la
+     * CONFIGURACIÓN. Con el modo fuera de `live` (N2 `mode_off`; también la sombra) o el canal asistido apagado (N4
+     * `channel_disabled`), el despachador ya no sacaría un asistido ({@see Channels\AssistedChannel::attempt()}): la
+     * bandeja retiene TODO como con la PARADA GLOBAL (`brake`). Se lee en cada petición: al volver a encender, vuelve.
+     * La maestra apagada ya la corta el controlador (409 `outreach_disabled`).
+     *
+     * @return array{global: bool, channels: list<string>, strategies: list<string>}
+     */
+    private function openBrakes(): array
+    {
+        $abiertos = $this->stop->openScopes();
+        if (! OutreachConfig::isLive() || ! OutreachConfig::channelEnabled('assisted')) {
+            $abiertos['global'] = true;
+        }
+
+        return $abiertos;
+    }
+
     /** m-7 (REV9, L9-66): un trabajo asistido cuya inscripción ya se cerró (vencida, cancelada) no se reclama ni admite resultado. */
     private function requireOpenEnrollment(int $enrollmentId): void
     {
@@ -338,7 +410,7 @@ final class AssistedQueue
      * la forma de M-5 (`complaint_recent` y `known`: false = sin datos); los demás, solo su código.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      */
     private function requireNotWithheld(object $trabajo, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): void
     {
@@ -364,24 +436,31 @@ final class AssistedQueue
      * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose`, `channel`, `medium`, `strategy_uuid`,
      *                                  `enrollment_version_id`, `enrollment_part` y `expires_at`
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      * @return array<int, string> por id de trabajo con motivo
      */
     private function withholdReasons(array $trabajos, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): array
     {
         $motivos = [];
         $porPersona = [];
+        $restringido = [];
         foreach ($trabajos as $j) {
+            $parte = self::partKey((int) $j->enrollment_version_id, (string) $j->enrollment_part);
             if (in_array(true, OutreachStop::ladderBrakes($abiertos, (string) $j->strategy_uuid, (string) $j->channel), true)) {
                 $motivos[(int) $j->id] = self::WITHHELD_BRAKE;
-            } elseif (! isset($enMarcha[self::partKey((int) $j->enrollment_version_id, (string) $j->enrollment_part)])) {
+            } elseif (! isset($enMarcha[$parte])) {
                 // N-2: una parte que la cadena no trae en marcha (o que apareció después de leerla): retenida.
                 $motivos[(int) $j->id] = self::WITHHELD_STRATEGY_STOPPED;
+            } elseif ($this->scriptOf($j) === null) {
+                // F-3: la plantilla del trabajo ya no está aprobada con la huella de su sello: no hay guion que dar.
+                $motivos[(int) $j->id] = self::WITHHELD_TEMPLATE_NOT_APPROVED;
             } else {
                 $porPersona[] = $j;
+                // F-2: solo el alcance canario en la parte canario (N5) y en toda versión que lo declare (N3, «solo canario»).
+                $restringido[(int) $j->id] = (string) $j->enrollment_part === 'canary' || $enMarcha[$parte][2];
             }
         }
-        $deLaPersona = $this->personReasons($porPersona, $ahora);
+        $deLaPersona = $this->personReasons($porPersona, $ahora, $restringido);
         foreach ($porPersona as $j) {
             if (isset($deLaPersona[(int) $j->id])) {
                 $motivos[(int) $j->id] = $deLaPersona[(int) $j->id];
@@ -400,15 +479,20 @@ final class AssistedQueue
      *    clave canónica, como `LadderInputBuilder`);
      *  - `complaint_recent` si se quejó dentro de la ventana ({@see LadderInputBuilder::complaintRecently()}, el
      *    lector del despachador, con la finalidad de la inscripción);
-     *  - `policy_unknown` si la política no se puede comprobar (falla cerrado; decir «pidió que no la contacten»
-     *    sin saberlo sería falso);
+     *  - `subject_minor` o `rne_check_missing` si N1 la niega por elegibilidad ({@see ineligible()}, R3-3);
+     *  - `canary_scope_mismatch` si el trabajo solo puede llegar al alcance canario y su número ya no es un canario
+     *    activo del medio ({@see outOfCanaryScope()}, F-2);
+     *  - `policy_unknown` si la política, la elegibilidad o el alcance no se pueden comprobar (falla cerrado; decir
+     *    «pidió que no la contacten» sin saberlo sería falso);
      *  - `complaint_unknown` si no hay datos de eventos para la queja (falla cerrado, como N6).
-     * Una clave que ya no es de una persona (la supresión 1581 la deja en `x:<id>`) no se lee: no se sabe nada.
+     * Lo SABIDO gana a lo desconocido. Una clave que ya no es de una persona (la supresión 1581 la deja en `x:<id>`)
+     * no se lee: no se sabe nada.
      *
      * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose` y `medium`
+     * @param  array<int, bool>  $restringido  por id: ¿solo alcanza al alcance canario? (sin la entrada, sí: falla cerrado)
      * @return array<int, string> por id de trabajo retenido
      */
-    private function personReasons(array $trabajos, DateTimeImmutable $ahora): array
+    private function personReasons(array $trabajos, DateTimeImmutable $ahora, array $restringido): array
     {
         if ($trabajos === []) {
             return [];
@@ -419,10 +503,14 @@ final class AssistedQueue
         )));
         $foto = $claves === [] ? null : $this->snapshots->build($claves, $ahora, self::personSelection());
         $politica = [];
+        $elegible = [];
+        $canario = [];
         $preguntas = [];
         foreach ($trabajos as $j) {
             $s = $foto?->subject((string) $j->subject_key);
             $politica[(int) $j->id] = self::optedOut($s, (string) $j->purpose, (string) $j->medium);
+            $elegible[(int) $j->id] = self::ineligible($s, (string) $j->purpose, (string) $j->medium);
+            $canario[(int) $j->id] = ($restringido[(int) $j->id] ?? true) ? self::outOfCanaryScope($s, (string) $j->medium) : false;
             if ($politica[(int) $j->id] !== true && $s !== null && $s->resolved()) {
                 $preguntas[(int) $j->id] = ['key' => (string) ($s->canonicalKey ?? $s->key), 'purpose' => (string) $j->purpose, 'medium' => (string) $j->medium];
             }
@@ -439,7 +527,9 @@ final class AssistedQueue
             $motivo = match (true) {
                 $politica[(int) $j->id] === true => self::WITHHELD_OPTED_OUT,
                 $queja === true => self::WITHHELD_COMPLAINT_RECENT,
-                $politica[(int) $j->id] === null => self::WITHHELD_POLICY_UNKNOWN,
+                is_string($elegible[(int) $j->id]) => $elegible[(int) $j->id],
+                $canario[(int) $j->id] === true => self::WITHHELD_CANARY_SCOPE_MISMATCH,
+                $politica[(int) $j->id] === null, $elegible[(int) $j->id] === null, $canario[(int) $j->id] === null => self::WITHHELD_POLICY_UNKNOWN,
                 $queja === null => self::WITHHELD_COMPLAINT_UNKNOWN,
                 default => null,
             };
@@ -453,13 +543,15 @@ final class AssistedQueue
 
     /**
      * La foto de la persona para la bandeja: la queja (SOLO `complaint_created`: `human_requested` no retira nada,
-     * L9-66) y las entradas de N1/N2 por persona (`policy`). Los contactos, solo porque
-     * {@see CoreProjection::policyInput()} los exige de una persona resuelta (no se usan). Sin los frenos ajenos
-     * (`global`, D-3) ni hechos de condiciones.
+     * L9-66), las entradas de N1/N2 por persona (`policy`) y los dos hechos de N1 que la bandeja mira por R3-3
+     * (`subject.is_minor`, y `subject.has_voice_contact`, sin el que {@see CoreProjection::policyInput()} no da el RNE
+     * por vigente), los mismos que pide el despachador ({@see CoreProjection::POLICY_FACTS}). Los contactos, solo porque
+     * `policyInput()` los exige de una persona resuelta (no se usan). Sin los frenos ajenos (`global`, D-3) ni hechos de
+     * condiciones.
      */
     private static function personSelection(): FactSelection
     {
-        return new FactSelection(facts: [], events: ['complaint_created'], contacts: true, policy: true);
+        return new FactSelection(facts: ['subject.has_voice_contact', 'subject.is_minor'], events: ['complaint_created'], contacts: true, policy: true);
     }
 
     /**
@@ -471,6 +563,14 @@ final class AssistedQueue
      * desconocido. Un `true` sabido gana a un desconocido. La supresión del libro la añade {@see personReasons()}.
      * La escalera da por `denied` también un `lead.consent_denied` que no se sabe (falla cerrado); aquí ese caso es
      * desconocido (`null`): retiene igual, pero sin decir que lo pidió.
+     *
+     * R3-1 (`informe-security-bandeja-ronda3.md`): por VOZ, N1 niega todo consentimiento que no sea `granted`
+     * (`no_consent_for_purpose_channel`), y revocarlo (`revoked` en `voice_consents`, D8-18: «revocar no espera a
+     * nadie») lo deja en `missing`, no en `denied`. Aquí retiene igual: `true` si se sabe que revocó
+     * (`voice.consent_revoked`: el último evento válido de algún contacto activo es `revoked`); si no (un contacto
+     * desactivado, nunca concedido o sin leer), `null`, porque decir «lo pidió» sin saberlo sería falso. Por WhatsApp NO se extiende:
+     * `consent.whatsapp.service` depende de la ventana de 24 h y retendría trabajos de servicio válidos; la baja por
+     * WhatsApp ya llega como `lead.consent_denied`.
      */
     private static function optedOut(?SubjectFacts $s, string $purpose, string $medium): ?bool
     {
@@ -478,10 +578,15 @@ final class AssistedQueue
             return null;
         }
         $entrada = CoreProjection::policyInput($s, $purpose, null);
+        $consentimiento = $entrada['consent'][$medium];
         $senales = [
             $entrada['optOut']['doNotContact'],
             $entrada['optOut']['siblingDoNotContact'],
-            $entrada['consent'][$medium] === 'denied' ? $s->policy('lead.consent_denied') : false,
+            match (true) {
+                $consentimiento === 'denied' => $s->policy('lead.consent_denied'),
+                $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => $s->policy('voice.consent_revoked') === true ? true : null,
+                default => false,
+            },
         ];
         if ($purpose === OutreachCatalog::PURPOSE_COMMERCIAL) {
             $senales[] = $entrada['optOut']['commercial'];
@@ -497,21 +602,73 @@ final class AssistedQueue
     }
 
     /**
+     * R3-3 (directiva del propietario del 21-11-2026: «un contacto que pierde elegibilidad debe dejar de poder
+     * ofrecerse, reclamarse o ejecutarse por el canal restringido»): lo que N1 niega sin que la persona lo pida, con
+     * la MISMA entrada ({@see CoreProjection::policyInput()}):
+     *  - `subject_minor` si se sabe que es menor (`subject.isMinor` = true), en cualquier medio y finalidad. Que no se
+     *    sepa NO retiene: la escalera tampoco niega (D9-15: la edad no se infiere; un prospecto sin ficha nunca la
+     *    tiene);
+     *  - por voz, `rne_check_missing` si algún contacto de voz activo no tiene una consulta al RNE vigente
+     *    (`voice.rne_check_missing` = true: caducó o no la hay). La escalera niega todo `rneOk` que no sea `true`; si
+     *    no es `true` y no se sabe que falta (sin la política, sin el hecho del contacto de voz o sin contacto de voz
+     *    activo), `null`.
+     * `false` si N1 no niega por esto; `null` si no se puede comprobar (sin foto, persona sin resolver o medio fuera
+     * del conjunto): la bandeja retiene con `policy_unknown`.
+     */
+    private static function ineligible(?SubjectFacts $s, string $purpose, string $medium): string|false|null
+    {
+        if ($s === null || ! $s->resolved() || ! in_array($medium, OutreachCatalog::MEDIUMS, true)) {
+            return null;
+        }
+        $entrada = CoreProjection::policyInput($s, $purpose, null);
+        if ($entrada['subject']['isMinor'] === true) {
+            return self::WITHHELD_SUBJECT_MINOR;
+        }
+        if ($medium !== OutreachCatalog::MEDIUM_VOICE || $entrada['voice']['rneOk'] === true) {
+            return false;
+        }
+
+        return $s->policy('voice.rne_check_missing') === true ? self::WITHHELD_RNE_CHECK_MISSING : null;
+    }
+
+    /**
+     * F-2: ¿está la persona FUERA del alcance canario del medio del trabajo, con la MISMA entrada que N5 y N3
+     * (`canary.{medio}`, `LadderInputBuilder`: `inCanaryScope`)? `true` si se sabe que ninguno de sus números es un
+     * canario ACTIVO de ese medio (desactivado o revocado después de salir); `false` si alguno lo es; `null` si no se
+     * puede comprobar (sin foto, sin resolver, medio fuera del conjunto o la política sin leer): la escalera niega todo
+     * lo que no sea `true`, y la bandeja retiene con `policy_unknown`.
+     */
+    private static function outOfCanaryScope(?SubjectFacts $s, string $medium): ?bool
+    {
+        if ($s === null || ! $s->resolved() || ! in_array($medium, OutreachCatalog::MEDIUMS, true)) {
+            return null;
+        }
+        $enAlcance = $s->policy("canary.{$medium}");
+
+        return $enAlcance === null ? null : ! $enAlcance;
+    }
+
+    /**
      * N-2: las (versión, parte) EN MARCHA de unas estrategias, tal como está AHORA la cadena
      * ({@see OutreachPublishedStrategies::liveStrategies()}, solo de esas): la parte viva con `runnable()` (cadena
      * legible, versión en su estado vivo y contenido releído), sin `paused()` y en `active`. Son las entradas de
-     * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Lo que no está aquí (revertida,
-     * retirada, archivada, apagada, ilegible o versión que no es de la estrategia) no está en marcha.
+     * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Y con la referencia del Studio de su
+     * versión ÍNTEGRA (N3 `studio_reference_invalid`, m-2 de `informe-security-bandeja-r3.md`): la versión del Studio
+     * que ya no se encuentra, su huella distinta, una línea base que ya no es la del código desplegado o una referencia
+     * ilegible la paran igual que la escalera, sin consultas nuevas (`studio` ya viene en la parte leída). Lo que no está
+     * aquí (revertida, retirada, archivada, apagada, ilegible, con la referencia que no vale o versión que no es de la
+     * estrategia) no está en marcha. Con cada parte va si su versión del Studio declara «solo canario» (N3
+     * `canary_only_declared`, F-2).
      *
      * @param  list<int>  $strategyIds
-     * @return array<string, array{0: int, 1: string}> clave {@see partKey()} → [versión, parte]
+     * @return array<string, array{0: int, 1: string, 2: bool}> clave {@see partKey()} → [versión, parte, solo canario]
      */
     private function runningParts(array $strategyIds): array
     {
         $enMarcha = [];
         foreach ($this->bridge->liveStrategies(array_values(array_unique($strategyIds))) as $l) {
-            if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE) {
-                $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part];
+            if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE && $l->studio['referenceValid'] === true) {
+                $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part, $l->studio['canaryOnly'] !== false];
             }
         }
 
@@ -526,7 +683,7 @@ final class AssistedQueue
     /**
      * N-2 en SQL: la inscripción es de una parte en marcha (lista blanca; sin ninguna, nada).
      *
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha
      */
     private static function inRunningPart(Builder $w, array $enMarcha): void
     {
@@ -572,7 +729,7 @@ final class AssistedQueue
      * esconde trabajo ofrecible en `all`).
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      * @return list<object>
      */
     private function queueRows(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, ?object $after, int $size): array
@@ -608,7 +765,7 @@ final class AssistedQueue
      * ni ninguna parte parada en la vista, 0 sin consultar.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
-     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
+     * @param  array<string, array{0: int, 1: string, 2: bool}>  $enMarcha  {@see runningParts()}
      */
     private function heldCount(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, bool $hayParadas): int
     {
@@ -657,39 +814,96 @@ final class AssistedQueue
      */
     private function dto(object $j, ?int $viewerId = null, ?string $withheld = null): array
     {
-        $reclamante = $viewerId !== null && $j->assisted_claimed_by_admin_id !== null && (int) $j->assisted_claimed_by_admin_id === $viewerId;
-        $contacto = $reclamante && $withheld === null;
-        $persona = SubjectKey::isValid((string) $j->subject_key) ? SubjectKey::parse((string) $j->subject_key) : null;
-        $contenido = $this->bridge->contentOfVersion((int) $j->strategy_version_id);
-
-        return [
-            'uuid' => (string) $j->uuid,
-            'enrollment' => (string) $j->enrollment_uuid,
-            'strategy' => ['uuid' => (string) $j->strategy_uuid, 'key' => (string) $j->strategy_key, 'goal' => $contenido['goal'] ?? null, 'purpose' => (string) $j->purpose],
-            'step' => (int) $j->step_index,
-            'attempt' => (int) $j->attempt,
-            'medium' => (string) $j->medium,
-            'status' => (string) $j->status,
-            'subjectRef' => (string) $j->subject_ref,
-            'person' => ($contacto && $persona !== null) ? ['kind' => $persona['kind'] === SubjectKey::MEMBER ? 'member' : 'lead', 'id' => $persona['id']] : null,
-            'script' => ($contacto && $j->template_version_id !== null) ? $this->bridge->assistedScript((int) $j->template_version_id) : null,
-            'contactWithheld' => $reclamante ? $withheld : null,
-            'reason' => $this->reasonOf((int) $j->id),
-            'startedAt' => self::iso($j->status_changed_at),
-            'dueBy' => self::iso($j->expires_at),
-            'claimedBy' => $j->assisted_claimed_by_admin_id === null ? null : ['id' => (int) $j->assisted_claimed_by_admin_id, 'name' => (string) $j->assisted_claimed_by_name, 'at' => self::iso($j->assisted_claimed_at)],
-            'outcomes' => self::STAFF_OUTCOMES,
-        ];
+        return $this->dtos([[$j, $withheld]], $viewerId)[0];
     }
 
-    /** Las frases de la decisión que planificó el trabajo (sin datos personales). @return list<string> */
-    private function reasonOf(int $jobId): array
+    /**
+     * Las filas de una página ({@see dto()}), en el mismo orden, con lo que enseñan leído POR PÁGINA y no por fila
+     * (m-1 de `informe-reviewer-ronda3.md`): el objetivo, una vez por versión distinta; el guion, una vez por
+     * plantilla distinta (solo si alguna fila lo enseña); y el motivo de la traza, en UNA consulta para todas.
+     *
+     * @param  list<array{0: object, 1: ?string}>  $rows  [trabajo, motivo de retención]
+     * @return list<array<string, mixed>>
+     */
+    private function dtos(array $rows, ?int $viewerId): array
     {
-        $plan = DB::table(OutreachTables::DECISIONS)->where('job_id', $jobId)->where('kind', 'plan')->orderBy('id')->first(['trace_json']);
-        if ($plan === null) {
+        if ($rows === []) {
             return [];
         }
-        $traza = json_decode((string) $plan->trace_json, true);
+        $motivos = $this->reasonsOf(array_map(static fn (array $r): int => (int) $r[0]->id, $rows));
+        $contenidos = [];
+        $salida = [];
+        foreach ($rows as [$j, $withheld]) {
+            $reclamante = $viewerId !== null && $j->assisted_claimed_by_admin_id !== null && (int) $j->assisted_claimed_by_admin_id === $viewerId;
+            $contacto = $reclamante && $withheld === null;
+            $persona = SubjectKey::isValid((string) $j->subject_key) ? SubjectKey::parse((string) $j->subject_key) : null;
+            $version = (int) $j->strategy_version_id;
+            if (! array_key_exists($version, $contenidos)) {
+                $contenidos[$version] = $this->bridge->contentOfVersion($version);
+            }
+            $guion = $contacto ? $this->scriptOf($j) : null;
+            $salida[] = [
+                'uuid' => (string) $j->uuid,
+                'enrollment' => (string) $j->enrollment_uuid,
+                'strategy' => ['uuid' => (string) $j->strategy_uuid, 'key' => (string) $j->strategy_key, 'goal' => $contenidos[$version]['goal'] ?? null, 'purpose' => (string) $j->purpose],
+                'step' => (int) $j->step_index,
+                'attempt' => (int) $j->attempt,
+                'medium' => (string) $j->medium,
+                'status' => (string) $j->status,
+                'subjectRef' => (string) $j->subject_ref,
+                'person' => ($contacto && $persona !== null) ? ['kind' => $persona['kind'] === SubjectKey::MEMBER ? 'member' : 'lead', 'id' => $persona['id']] : null,
+                'script' => $guion,
+                'contactWithheld' => $reclamante ? $withheld : null,
+                'reason' => $motivos[(int) $j->id] ?? [],
+                'startedAt' => self::iso($j->status_changed_at),
+                'dueBy' => self::iso($j->expires_at),
+                'claimedBy' => $j->assisted_claimed_by_admin_id === null ? null : ['id' => (int) $j->assisted_claimed_by_admin_id, 'name' => (string) $j->assisted_claimed_by_name, 'at' => self::iso($j->assisted_claimed_at)],
+                'outcomes' => self::STAFF_OUTCOMES,
+            ];
+        }
+
+        return $salida;
+    }
+
+    /**
+     * F-3: el guion de la plantilla del trabajo, solo si sigue APROBADA, íntegra y con la huella de su sello
+     * ({@see OutreachPublishedStrategies::assistedScript()}); null en cualquier otro caso, también sin plantilla. Una
+     * lectura por (plantilla, huella) distinta y por petición ({@see $guiones}), no por fila (m-1).
+     */
+    private function scriptOf(object $j): ?string
+    {
+        if ($j->template_version_id === null) {
+            return null;
+        }
+        $clave = (int) $j->template_version_id.':'.strtolower((string) $j->template_hash);
+        if (! array_key_exists($clave, $this->guiones)) {
+            $this->guiones[$clave] = $this->bridge->assistedScript((int) $j->template_version_id, (string) $j->template_hash);
+        }
+
+        return $this->guiones[$clave];
+    }
+
+    /**
+     * Las frases de la decisión que planificó cada trabajo (sin datos personales), en UNA consulta: la primera
+     * decisión `plan` de cada uno por id, como antes por fila (`odec_job_idx`).
+     *
+     * @param  list<int>  $jobIds
+     * @return array<int, list<string>> por id de trabajo (sin decisión de plan, no está)
+     */
+    private function reasonsOf(array $jobIds): array
+    {
+        $trazas = [];
+        foreach (DB::table(OutreachTables::DECISIONS)->whereIn('job_id', array_values(array_unique($jobIds)))->where('kind', 'plan')->orderBy('id')->get(['job_id', 'trace_json']) as $plan) {
+            $trazas[(int) $plan->job_id] ??= (string) $plan->trace_json;
+        }
+
+        return array_map(static fn (string $t): array => self::reasonFrom($t), $trazas);
+    }
+
+    /** Las frases de una traza de plan. @return list<string> */
+    private static function reasonFrom(string $traceJson): array
+    {
+        $traza = json_decode($traceJson, true);
         $t = is_array($traza) && array_is_list($traza) ? ($traza[0] ?? []) : (array) $traza;
         $canal = is_string($t['channel']['channel'] ?? null) ? $t['channel']['channel'] : null;
         $salida = $canal !== null && is_array($t['policy'][$canal]['output'] ?? null) ? $t['policy'][$canal]['output'] : null;
