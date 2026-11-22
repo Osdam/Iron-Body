@@ -8,6 +8,7 @@ use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceExclusion;
 use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceIds;
+use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -488,7 +489,18 @@ final class VoiceTools
         $aptos = [];
         $retenidos = 0;
         $omitidos = 0;
-        foreach (array_values($plan->benefitsArray()) as $n => $crudo) {
+        try {
+            $lista = $plan->benefitsArray();
+        } catch (ErrorException $e) {
+            // M-4 (revisión de security del 22-11-2026): `benefits` no se valida al guardarlo y una lista ANIDADA
+            // (`[["Sauna"]]`) hace que `benefitsArray()` convierta un array en texto: el aviso de PHP sube como excepción y
+            // `consultar_planes` daba 500 toda la llamada. Ese plan sale SIN beneficios (la lista entera cuenta como un
+            // retenido) y la herramienta sigue; la línea, sin texto, dice qué plan arreglar en el CRM.
+            Log::channel('voice')->warning('voice.tool.benefits_unreadable', ['plan_id' => (int) $plan->id, 'error_class' => $e::class]);
+
+            return ['deliverable' => [], 'withheld' => 1, 'omitted' => 0];
+        }
+        foreach (array_values($lista) as $n => $crudo) {
             if ($n >= self::MAX_BENEFITS_EXAMINED || count($aptos) >= self::MAX_BENEFITS_PER_PLAN) {
                 $omitidos++;
 

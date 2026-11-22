@@ -244,6 +244,38 @@ class VoiceToolsBenefitsTest extends TestCase
         $this->assertSame(['plansWithheld' => 2], VoiceCallEvent::query()->where('kind', 'tool_call')->orderByDesc('id')->first()?->codes);
     }
 
+    /**
+     * M-4 (revisión de security del 22-11-2026): un JSON de beneficios ANIDADO guardado como texto (el CRM no lo
+     * valida) hace que `Plan::benefitsArray()` lance; antes, `consultar_planes` daba 500 toda la llamada. Ahora ese
+     * plan sale sin beneficios (contado como un retenido, con su línea sin texto) y el resto, igual. El modelo `Plan`
+     * no cambia: lanza igual.
+     */
+    public function test_m4_un_beneficio_mal_guardado_no_tumba_la_herramienta(): void
+    {
+        $this->plan('Plan Roto', 70000, 1, (string) json_encode([['Sauna', 'Toalla'], 'Casillero']));
+        $this->plan('Plan Valera', 65000, 2, json_encode(self::VALERA));
+        $roto = Plan::query()->where('name', 'Plan Roto')->sole();
+        try {
+            $roto->benefitsArray();
+            $this->fail('el modelo lanza con una lista anidada');
+        } catch (\ErrorException) {
+            // Lo esperado: es el defecto de datos que la herramienta no puede dejar pasar como un 500.
+        }
+        $lineas = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$lineas): void {
+            if ($m->message === 'voice.tool.benefits_unreadable') {
+                $lineas[] = $m->context;
+            }
+        });
+
+        $cuerpo = $this->consultarPlanes();
+        $this->assertSame(['Plan Roto', 'Plan Valera'], array_column($cuerpo['planes'], 'nombre'), 'el plan sigue, con su precio');
+        $this->assertArrayNotHasKey('beneficios', $cuerpo['planes'][0], 'sin beneficios entregables');
+        $this->assertSame(self::VALERA, $cuerpo['planes'][1]['beneficios'], 'y el resto, igual');
+        $this->assertSame(['benefitsWithheld' => 1, 'benefitsOmitted' => 0], VoiceCallEvent::query()->where('kind', 'tool_call')->sole()->codes);
+        $this->assertSame([['plan_id' => (int) $roto->id, 'error_class' => \ErrorException::class]], $lineas, 'qué plan arreglar, sin texto');
+    }
+
     public function test_spoken_codes_es_la_misma_guarda_que_la_de_la_post_llamada(): void
     {
         foreach ([...self::VALERA, ...self::VIGILADOS, 'Te paso con un asesor', 'Asesoría con un asesor comercial', 'Bono de referido', 'Promoción especial',
