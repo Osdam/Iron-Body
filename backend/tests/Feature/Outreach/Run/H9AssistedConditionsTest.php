@@ -391,7 +391,7 @@ class H9AssistedConditionsTest extends TestCase
         (new OutreachStop)->open('channel', 'assisted', 'legal_hold', 'Retención legal', $gente['beto'], (string) Str::uuid());
         $this->assertSame('brake', $motivo());
         // La lista completa (con `strategy_stopped`, `opted_out` y `policy_unknown`) la fija H9AssistedOptOutStrategyTest.
-        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'policy_unknown', 'complaint_unknown', 'expired']);
+        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'policy_unknown', 'complaint_unknown', 'expired']);
     }
 
     // ── I-4 · La página que se llena ────────────────────────────────────────
