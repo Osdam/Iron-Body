@@ -48,10 +48,20 @@ class StudioLabIsolationTest extends TestCase
         'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
     ];
 
-    /** La persistencia y la orquestación (paso 3 del Hito 4). */
+    /**
+     * La persistencia y la orquestación (paso 3 del Hito 4). Apartado 5 del
+     * cierre: el lector de la comprobación del motor (lee el catálogo).
+     */
     private const PERSISTENCIA = [
-        'StudioLabEvents.php', 'StudioLabRunner.php', 'StudioLabRuns.php', 'StudioLabScenarios.php', 'StudioLabStepJob.php', 'StudioLabVerdicts.php',
+        'StudioLabEngineCheck.php', 'StudioLabEvents.php', 'StudioLabRunner.php', 'StudioLabRuns.php', 'StudioLabScenarios.php', 'StudioLabStepJob.php', 'StudioLabVerdicts.php',
     ];
+
+    /**
+     * Los únicos del laboratorio que nombran el motor: el adaptador de las
+     * guardas (Hito 4) y, por la Enmienda 9 de H4 (22-11-2026), los lectores
+     * del recorrido del motor.
+     */
+    private const NOMBRAN_EL_MOTOR = ['StudioLabEngineCheck.php', 'StudioLabEngineChecks.php'];
 
     /** @return array<string,string> nombre → ruta */
     private static function ficheros(): array
@@ -92,7 +102,8 @@ class StudioLabIsolationTest extends TestCase
                 }
             }
         }
-        $this->assertSame(['StudioLabEngineChecks.php'], array_keys($nombran));
+        ksort($nombran);
+        $this->assertSame(self::NOMBRAN_EL_MOTOR, array_keys($nombran));
     }
 
     public function test_ningun_fichero_nombra_la_configuracion_ni_la_clave_del_motor(): void
