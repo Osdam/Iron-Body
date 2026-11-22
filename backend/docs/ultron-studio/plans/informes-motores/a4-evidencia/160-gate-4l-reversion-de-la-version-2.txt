@@ -1,0 +1,37 @@
+GATE 4-L · LA REVERSIÓN DE LA VERSIÓN 2, LEÍDA EN PRODUCCIÓN (solo lectura) · 22-11-2026, 04:05 UTC (21-11, 23:05 en Bogotá)
+lead · el propietario la revirtió en el CRM con la cuenta «Desarrolladores» a las 11:02 p. m. y pidió verificar en el servidor la reversión y que el canario quedó libre; la versión 3 NO se publica: fuera de la ventana (07:00 a 19:00)
+
+R1 · cadena de publicaciones | 4 | rollback | 2e243853 | 27 | Desarrolladores | Super Admin | 22-11-2026 04:02:55 | 21-11-2026 11:02:55 pm | t | a5d7b13f | 205 | 3 | 
+R1 · cadena de publicaciones | 3 | publish | 2e243853 | 27 | Desarrolladores | Super Admin | 18-11-2026 22:40:35 | 18-11-2026 05:40:35 pm | t | 8dee2eb4 | 0 | 2 | 
+R1 · cadena de publicaciones | 2 | rollback | 4017639c | 27 | Desarrolladores | Super Admin | 12-11-2026 22:55:36 | 12-11-2026 05:55:36 pm | t | b6da794a | 246 | 1 | 
+R1 · cadena de publicaciones | 1 | publish | 4017639c | 27 | Desarrolladores | Super Admin | 12-11-2026 21:45:13 | 12-11-2026 04:45:13 pm | t | e292e32e | 0 |  | 
+R2 · motivo de la reversión (lo escribió el propietario) | Se sustituye la versión 2 por la versión 3, que incorpora la regeneración inteligente de respuestas y las nuevas validaciones. La versión 2 dejó de aplicarse tras el despliegue del 21 de noviembre de 2026.
+R3 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 22-11-2026 03:52:45
+R3 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | ROLLED_BACK | 22-11-2026 04:02:55
+R3 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36
+R3 · versiones | 1 | ad1f1562 | ULTRON Studio - Canario V1 - Pruebas | APPROVED | 09-11-2026 18:55:33
+R4 · versiones que ocupan el canario o están publicadas | 0 | 0
+R5 · auditoría desde las 04:00 UTC | 04:02:55 | version.rolled_back | 27 | Desarrolladores | CANARY → ROLLED_BACK | 2e243853
+R6 · mensajes y acciones en la conversación canaria desde las 03:50 UTC | 0 | 0
+
+── La cadena, comprobada por el propio servidor, y lo que el motor ofrece ahora a la canaria ──
+Llave del motor: canary · estado: legacy
+Cabeza: entrada 4 (rollback, 2026-11-22T04:02:55+00:00) · verifica
+Canario: Legacy
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo part_legacy
+--- órdenes de ULTRON disponibles:
+ultron:abort ultron:canary-report ultron:origin-report ultron:prompt-trace ultron:prompts-n8n ultron:turn-watchdog 
+
+Lectura:
+· Entrada 4 de la cadena: rollback de la versión 2 (2e243853), firmada, de la cuenta 27 «Desarrolladores» (Super Admin), el 22-11-2026 a las 04:02:55 UTC
+  (21-11, 11:02:55 p. m. en Bogotá), con su motivo (205 caracteres). El servidor la verifica: «Cabeza: entrada 4 (rollback) · verifica», salida 0.
+· La versión 2 está en ROLLED_BACK. Ninguna versión en CANARY ni en PUBLISHED: el canario está libre. Declaración vigente: Canario Legacy, Resto Legacy.
+· El motor ofrece ahora a la canaria «legacy · part_legacy» (antes, «legacy · compiler_changed»): mismas instrucciones base; la respuesta no cambia.
+· La versión 3 (39cfae9f) sigue en APPROVED, con su veredicto «Aprobada». No está publicada.
+· Ningún mensaje ni acción en la conversación canaria durante la reversión.
+· Para publicarla solo falta la ventana (07:00 a 19:00, hora de Bogotá); el Studio vuelve a comprobar todos los requisitos al publicar y los enseña en el diálogo.
