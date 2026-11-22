@@ -50,10 +50,12 @@
 #    supervisor, las migraciones registradas, el esquema (solo estructura) de cada tabla que tocan las migraciones y la
 #    definición de partida de cada objeto, el propio guion y SHA256SUMS. Todo lo que imprime queda en su registro.log.
 # 2. En el ORDEN declarado: (M) cada migración, sola, con ironbody-migrate --path=<copia de root, comprobada contra git>
-#    (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces), registrada y con su esquema de después; (C) el
-#    código: git merge --ff-only con umask 022 y www-data lee cada fichero; (K) config:cache y route:cache como www-data
-#    con umask 077, cuando el lote las declara. Si algo falla: VUELTA ATRÁS AUTOMÁTICA (código 4).
-# 3. queue:restart; cada worker con pid nuevo (≤ 90 s) y, pasado un margen, dos lecturas: todos en RUNNING.
+#    (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces; lanzado desde un umask 077, m4), registrada y con
+#    su esquema de después; (C) el código: git merge --ff-only con umask 022 y www-data lee cada fichero; (K)
+#    config:cache y route:cache como www-data con umask 077, cuando el lote las declara. Si algo falla: VUELTA ATRÁS
+#    AUTOMÁTICA (código 4).
+# 3. queue:restart; cada worker con pid nuevo (≤ 90 s; si no, hasta 300 s más) y, pasado un margen, dos lecturas: todos en
+#    RUNNING.
 # 4. Comprobaciones posteriores (si una falla: VUELTA ATRÁS AUTOMÁTICA, código 4): HEAD = nuevo y árbol limpio; www-data
 #    lee lo nuevo; los mismos workers en RUNNING (si alguno tarda en coger pid nuevo, hasta 300 s más y otras dos
 #    lecturas); admin/voice/status sin token → 401; migrate:status sin pendientes; el esquema de después de cada
@@ -927,6 +929,11 @@ if [ "$NM" -gt 0 ]; then
   H_MIG=$(sha256sum < "$MIGRADOR" | cut -c1-16); H_VER=$(g show "$N:$MIG_VERSIONADO" | sha256sum | cut -c1-16)
   if [ "$H_MIG" = "$H_VER" ]; then say "   $MIGRADOR = la copia versionada de iron-ia/ops (sha256 $H_MIG…)"
   else say "   AVISO: $MIGRADOR (sha256 $H_MIG…) no es la copia versionada de iron-ia/ops en $(corto "$N") ($H_VER…): mirar qué hace antes de desplegar"; fi
+  UM=$( (umask 077; sudo -u "$WWW" sh -c umask) 2>/dev/null ) || UM="?"
+  case "$UM" in
+    0077|077) say "   umask de sudo -u $WWW desde un umask 077: $UM (la caché que rehace ironbody-migrate nace en 600)" ;;
+    *) say "   AVISO: umask de sudo -u $WWW desde un umask 077: $UM (no 0077: la caché que rehace ironbody-migrate queda un instante legible hasta su chmod 600; m4, para security)" ;;
+  esac
   [ "$BLOQ" = 0 ] || say "   AVISO: hay cerrojos sobre las tablas de las migraciones (lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces)"
 else
   say "   pendientes frente a origin/main: ninguna (el lote no migra)"
@@ -1026,7 +1033,10 @@ migra() {
   intento=0
   while :; do
     intento=$((intento + 1))
-    set +e; sal=$("$MIGRADOR" --path="$dir" --realpath 2>&1); rc=$?; set -e
+    # m4 (rev-guion): el envoltorio, desde un umask 077. Su config:cache va por sudo, que aplica la unión de este umask
+    # con el suyo (022): la caché nace en 600 y no queda el instante en 644 hasta su chmod (si PAM no lo pisa: el paso 0
+    # dice qué umask da sudo en este servidor). Lo que escriba la migración como www-data también nace en 600/700.
+    set +e; sal=$(umask 077; "$MIGRADOR" --path="$dir" --realpath 2>&1); rc=$?; set -e
     # La salida entera (con la traza, si falla) queda en el respaldo; aquí, solo el resumen (el filtro puede no casar
     # nada, y eso no es un error: de ahí el || true).
     ( umask 077; printf '%s\n' "$sal" > "$BK/migracion-$i-intento-$intento.log" )
