@@ -67,6 +67,13 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
 
     private const OPENAI_URL = 'https://api.openai.com/v1/responses';
 
+    /**
+     * El precio del plan sembrado (98 765) como viaja en la respuesta del
+     * servidor («$98.765») o sin separador, y nunca como parte de un número
+     * más largo ni como decimales (los microsegundos de una hora: «.987654»).
+     */
+    private const PRICE_AS_SENT = '/(?<![\d.])98\.?765(?!\d)/';
+
     /** @var list<array{table:string,sql:string}> */
     private array $writes = [];
 
@@ -206,7 +213,15 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
      * `ultron_studio_lab_*`, no crea conversación, mensaje, acción de IA ni
      * evento comercial (la huella del motor no cambia), no encola nada más que
      * su paso, no sale a la red salvo la Responses API con la clave del
-     * laboratorio, y no envía el precio, la persona ni la conversación reales.
+     * laboratorio, y no envía la persona ni la conversación reales.
+     *
+     * EL PRECIO (NB1 de la revisión de seguridad; lo acepta el propietario):
+     * para una intención de precio, la respuesta determinista del servidor,
+     * con el precio del catálogo, viaja al estratega dentro de
+     * `base_decision`, IGUAL que en el motor real (paridad). Fuera de ahí, no.
+     * Se busca como viaja («$98.765», con el separador de miles) y también sin
+     * él, sin dígitos ni punto delante ni dígitos detrás: los microsegundos de
+     * la hora (`business_time`) y un decimal no dan un falso positivo.
      */
     public function test_el_recorrido_del_motor_no_cambia_nada_del_motor_y_no_suelta_la_clave(): void
     {
@@ -283,6 +298,7 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         // 4) HTTP: solo la Responses API, con la clave del laboratorio y la forma del nodo de n8n.
         $delMotor = array_values(array_filter($this->sent, static fn (HttpRequest $p): bool => str_starts_with((string) ($p->data()['text']['format']['name'] ?? ''), 'ultron_') && ! str_starts_with((string) $p->data()['text']['format']['name'], 'ultron_lab_')));
         $this->assertGreaterThanOrEqual(6, count($delMotor), 'dos casos, al menos estratega, redactor y revisor en cada uno');
+        $conPrecio = [];
         foreach ($this->sent as $peticion) {
             $this->assertSame(self::OPENAI_URL, $peticion->url());
             $this->assertSame('Bearer '.self::SENTINEL_KEY, $peticion->header('Authorization')[0] ?? null);
@@ -292,11 +308,21 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
                 $this->assertArrayNotHasKey($prohibida, $c);
             }
             $crudo = (string) json_encode($c, JSON_UNESCAPED_UNICODE);
-            // Ni el precio, ni la persona, ni la conversación reales, ni el personal, ni la etiqueta, ni la clave del motor.
-            foreach (['98765', '3001234567', 'Prospecto', 'Hola, quiero información', 'Ana Pérez', 'Root Laboratorio', '@ironbody.test', 'Versión con etiqueta secreta', $version, self::ENGINE_KEY] as $nunca) {
+            // Ni la persona, ni la conversación reales, ni el personal, ni la etiqueta, ni la clave del motor.
+            foreach (['3001234567', 'Prospecto', 'Hola, quiero información', 'Ana Pérez', 'Root Laboratorio', '@ironbody.test', 'Versión con etiqueta secreta', $version, self::ENGINE_KEY] as $nunca) {
                 $this->assertStringNotContainsString($nunca, $crudo, "Viajó al proveedor: {$nunca}");
             }
+            // El precio, solo en la `base_decision` del estratega (NB1, ver arriba): se quita y se mira el resto. Se
+            // cuenta por petición: el doble de `Http::fake` pasa dos veces por cada una (el mismo objeto).
+            $segundo = json_decode((string) ($c['input'][1]['content'][0]['text'] ?? 'null'), true);
+            if (is_array($segundo) && array_key_exists('base_decision', $segundo)) {
+                $conPrecio[spl_object_id($peticion)] = preg_match(self::PRICE_AS_SENT, (string) json_encode($segundo['base_decision'], JSON_UNESCAPED_UNICODE));
+                unset($segundo['base_decision']);
+                $c['input'][1]['content'][0]['text'] = json_encode($segundo, JSON_UNESCAPED_UNICODE);
+            }
+            $this->assertDoesNotMatchRegularExpression(self::PRICE_AS_SENT, (string) json_encode($c, JSON_UNESCAPED_UNICODE), 'El precio viajó fuera de base_decision.');
         }
+        $this->assertSame(1, array_sum($conPrecio), 'el precio viaja, formateado, en la base_decision del estratega de C-02 (intención de precio), y solo ahí');
         foreach ($delMotor as $peticion) {
             $c = $peticion->data();
             $this->assertSame(['user', 'user'], array_column($c['input'], 'role'));
@@ -304,7 +330,7 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
             $this->assertArrayNotHasKey('instructions', $c);
             $this->assertArrayHasKey('temperature', $c);
         }
-        // El contexto de NEGOCIO sí viaja (enmienda 9 de H4): el plan sin precio y la base de conocimiento.
+        // El contexto de NEGOCIO sí viaja (enmienda 9 de H4): los planes (en `plans`, sin precio) y la base de conocimiento.
         $todo = (string) json_encode(array_map(static fn (HttpRequest $p): array => $p->data(), $delMotor), JSON_UNESCAPED_UNICODE);
         $this->assertStringContainsString('Mensualidad', $todo);
         $this->assertStringContainsString('Cercano y claro', $todo);
