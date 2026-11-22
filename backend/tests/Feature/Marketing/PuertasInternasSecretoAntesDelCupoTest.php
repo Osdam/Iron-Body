@@ -165,41 +165,114 @@ class PuertasInternasSecretoAntesDelCupoTest extends TestCase
     }
 
     /**
-     * LA GUARDA. En TODA ruta que lleve la puerta del secreto interno, esa puerta corre antes que cualquier limitador,
-     * en el orden EFECTIVO (el que Laravel aplica tras reordenar), no en el declarado. Una ruta interna nueva queda
-     * cubierta sin tocar nada; si alguien quita la prioridad de `bootstrap/app.php`, esta prueba cae.
+     * Con el secreto válido y la firma HMAC opcional (`X-IronBody-Signature`) mala, el 403 tampoco cuenta ni enseña el
+     * contador: quien llega ahí ya tiene el secreto y podría gastar el cupo con llamadas válidas, que sí cuentan.
      */
-    public function test_en_toda_ruta_interna_el_secreto_corre_antes_que_el_limitador(): void
+    public function test_una_firma_mala_con_el_secreto_valido_no_cuenta_ni_cambia_lo_que_recibe_el_asesor(): void
+    {
+        $sinInundar = $this->loQueRecibeN8n();
+        $firmaMala = $this->conSecreto() + ['X-IronBody-Signature' => str_repeat('0', 64)];
+
+        foreach (range(1, self::INUNDACION) as $i) {
+            $r = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => 999999, 'message_id' => 999999], $firmaMala);
+            $r->assertStatus(403);
+            $this->assertFalse($r->headers->has('X-RateLimit-Limit'), "el 403 de la firma enseña el contador (petición {$i})");
+        }
+
+        $this->assertSame($sinInundar, $this->loQueRecibeN8n(), 'las peticiones con la firma mala gastaron el cupo del asesor');
+    }
+
+    /** Los cubos GLOBALES de n8n: gastarlos sin el secreto es lo que dejaba mudo al asesor. */
+    private const CUBOS_DE_N8N = ['internal-automation', 'internal-marketing-ai', 'internal-marketing-ai-check'];
+
+    /**
+     * Lo que la guarda considera mal, sobre el orden EFECTIVO (el que Laravel aplica tras reordenar) y por la clase
+     * RESUELTA de cada middleware, no por el alias con que se declaró:
+     *  - una ruta bajo `api/internal/` sin la puerta del secreto;
+     *  - una ruta que usa un cubo global de n8n sin la puerta (aunque no esté bajo `api/internal/`);
+     *  - una ruta con la puerta y con un limitador que corre antes que ella.
+     *
+     * @return array{malas: list<string>, internas: int, conCuboDeN8n: int}
+     */
+    private function loQueVeLaGuarda(): array
     {
         // El núcleo HTTP es quien entrega al enrutador los alias, los grupos y la lista de prioridad: sin construirlo,
-        // el orden «efectivo» sería el declarado y esta guarda no mediría nada.
+        // el orden «efectivo» sería el declarado y la guarda no mediría nada.
         $this->app->make(HttpKernel::class);
         $router = app('router');
-        $internas = array_values(array_filter(
-            Route::getRoutes()->getRoutes(),
-            static fn (RutaDeLaravel $r): bool => in_array('automation.internal', $r->gatherMiddleware(), true)
-                || in_array(VerifyInternalAutomationSignature::class, $r->gatherMiddleware(), true),
-        ));
-        $this->assertGreaterThanOrEqual(15, count($internas), 'la guarda no vale: no encuentra las rutas internas');
-
         $malas = [];
-        $conLimitador = 0;
-        foreach ($internas as $ruta) {
+        $internas = 0;
+        $conCuboDeN8n = 0;
+
+        foreach (Route::getRoutes()->getRoutes() as $ruta) {
+            /** @var RutaDeLaravel $ruta */
             $efectivo = array_values(array_filter($router->gatherRouteMiddleware($ruta), 'is_string'));
-            $clases = array_map(static fn (string $m): string => explode(':', $m, 2)[0], $efectivo);
-            $puerta = array_search(VerifyInternalAutomationSignature::class, $clases, true);
-            $limitadores = array_keys(array_filter($clases, static fn (string $c): bool => is_a($c, ThrottleRequests::class, true)));
-            $this->assertNotFalse($puerta, 'ruta interna sin la puerta del secreto en su orden efectivo: '.$ruta->uri());
-            if ($limitadores === []) {
+            $puerta = null;
+            $primerLimitador = null;
+            $usaCuboDeN8n = false;
+            foreach ($efectivo as $i => $m) {
+                [$clase, $parametros] = array_pad(explode(':', $m, 2), 2, '');
+                if ($puerta === null && is_a($clase, VerifyInternalAutomationSignature::class, true)) {
+                    $puerta = $i;
+                }
+                if (is_a($clase, ThrottleRequests::class, true)) {
+                    $primerLimitador ??= $i;
+                    $usaCuboDeN8n = $usaCuboDeN8n || in_array(explode(',', $parametros)[0], self::CUBOS_DE_N8N, true);
+                }
+            }
+            $nombre = implode('|', $ruta->methods()).' '.$ruta->uri();
+            $esInterna = str_starts_with($ruta->uri(), 'api/internal/');
+            $internas += $esInterna ? 1 : 0;
+            $conCuboDeN8n += $usaCuboDeN8n ? 1 : 0;
+
+            if ($puerta === null) {
+                if ($esInterna) {
+                    $malas[] = $nombre.' · ruta interna sin la puerta del secreto';
+                } elseif ($usaCuboDeN8n) {
+                    $malas[] = $nombre.' · gasta un cubo de n8n sin la puerta del secreto';
+                }
+
                 continue;
             }
-            $conLimitador++;
-            if ($puerta > min($limitadores)) {
-                $malas[] = implode('|', $ruta->methods()).' '.$ruta->uri();
+            if ($primerLimitador !== null && $primerLimitador < $puerta) {
+                $malas[] = $nombre.' · el limitador corre antes que el secreto';
             }
         }
 
-        $this->assertGreaterThanOrEqual(15, $conLimitador, 'la guarda no vale: casi ninguna ruta interna lleva limitador');
-        $this->assertSame([], $malas, 'en estas rutas internas el limitador corre antes que el secreto (una petición sin credenciales gasta el cupo)');
+        return ['malas' => $malas, 'internas' => $internas, 'conCuboDeN8n' => $conCuboDeN8n];
+    }
+
+    /**
+     * LA GUARDA. Ninguna ruta gasta un cubo de n8n, ni vive bajo `api/internal/`, sin que la puerta del secreto corra
+     * antes que su limitador. Una ruta interna nueva queda cubierta sin tocar nada; si alguien quita la prioridad de
+     * `bootstrap/app.php`, esta prueba cae con las 21.
+     */
+    public function test_en_toda_ruta_interna_el_secreto_corre_antes_que_el_limitador(): void
+    {
+        $visto = $this->loQueVeLaGuarda();
+
+        $this->assertGreaterThanOrEqual(15, $visto['internas'], 'la guarda no vale: no encuentra las rutas internas');
+        $this->assertGreaterThanOrEqual(15, $visto['conCuboDeN8n'], 'la guarda no vale: casi ninguna ruta usa los cubos de n8n');
+        $this->assertSame([], $visto['malas'], 'una petición sin credenciales gastaría el cupo de n8n en estas rutas');
+    }
+
+    /**
+     * Y la guarda VE lo que tiene que ver (NB-1 de la revisión de seguridad de API): una ruta que comparta un cubo de
+     * n8n sin la puerta reabre el defecto aunque no esté bajo `api/internal/`, y una ruta interna sin puerta es una
+     * ruta sin autenticar. Se registran aquí, solo para esta prueba.
+     */
+    public function test_la_guarda_ve_una_ruta_que_gasta_el_cubo_de_n8n_sin_la_puerta_y_una_interna_sin_puerta(): void
+    {
+        Route::middleware(['api', 'throttle:internal-marketing-ai'])->get('api/sonda/comparte-el-cubo', static fn () => 'ok');
+        Route::middleware(['api'])->get('api/internal/sonda/sin-puerta', static fn () => 'ok');
+        // Declarada al revés, con la puerta: la prioridad la corrige y la guarda NO debe quejarse de ella.
+        Route::middleware(['api', 'throttle:internal-marketing-ai', 'automation.internal'])->get('api/internal/sonda/al-reves', static fn () => 'ok');
+
+        $malas = $this->loQueVeLaGuarda()['malas'];
+
+        $this->assertSame([
+            'GET|HEAD api/sonda/comparte-el-cubo · gasta un cubo de n8n sin la puerta del secreto',
+            'GET|HEAD api/internal/sonda/sin-puerta · ruta interna sin la puerta del secreto',
+        ], $malas);
     }
 }
