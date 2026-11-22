@@ -4,9 +4,11 @@
 
 *(22-11, backend de voz: revisado sobre `0c57d7c4`. Solo se corrige lo que la punta dejó viejo; cada cambio va marcado «(22-11)». Recorrido y medición: `plans/informes-cierre/informe-be-voz.md`.)*
 
-**Base:** auditoría C (`plans/cierre/auditoria-c-voz-telefonia.md`), §3, §4.1, §4.4, §4.6 y §4.9.
+*(22-11, **enmienda 20**, devops: la parte de Twilio y ElevenLabs se reescribe para la **decisión del propietario** del 22-11-2026, literal en `MATRIZ_CIERRE_V2.md` §9: el número empresarial **…5483** (el visible de WhatsApp, ya verificado en Twilio como identificador de llamadas) es el **ORIGEN** de las salientes de Sofía, en la **cuenta principal** de Twilio, **sin comprar números ni crear una subcuenta** y sin tocar la integración de WhatsApp de Meta; primer destino canario, el celular del propietario **…6026**. Lo que cambia va marcado «(E20)». Diseño: `plans/informes-cierre/diseno-arq-telefonia.md`; backend: `informe-be-telefonia.md`; mandos y banco: `informe-ops-telefonia.md` (ensayo `ops/banco-h8/ensayar-ops8f.sh`). Consentimiento, canarios, horario, frecuencia, cupos, presupuesto, freno y corte **no cambian**. Las entrantes siguen sin ruta: apartado F.)*
 
-**Qué sustituye:** para esta llamada, sustituye a los pasos 0.6, 2.3–2.5 y 3.1 de `ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`. El paso 0.6 de ese documento escribe `TWILIO_VOICE_FROM=+57…5483`, que es el número de WhatsApp: **no se ejecuta**.
+**Base:** auditoría C (`plans/cierre/auditoria-c-voz-telefonia.md`), §3, §4.1, §4.4, §4.6 y §4.9; contrato H8, enmienda 20 (E20-1).
+
+**Qué sustituye:** para esta llamada, sustituye a los pasos 0.6, 2.3–2.5 y 3.1 de `ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`. El paso 0.6 de ese documento escribe `TWILIO_VOICE_FROM=+57…5483` **sin la declaración de la identidad compartida: no se ejecuta**. *(E20)* El …5483 se pone como origen **solo** por el camino del paso 6 (`numero-compartido on` con la cita de A0 y después `fase 2 set`), y la política lo admite **solo** cuando el servidor lo ve importado solo saliente y sin agente (paso 8).
 
 **Quién hace cada cosa:**
 
@@ -20,6 +22,8 @@
 - Un paso no empieza hasta que el anterior imprima lo que dice la columna «Tiene que imprimir». Si imprime otra cosa, se para y se aplica su vuelta atrás.
 - Cada orden que escribe el fichero de entorno deja una copia previa en `/root/env-pre-voice-<orden>-<fecha>` (600) e imprime su «vuelta atrás exacta». **Hay que guardar esa línea.** Las copias llevan secretos: cuando ya no hagan falta, se borran con `shred -u`.
 - Ningún secreto pasa por el chat ni por la línea de órdenes. Se escriben en ficheros 600 con `vi` (ver `ops/modelos-root/README.md`).
+- *(E20)* La key de Twilio de Laravel se instala **tecleándola o pegándola P en la terminal del servidor, sin eco** (`fase 2 secreto --terminal`, paso 6): nunca por el chat, ni en la línea de órdenes, ni en un fichero. La key de la importación de ElevenLabs **no va al servidor**: P la escribe solo en el formulario de ElevenLabs.
+- Ningún teléfono completo en el chat ni en las notas: como mucho, las cuatro últimas cifras.
 - Los mandos que escriben el fichero de entorno se excluyen entre sí con cerrojos. Aun así, **no se lanzan dos a la vez**.
 
 ---
@@ -28,8 +32,10 @@
 
 Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa. La referencia (por ejemplo `AUT-VOZ-1`) es la que se cita **literalmente** en el commit y en `--autorizacion=`.
 
-> **A0 · Fase 2 (pasos 0 y 6).** Solo si no consta ya por escrito. Los mandos de la fase 2 la exigen (protección 13).
-> «Autorizo instalar en `/root` los mandos actualizados de la voz (`h8-voice-scope.sh`, `el-verificar.sh` y `h7-monitor-scope.sh`, huellas del informe del 11-11). Autorizo también cargar en producción las piezas de Twilio de la voz con `h8-voice-scope.sh fase 2`: la key restringida, la cuenta, el número …____ (que **no** es el de WhatsApp …5483), el `phnum_…` importado y la declaración de que el número es solo saliente. Esto incluye apagar y volver a encender el monitor de voz alrededor de esa carga. Firma y fecha: ____»
+*(E20) A0–A3 son las mismas cuatro, con las mismas referencias, alcance y condiciones. Solo cambia, en A0 y A3, la cláusula del ORIGEN, que decía «no es el de WhatsApp …5483» y que la decisión del propietario invierte; A0 nombra además la declaración de la identidad compartida, que el mando exige citar.*
+
+> **A0 · Fase 2 (pasos 0 y 6).** Solo si no consta ya por escrito. Los mandos de la fase 2 la exigen (protección 13). *(E20)* `numero-compartido on` cita su referencia con `--autorizacion=`: si A0 no tiene una, la que se le dé al guardarla (p. ej. `AUT-VOZ-0`).
+> «Autorizo instalar en `/root` los mandos actualizados de la voz (`h8-voice-scope.sh`, `h8-twilio-check.sh`, `el-verificar.sh` y `h7-monitor-scope.sh`, huellas del paso 0 de este runbook). Autorizo también cargar en producción las piezas de Twilio de la voz con `h8-voice-scope.sh fase 2`: la key restringida de la cuenta principal (tecleada en la terminal, sin eco), la cuenta, *(E20)* **el número empresarial …5483 como origen de las salientes (identificador de llamada verificado, solo saliente, sin agente)**, el `phnum_…` de su importación nueva y la declaración de que el número es solo saliente, *(E20)* **y declarar la identidad compartida con WhatsApp (`numero-compartido on`)**. Esto incluye apagar y volver a encender el monitor de voz alrededor de esa carga. Firma y fecha: ____»
 
 > **A1 · El commit `voice(calls-open)` y su despliegue 4a (paso 9). Referencia `AUT-VOZ-1`.**
 > «Autorizo abrir en el código las llamadas de voz: un commit cuyo asunto empieza por `voice(calls-open):` y que cambia **una sola línea**, `public const CALLS_ENABLED_IN_CODE = false;` → `true;` en `app/Services/Voice/VoiceCallPolicy.php`. Autorizo su despliegue con `deploy-h8-backend-fase1.sh --fase=4a --autorizacion=AUT-VOZ-1`. Autorizo, después de ese despliegue, el commit de pruebas que acompaña la apertura (C-4 del informe de devops), sin relajar ninguna guarda. Abrir la constante no hace ninguna llamada: las banderas, el cupo, el presupuesto, la publicación y el canario siguen cerrando. Firma y fecha: ____»
@@ -39,8 +45,8 @@ Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa
 
 > **A3 · La primera llamada (paso 14). Referencia `AUT-VOZ-3`.** Es el texto de §3 de la auditoría, con las cifras de la puerta:
 > Autorizo **una** llamada saliente de prueba de ULTRON («Sofía») desde el CRM, con estas condiciones:
-> - **Origen:** el número …____ (identificador de llamada verificado en la cuenta de voz de Twilio), importado en ElevenLabs como solo saliente (`phnum_…`). **No** es el número de WhatsApp …5483.
-> - **Destino:** mi teléfono registrado como **canario de voz** (…____), activado por otra persona. Ningún otro número.
+> - **Origen:** *(E20)* el número empresarial **…5483** (identificador de llamada verificado en la **cuenta principal** de Twilio, el mismo que se ve en WhatsApp), importado en ElevenLabs como **solo saliente y sin agente** (`phnum_…`) con una API key restringida, con la identidad compartida **admitida por el servidor** (paso 8). Twilio no garantiza en Colombia que mi teléfono vea ese número.
+> - **Destino:** mi teléfono registrado como **canario de voz** (*(E20)* **…6026**), activado por otra persona. Ningún otro número.
 > - **Agente:** el publicado en canario («Iron Body · voz · publication · <12 primeros caracteres de la huella>»), compilado con la versión «____» y el perfil «Sofia Medellin» rev. __, con el veredicto «aprobado» del laboratorio que dio ____.
 > - **Cuándo:** el __-__-2026 entre las __:__ y las __:__. Horario legal: de lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00, **también para el canario**. *(22-11: aquí decía «ni el 15-11 ni el 16-11», ya pasados.)* **Ningún domingo ni festivo: los próximos festivos son el martes 08-12, el viernes 25-12 y el viernes 01-01-2027** (`OutboundSchedule.php:29`, `ColombianHolidays`).
 > - **Si no contesto** (no contesta, ocupado, buzón o un fallo del proveedor), **ese día ya no se puede repetir** *(22-11)*: la frecuencia de la Ley 2300 (una al día y dos en 7 días por número) vale también para el canario y cuenta esos intentos (`VoiceFrequency.php:26, 36`).
@@ -53,11 +59,23 @@ Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa
 >
 > Firma y fecha: ____
 
+**(E20) Qué autorización exige cada orden** (ninguna nueva; las de apagar no esperan a nadie):
+
+| Orden o paso | Autorización |
+|---|---|
+| Paso −1: desplegar el lote 3 (voz y telefonía) | La **específica del propietario para el lote 3** (`DEPLOY_CIERRE_LOTES.md` §4, rama `cierre/ops-lotes`); no es A0–A3 |
+| Paso 0 (mandos), 6 (`fase 2 secreto --terminal`, `fase 2 set`, **`numero-compartido on --autorizacion=<A0>`**), 7 y 8 (`expectativa`, `monitor on`) | A0 |
+| Paso 9: `voice(calls-open)` y el despliegue 4a | A1 (`AUT-VOZ-1`) |
+| Paso 10: `salientes on` | A2 (`AUT-VOZ-2`) |
+| Paso 14: la llamada | A3 (`AUT-VOZ-3`) |
+| Paso R2: rotar el Auth Token maestro (el del OTP) | **La suya propia** (no la cubre ninguna de A0–A3) |
+| `salientes off`, `entrantes off`, `monitor off`, `numero-compartido off` | Ninguna: son la vuelta atrás |
+
 ---
 
 ## B. Avisos antes de empezar
 
-- **C-6 · El saldo de Twilio es el del inicio de sesión.** La voz, las pruebas manuales y la llamada de verificación del identificador consumen el **mismo saldo** que los SMS del OTP. Sin saldo, **nadie puede iniciar sesión** en la app ni en el CRM. Antes de los pasos 2 y 14, P mira el saldo en Console → Billing.
+- **C-6 · El saldo de Twilio es el del inicio de sesión.** La voz, las pruebas manuales y la llamada de verificación del identificador consumen el **mismo saldo** que los SMS del OTP. *(E20)* Con la cuenta principal es, además, la **misma cuenta**. Sin saldo, **nadie puede iniciar sesión** en la app ni en el CRM. Antes de los pasos 2 y 14, P mira el saldo en Console → Billing.
   - Recomendación: no seguir con menos de US$ 10.
   - Recomendación: activar una alerta de saldo o la recarga automática.
   - Las dos son decisión de P.
@@ -66,12 +84,16 @@ Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa
   - `entrantes on` no aplica.
 
   `estado` lo enseña así: «el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado».
+- *(E20)* **Lo que asume el propietario** (contrato E20-1, diseño §1): quien tenga la clave de ElevenLabs o la de la importación puede llamar como «Iron Body» (la conciliación lo detecta después: freno `unknown_provider_call`; no lo impide); la reputación de la línea de atención; que **las devoluciones de llamada suenan en el teléfono del gimnasio, no en Sofía** (recepción tiene que saberlo antes de la llamada); y que Twilio **no garantiza** en Colombia que el destino vea el …5483.
+- *(E20)* **Con la cuenta principal**, cualquier llamada de voz de la cuenta que no pida Laravel (una prueba desde la consola de Twilio o de ElevenLabs) echa el freno `unknown_provider_call` en la siguiente conciliación. El nivel 3 de la vuelta atrás **nunca es suspender la cuenta** (tumbaría el OTP): se revocan las keys de voz y se borra la importación.
 - **Qué NO hacer:**
-  - en el servidor: `fase 2 set TWILIO_VOICE_FROM=+57…5483`; `fase 2 set ELEVENLABS_AGENT_PHONE_NUMBER_ID=` con el id de la importación de …5483; `monitor on --acepta-freno` sin saber por qué frenaría;
+  - en el servidor: *(E20)* `fase 2 set TWILIO_VOICE_FROM=+57…5483` **antes** de `numero-compartido on` (se niega); `fase 2 set ELEVENLABS_AGENT_PHONE_NUMBER_ID=` con el id de la importación **antigua** (la hecha con el Auth Token); `fase 2 secreto` con un `TWILIO_VOICE_SIGNING_TOKEN` (con la cuenta principal sería el Auth Token maestro del OTP); `monitor on --acepta-freno` sin saber por qué frenaría;
+  - *(E20)* en la consola de Twilio: comprar, portar o trasladar el …5483; crear una subcuenta; tocar Messaging, los remitentes de WhatsApp o Verify; usar el Account SID + Auth Token para nada de la voz;
   - en la consola de ElevenLabs (§4.6), cualquiera de estas cosas echa el freno o bloquea:
     - asignar el webhook «ironbody-voz-post-llamada» a un agente propio o a todo el workspace;
     - probar o duplicar el agente publicado;
     - asignar un agente al número importado;
+    - *(E20)* importar el …5483 con el Account SID + Auth Token, o como número con entrantes;
     - tocar los secretos o el agente de verificación;
     - revocar la clave vieja antes de que el servidor tenga la nueva.
 
@@ -81,30 +103,38 @@ Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa
 
 Leyenda del «Tipo»: **O** = obligatorio (sin él no hay llamada); **R** = recomendado.
 
+### Paso −1 · L (con la autorización específica del propietario para el lote 3) · El código de la voz y de la telefonía (C-0) — O
+
+*(E20)* El código que admite el …5483 (`VoiceNumberGuard::sharedIdentity()`, `VOICE_NUMBER_SHARED_WITH_MESSAGING`) y la salida de las `ambiguous` (E19-3) llegan con el **lote 3** (`ops/DEPLOY_CIERRE_LOTES.md` §4, `deploy-cierre-lote.sh … --orden=migracion-primero --config=…`). **C-0:** primero la migración `2026_11_22_100002_…` y después el código; al volver atrás, primero el código y después el disparador (el guion lo hace así). La configuración que declara: `voice.number.shared_with_messaging=false` (apagada: nada se admite hasta el paso 6).
+
+- **Tiene que imprimir:** lo que dice `DEPLOY_CIERRE_LOTES.md` §4 para el lote 3. Después, `voice:doctor --telefonia --json` trae `number.sharedWithMessaging` con `declared=false` y `reason=not_declared`.
+- **Vuelta atrás:** la del guion del lote (código primero, después el disparador).
+- Los mandos de este runbook valen **antes y después** del lote 3: con el código anterior, `numero-compartido on` y el …5483 se niegan («el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING») y todo lo demás sigue igual (ensayado: `ensayar-ops8f.sh`, «código anterior»).
+
 ### Paso 0 · L · Mandos actualizados y lecturas (con A0) — O
 
-Desde el Mac, en la raíz `Iron-Body/`. `C` es el commit que confirme estos ficheros. *(22-11: es `9502884a`; los tres no han cambiado desde entonces hasta `0c57d7c4`.)*
+Desde el Mac, en la raíz `Iron-Body/`. `C` es el commit que confirme estos ficheros. *(22-11: era `9502884a`.)* *(E20: es **`a64561a4`** en `integracion/voz`, o cualquier commit posterior en el que los dos casen con las huellas de abajo; informe `plans/informes-cierre/informe-ops-telefonia.md`. Cambian `h8-voice-scope.sh` y `h8-twilio-check.sh`; `el-verificar.sh` y `h7-monitor-scope.sh`, no.)*
 
 ```bash
 O=backend/docs/ultron-studio/ops
-ssh ironbody-vps 'sha256sum /root/h8-voice-scope.sh /root/el-verificar.sh /root/h7-monitor-scope.sh'
-#   esperado hoy: d8a18960… (L9-110), 7cc6100f… (el de HEAD; si no casa, PARAR y comparar) y c70537b7… (L9-110)
-#   (22-11) «el de HEAD» era el HEAD del 11-11 (b8d00f7f): desde 9502884a el repo trae ya las huellas nuevas de abajo.
-#   Si /root ya enseña 231e4a8a…, cd7a5a7a… y be6c3c47…, los mandos ya están instalados: no se copian otra vez.
-ssh ironbody-vps 'T=$(date -u +%Y%m%d-%H%M%S); for n in h8-voice-scope.sh el-verificar.sh h7-monitor-scope.sh; do cp -p /root/$n /root/$n.pre-telefonia-$T; done; ls -l /root/*.pre-telefonia-*'
-for n in h8-voice-scope.sh el-verificar.sh h7-monitor-scope.sh; do
+ssh ironbody-vps 'sha256sum /root/h8-voice-scope.sh /root/h8-twilio-check.sh /root/el-verificar.sh /root/h7-monitor-scope.sh'
+#   (E20) hoy: h8-voice-scope.sh 231e4a8a… (o la vieja d8a18960…), h8-twilio-check.sh e06a9e71… (o ausente),
+#   el-verificar.sh cd7a5a7a… y h7-monitor-scope.sh be6c3c47…. Si estos dos no casan, se instalan como antes (9502884a).
+ssh ironbody-vps 'T=$(date -u +%Y%m%d-%H%M%S); for n in h8-voice-scope.sh h8-twilio-check.sh; do [ ! -e /root/$n ] || cp -p /root/$n /root/$n.pre-telefonia-$T; done; ls -l /root/*.pre-telefonia-*'
+for n in h8-voice-scope.sh h8-twilio-check.sh; do
   git show "$C:$O/$n" | ssh ironbody-vps "umask 077; cat > /root/$n && chmod 700 /root/$n && sha256sum /root/$n"
 done
-#   tienen que salir las huellas nuevas de la tabla del informe (231e4a8a…, cd7a5a7a…, be6c3c47…)
+#   (E20) tienen que salir: h8-voice-scope.sh 6bd98ae2… y h8-twilio-check.sh db842269…
 ```
 
-Después, en el servidor, las lecturas R1–R6 de la auditoría (§2.1).
+Después, en el servidor, las lecturas R1–R6 de la auditoría (§2.1) y `bash /root/h8-voice-scope.sh estado`.
 
 - **Tiene que imprimir:**
   - R1: `5483_es_whatsapp: true`;
   - R2 y R3: `ok`, sin `wouldOpen` y freno suelto;
   - R4: «TODO REGISTRADO»;
-  - R5: `carrier=not_configured`, `unknown 0`.
+  - R5: `carrier=not_configured`, `unknown 0`;
+  - *(E20)* `estado`: «identidad compartida (VOICE_NUMBER_SHARED_WITH_MESSAGING, enmienda 20): no declarada», «veredicto del servidor …: NO admitida (not_declared)…», «constante de llamadas: cerrada», «salientes: no», «entrantes: no». Si dice «el código desplegado no la lee», falta el paso −1.
 - **Vuelta atrás:** `install -m 700 /root/<mando>.pre-telefonia-<T> /root/<mando>`.
 
 ### Paso 0.R · L con P en la terminal · Rotar la clave de ElevenLabs (§4.9) — R
@@ -127,57 +157,92 @@ Es independiente de la llamada. Se hace **antes del paso 6**, o después de la l
 
 - **Vuelta atrás:** la línea guardada. Solo vale hasta que P revoque la clave vieja; después, la vuelta es otra clave nueva.
 
-### Pasos 1–5 · P · Consolas — O, salvo donde se indica
+### Pasos 1–5 · P · Twilio y ElevenLabs (E20: cuenta principal, sin subcuenta) — O, salvo donde se indica
+
+En este orden. P trabaja en las consolas; L, en la terminal del servidor cuando se indica. Ningún valor pasa por el chat.
 
 | # | Dónde | Qué | Comprobar | Vuelta atrás | Tipo |
 |---|---|---|---|---|---|
-| 1 | Twilio | Crear la subcuenta «Voz». Mirar el saldo (C-6) | Aparece un AC… nuevo | Cerrarla (sin coste) | R |
-| 2 | Twilio (subcuenta) | Verified Caller IDs → Add → un número que **no** sea …5483 ni el remitente del OTP → Twilio llama → teclear el código | Queda «verified» | Borrarlo | O (o comprar un número) |
-| 3 | Twilio (subcuenta) | Voice → Geo permissions: Colombia | Habilitado | — | O si la subcuenta no lo hereda |
-| 4 | Twilio (subcuenta) | API keys → Restricted, solo voz (`ops/modelos-root/README.md`) → dejarla en `/root/tw-voz.txt` (600, con `vi`, junto a L) | Lo comprueba el paso 7 | Revocar la key | O |
-| 5 | ElevenLabs | Phone numbers → Import from Twilio: el número del paso 2, con el SID y el token **de la subcuenta**, **sin asignar agente** → anotar el `phnum_…` y los 4 últimos dígitos | Saliente sí, entrante no | Borrar la importación | O |
+| 1 | Twilio (cuenta principal) | Mirar el saldo (C-6). **No** crear subcuenta | Saldo ≥ US$ 10 | — | O |
+| 2 | Twilio · Phone Numbers → Verified Caller IDs | Confirmar que el **…5483** está «verified» en ESTA cuenta (lo confirmó el propietario el 22-11). **No** se vuelve a verificar, ni se compra, porta o traslada | Aparece verificado | — | O |
+| 3 | Twilio · Voice → Settings → Geo permissions | Llamadas salientes de voz **solo a Colombia** (el resto, apagado, también los destinos de alto riesgo). Son los permisos de **voz**: los de mensajería (los del OTP) no se tocan | Solo Colombia marcado | Volver a la lista de antes (anotarla antes de cambiar) | O |
+| 4 | Twilio · Account → API keys & tokens → Create API key | **Key L** (Laravel): tipo **Restricted**, nombre `ironbody-voz-laravel`, solo voz: llamadas *list*, *read* y *update* (colgar: corte de emergencia 0b), números *list* y caller IDs *list*, cuenta *read* (opcional: deja ver si es subcuenta) y uso *read*; **nada** de mensajería, Verify ni *create* de llamadas. Twilio enseña el SID `SK…` y el secreto **una sola vez**: dejar la ventana abierta y pasar al paso 6.1 | Lo comprueba el paso 7 («la key NO puede leer mensajes») | Revocar la key | O |
+| 5a | Twilio · Create API key | **Key E** (la de la importación de ElevenLabs): Restricted, nombre `ironbody-voz-elevenlabs`, lo que exija la importación de un caller ID **[por confirmar en la consola: E16-17]**; nunca mensajería. Su SID y su secreto se escriben **solo** en el formulario de ElevenLabs (5c) | ElevenLabs acepta la importación | Revocar la key | O |
+| 5b | ElevenLabs · Phone numbers | Anotar el `phnum_…` de la importación **antigua** del …5483 (la hecha con el Account SID + Auth Token, A-1), comprobar que no tiene agente y **borrarla**. No toca Twilio ni WhatsApp: el identificador sigue verificado. Antes, L comprueba en `estado` que `ELEVENLABS_AGENT_PHONE_NUMBER_ID` no es ese id | Ya no aparece | Reimportar (5c) | O |
+| 5c | ElevenLabs · Phone numbers → Import from Twilio | El **…5483**, etiqueta «Iron Body · voz (solo saliente)», el Account SID de la cuenta principal y, como credencial, **API Key SID + API Key Secret de la key E** (nunca el Auth Token), **sin asignar agente**. ElevenLabs lo enseña como «Outbound Only». Anotar el `phnum_…` nuevo (no es secreto) | Saliente sí, entrante no, sin agente | Borrar la importación | O |
 
-### Paso 6 · L (con A0) · Las piezas de la fase 2 — O
+- **El Auth Token maestro** estuvo en ElevenLabs (la importación antigua): se rota en el **paso R2**, aparte y con su propia autorización, porque es el del OTP.
+- Si ElevenLabs no deja importar un caller ID con una API key, **PARAR**: no se usa el Auth Token (A-1).
 
-Las órdenes van una a una. Hay que esperar el «APLICADO» de cada una.
+### Paso 6 · L (con A0) · Las órdenes del mando, una por una — O
+
+Hay que esperar el «APLICADO» (o lo que diga cada una) antes de la siguiente. Cada orden que escribe deja su copia previa y su vuelta atrás exacta: **guardarlas**.
+
+1. **La key L, sin eco (P a la terminal, junto a L).**
+   ```bash
+   bash /root/h8-voice-scope.sh monitor off                   # si estaba encendido
+   bash /root/h8-voice-scope.sh fase 2 secreto --terminal     # P pega el SID y el secreto en las dos preguntas; no se ven
+   ```
+   - **Tiene que imprimir:** las dos preguntas sin eco, «claves escritas (sin valores): TWILIO_VOICE_API_KEY_SECRET TWILIO_VOICE_API_KEY_SID» y «MANDO fase2-secreto APLICADO». Con un SID que no es `SK…` («parece un Account SID») o un secreto fuera de forma, se niega sin tocar nada: repetir.
+   - Después, P cierra la ventana de la key en Twilio. Alternativa sin terminal compartida: el fichero 600 de `ops/modelos-root/` (sin `TWILIO_VOICE_SIGNING_TOKEN`).
+2. **Lo que no es secreto.**
+   ```bash
+   bash /root/h8-voice-scope.sh fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false TWILIO_VOICE_ACCOUNT_SID=AC… ELEVENLABS_AGENT_PHONE_NUMBER_ID=phnum_…
+   ```
+   (el AC… de la cuenta principal y el `phnum_…` NUEVO del paso 5c). **Tiene que imprimir:** «MANDO fase2-set APLICADO».
+3. **La declaración, con la cita de A0.**
+   ```bash
+   bash /root/h8-voice-scope.sh numero-compartido on --autorizacion=<referencia de A0>
+   ```
+   - **Tiene que imprimir:** «== AUTORIZACIÓN ESCRITA DEL PROPIETARIO (referencia citada): «…»», «shared_declared: false → true», «AVISO (enmienda 20): la declaración SOLA no admite nada…» y «MANDO numero-compartido-on APLICADO (…; autorización citada: «…»)».
+   - **Se niega** (código 2, nada tocado) sin `--autorizacion`, con las llamadas encendidas, sin el código del paso −1 o sin `VOICE_NUMBER_INBOUND_CAPABLE=false`.
+4. **El origen.**
+   ```bash
+   bash /root/h8-voice-scope.sh fase 2 set TWILIO_VOICE_FROM=+57…5483
+   ```
+   - **Tiene que imprimir:** «TWILIO_VOICE_FROM = el visible de WhatsApp, con la identidad compartida declarada y «Outbound Only» (enmienda 20): se escribe…», «AVISO: número de voz = el visible de WhatsApp, PENDIENTE de la conciliación del número: NO admitida (observation_unverified)…» y «MANDO fase2-set APLICADO». Es lo esperado: la política sigue negando por nombre hasta el paso 8.
+   - **Si se niega con «protegido de WhatsApp que NO es el visible»:** el …5483 está entre los protegidos pero no es `WHATSAPP_DISPLAY_PHONE`. **PARAR** (pregunta abierta del diseño: decide el propietario).
+   - B, en el CRM: Studio → Integraciones → Voz → reconocer la configuración (la huella de la voz cambió con las piezas).
+5. **Comprobar.**
+   ```bash
+   bash /root/h8-voice-scope.sh estado
+   ```
+   **Tiene que imprimir:** «TWILIO_VOICE_FROM …5483», «número de voz igual a uno de WhatsApp: SÍ (…salvo la identidad compartida ADMITIDA…)», «identidad compartida (…): DECLARADA · TWILIO_VOICE_FROM es el visible de WhatsApp: sí», «NO: «Outbound Only» declarado», «TWILIO_VOICE_SIGNING_TOKEN falta», «veredicto del servidor…: NO admitida (observation_unverified)…» y, en el doctor, `whatsapp=CHOCA` y `subcuenta=si` (quiere decir «credencial de Twilio puesta»).
+
+- **Tiempo:** la expectativa y el reconocimiento van en menos de 30 minutos. Si no, el monitor del H7 abriría `integrations_drift` o `config_drift:voice`.
+- **Vuelta atrás:** la «vuelta atrás exacta» que imprime cada orden, en orden inverso. La funcional: `numero-compartido off` (la política vuelve a negar el …5483; con el monitor encendido, la siguiente conciliación echa el freno `number_is_messaging`: el lado seguro) y `monitor off`.
+
+### Paso 7 · L · `bash /root/h8-twilio-check.sh` — O *(E20: era R)*
+
+- **Tiene que imprimir:**
+  - «VEREDICTO: APTA · cuenta principal (enmienda del 22-11-2026, E20-1)» y código 0;
+  - «INFO el número de voz es el VISIBLE de WhatsApp como identidad compartida declarada…»;
+  - «CALLER ID VERIFICADO de esta cuenta»; «la key NO puede leer mensajes»; «llamadas en la cuenta: N (… ajenas 0)»; «TWILIO_VOICE_SIGNING_TOKEN vacío»;
+  - las tres líneas «NO comprueba…» (que el destino vea el número, la credencial de la importación y los permisos, las entrantes) y el AVISO de la importación.
+- **Se para** con cualquier `FALLO` o con código 3. Las causas típicas las dice la propia salida: una llamada ajena en la ventana, el token de firma puesto, una key que lee mensajes, el …5483 como número comprado.
+- **Lo que no comprueba lo confirma P por escrito:** que la importación de 5c se hizo con la key E y no con el Auth Token, y la lista de permisos de las dos keys.
+- **Vuelta atrás:** no hace falta (solo lee).
+
+### Paso 8 · L · El número observado y la admisión — O
 
 ```bash
-bash /root/h8-voice-scope.sh monitor off
-bash /root/h8-voice-scope.sh fase 2 secreto /root/tw-voz.txt
-bash /root/h8-voice-scope.sh fase 2 set TWILIO_VOICE_ACCOUNT_SID=AC… TWILIO_VOICE_FROM=+57… ELEVENLABS_AGENT_PHONE_NUMBER_ID=phnum_… VOICE_NUMBER_INBOUND_CAPABLE=false
-#   B, en el CRM: Studio → Integraciones → Voz → reconocer la configuración (la huella de la voz cambió con las piezas)
 bash /root/h8-voice-scope.sh expectativa fase2      # si el monitor del H7 está encendido (h7-monitor-scope.sh estado)
-bash /root/h8-voice-scope.sh monitor on             # primero concilia en seco: si frenaría, se niega
-bash /root/h8-voice-scope.sh estado
+bash /root/h8-voice-scope.sh monitor on             # primero concilia EN SECO (lee ElevenLabs y Twilio; no escribe)
 ```
 
-- **Tiene que imprimir:**
-  - «MANDO monitor-off APLICADO», «MANDO fase2-secreto APLICADO» y «/root/tw-voz.txt destruido»;
-  - «MANDO fase2-set APLICADO», «MANDO expectativa-fase2 APLICADO» y «MANDO monitor-on APLICADO»;
-  - `estado`: «número de voz igual a uno de WhatsApp: no», «NO: «Outbound Only» declarado», `subcuenta=si`, `numero=si` e `importado=si`.
-- **Tiempo:** la expectativa y el reconocimiento van en menos de 30 minutos. Si no, el monitor del H7 abriría `integrations_drift` o `config_drift:voice`.
-- **Si `fase 2 set` se niega por el número:** es el de WhatsApp. **PARAR**.
-- **Si `monitor on` se niega porque frenaría:** probablemente es la llamada de verificación de Twilio en la ventana de 48 h [H]. Se espera a que salga de la ventana. Encender con `--acepta-freno` solo si se entiende la causa.
-- **Vuelta atrás:** la «vuelta atrás exacta» que imprime cada orden (instalar su copia previa y regenerar la caché), en orden inverso. La funcional: `monitor off`.
-
-### Paso 7 · L · `bash /root/h8-twilio-check.sh` — R
-
-- **Tiene que imprimir:**
-  - «VEREDICTO: APTA»;
-  - «CALLER ID VERIFICADO de esta cuenta»;
-  - «la key NO puede leer mensajes»;
-  - 0 llamadas ajenas.
-- Con `FALLO`, se para.
-- **Vuelta atrás:** no hace falta (solo lee).
-
-### Paso 8 · L · El número observado — O
-
-1. Esperar a la pasada horaria de `voice:reconcile --numbers` (minuto 0).
-2. Ejecutar `sudo -u www-data php artisan voice:doctor --telefonia --json`.
-
-- **Tiene que imprimir:** `telefonia.number.check` = `verified`, `brakeOpen` = `false` y `webhookHealth` en `ok`.
-- **Cuidado:** la puerta exige una observación de **menos de 2 h**. Con el monitor encendido, la pasada horaria la renueva sola. Hay que volver a mirarlo justo antes del paso 14.
-- **Vuelta atrás:** no hace falta (solo lee).
+- **Tiene que imprimir** la línea de la conciliación en seco con `numero=outbound_only compartida=admitida haria_freno=no`, y «MANDO monitor-on APLICADO». **Se niega** si frenaría; lo que diga `compartida=` es la causa:
+  - `observed_inbound`: ElevenLabs no dice `supports_inbound=false` (importado con entrantes, o el campo, obsoleto, ya no llega). Reimportar como solo saliente; si el campo ya no existe, **PARAR** y avisar a backend (hace falta otra enmienda);
+  - `observed_agent`: el número tiene un agente asignado en ElevenLabs: quitárselo;
+  - `observation_unverified` con `numero=number_mismatch`: el `phnum_…` configurado no es el …5483: revisar 5c y el paso 6.2;
+  - `desconocidas>0`: una llamada de la cuenta en las últimas 48 h sin su fila (p. ej. una prueba desde una consola). Esperar a que salga de la ventana; `--acepta-freno` solo si se entiende la causa.
+- **En seco no se guarda la observación:** después de encender, esperar a la pasada horaria de `voice:reconcile --numbers` (minuto 0) y mirar:
+  ```bash
+  bash /root/h8-voice-scope.sh estado
+  sudo -u www-data php artisan voice:doctor --telefonia --json
+  ```
+  **Tiene que imprimir:** «veredicto del servidor…: ADMITIDA por el servidor…» y `whatsapp=COMPARTIDO` en `estado`; en el doctor, `telefonia.number.check` = `verified`, `number.sharedWithMessaging` = `{"declared": true, "admitted": true, "reason": null}`, `brakeOpen` = `false` y `webhookHealth` en `ok`. Es el criterio de entrada de la 4a de E16-16 enmendado (E20-1).
+- **Cuidado:** la puerta exige una observación de **menos de 2 h**. Con el monitor encendido, la pasada horaria la renueva sola. Hay que volver a mirarlo justo antes del paso 14. Si la observación caduca, la identidad deja de estar admitida (`observation_unverified`) y la puerta vuelve a decir `voice_number_is_whatsapp`: es el lado seguro.
+- **Vuelta atrás:** `monitor off` (y, si hace falta, `numero-compartido off`).
 
 ### Paso 9 · L (con A1) · El commit `voice(calls-open)` y el despliegue 4a — O
 
@@ -251,6 +316,7 @@ bash /root/h8-voice-scope.sh expectativa llamadas   # si el monitor del H7 está
 
 - **Tiene que imprimir:**
   - la línea «reserva de la puerta por saliente (…): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre»;
+  - *(E20)* «número de voz = el visible de WhatsApp: ADMITIDA por el servidor…»;
   - «MANDO salientes-on APLICADO».
 
   La puerta todavía dice `no_publication`: es lo esperado.
@@ -260,6 +326,7 @@ bash /root/h8-voice-scope.sh expectativa llamadas   # si el monitor del H7 está
   - sin las piezas;
   - con la constante cerrada;
   - si la fórmula de la puerta cambió en el código.
+  - *(E20)* si el servidor no admite la identidad compartida (lo dice con su motivo: el paso 8 no está hecho o la observación caducó).
 - **Vuelta atrás:** `bash /root/h8-voice-scope.sh salientes off` (cupo y presupuesto a 0). Después, B reconoce otra vez.
 
 ### Paso 11 · B · Veredicto del laboratorio — O
@@ -284,7 +351,7 @@ SMOKE_PHASE=4a bash /root/smoke-run-h8.sh
 
 ### Paso 13 · P y B · Canario de voz — O
 
-CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su consentimiento; B lo autoriza; B lo activa.
+CRM → Integraciones → Canarios, canal voz: P registra su teléfono (*(E20)* el **…6026**) con su consentimiento; B lo autoriza; B lo activa.
 
 - **Tiene que verse:** «activo».
 - **Vuelta atrás:** desactivar o revocar.
@@ -294,12 +361,14 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 **Justo antes**, todo esto tiene que cumplirse:
 - día y hora legales;
 - el saldo de Twilio (C-6);
-- `voice:doctor --telefonia --json`: `number.check=verified` con menos de 2 h, `brakeOpen=false` y `callsEnabledInCode=true`;
+- `voice:doctor --telefonia --json`: `number.check=verified` con menos de 2 h, `brakeOpen=false` y `callsEnabledInCode=true`; *(E20)* `number.sharedWithMessaging.admitted=true`;
+- *(E20)* recepción sabe que una devolución de la llamada sonará en la línea del gimnasio (apartado F);
 - `estado`: `cadena=canary:ok` e `ironbody-voice` en RUNNING.
 
 **La llamada:** CRM → Voz y telefonía → Llamadas → nueva → el canario.
 
 **Tiene que verse:**
+- *(E20)* **qué número enseña el teléfono del propietario (…6026)**: lo esperado es el …5483. Twilio **no lo garantiza** en Colombia («Domestic: Local (Non-guaranteed)»): si sale otro número o «desconocido», se anota y se para tras la llamada; no es un fallo de seguridad sino de identidad, y lo decide el propietario (un número propio de Twilio sería una decisión nueva). Esta es la única forma de saberlo;
 - 202 en el CRM;
 - la fila pasa por `requested → dialing → active → completed`;
   - *(22-11)* `active` solo aparece si Sofía usa una herramienta: la primera herramienta pasa la llamada de `dialing` a `active` (E1-1, `VoiceTools.php:122-123`). Ni Twilio ni la conciliación la pasan a `active` (`VoiceReconciler.php:29-31`). Con un perfil sin `consultar_planes` ni `consultar_horarios` (la rev. 2), lo normal es `requested → dialing → completed`, y es correcto (caso del fixture «saliente contestada sin herramientas», `VoicePostCallWebhookTest`).
@@ -311,12 +380,18 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 - una segunda petición ese día da `daily_cap_reached`.
   - *(22-11)* Al mismo canario da exactamente `[frequency_exceeded, daily_cap_reached]`, y lo mismo si la primera quedó `no_answer`, `busy`, `failed` o `ambiguous`. Solo `canceled` y `failed_to_start` no gastan el día (`VoiceFrequency.php:36`, `VoiceCallFacts.php:35-39`), y la `failed_to_start` que deja la salida de una `ambiguous` (E19-3) SÍ lo gasta: pudo sonar (C-3). **Si nadie contesta, la llamada de ese día está gastada.**
 
+- *(E20)* **si no contesta** (no contesta, ocupado, buzón o fallo del proveedor): **no se reintenta ese día** (frecuencia y cupo, arriba); `salientes off` y se repite otro día legal, con la observación del número renovada (paso 8).
+
 **Vuelta atrás:**
 1. Colgar en el CRM, o `sudo -u www-data php artisan voice:hangup --all --confirm`.
 2. `bash /root/h8-voice-scope.sh salientes off`.
 
 **Al terminar:** `salientes off` (R), salvo que P autorice por escrito seguir hacia las 3 llamadas de la evidencia del canario. Después, B reconoce la configuración.
 - *(22-11)* Las 3 llamadas (`ULTRON_STUDIO_VOICE_CANARY_MIN_CALLS=3`) no caben en una semana con UN solo teléfono canario. La frecuencia por número es una al día y como mucho dos en 7 días móviles (`VOICE_FREQUENCY_PER_WEEK` ≤ 2; `VoiceFrequency.php:74-79`), y no se puede subir. Con un solo canario, la tercera va al octavo día de la primera. Si no, hace falta un segundo canario o el modo `calendar` de la semana (decisión P-11).
+
+### Paso R2 · L con P · Rotar el Auth Token maestro de Twilio (A-1) — aparte, con su PROPIA autorización
+
+*(E20)* La importación antigua del …5483 se hizo con el Account SID + Auth Token de la cuenta principal: ElevenLabs tuvo la credencial maestra, que es **la del OTP** (inicio de sesión). Borrada la importación (paso 5b), se rota con `bash /root/h8-otp-token-rotate.sh` (procedimiento B-6: `docs/ops/ROTACION-CREDENCIALES.md`, nota OPS8-e), **coordinado con el OTP**: el token nuevo como secundario, el mando, la vista del proceso web y después promocionar. No lo cubre ninguna de A0–A3: **requiere su propia autorización**. Va **antes del paso 6 o después de la llamada, nunca entre los pasos 9 y 14**, y fuera de los minutos de las conciliaciones. La voz no usa ese token (`TWILIO_VOICE_SIGNING_TOKEN` vacío): rotarlo no toca las piezas de la voz.
 
 ---
 
@@ -328,6 +403,10 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 | `elevenlabs_unverified` | La marca de 30 días caducó | `sudo -u www-data php artisan ultron-studio:integrations-snapshot --verify-voice` (un GET), con autorización |
 | `number_unverified` (con `telefonia.number.checkReason` = `stale` o `no_observation`) | Sin una conciliación del número en las últimas 2 h | Esperar a la pasada horaria con el monitor encendido |
 | `number_mismatch` | Lo que ve la conciliación no es el número de `TWILIO_VOICE_FROM` | PARAR: revisar la importación (paso 5) y las piezas (paso 6) |
+| *(E20)* `voice_number_is_whatsapp` en la puerta | El servidor no admite la identidad compartida | `bash /root/h8-voice-scope.sh estado`: el veredicto dice el motivo en español (no declarada, otro número, sin «Outbound Only», entrantes encendidas, sin una conciliación de menos de 2 h, lo observado no es el visible, ElevenLabs no dice solo saliente, agente asignado). Corregir esa causa; nunca soltar la guarda |
+| *(E20)* Freno `number_is_messaging` | La conciliación vio el …5483 importado con agente, con entrantes o sin la declaración | Corregirlo en ElevenLabs (paso 5c) o en el mando; después lo suelta una persona con `ultron.voice_publish` y una nota. Si fue por `numero-compartido off`, es lo esperado |
+| *(E20)* El teléfono del propietario ve otro número o «desconocido» | Twilio no garantiza el identificador en Colombia | Anotarlo y parar tras la llamada. Decide el propietario; no se toca nada para «arreglarlo» |
+| *(E20)* `h8-twilio-check.sh` no da «APTA · cuenta principal» | Lo que diga su línea «falta: …» | Corregir esa causa (llamada ajena: esperar la ventana; token de firma: quitarlo con la vuelta atrás de la orden que lo puso) y repetir |
 | `voice_braked` | Freno echado (§4.6) | Leer la causa en el CRM. Lo suelta una persona con `ultron.voice_publish` y una nota |
 | `voice_number_not_assigned` (al publicar) | Falta `VOICE_NUMBER_INBOUND_CAPABLE=false` (C-5) | Con A0: `salientes off` → `fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false` → `salientes on …` → reconocer → publicar |
 | La llamada se queda en `requested` | Worker `ironbody-voice` parado | `supervisorctl status`. La fila pasa a `ambiguous` a los 15 min (la conciliación) |
@@ -430,3 +509,19 @@ Hace falta una autorización escrita nueva, citada en el commit nuevo. Que valga
 
 - `ops/h8-e2e.sh` y `ops/v9-abierta.sh` corren en los dos estados de la constante. Las fases abiertas del E2E fallan desde el 10-11 15:00 UTC por una fecha fija en sus pruebas, ajena a la apertura. Hallazgo para tester: informe de devops del 12-11, §2.4.
 - **Para la siguiente ola:** `deploy-h9-backend-cierre.sh` y `deploy-m1-backend.sh` se niegan con la constante abierta en `origin/main`. El desplegador de la siguiente ola tiene que admitir «abierta en producción y en `origin/main`, y `VoiceCallPolicy.php` sin cambios». La apertura sigue siendo solo de la 4a.
+
+---
+
+## F. Entrantes: sin resolver *(E20)*
+
+**Verificar el …5483 como identificador saliente no resuelve las entrantes, y este runbook no las declara resueltas.** Un *Verified Caller ID* solo presenta una identidad al llamar: las llamadas al …5483 siguen yendo a su operador, no a Twilio, y ElevenLabs no le asigna un agente. **Hoy, quien devuelva una llamada de Sofía llama a la línea del gimnasio y la atiende recepción, no Sofía.** El mando lo hace cumplir: con la identidad compartida declarada, `entrantes on` se niega por su nombre, y `fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=true` también.
+
+Lo que haría falta (diseño, §5), cada camino con su propia decisión del propietario y su enmienda:
+
+| Camino | Qué exige | Contra |
+|---|---|---|
+| (a) Un número **propio de Twilio** con voz, importado en ElevenLabs con entrantes y asignado a la parte canaria | Comprarlo (unos 17,50 US$/mes, con el bundle regulatorio de Colombia), `VOICE_NUMBER_INBOUND_CAPABLE=true` en ESE número y la fase 3 con su autorización | Contradice «no comprar números»: es una decisión nueva. Los socios marcarían otro número |
+| (b) **Desvío** del operador del …5483 hacia (a) | (a), y el desvío en la línea | Meta pide en los fijos «disable call forwarding or IVR» para verificar el número: una reverificación de WhatsApp caería en Sofía; y el llamante desviado puede llegar con otro identificador, que es con lo que autoriza la puerta de entrantes |
+| (c) **SIP** con una central u operador dueño de la línea | La línea en un troncal SIP y una enmienda (hoy `sip-trunk` está prohibido) | Toca la línea del negocio y el contrato |
+
+Hasta que el propietario decida uno: las entrantes quedan **apagadas**, recepción sabe que las devoluciones llegan a su línea, y nada de lo anterior se construye.
