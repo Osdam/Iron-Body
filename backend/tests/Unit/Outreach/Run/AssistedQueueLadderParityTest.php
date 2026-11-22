@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Outreach\Run;
 
+use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\PolicyLadder;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutreachSendGate;
@@ -27,8 +28,9 @@ class AssistedQueueLadderParityTest extends TestCase
             'calendar_outside_legal_hours' => 'excluido:al_salir',
             'calendar_sunday' => 'excluido:al_salir',
             'calendar_holiday' => 'excluido:al_salir',
-            // Por voz, R3-1 (`opted_out` si consta la revocación; si no, `policy_unknown`); por WhatsApp comercial, I-1
-            // (`policy_unknown`). WhatsApp de servicio y de cobranza, no: `ventana_24h`.
+            // Por voz, R3-1 (`opted_out` si consta la revocación; si no, `policy_unknown`); por WhatsApp comercial y de
+            // cobranza, I-1 (`policy_unknown`; la cobranza, desde la última tanda del lote 4). WhatsApp de servicio, no: la
+            // ventana de 24 h (por finalidad, {@see WHATSAPP_SIN_CONSENTIMIENTO}).
             'no_consent_for_purpose_channel' => 'retiene:opted_out,policy_unknown',
             // `lead.consent_denied` y la retirada del libro de C9 (C-1); sin leer, `policy_unknown`.
             'consent_denied' => 'retiene:opted_out,policy_unknown',
@@ -72,7 +74,7 @@ class AssistedQueueLadderParityTest extends TestCase
             'channel_not_live' => 'excluido:solo_automaticos',
             'template_not_approved' => 'retiene:template_not_approved',
             'template_category_mismatch' => 'excluido:al_salir',
-            // Sin identidad de WhatsApp no hay consentimiento comercial concedido: I-1 (`policy_unknown`).
+            // Sin identidad de WhatsApp no hay consentimiento comercial ni de cobranza concedido: I-1 (`policy_unknown`).
             'no_whatsapp_identity' => 'retiene:policy_unknown',
             // Sin contacto de voz activo: R3-1 y R3-3 (`policy_unknown`).
             'no_voice_contact' => 'retiene:policy_unknown',
@@ -108,6 +110,19 @@ class AssistedQueueLadderParityTest extends TestCase
             'callback_scheduled' => 'excluido:al_salir',
             'enrollment_window_over' => 'excluido:al_salir',
         ],
+    ];
+
+    /**
+     * `no_consent_for_purpose_channel` POR WHATSAPP, finalidad a finalidad (la escalera lo niega en las tres): lo que
+     * hace la bandeja cuando el consentimiento ya no es `granted` y no consta `denied`. La de servicio es la ventana de
+     * 24 h, que retendría trabajos de servicio válidos.
+     *
+     * @var array<string, string>
+     */
+    private const WHATSAPP_SIN_CONSENTIMIENTO = [
+        'collections' => 'retiene:policy_unknown',
+        'commercial' => 'retiene:policy_unknown',
+        'service' => 'no_retiene:ventana_24h',
     ];
 
     /**
@@ -170,6 +185,18 @@ class AssistedQueueLadderParityTest extends TestCase
         foreach (array_keys(self::DECISIONES) as $decision) {
             $this->assertStringContainsString("`excluido:{$decision}`", $contrato, "la decisión {$decision} consta en el contrato");
         }
+    }
+
+    public function test_por_whatsapp_sin_consentimiento_la_tabla_clasifica_cada_finalidad_como_la_bandeja(): void
+    {
+        $finalidades = array_keys(self::WHATSAPP_SIN_CONSENTIMIENTO);
+        $catalogo = OutreachCatalog::PURPOSES;
+        sort($catalogo);
+        $this->assertSame($catalogo, $finalidades, 'cada finalidad del catálogo, clasificada (y ninguna de más)');
+        $retienen = array_keys(array_filter(self::WHATSAPP_SIN_CONSENTIMIENTO, static fn (string $c): bool => str_starts_with($c, 'retiene:')));
+        $deLaBandeja = AssistedQueue::CONSENT_GATED_WHATSAPP_PURPOSES;
+        sort($deLaBandeja);
+        $this->assertSame($retienen, $deLaBandeja, 'las finalidades en las que la bandeja retiene son las de la tabla');
     }
 
     public function test_lo_que_solo_evaluan_los_canales_automaticos_no_le_llega_al_asistido(): void

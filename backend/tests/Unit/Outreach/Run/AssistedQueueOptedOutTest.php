@@ -91,8 +91,18 @@ class AssistedQueueOptedOutTest extends TestCase
             'I-1: WhatsApp comercial con el consentimiento sin leer: no se sabe' => [$sin('consent.whatsapp.commercial'), 'commercial', 'whatsapp', null],
             'I-1: WhatsApp comercial concedido por C9 (el número de hoy): se sabe que no' => [['consent.whatsapp.commercial' => false, 'c9.whatsapp.commercial.granted' => true] + self::LIMPIA, 'commercial', 'whatsapp', false],
             'I-1: un sí sabido gana al consentimiento perdido' => [['consent.whatsapp.commercial' => false, 'lead.do_not_contact' => true] + self::LIMPIA, 'commercial', 'whatsapp', true],
-            'I-1: no alcanza a la cobranza por WhatsApp (solo la comercial)' => [['consent.whatsapp.collections' => false] + self::LIMPIA, 'collections', 'whatsapp', false],
+            // I-1 también para la COBRANZA por WhatsApp (última tanda del lote 4, decisión del lead con la misma directiva):
+            // la escalera la niega igual (`no_consent_for_purpose_channel`) y `consent.whatsapp.collections` es siempre
+            // false (P9-15): solo la concede una autorización de C9 para el número de hoy. Hasta esta tanda este caso daba
+            // `false` y se llamaba «no alcanza a la cobranza»: la regla es más estricta a propósito.
+            'I-1: WhatsApp de cobranza sin la autorización concedida y sin un denegado: no se sabe (retiene)' => [['consent.whatsapp.collections' => false] + self::LIMPIA, 'collections', 'whatsapp', null],
+            'I-1: WhatsApp de cobranza con el consentimiento sin leer: no se sabe' => [$sin('consent.whatsapp.collections'), 'collections', 'whatsapp', null],
+            'I-1: WhatsApp de cobranza concedido por C9 (el número de hoy): se sabe que no' => [['c9.whatsapp.collections.granted' => true] + self::LIMPIA, 'collections', 'whatsapp', false],
+            'I-1: la autorización comercial no vale para la cobranza' => [['c9.whatsapp.commercial.granted' => true] + self::LIMPIA, 'collections', 'whatsapp', null],
+            'I-1: en la cobranza, un sí sabido gana al consentimiento perdido' => [['lead.do_not_contact' => true] + self::LIMPIA, 'collections', 'whatsapp', true],
+            'I-1: la cobranza por voz sigue siendo R3-1' => [['consent.voice_call.collections' => false, 'voice.consent_revoked' => true] + self::LIMPIA, 'collections', 'voice', true],
             'I-1: ni al servicio por WhatsApp' => [['consent.whatsapp.service' => false, 'consent.whatsapp.commercial' => false] + self::LIMPIA, 'service', 'whatsapp', false],
+            'I-1: ni al servicio por WhatsApp con la cobranza sin autorizar' => [['consent.whatsapp.service' => false, 'consent.whatsapp.collections' => false] + self::LIMPIA, 'service', 'whatsapp', false],
             'R3-1: un sí sabido gana a la voz sin consentimiento' => [['lead.do_not_contact' => true, 'consent.voice_call.commercial' => false] + self::LIMPIA, 'commercial', 'voice', true],
             // C-1 de la revisión de API del consentimiento: la retirada del libro (C9) para la finalidad del trabajo, por WhatsApp.
             'C-1: retirada de C9 comercial, en un trabajo comercial por WhatsApp: lo pidió' => [['c9.whatsapp.commercial.revoked' => true] + self::LIMPIA, 'commercial', 'whatsapp', true],

@@ -135,6 +135,13 @@ final class AssistedQueue
         self::WITHHELD_POLICY_UNKNOWN, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED,
     ];
 
+    /**
+     * I-1 (lote 4; la cobranza, decisión del lead en la última tanda): las finalidades en las que, por WhatsApp, un
+     * consentimiento que no es `granted` ni consta `denied` retiene con `policy_unknown` ({@see optedOut()}). El
+     * servicio no está: su consentimiento es la ventana de 24 h.
+     */
+    public const CONSENT_GATED_WHATSAPP_PURPOSES = [OutreachCatalog::PURPOSE_COMMERCIAL, OutreachCatalog::PURPOSE_COLLECTIONS];
+
     /** I-4: las filas que se leen por tanda para llenar una página (una foto de quejas por tanda). */
     public const SCAN_BATCH = self::MAX_PAGE;
 
@@ -574,9 +581,13 @@ final class AssistedQueue
      *
      * I-1 de `informe-reviewer-bandeja.md` (decisión del lead por la directiva del propietario: «un contacto que pierde
      * elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal restringido»): por WhatsApp
-     * COMERCIAL, un consentimiento que ya no es `granted` y no consta `denied` (un prospecto nuevo de la persona con
-     * `consent_status` nulo, el más reciente, que es el que lee N1) es «no se sabe»: `null`, `policy_unknown`, como
-     * por voz. La autorización de C9 confirmada para el número de hoy cuenta como `granted` (`consentFor()`).
+     * COMERCIAL y de COBRANZA ({@see CONSENT_GATED_WHATSAPP_PURPOSES}), un consentimiento que ya no es `granted` y no
+     * consta `denied` es «no se sabe»: `null`, `policy_unknown`, como por voz. La escalera niega los dos
+     * (`no_consent_for_purpose_channel`). En la comercial, p. ej. un prospecto nuevo de la persona con `consent_status`
+     * nulo (el más reciente, el que lee N1); en la cobranza, la autorización de C9 que dejó de valer porque el número
+     * de hoy es otro (`consent.whatsapp.collections` es siempre false, P9-15: solo el libro la concede). La
+     * autorización de C9 confirmada para el número de hoy cuenta como `granted` (`consentFor()`). El SERVICIO, no: su
+     * consentimiento es la ventana de 24 h y retendría trabajos de servicio válidos.
      *
      * C-1 de `informe-apisec-consent.md` (Enmienda C9): la RETIRADA del libro de autorizaciones para la finalidad del
      * trabajo (`c9.whatsapp.<finalidad>.revoked`, la suya o la de otra ficha con uno de sus números) es una petición
@@ -596,7 +607,7 @@ final class AssistedQueue
             match (true) {
                 $consentimiento === 'denied' => $s->policy('lead.consent_denied'),
                 $medium === OutreachCatalog::MEDIUM_VOICE && $consentimiento !== 'granted' => $s->policy('voice.consent_revoked') === true ? true : null,
-                $medium === OutreachCatalog::MEDIUM_WHATSAPP && $purpose === OutreachCatalog::PURPOSE_COMMERCIAL && $consentimiento !== 'granted' => null,
+                $medium === OutreachCatalog::MEDIUM_WHATSAPP && in_array($purpose, self::CONSENT_GATED_WHATSAPP_PURPOSES, true) && $consentimiento !== 'granted' => null,
                 default => false,
             },
             $medium === OutreachCatalog::MEDIUM_WHATSAPP && $s->policy("c9.whatsapp.{$purpose}.revoked") === true,

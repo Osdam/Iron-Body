@@ -602,6 +602,70 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
     }
 
+    /** La autorización de COBRANZA por WhatsApp del libro, por el servicio REAL: Ana la registra para el número de hoy y Beto la confirma. */
+    private function grantCollectionsInLedger(int $memberId): void
+    {
+        $texto = 'Autorizo a Iron Body a escribirme por WhatsApp sobre mis pagos pendientes.';
+        config(['outreach_consents.legal.collections' => ['version' => 'c9-whatsapp-cobranza/2026-11-22.1', 'text' => $texto]]);
+        $gente = $this->threePeople();
+        $servicio = new OutreachConsents;
+        $pedida = $servicio->record(new OutreachAccess($gente['ana']), [
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $memberId, 'purpose' => 'collections',
+            'source' => 'reception_form', 'evidence' => 'Formulario firmado en recepción', 'legalVersion' => 'c9-whatsapp-cobranza/2026-11-22.1',
+            'legalHash' => hash('sha256', $texto),
+        ]);
+        $this->assertSame(201, $pedida['http']);
+        $this->assertSame(201, $servicio->confirm(new OutreachAccess($gente['beto']), (string) $pedida['consent']['uuid'], (string) Str::uuid())['http']);
+    }
+
+    /**
+     * I-1 TAMBIÉN PARA LA COBRANZA POR WHATSAPP (última tanda del lote 4; decisión del lead con la misma directiva: «un
+     * contacto que pierde elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal
+     * restringido»). La cobranza por WhatsApp solo la autoriza el libro de C9, para un número
+     * (`consent.whatsapp.collections` es siempre false, P9-15). Dos asistidos de cobranza salen con esa autorización
+     * para el número de hoy y Ana reclama uno: se ofrece y se entrega. Después la persona escribe desde OTRO número:
+     * nace un prospecto suyo con conversación y ése es el número de hoy, así que la autorización ya no vale. N1 lee
+     * `missing` sin un `denied` (la escalera negaría, `no_consent_for_purpose_channel`); la bandeja retiene con
+     * `policy_unknown`. Hasta esta tanda seguía entregando la ficha y el guion.
+     */
+    public function test_i1_por_whatsapp_de_cobranza_la_autorizacion_que_deja_de_valer_retiene_con_policy_unknown(): void
+    {
+        $gente = $this->threePeople();
+        $this->runFlags('live');
+        $this->plantilla = $this->assistedTemplate(['purpose' => 'collections', 'content' => ['medium' => 'whatsapp', 'script' => 'Saluda y recuerda con respeto que hay una cuota pendiente; ofrece ayuda para ponerse al día.']]);
+        $this->vivo = $this->liveStrategy($this->validContent($this->plantilla, [
+            'goal' => 'collect_payment', 'purpose' => 'collections', 'exclusions' => null,
+            'trigger' => ['event' => 'receivable.overdue', 'params' => ['daysMin' => 3, 'daysMax' => 30]],
+            'audience' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => true],
+            'success' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => false],
+        ]));
+        $socios = [$this->canaryMember('whatsapp'), $this->canaryMember('whatsapp')];
+        foreach ($socios as $s) {
+            $this->grantCollectionsInLedger($s['member']);
+        }
+        [$mio, $libre] = array_map(fn (array $s): string => $this->uuidOf($this->seedStarted(['subject_key' => $s['key'], 'member_id' => $s['member']], 'whatsapp')), $socios);
+        $this->assertSame(['collections'], DB::table('outreach_enrollments')->distinct()->pluck('purpose')->all());
+        $cola = new AssistedQueue;
+        $foto = $this->snap([$socios[0]['key']], '2026-11-17 15:00:00', CoreProjection::selectionFor([]))->subject($socios[0]['key']);
+        $this->assertSame('granted', CoreProjection::policyInput($foto, 'collections', null)['consent']['whatsapp'], 'antes: la autorización de cobranza del número de hoy');
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $socios[0]['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'antes: el libre se ofrece');
+
+        foreach ($socios as $i => $s) {
+            $nuevo = '300999100'.$i;
+            $this->conversation($this->lead(['member_id' => $s['member'], 'phone' => $nuevo, 'consent_status' => null]));
+            // El número nuevo también es un número de prueba activo: el caso no es F-2 (`canary_scope_mismatch`).
+            $this->canary('+57'.$nuevo, 'whatsapp');
+        }
+        $foto = $this->snap([$socios[0]['key']], '2026-11-17 15:00:00', CoreProjection::selectionFor([]))->subject($socios[0]['key']);
+        $this->assertSame(['missing', false, false], [CoreProjection::policyInput($foto, 'collections', null)['consent']['whatsapp'], $foto->policy('lead.consent_denied'),
+            $foto->policy('c9.whatsapp.collections.revoked')], 'lo que lee N1: la autorización de otro número, sin un «denegado» ni una retirada');
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', $socios[0]['phone'], $socios[1]['phone'], '300999100');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'no_answer', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
+    }
+
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────
 
     /** @return array<string, array{0: string, 1: string}> */
