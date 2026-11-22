@@ -14,7 +14,7 @@
 #   bash /root/h8-voice-scope.sh fase 2 secreto --terminal                   la key de Laravel (su SID y su secreto) tecleada
 #                                                                             en esta terminal SIN ECO (nunca chat ni argumentos)
 #   bash /root/h8-voice-scope.sh numero-compartido on --autorizacion=REF     VOICE_NUMBER_SHARED_WITH_MESSAGING=true (enmienda 20)
-#   bash /root/h8-voice-scope.sh numero-compartido off                       la retira (la política vuelve a negar el visible)
+#   bash /root/h8-voice-scope.sh numero-compartido off                       la retira (la política niega el visible) y apaga las salientes si están encendidas
 #   bash /root/h8-voice-scope.sh salientes on --cupo=N --presupuesto=USD    fase 4a: alcance canary, nada más
 #   bash /root/h8-voice-scope.sh salientes off                               nivel 0 de D8-20 para las salientes
 #   bash /root/h8-voice-scope.sh entrantes on --cupo=N                       fase 3
@@ -959,7 +959,7 @@ print("%s|reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, %d
     # condición 1 de la identidad compartida. Sola no admite nada (las otras seis las comprueba el servidor). «on» exige la
     # cita de la autorización escrita (como --autorizacion de deploy-h8-backend-fase1.sh), las llamadas apagadas, el
     # código que la lee y el número ya declarado «Outbound Only»; «off» es la vuelta atrás y no espera a nadie.
-    ORDEN=numero-compartido-$2
+    ORDEN=numero-compartido-$2; APAGA_SALIENTES=0
     if [ "$2" = on ]; then
       for a in "${@:3}"; do
         case "$a" in
@@ -978,8 +978,21 @@ print("%s|reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, %d
     else
       [ "$#" = 2 ] || { uso; exit 2; }
       [ "$(campo shared_known)" = true ] || niega "el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING: no hay declaración que retirar"
+      # B-1 (informe-security-mandos.md, condición (2).8): primero las salientes, después la declaración. Si las salientes
+      # no constan apagadas, «off» las apaga en la MISMA escritura con lo mismo que «salientes off» y lo dice; no espera a
+      # nadie. Con las salientes apagadas, la orden es la de siempre (solo la declaración).
+      if [ "$OUT" != false ]; then
+        APAGA_SALIENTES=1
+        A=(VOICE_NUMBER_SHARED_WITH_MESSAGING=false VOICE_OUTBOUND_ENABLED=false TWILIO_VOICE_DAILY_CALL_CAP=0 VOICE_DAILY_BUDGET_USD=0)
+        [ "$INB" = true ] || A+=(TWILIO_VOICE_ENABLED=false)
+        echo "== las salientes están encendidas (VOICE_OUTBOUND_ENABLED: $OUT): esta orden las APAGA en la misma escritura que retira la declaración, con lo mismo que «salientes off» (${A[*]:1}), porque retirar la declaración con las salientes encendidas las dejaría abiertas sobre un número que la política ya niega (B-1: primero las salientes, después la declaración)"
+      fi
     fi
-    CAMBIOS=$(json_de "VOICE_NUMBER_SHARED_WITH_MESSAGING=$([ "$2" = on ] && echo true || echo false)") ;;
+    if [ "$APAGA_SALIENTES" = 1 ]; then
+      CAMBIOS=$(json_de "${A[@]}")
+    else
+      CAMBIOS=$(json_de "VOICE_NUMBER_SHARED_WITH_MESSAGING=$([ "$2" = on ] && echo true || echo false)")
+    fi ;;
   *) uso; exit 2 ;;
 esac
 [ -n "$CAMBIOS" ] || aborta "no se calcularon los cambios"
@@ -1196,7 +1209,11 @@ case "$ORDEN" in
     echo "   AVISO (enmienda 20): la declaración SOLA no admite nada. Falta, por este orden: «bash $0 fase 2 set TWILIO_VOICE_FROM=<el visible> ELEVENLABS_AGENT_PHONE_NUMBER_ID=<el phnum_… de la importación solo saliente>», y que voice:reconcile --numbers vea el número importado solo saliente y sin agente (la pasada horaria, con el monitor de voz encendido). «estado» dice el motivo mientras no se admita"
     echo "   AVISO: no abre ninguna llamada ni toca las entrantes, el consentimiento, los canarios, el horario, los cupos, el presupuesto ni el freno; «salientes on» sigue exigiendo todo lo de antes" ;;
   numero-compartido-off)
-    [ "$(campo whatsapp_collision)" != true ] || echo "   AVISO: TWILIO_VOICE_FROM sigue siendo el de WhatsApp: la política deniega por nombre y, con el monitor de voz encendido, la siguiente conciliación del número echará el freno number_is_messaging (el lado seguro). Para volver a un número dedicado: «bash $0 fase 2 set TWILIO_VOICE_FROM=… ELEVENLABS_AGENT_PHONE_NUMBER_ID=…»" ;;
+    [ "$(campo whatsapp_collision)" != true ] || echo "   AVISO: TWILIO_VOICE_FROM sigue siendo el de WhatsApp: la política deniega por nombre y, con el monitor de voz encendido, la siguiente conciliación del número echará el freno number_is_messaging (el lado seguro). Para volver a un número dedicado: «bash $0 fase 2 set TWILIO_VOICE_FROM=… ELEVENLABS_AGENT_PHONE_NUMBER_ID=…»"
+    if [ "$APAGA_SALIENTES" = 1 ]; then
+      echo "   AVISO (B-1): las salientes estaban encendidas y quedan APAGADAS en esta misma escritura (lo de «salientes off»). Esta orden no cuelga una llamada en curso: sudo -u $WWW php artisan voice:hangup --all --confirm. Volver a encenderlas es otra vez «salientes on», con todo lo que exige"
+      echo "   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice"
+    fi ;;
 esac
 echo "   vuelta atrás exacta (el fichero de antes): $VUELTA"
 [ -z "$VUELTA_FUNCIONAL" ] || echo "   vuelta atrás funcional: $VUELTA_FUNCIONAL"

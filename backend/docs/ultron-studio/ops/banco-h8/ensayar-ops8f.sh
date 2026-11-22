@@ -23,6 +23,9 @@
 # Los números son SINTÉTICOS: el visible de WhatsApp +57 300 000 0050, otro protegido +57 300 000 0051 y el dedicado
 # +57 601 000 0090; la constante de llamadas solo se abre en el clon del banco, con un commit `voice(calls-open): banco …`
 # que se revierte al terminar.
+# PT-04 (22-11-2026, B-1 de plans/informes-cierre/informe-security-mandos.md): «numero-compartido off» con las salientes
+# encendidas las apaga en la misma escritura. Para comparar, el ensayo copia también el mando de ANTES de esa corrección
+# (huella 6bd98ae2…): de git, MANDO_ANTES_REF (por defecto b461c205), o de un fichero, MANDO_ANTES.
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
 ORDEN=${2:-}
@@ -177,26 +180,37 @@ esac
 vivo "$PUERTO_VALLA" && vivo "$PUERTO_EL" && vivo "$PUERTO_TW" && [ -n "$(escuchando "$BANCO_PORT")" ] || muere "arranca antes: bash $0 $B arrancar"
 
 # ── Las copias del banco de los dos mandos (las sustituciones de preparar.sh, que casan las veces exactas) ────────────
-python3 -I - "$OPS" "$B" "$ME" "$URL" "$GRUPO" "$PUERTO_TW" <<'PY'
+# PT-04: y la del mando de ANTES de la corrección de B-1 (6bd98ae2…), con las mismas sustituciones.
+ANTES_SHA=6bd98ae20da91b5d8d9e7b973f73391423b8037ecb6c21cc14908c46091ab68b
+ANTES_SRC="$B/root/h8-voice-scope-antes.orig"
+if [ -n "${MANDO_ANTES:-}" ]; then
+  install -m 600 "$MANDO_ANTES" "$ANTES_SRC"
+else
+  ( umask 077; git -C "$WT" show "${MANDO_ANTES_REF:-b461c205}:backend/docs/ultron-studio/ops/h8-voice-scope.sh" > "$ANTES_SRC" ) || muere "no se pudo sacar de git el mando de antes (MANDO_ANTES_REF o MANDO_ANTES)"
+fi
+[ "$(python3 -I -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$ANTES_SRC")" = "$ANTES_SHA" ] || muere "el mando de antes no tiene la huella 6bd98ae2… (MANDO_ANTES o MANDO_ANTES_REF)"
+python3 -I - "$OPS" "$B" "$ME" "$URL" "$GRUPO" "$PUERTO_TW" "$ANTES_SRC" <<'PY'
 import sys
-ops, b, me, url, grupo, ptw = sys.argv[1:7]
-def copia(nombre, reglas):
-    s = open(f"{ops}/{nombre}", encoding="utf-8").read()
+ops, b, me, url, grupo, ptw, antes = sys.argv[1:8]
+def copia(nombre, reglas, origen=None, destino=None):
+    s = open(origen or f"{ops}/{nombre}", encoding="utf-8").read()
     for viejo, nuevo, veces in reglas:
         n = s.count(viejo)
         if n != veces:
-            sys.exit(f"ensayar-ops8f: «{viejo[:70]}» aparece {n} veces en {nombre} (esperado {veces}): el mando cambió")
+            sys.exit(f"ensayar-ops8f: «{viejo[:70]}» aparece {n} veces en {destino or nombre} (esperado {veces}): el mando cambió")
         s = s.replace(viejo, nuevo)
-    open(f"{b}/root/{nombre}", "w", encoding="utf-8").write(s)
+    open(f"{b}/root/{destino or nombre}", "w", encoding="utf-8").write(s)
 propio = [("APPDIR=/var/www/api/backend", f"APPDIR={b}/api/backend", 1), ("WWW=www-data", f"WWW={me}", 1), ('[ "$(id -u)" = 0 ]', "true", 1)]
-copia("h8-voice-scope.sh", propio + [("API=https://api.ironbodyneiva.cloud/api", f"API={url}", 1), ("ROOT_U=root", f"ROOT_U={me}", 1),
+voz = propio + [("API=https://api.ironbodyneiva.cloud/api", f"API={url}", 1), ("ROOT_U=root", f"ROOT_U={me}", 1),
       ("ROOT_G=root", f"ROOT_G={grupo}", 1), ("COPIAS=/root", f"COPIAS={b}/root", 1),
-      ("CERROJO=/run/lock/h8-voice-scope.lock", f"CERROJO={b}/run/h8-voice-scope.lock", 1), ("NIVEL_ERROR=production.ERROR", "NIVEL_ERROR=local.ERROR", 1)])
+      ("CERROJO=/run/lock/h8-voice-scope.lock", f"CERROJO={b}/run/h8-voice-scope.lock", 1), ("NIVEL_ERROR=production.ERROR", "NIVEL_ERROR=local.ERROR", 1)]
+copia("h8-voice-scope.sh", voz)
+copia("h8-voice-scope.sh", voz, origen=antes, destino="h8-voice-scope-antes.sh")
 copia("h8-twilio-check.sh", propio + [("TW_API=https://api.twilio.com", f"TW_API=http://127.0.0.1:{ptw}", 1), ("TW_NUMBERS=https://numbers.twilio.com", f"TW_NUMBERS=http://127.0.0.1:{ptw}", 1)])
 PY
-chmod 700 "$B/root/h8-voice-scope.sh" "$B/root/h8-twilio-check.sh"
-bash -n "$B/root/h8-voice-scope.sh" && bash -n "$B/root/h8-twilio-check.sh" || muere "las copias del banco no pasan bash -n"
-! grep -v '^[[:space:]]*#' "$B/root/h8-voice-scope.sh" "$B/root/h8-twilio-check.sh" | grep -nE '/var/www|ironbodyneiva|api\.twilio\.com|numbers\.twilio\.com' || muere "las copias del banco todavía nombran rutas o hosts de producción"
+chmod 700 "$B/root/h8-voice-scope.sh" "$B/root/h8-voice-scope-antes.sh" "$B/root/h8-twilio-check.sh"
+bash -n "$B/root/h8-voice-scope.sh" && bash -n "$B/root/h8-voice-scope-antes.sh" && bash -n "$B/root/h8-twilio-check.sh" || muere "las copias del banco no pasan bash -n"
+! grep -v '^[[:space:]]*#' "$B/root/h8-voice-scope.sh" "$B/root/h8-voice-scope-antes.sh" "$B/root/h8-twilio-check.sh" | grep -nE '/var/www|ironbodyneiva|api\.twilio\.com|numbers\.twilio\.com' || muere "las copias del banco todavía nombran rutas o hosts de producción"
 
 LOG="$B/logs/ensayo-ops8f-$(date -u +%Y%m%d-%H%M%S).txt"
 ( umask 077; : > "$LOG" )
@@ -215,6 +229,7 @@ paso() { # <nombre> <código esperado> <patrón ERE que tiene que salir> <orden�
 tiene() { printf '%s' "$SALIDA" | grep -qE -- "$1"; }   # el patrón sale en la última salida
 comprueba() { caso "$1" "$(tiene "$2" && echo 0 || echo 1)" "${3:-}"; }
 alcance() { env "${RED[@]}" bash "$B/root/h8-voice-scope.sh" "$@" < /dev/null; }
+alcance_antes() { env "${RED[@]}" bash "$B/root/h8-voice-scope-antes.sh" "$@" < /dev/null; }   # PT-04: el de 6bd98ae2…
 twilio() { env "${RED[@]}" bash "$B/root/h8-twilio-check.sh" "$@" < /dev/null; }
 ctl_el() { curl -s --max-time 5 "http://127.0.0.1:$PUERTO_EL$1"; }
 ctl_tw() { curl -s --max-time 5 "http://127.0.0.1:$PUERTO_TW$1"; }
@@ -405,6 +420,41 @@ comprueba "salientes on · lo dice: número de voz = el visible, ADMITIDA" 'núm
 comprueba "salientes on · la reserva de la puerta se sigue comprobando (C-1)" 'el presupuesto \(2\.00 US\$\) la cubre'
 paso "salientes on · el presupuesto que no cubre la reserva se sigue negando con la identidad admitida" 2 'no cubre la reserva' alcance salientes on --cupo=1 --presupuesto=0.30
 paso "entrantes on · con la identidad compartida declarada → se niega por su nombre" 2 'identidad compartida con la mensajería está declarada' alcance entrantes on --cupo=1
+
+# ── 6b. PT-04 · B-1 (informe-security-mandos.md, condición (2).8): «numero-compartido off» con las salientes ENCENDIDAS ─
+# (a) las apaga en la MISMA escritura (lo de «salientes off») y lo dice; (c) su vuelta exacta devuelve el fichero de antes.
+# El mando de ANTES (6bd98ae2…), en el mismo punto, sale APLICADO con las salientes encendidas: el defecto que (a) hace caer.
+install -m 600 "$ENVB" "$B/root/env-ops8f-salientes-on"
+cuenta_copias() { find "$B/root" -maxdepth 1 -name 'env-pre-voice-*' | wc -l | tr -d ' '; }
+N0=$(cuenta_copias)
+paso "B-1 (a) · identidad ADMITIDA y salientes on: numero-compartido off → APLICADO" 0 'MANDO numero-compartido-off APLICADO' alcance numero-compartido off
+comprueba "B-1 (a) · lo dice: las salientes están encendidas y esta orden las APAGA en la misma escritura" 'las salientes están encendidas \(VOICE_OUTBOUND_ENABLED: true\): esta orden las APAGA en la misma escritura'
+comprueba "B-1 (a) · el antes → después: salientes, cupo, presupuesto, Twilio Voice y la declaración, en una sola escritura" 'budget: "2\.00" → "0" · outbound: true → false · outbound_cap: 1 → 0 · shared_declared: true → false · twilio_voice: true → false$'
+comprueba "B-1 (a) · avisa de que no cuelga una llamada en curso (voice:hangup)" 'AVISO \(B-1\): las salientes estaban encendidas y quedan APAGADAS.*voice:hangup --all --confirm'
+comprueba "B-1 (a) · avisa de reconocer la huella de voz del Studio (H-25)" 'AVISO \(H-25, OPS8-d\): salientes on/off cambian la huella de voz'
+COPIA_A=$(printf '%s' "$SALIDA" | sed -n 's/^MANDO numero-compartido-off APLICADO (copia previa: \([^;)]*\).*$/\1/p')
+VUELTA_A=$(printf '%s' "$SALIDA" | sed -n 's/^   vuelta atrás exacta (el fichero de antes): //p')
+caso "B-1 (a) · una sola escritura: UNA copia previa nueva (la de numero-compartido-off), que es el fichero con las salientes encendidas" "$([ "$(cuenta_copias)" = $((N0 + 1)) ] && [[ "$COPIA_A" == */env-pre-voice-numero-compartido-off-* ]] && cmp -s "$COPIA_A" "$B/root/env-ops8f-salientes-on" && echo 0 || echo 1)" "$(cuenta_copias) copias previas (antes $N0)"
+H=$(python3 -I - "$ENVB" <<'PY'
+import re, sys
+e = open(sys.argv[1], encoding="utf-8").read()
+v = lambda k: (re.search(r"^[ \t]*" + k + r"=(.*)$", e, re.M) or [None, None])[1]
+quiere = {"VOICE_NUMBER_SHARED_WITH_MESSAGING": "false", "VOICE_OUTBOUND_ENABLED": "false", "TWILIO_VOICE_DAILY_CALL_CAP": "0", "VOICE_DAILY_BUDGET_USD": "0", "TWILIO_VOICE_ENABLED": "false"}
+print("si" if all(v(k) == x for k, x in quiere.items()) else "no")
+PY
+)
+caso "B-1 (a) · el fichero: VOICE_OUTBOUND_ENABLED=false, TWILIO_VOICE_DAILY_CALL_CAP=0, VOICE_DAILY_BUDGET_USD=0, TWILIO_VOICE_ENABLED=false y la declaración en false" "$([ "$H" = si ] && echo 0 || echo 1)"
+paso "B-1 (a) · estado: la declaración retirada (not_declared)…" 0 'NO admitida \(not_declared\)' alcance estado
+comprueba "B-1 (a) · …y «salientes: no»" 'salientes: no '
+( eval "export ${RED[*]}; $VUELTA_A" ) > /dev/null 2>&1 && cmp -s "$ENVB" "$B/root/env-ops8f-salientes-on" && caso "B-1 (c) · la vuelta atrás EXACTA de ese «off» devuelve byte a byte el fichero de antes (salientes y declaración)" 0 || caso "B-1 (c) · la vuelta atrás exacta de ese «off»" 1 "$COPIA_A"
+paso "B-1 (c) · estado tras la vuelta exacta: ADMITIDA otra vez…" 0 'ADMITIDA por el servidor' alcance estado
+comprueba "B-1 (c) · …y «salientes: sí»" 'salientes: sí '
+paso "B-1 · el mando de ANTES (6bd98ae2…) en el mismo punto: numero-compartido off → APLICADO" 0 'MANDO numero-compartido-off APLICADO' alcance_antes numero-compartido off
+comprueba "B-1 · el mando de ANTES solo retira la declaración (el defecto de B-1: no apaga las salientes)" 'antes → después \(sin valores de secretos\): shared_declared: true → false$'
+VUELTA_V=$(printf '%s' "$SALIDA" | sed -n 's/^   vuelta atrás exacta (el fichero de antes): //p')
+paso "B-1 · tras el mando de ANTES: la declaración retirada (not_declared)…" 0 'NO admitida \(not_declared\)' alcance estado
+comprueba "B-1 · …con «salientes: sí» (lo que el caso (a) no deja)" 'salientes: sí '
+( eval "export ${RED[*]}; $VUELTA_V" ) > /dev/null 2>&1 && cmp -s "$ENVB" "$B/root/env-ops8f-salientes-on" && caso "B-1 · la vuelta exacta del mando de antes devuelve el fichero con las salientes encendidas" 0 || caso "B-1 · la vuelta exacta del mando de antes" 1
 paso "salientes off → APLICADO" 0 'MANDO salientes-off APLICADO' alcance salientes off
 
 # ── 7. La vuelta atrás: numero-compartido off ──────────────────────────────────────────────────────────────────────
@@ -420,6 +470,18 @@ paso "twilio · tras off: el visible sin la declaración vuelve a ser FALLO" 3 '
 ( eval "export ${RED[*]}; $VUELTA" ) > /dev/null 2>&1 && cmp -s "$ENVB" "$COPIA" && caso "la vuelta atrás EXACTA que imprime «off» deja el fichero byte a byte como su copia previa" 0 || caso "la vuelta atrás exacta de «off»" 1 "$COPIA"
 paso "estado · tras la vuelta exacta: DECLARADA otra vez y ADMITIDA (la observación sigue fresca)" 0 'ADMITIDA por el servidor' alcance estado
 paso "numero-compartido off otra vez → APLICADO" 0 'MANDO numero-compartido-off APLICADO' alcance numero-compartido off
+# PT-04 · B-1 (b): con las salientes YA apagadas, el mando de ahora es el de antes: desde el mismo fichero, el de antes
+# deja el mismo fichero byte a byte y la misma salida línea a línea (salvo la fecha de la copia y el nombre del mando).
+comprueba "B-1 (b) · con las salientes ya apagadas, el antes → después es solo shared_declared" 'antes → después \(sin valores de secretos\): shared_declared: true → false$'
+caso "B-1 (b) · y no dice que apague las salientes" "$(tiene 'las APAGA en la misma escritura|AVISO \(B-1\)' && echo 1 || echo 0)"
+SAL_N=$SALIDA; install -m 600 "$ENVB" "$B/root/env-ops8f-off-ahora"
+COPIA_N=$(printf '%s' "$SALIDA" | sed -n 's/^MANDO numero-compartido-off APLICADO (copia previa: \([^;)]*\).*$/\1/p')
+VUELTA_N=$(printf '%s' "$SALIDA" | sed -n 's/^   vuelta atrás exacta (el fichero de antes): //p')
+( eval "export ${RED[*]}; $VUELTA_N" ) > /dev/null 2>&1 && cmp -s "$ENVB" "$COPIA_N" || muere "B-1 (b): la vuelta exacta no devolvió el fichero de antes ($COPIA_N)"
+paso "B-1 (b) · el mando de ANTES desde el mismo fichero → APLICADO" 0 'MANDO numero-compartido-off APLICADO' alcance_antes numero-compartido off
+caso "B-1 (b) · el fichero de entorno queda byte a byte como con el mando de antes" "$(cmp -s "$ENVB" "$B/root/env-ops8f-off-ahora" && echo 0 || echo 1)"
+normaliza() { sed -E -e 's/[0-9]{8}-[0-9]{6}/<fecha>/g' -e "s#$B/root/h8-voice-scope(-antes)?\\.sh#<mando>#g"; }
+caso "B-1 (b) · y la salida es la misma línea a línea (salvo la fecha de la copia y el nombre del mando)" "$([ "$(printf '%s\n' "$SAL_N" | normaliza)" = "$(printf '%s\n' "$SALIDA" | normaliza)" ] && echo 0 || echo 1)"
 
 alcance monitor off >> "$LOG" 2>&1 || true
 rm -f "$B/run/worker-voz"; constante cerrar
