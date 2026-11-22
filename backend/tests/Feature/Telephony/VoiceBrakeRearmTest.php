@@ -101,7 +101,7 @@ class VoiceBrakeRearmTest extends TestCase
                 throw new \LogicException('la conciliación solo lee');
             }
 
-            public function describeAgent(string $agentId): VoiceAgentObservation
+            public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
             {
                 return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_OBSERVED, $agentId, null, null, $this->proyeccion, 200, null);
             }

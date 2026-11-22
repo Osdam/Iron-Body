@@ -198,7 +198,7 @@ class UltronStudioVoiceOutboundOnlyTest extends TestCase
                 return $this->inner->createAgent($payload);
             }
 
-            public function describeAgent(string $agentId): VoiceAgentObservation
+            public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
             {
                 ($this->onDescribe)($agentId);
 

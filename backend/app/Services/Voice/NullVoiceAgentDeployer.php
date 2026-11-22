@@ -14,7 +14,7 @@ final class NullVoiceAgentDeployer implements VoiceAgentDeployer
         return new VoiceDeployResult(VoiceDeployResult::OUTCOME_NOT_CONFIGURED, null, [], null, null);
     }
 
-    public function describeAgent(string $agentId): VoiceAgentObservation
+    public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
     {
         return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_NOT_CONFIGURED, null, null, null, null, null, null);
     }

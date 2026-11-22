@@ -56,7 +56,7 @@ final class FakeVoiceDeployer implements VoiceAgentDeployer
         return new VoiceDeployResult(VoiceDeployResult::OUTCOME_CREATED, $id, [], 200, null);
     }
 
-    public function describeAgent(string $agentId): VoiceAgentObservation
+    public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
     {
         $this->calls[] = ['describe', $agentId];
         if ($this->describeOutcome === 'unreachable') {

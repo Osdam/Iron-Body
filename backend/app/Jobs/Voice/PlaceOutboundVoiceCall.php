@@ -18,10 +18,12 @@ use App\Services\Voice\Dto\OutboundCallRequest;
 use App\Services\Voice\Dto\OutboundCallResult;
 use App\Services\Voice\Dto\VoiceAgentObservation;
 use App\Services\Voice\Dto\VoiceAgentSpec;
+use App\Services\Voice\ElevenLabs\ElevenLabsCallStarter;
 use App\Services\Voice\VoiceAdapters;
 use App\Services\Voice\VoiceCallContext;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceCallStarter;
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -69,6 +71,19 @@ use Throwable;
  *  6. el destino, descifrado SOLO EN MEMORIA, que tiene que seguir siendo
  *     el sellado (su huella); si no se puede, `error` (DF-G8).
  * La frecuencia y los cupos no se repiten: ya están reservados.
+ *
+ * EL PLAZO PARA MARCAR (Enmienda del 22-11-2026, E19-2; H-2 del informe
+ * `informe-be-voz.md`). Con la caché de la deriva vacía, el paso 4 hace un GET
+ * del agente y otro por herramienta, cada uno con su plazo de la
+ * configuración; después viene el POST (hasta 20 s). Si todo pasaba de los
+ * 30 s del job, el job moría con la fila `requested` y quedaba `ambiguous`
+ * sin haber marcado (H-1). Ahora el POST sale, como muy tarde, a los
+ * {@see dialDeadline()} segundos de empezar (30 − 20 − 4 = 6): la lectura de
+ * la deriva se hace DENTRO de lo que queda (su plazo total, E19-2), y si no
+ * termina a tiempo, `drift_unverified`; si justo antes de marcar ya no queda
+ * (los pasos locales tardaron), `error` (DF-G8: un fallo local antes de
+ * enviar). Las dos cancelan SIN PETICIÓN: un final limpio (`canceled`, la
+ * reserva liberada), nunca `ambiguous`.
  */
 class PlaceOutboundVoiceCall implements ShouldQueue
 {
@@ -81,6 +96,14 @@ class PlaceOutboundVoiceCall implements ShouldQueue
     public int $timeout = 30;
 
     public bool $failOnTimeout = true;
+
+    /**
+     * E19-2 (H-2): lo que se deja después del POST para guardar su resultado
+     * (una transacción con el cerrojo de la fila, su evento y su línea, de
+     * milisegundos; el cerrojo lo tiene, como mucho, una herramienta, que no
+     * sale a la red) y para lo que el worker gasta fuera de `handle()`.
+     */
+    public const AFTER_DIAL_MARGIN_SECONDS = 4;
 
     public function __construct(public readonly int $callId)
     {
@@ -99,12 +122,13 @@ class PlaceOutboundVoiceCall implements ShouldQueue
      */
     public function run(VoiceCallStarter $starter): ?string
     {
+        $plazo = $this->dialDeadline();
         $llamada = VoiceCall::query()->find($this->callId);
         if ($llamada === null || $llamada->status !== VoiceCall::STATUS_REQUESTED) {
             return $llamada?->status;
         }
 
-        $motivo = $this->recheck($llamada);
+        $motivo = $this->recheck($llamada, $plazo);
         if ($motivo !== null) {
             return $this->cancel($llamada, $motivo);
         }
@@ -120,10 +144,47 @@ class PlaceOutboundVoiceCall implements ShouldQueue
             return $this->cancel($llamada, 'error');
         }
 
+        return $this->dialWithin($llamada, $peticion, $starter, $plazo);
+    }
+
+    /**
+     * E19-2 (H-2): el instante en que, como muy tarde, tiene que salir el POST
+     * para que el job termine dentro de su plazo aunque el proveedor agote el
+     * suyo: el plazo del job, menos el máximo del iniciador
+     * ({@see ElevenLabsCallStarter::MAX_TIMEOUT_SECONDS}, el peor caso: su
+     * plazo efectivo nunca pasa de ahí) y {@see AFTER_DIAL_MARGIN_SECONDS}.
+     * Con el reloj de la aplicación (las pruebas lo controlan).
+     */
+    public function dialDeadline(): CarbonInterface
+    {
+        return now()->addSeconds($this->timeout - ElevenLabsCallStarter::MAX_TIMEOUT_SECONDS - self::AFTER_DIAL_MARGIN_SECONDS);
+    }
+
+    /**
+     * E19-2 (H-2): el último paso, marcar, solo si todavía se llega a tiempo
+     * (si no, `error`, sin petición). Aparte, como {@see recheckAfterCode()},
+     * solo para que las pruebas lo recorran en el árbol compartido, donde la
+     * constante está cerrada: solo lo llama {@see run()}, ya comprobada la
+     * constante, y el iniciador la vuelve a comprobar.
+     */
+    private function dialWithin(VoiceCall $llamada, OutboundCallRequest $peticion, VoiceCallStarter $starter, CarbonInterface $plazo): string
+    {
+        if (! now()->lessThan($plazo)) {
+            unset($peticion);
+            Log::channel('voice')->warning('voice.outbound.dial_deadline', ['call_uuid' => $llamada->uuid, 'stage' => 'before_dial', 'late_ms' => self::msUntil($plazo) * -1]);
+
+            return $this->cancel($llamada, 'error');
+        }
         $resultado = $starter->startOutbound($peticion);
         unset($peticion);
 
         return $this->record($llamada, $resultado);
+    }
+
+    /** Los milisegundos que quedan hasta `$plazo` (negativos si ya pasó). */
+    private static function msUntil(CarbonInterface $plazo): int
+    {
+        return (int) round($plazo->getPreciseTimestamp(3) - now()->getPreciseTimestamp(3));
     }
 
     /**
@@ -147,23 +208,25 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         VoiceHangup::brakeIfUnconfirmedAfterCancel($llamada);
     }
 
-    private function recheck(VoiceCall $llamada): ?string
+    private function recheck(VoiceCall $llamada, CarbonInterface $plazo): ?string
     {
         if (VoiceCallPolicy::CALLS_ENABLED_IN_CODE !== true) {
             return 'calls_disabled_in_code';
         }
 
-        return $this->recheckAfterCode($llamada);
+        return $this->recheckAfterCode($llamada, $plazo);
     }
 
     /**
      * Los pasos 1 (banderas) a 5 de DF-G9, ya comprobada la constante. Aparte
      * solo para que las pruebas los recorran en el árbol compartido, donde la
      * constante está cerrada y `run()` nunca pasa de ella: no es un atajo
-     * (solo lo llama {@see recheck()} y no marca nada).
+     * (solo lo llama {@see recheck()} y no marca nada). Sin `$plazo`, el de
+     * un job que empieza ahora ({@see dialDeadline()}).
      */
-    private function recheckAfterCode(VoiceCall $llamada): ?string
+    private function recheckAfterCode(VoiceCall $llamada, ?CarbonInterface $plazo = null): ?string
     {
+        $plazo ??= $this->dialDeadline();
         if (config('voice.outbound.enabled') !== true) {
             return 'outbound_disabled';
         }
@@ -188,20 +251,34 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         // E10-6: solo una observación hecha AQUÍ puede rearmar un freno soltado;
         // el veredicto de la caché es de antes (la misma observación).
         $rearma = static fn (): bool => false;
+        $tarde = false;
         if ($deriva === null) {
             $observada = now();
-            $observacion = VoiceAdapters::deployer()->describeAgent((string) $parte->providerAgentId);
+            // E19-2 (H-2): la lectura, dentro de lo que queda antes de tener que marcar (su plazo TOTAL, todas sus peticiones).
+            $observacion = VoiceAdapters::deployer()->describeAgent((string) $parte->providerAgentId, max(0, self::msUntil($plazo)) / 1000);
             if ($observacion->outcome !== VoiceAgentObservation::OUTCOME_OBSERVED) {
+                if ($observacion->reason === VoiceAgentObservation::REASON_DEADLINE) {
+                    Log::channel('voice')->warning('voice.outbound.dial_deadline', ['call_uuid' => $llamada->uuid, 'stage' => 'drift', 'outcome' => $observacion->outcome]);
+                }
+
                 return 'drift_unverified';
             }
             $deriva = ! hash_equals((string) $parte->projectionHash, (string) $observacion->projectionHash);
             Cache::put(OutboundGate::DRIFT_CACHE_PREFIX.$parte->providerAgentId, $deriva, OutboundGate::DRIFT_CACHE_SECONDS);
             $rearma = VoiceBrake::observedAfter($observada);
+            $tarde = ! now()->lessThan($plazo);
         }
+        // Una deriva observada echa el freno aunque llegue tarde: es lo que protege, no el plazo.
         if ($deriva === true) {
             VoiceBrake::openOrRearm('agent_drift', 'drift:'.$parte->providerAgentId, ['where' => 'outbound_job', 'seq' => $parte->seq, 'part' => $parte->part], $rearma, (int) $llamada->id);
 
             return 'agent_drift';
+        }
+        if ($tarde) {
+            // Sin deriva, pero comprobada tarde para marcar con margen: no se marca (la observación queda en la caché).
+            Log::channel('voice')->warning('voice.outbound.dial_deadline', ['call_uuid' => $llamada->uuid, 'stage' => 'drift', 'outcome' => $observacion->outcome]);
+
+            return 'drift_unverified';
         }
 
         // 5. El destino y el calendario, justo antes de marcar y con las reglas de la puerta.

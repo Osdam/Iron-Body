@@ -15,6 +15,7 @@ use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceNumberObserver;
 use App\Services\Voice\VoiceProviderStatus;
 use App\Services\Voice\VoiceWebhookObserver;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Client\StrayRequestException;
@@ -76,7 +77,21 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
 
     public const CONNECT_TIMEOUT_SECONDS = 5;
 
+    /**
+     * E19-2 (H-2): con un plazo total ({@see describeAgent()}), una petición
+     * no empieza con menos de esto por delante: un proveedor sano responde a
+     * un GET en unos cientos de milisegundos, y empezar una con menos es
+     * gastar el plazo en algo que casi seguro no llega.
+     */
+    public const MIN_REQUEST_SECONDS = 1.0;
+
     private const JSON_MAX_DEPTH = 64;
+
+    /**
+     * @param  (Closure(): float)|null  $clock  un reloj MONÓTONO en segundos para el plazo total de
+     *                                          {@see describeAgent()}; solo las pruebas pasan otro (por defecto, `hrtime`)
+     */
+    public function __construct(private readonly ?Closure $clock = null) {}
 
     public function createAgent(VoiceAgentPayload $payload): VoiceDeployResult
     {
@@ -144,7 +159,15 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
         return new VoiceDeployResult(VoiceDeployResult::OUTCOME_CREATED, $agente, $ids, $estado, null);
     }
 
-    public function describeAgent(string $agentId): VoiceAgentObservation
+    /**
+     * Con `$withinSeconds` (E19-2, H-2; el job de la saliente, con lo que le
+     * queda antes de tener que marcar), un plazo TOTAL: cada GET espera como
+     * mucho lo que queda (y nunca más que el de la configuración) y ninguno
+     * empieza con menos de {@see MIN_REQUEST_SECONDS} por delante; entonces
+     * `unreachable` con motivo `deadline`, sin esa petición. Sin él, como
+     * siempre: el plazo de la configuración en cada petición.
+     */
+    public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
     {
         $config = ElevenLabsConfig::fromConfig();
         $base = $config->baseUrl();
@@ -154,9 +177,13 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
         if (! VoiceIds::isProviderId($agentId)) {
             return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_ERROR, null, null, null, null, null, VoiceAgentObservation::REASON_INVALID_REQUEST);
         }
-        $espera = $config->timeoutSeconds();
+        $fin = $withinSeconds === null ? null : $this->monotonicSeconds() + $withinSeconds;
 
         // 1. El agente.
+        $espera = $this->waitFor($config->timeoutSeconds(), $fin);
+        if ($espera === null) {
+            return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_UNREACHABLE, $agentId, null, null, null, null, VoiceAgentObservation::REASON_DEADLINE);
+        }
         try {
             $respuesta = Http::withHeaders(['xi-api-key' => trim((string) config('voice.elevenlabs.api_key'))])
                 ->acceptJson()
@@ -187,6 +214,10 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
         // 2. Sus herramientas, una a una (como mucho las del catálogo).
         $herramientas = [];
         foreach ($idsHerramientas as $i => $idHerramienta) {
+            $espera = $this->waitFor($config->timeoutSeconds(), $fin);
+            if ($espera === null) {
+                return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_UNREACHABLE, $agentId, null, null, null, null, VoiceAgentObservation::REASON_DEADLINE);
+            }
             try {
                 $r = Http::withHeaders(['xi-api-key' => trim((string) config('voice.elevenlabs.api_key'))])
                     ->acceptJson()
@@ -225,6 +256,26 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
             $respuesta->status(),
             null,
         );
+    }
+
+    /**
+     * E19-2: lo que puede esperar la próxima petición de una lectura con plazo total (`$fin`, en el reloj monótono):
+     * el de la configuración, o lo que queda si es menos; null si queda menos de {@see MIN_REQUEST_SECONDS}.
+     */
+    private function waitFor(int $configurado, ?float $fin): int|float|null
+    {
+        if ($fin === null) {
+            return $configurado;
+        }
+        $queda = $fin - $this->monotonicSeconds();
+
+        return $queda < self::MIN_REQUEST_SECONDS ? null : min($configurado, $queda);
+    }
+
+    /** El reloj monótono, en segundos. */
+    private function monotonicSeconds(): float
+    {
+        return $this->clock === null ? hrtime(true) / 1e9 : ($this->clock)();
     }
 
     public function assignNumber(string $providerNumberId, ?string $agentId): VoiceDeployResult
