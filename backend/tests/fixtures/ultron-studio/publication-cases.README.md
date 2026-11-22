@@ -32,7 +32,7 @@
 
 Tienen que reproducir cada `expected` **exactamente**. Si PHP discrepa, se corrige PHP. Este fichero solo cambia con una enmienda del contrato.
 
-**Recuento:** 231 casos.
+**Recuento:** 234 casos: los 231 de arriba y tres de la **Enmienda del 22-11-2026** (B-2, cuatro ojos por regla; contrato H5, A5.1 paso 4). Esos tres los escribió a mano el backend desde la enmienda, copiando los casos del autor de la versión. **No** los cubren la segunda derivación ni las 29 implementaciones equivocadas de arriba. Los cubren la parte HTTP (`UltronStudioPublicationLifecycleTest`) y, con su detalle, `UltronStudioRulePhraseAuthorsTest`.
 
 | Sección | Casos | Desglose |
 |---|---|---|
@@ -40,7 +40,7 @@ Tienen que reproducir cada `expected` **exactamente**. Si PHP discrepa, se corri
 | `effectiveJson` | 21 | 11 `effectiveJson` (bytes) + 10 `compose` (qué versión va en cada parte) |
 | `signature` | 24 | 7 `sign` + 17 `verify` |
 | `scope` | 63 | 24 de la matriz `canary`/`all` × 3 conversaciones × 4 formas de partes; 5 `off`; 3 sin fila; 2 fallos simulados; 29 de verificación (contrato, huella, firma, `malformed` y bytes no canónicos) |
-| `gates` | 71 | 45 `publish` + 13 `promote` + 9 `rollback` + 4 `legacy` |
+| `gates` | 74 | 47 `publish` + 14 `promote` + 9 `rollback` + 4 `legacy` (71 + 3 de la Enmienda del 22-11-2026) |
 | `evidence` | 18 | — |
 
 **Dónde vive.** En `tests/fixtures/ultron-studio/`, junto a los de F, G y H4. El plan (§3.1 y §7) decía `tests/Fixtures/UltronStudio/`, pero eso no es la convención de la suite. Además, en el disco de macOS, que no distingue mayúsculas, esa ruta caería en `tests/fixtures/UltronStudio/`, y en Linux sería un tercer directorio.
@@ -149,6 +149,7 @@ Tienen que reproducir cada `expected` **exactamente**. Si PHP discrepa, se corri
   - `previewHash` y `evidenceHash` son `{sent, current}`.
   - `head`, en Legacy, es `declaring`, `legacy` o `none` (ninguna fila).
   - `now` va siempre en UTC.
+  - `actor.isRulePhraseAuthor` (Enmienda del 22-11-2026, B-2): quien actúa escribió una revisión, ≤ la copiada, de una S-NNN que aporta frases a la versión (la versión es de otra persona). Si falta, es `false`. Rechaza en el paso 4, justo después de `isAuthor`, con `four_eyes_required` y `payload.detail = rule_phrase_author`. Revertir y Legacy no la miran: no tienen cuatro ojos (A5.3).
 - **`expected`.**
   - `{status, code}` de la **primera** puerta que rechaza.
   - `{status: null, code: null}` es que ninguna rechaza y sigue la transacción (paso 12).
@@ -331,7 +332,7 @@ Cada punto cita los casos que lo fijan. **El lead tiene que congelarlos** con un
 |---|---|
 | 1 | persona → `ultron.view` → `ultron.publish` (como `StudioAccess::require`) |
 | 2 | `publishing_disabled` → `engine_not_reading_versions` |
-| 4 | `version_not_found` → `four_eyes_required` |
+| 4 | `version_not_found` → `four_eyes_required` (primero quien creó la versión; después, B-2, quien escribió frases que copia) |
 | 5 | estado → integridad |
 | 6 | `revalidation_blocked` → `revalidation_changed` |
 | 8 | `engine_value_mismatch` → `engine_reading_unavailable` |
