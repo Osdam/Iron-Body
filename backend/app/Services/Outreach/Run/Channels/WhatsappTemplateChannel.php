@@ -6,6 +6,7 @@ use App\Models\MarketingLead;
 use App\Services\Marketing\MarketingMessageDispatcher;
 use App\Services\Marketing\OutreachTemplateMessage;
 use App\Services\Outreach\Facts\BatchSnapshotBuilder;
+use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\FactSelection;
 use App\Services\Outreach\Facts\WhatsappRecipient;
 use App\Services\Outreach\Facts\WhatsappSignals;
@@ -220,9 +221,11 @@ final class WhatsappTemplateChannel implements OutreachChannel
 
     /**
      * La persona según los HECHOS de este instante (`Facts`): null si tiene
-     * identidad de WhatsApp y el hecho autoriza esta finalidad por WhatsApp
-     * (`consent.whatsapp.<finalidad>`) sin ninguna negativa suya; si no, el
-     * código por el que no se le escribe.
+     * identidad de WhatsApp y la autorización de esta finalidad por WhatsApp es
+     * `granted` con la MISMA combinación que la escalera
+     * ({@see CoreProjection::consentFor()}: el prospecto o el libro de C9 para
+     * el número de hoy; gana la negativa de cualquiera de los dos) sin ninguna
+     * negativa suya; si no, el código por el que no se le escribe.
      */
     private function personState(string $subjectKey, string $purpose, DateTimeImmutable $now): ?string
     {
@@ -234,7 +237,7 @@ final class WhatsappTemplateChannel implements OutreachChannel
             return 'no_whatsapp_identity';
         }
 
-        return $s->policy("consent.whatsapp.{$purpose}") === true
+        return CoreProjection::consentFor($s->policy, 'whatsapp', $purpose) === 'granted'
             && $s->policy('lead.consent_denied') !== true
             && $s->policy('lead.do_not_contact') !== true
             && $s->policy('lead.do_not_contact_sibling') !== true ? null : 'no_consent_for_purpose_channel';

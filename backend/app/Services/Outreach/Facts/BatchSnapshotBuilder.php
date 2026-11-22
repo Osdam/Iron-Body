@@ -34,6 +34,7 @@ final class BatchSnapshotBuilder
         private readonly ContactHistoryFacts $history = new ContactHistoryFacts,
         private readonly CanaryFacts $canaries = new CanaryFacts,
         private readonly OperationalBrakes $brakes = new OperationalBrakes,
+        private readonly OutreachConsentFacts $consents = new OutreachConsentFacts,
     ) {}
 
     /**
@@ -99,6 +100,8 @@ final class BatchSnapshotBuilder
             }
             if ($seleccion->policy) {
                 $fusionar($this->canaries->facts($lote), $politica);
+                // C9-2: el libro de autorizaciones, con claves propias (`c9.*`): nunca pisa `consent.*`.
+                $fusionar($this->consents->facts($lote), $politica);
             }
 
             // Eventos: los pedidos y, si se piden transiciones, los que las prueban (una sola lectura).
@@ -148,7 +151,7 @@ final class BatchSnapshotBuilder
             ksort($pedidos, SORT_STRING);
             $pol = null;
             if ($seleccion->policy) {
-                $pol = array_intersect_key($politica[$clave], array_flip(FactNames::POLICY));
+                $pol = array_intersect_key($politica[$clave], array_flip([...FactNames::POLICY, ...FactNames::C9_POLICY]));
                 ksort($pol, SORT_STRING);
             }
             $sujetos[$clave] = new SubjectFacts(

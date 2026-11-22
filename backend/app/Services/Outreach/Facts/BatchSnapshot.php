@@ -183,7 +183,7 @@ final class BatchSnapshot
                 $errores[] = $ruta.'.policy';
             } else {
                 foreach ($p['policy'] as $k => $v) {
-                    if (! in_array($k, FactNames::POLICY, true) || ! is_bool($v)) {
+                    if (! FactNames::isPolicy((string) $k) || ! is_bool($v)) {
                         $errores[] = $ruta.'.policy.'.$k;
                     }
                 }

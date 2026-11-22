@@ -12,7 +12,9 @@ use App\Services\Outreach\Facts\EngineFacts;
 use App\Services\Outreach\Facts\LeadFacts;
 use App\Services\Outreach\Facts\MembershipFacts;
 use App\Services\Outreach\Facts\OperationalBrakes;
+use App\Services\Outreach\Facts\OutreachConsentFacts;
 use App\Services\Outreach\Facts\PaymentFacts;
+use App\Services\Outreach\Facts\PhoneRef;
 use App\Services\Outreach\Facts\ReceivableFacts;
 use App\Services\Outreach\Facts\SubjectKey;
 use App\Services\Outreach\Facts\SubjectResolver;
@@ -25,6 +27,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Outreach\Facts\Support\FactsWorld;
+use Tests\Feature\Outreach\Schema\OutreachConsentFixtures;
+use Tests\Feature\Outreach\Schema\OutreachSchemaFixtures;
 use Tests\TestCase;
 
 /**
@@ -38,6 +42,8 @@ use Tests\TestCase;
 class FactsReadOnlyTest extends TestCase
 {
     use FactsWorld;
+    use OutreachConsentFixtures;
+    use OutreachSchemaFixtures;
     use RefreshDatabase;
 
     private const NOW = '2026-11-09 15:00:00';
@@ -49,6 +55,8 @@ class FactsReadOnlyTest extends TestCase
     {
         config(['commercial.events_enabled' => true]);
         $claves = $this->sembrar();
+        // C9-2: una autorización confirmada para el número del primer socio, para que el lector del libro lea también las conversaciones.
+        $this->resolveConsent($this->requestConsent(['member_id' => (int) substr($claves[0], 2), 'phone_ref' => PhoneRef::fromRaw('3006660000')]));
         $antes = $this->conteos();
 
         $resolutor = SubjectResolver::TABLES;
@@ -69,6 +77,7 @@ class FactsReadOnlyTest extends TestCase
             'EngineFacts' => [fn () => [(new EngineFacts)->facts($this->pass($claves, self::NOW)), (new EngineFacts)->events($this->pass($claves, self::NOW), ['human_requested', 'payment_approved'])], [...EngineFacts::TABLES, ...$resolutor]],
             'ContactHistoryFacts' => [fn () => (new ContactHistoryFacts)->contacts($this->pass($claves, self::NOW)), [...ContactHistoryFacts::TABLES, ...$resolutor]],
             'CanaryFacts' => [fn () => (new CanaryFacts)->facts($this->pass($claves, self::NOW)), [...CanaryFacts::TABLES, ...$resolutor, ...$compartidas]],
+            'OutreachConsentFacts' => [fn () => (new OutreachConsentFacts)->facts($this->pass($claves, self::NOW)), [...OutreachConsentFacts::TABLES, ...$resolutor]],
             'OperationalBrakes' => [fn () => (new OperationalBrakes)->read(), OperationalBrakes::TABLES],
             'CatalogDomains' => [fn () => (new CatalogDomains)->read(), CatalogDomains::TABLES],
             'SubjectTimeline' => [fn () => (new SubjectTimeline)->forSubject($claves[0]), SubjectTimeline::TABLES],
@@ -141,7 +150,8 @@ class FactsReadOnlyTest extends TestCase
             'receivable_payments', 'marketing_leads', 'marketing_conversations', 'marketing_messages', 'marketing_followups', 'marketing_ai_actions',
             'commercial_events', 'commercial_opportunities', 'commercial_alerts', 'commercial_segments', 'classes', 'class_reservations', 'class_attendances',
             'class_sessions', 'valuation_appointments', 'physical_evaluations', 'voice_contacts', 'voice_consents', 'voice_exclusions', 'voice_rne_checks',
-            'voice_calls', 'voice_brakes', 'ultron_studio_canary_numbers', 'ultron_aborts', 'marketing_agent_settings', 'automation_events', 'identities'] as $t) {
+            'voice_calls', 'voice_brakes', 'ultron_studio_canary_numbers', 'ultron_aborts', 'marketing_agent_settings', 'automation_events', 'identities',
+            'outreach_consents'] as $t) {
             $c[$t] = Schema::hasTable($t) ? DB::table($t)->count() : -1;
         }
 
