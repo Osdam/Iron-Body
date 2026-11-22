@@ -1649,14 +1649,33 @@ Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/
 **Privacidad (encargado: OpenAI, Responses API).**
 - `store: false`, instrucciones fijas sin datos de nadie y un único mensaje con el texto de ESA respuesta.
 - El texto va enmascarado: teléfonos y cifras de 6 o más dígitos, documentos, correos y enlaces quedan ocultos; se quitan los invisibles y se corta a 500 caracteres.
+  - Desde la ronda 3 (M1 de security), también el correo escrito con espacios o con «arroba» y «punto» (solo si acaba en un dominio de primer nivel conocido), un dominio con ruta sin esquema (`instagram.com/usuario`) y una cuenta `@usuario`. Los dos últimos se ocultan como `[enlace]`, porque las instrucciones fijas solo nombran tres marcas. La huella del prompt no cambia.
 - Nunca `user`, `metadata` ni `safety_identifier`, ni el nombre, el teléfono o los identificadores de la persona.
 - El texto no se guarda ni se registra en los logs, que solo llevan la clase de lo ocurrido.
-- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). La compartida de la IA del CRM (`OPENAI_API_KEY`) no vale: con la misma clave, no llama.
+- Clave PROPIA del clasificador (`COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY`). No vale ninguna clave de OpenAI que ya use otra parte del sistema (M4): ni la compartida de IRON IA, del cerebro legado y del copiloto del CRM (`OPENAI_API_KEY`, en `services.openai.api_key` y en `iron_crm.api_key`) ni la del laboratorio del Studio (`ULTRON_STUDIO_LAB_OPENAI_API_KEY`). Con cualquiera de ellas no llama. La comparación es por huella, sin devolver ni registrar ninguna clave, y una prueba de la guarda exige que la lista cerrada (`OpenAiReplyClassifierTransport::FOREIGN_KEYS`) sean todas las de `config/`.
 
 **Red.**
 - `App\Services\Outreach` sigue sin nombrar ni el proveedor ni `Http::` (§3.4): solo conoce el puerto `ReplyClassifierTransport`.
 - La petición la hace `App\Services\ReplyClassification\OpenAiReplyClassifierTransport`, enlazado en `AppServiceProvider`. URL fija `https://api.openai.com/v1/responses`, conexión 3 s, tiempo 2–10 s, sin redirecciones y sin reintentos.
-- Lo vigila `ReplyClassifierStaticGuardsTest`.
+- Lo vigila `ReplyClassifierStaticGuardsTest`. Desde la ronda 3 (M3), es una barrera y no solo una alarma:
+  - el único implementador del puerto se busca resolviendo los nombres como PHP (alias, nombre completo, clase anónima y subinterfaz); el puerto no puede tener subinterfaces y nadie le hace `class_alias`;
+  - el adaptador no tiene otro camino de red: importaciones, funciones, métodos y llamadas con `::` en listas cerradas; ni `new`, ni `curl_*`, `file_get_contents`, `fopen`, `fsockopen` o `stream_socket_client` (tampoco nombrados en un texto);
+  - la URL es un único literal, sin concatenar ni interpolar, que solo usa `->post(self::URL, …)`.
+
+**Tope por pasada (ronda 3, M2).**
+- `outreach:whatsapp-outcomes` le pasa al clasificador como mucho `classifier.max_per_pass` respuestas por pasada: de 0 a 40, 10 por defecto, y 0 = ninguna. La plaza se toma al encolar.
+- Con 10 y 5 s, la pasada espera como mucho 50 s aunque todas agoten el tiempo, y cabe en su minuto. Con 40 y 10 s, 400 s, lejos de los 10 min de `withoutOverlapping`.
+- Lo que pasa del tope queda `replied` como hoy y **no se clasifica en una pasada posterior**. La única puerta sigue siendo haber ganado la inserción de ese `replied`. Dejarlo pendiente exigiría una de dos cosas:
+  - retrasar el `replied`: el canal de voz por estrategia no mira las respuestas pendientes, el de WhatsApp sí (`reply_pending`);
+  - una marca duradera nueva, que pide migración y con la que un descarte podría volver a llamar.
+- La pasada lo cuenta en `classifier.skipped.pass_cap` y lo deja en el registro `outreach.classifier.pass_cap`.
+
+**Fallo sostenido (ronda 3, C4).**
+- El clasificador cuenta las llamadas SEGUIDAS sin salida usable (cualquier clase de fallo del transporte, o una salida fuera del esquema), con la última clase y su instante.
+  - Una salida que se lee la vuelve a 0, también `none` o una confianza baja. Lo que no llega a llamar no la toca.
+  - Vive en la caché de la aplicación, no en una tabla: es un aviso, no una garantía.
+- `outreach:monitor` abre un incidente de IRON GUARD cuando la racha llega a `monitor.classifier_failures` (5 por defecto) y el clasificador está clasificando (`effective`). Fuente `outreach`, tipo `outreach_classifier`, gravedad media y una sola clase de incidente, que suma ocurrencias mientras siga.
+- **No echa ningún freno:** el clasificador ya falla cerrado. El incidente lleva solo códigos y cifras, nunca el texto ni la persona.
 
 **Presupuesto y migración.**
 - Contador propio en `outreach_budget_counters`, alcance `classifier:reply`, día de Bogotá y modo `live`.
@@ -1673,10 +1692,14 @@ Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/
 **Traza.**
 - El resultado lleva `source = classifier`, su confianza (fracción de 0 a 1) y la clave `job:<uuid>:ai9:<versión>:<huella del prompt>:<modelo>`.
 - El coste y las llamadas del día están en el contador.
+- Registros (ronda 3, M5): al descartar, `outreach.classifier.discarded` lleva el motivo y la traza técnica (versión, huella, modelo, coste y latencia), **sin la etiqueta ni la confianza**. Las dos solo van en `outreach.classifier.recorded`, lo mismo que ya guarda la fila del libro.
 
 **Estado** (`GET outreach/status`, aditivo).
 - `config.classifier` sigue siendo la bandera.
-- `config.classifierSetup` lleva {`implemented`, `version`, `promptRef`, `labels`, `enabled`, `transport`, `configured`, `model`, `dailyCap`, `dailyBudgetMicros`, `timeoutSeconds`, `effective`, `today` {`day`, `calls`, `micros`, `capUnits`, `capMicros`}}.
+- `config.classifierSetup` lleva {`implemented`, `version`, `promptRef`, `labels`, `enabled`, `transport`, `configured`, `model`, `dailyCap`, `dailyBudgetMicros`, `timeoutSeconds`, `maxPerPass`, `effective`, `today` {`day`, `calls`, `micros`, `capUnits`, `capMicros`}, `providerFailures` {`consecutive`, `lastClass`, `lastAt`, `alertAfter`}}.
+  - `maxPerPass` y `providerFailures` son de la ronda 3.
+  - `effective` exige además `maxPerPass > 0`.
+  - `lastClass` es una clase del transporte o `unknown`, y `null` si no hubo fallos; `lastAt` va en `Y-m-d\TH:i:s\Z` o es `null`.
 
 **Variables** (§9.1; todas en `.env.example`, a 0 o vacías). Además de `COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED=false`:
 
@@ -1688,8 +1711,11 @@ Esto es lo que hace el código del paquete AI9 (informe: `plans/informes-cierre/
 | `COMMERCIAL_AUTOMATION_CLASSIFIER_PRICE_INPUT_USD_PER_MTOK` / `_PRICE_OUTPUT_USD_PER_MTOK` | `0` | Precios por millón de tokens |
 | `COMMERCIAL_AUTOMATION_CLASSIFIER_TIMEOUT_SECONDS` | `5` | 2–10 s |
 | `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_OUTPUT_TOKENS` | `64` | 16–256, razonamiento incluido |
-| `COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY` | vacía | La clave propia (secreto) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_MAX_PER_PASS` | `10` | Respuestas por pasada de W9 (0–40; ronda 3, M2) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_API_KEY` | vacía | La clave propia (secreto); ninguna otra clave de OpenAI del sistema vale |
+| `COMMERCIAL_AUTOMATION_MONITOR_CLASSIFIER_FAILURES` | `5` | Fallos seguidos para el incidente del monitor, sin freno (1–1000; ronda 3, C4) |
 
 **Pendiente, fuera de esta enmienda.**
 - El mando (`clasificador on` con cupo, techo, modelo y precios, y que `apagar` ponga el cupo y el techo a 0) es de devops.
 - La comprobación con el modelo real la hace el lead, con autorización.
+- C1, C2, C3 y C5 de `informe-security-ai9.md` son decisiones del propietario o de operación: la ronda 3 no las toca.
