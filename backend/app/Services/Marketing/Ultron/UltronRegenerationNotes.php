@@ -38,6 +38,11 @@ use InvalidArgumentException;
  * beneficio (ya tienen su código de arriba), el guard, el dinero, la
  * membresía, el no contactar, el relevo y las herramientas.
  *
+ * CON LA LISTA Y EL TOPE (22-11-2026, corrección (1) del turno 2 de la tercera
+ * prueba real): N-P1, N-P2 y N-L tienen una variante con el esqueleto de la
+ * lista y su presupuesto ya expandido ({@see self::budgetNote()}); el código y
+ * el `issue` no cambian.
+ *
  * LOS PARÁMETROS NO LLEVAN TEXTO DE LA PERSONA: marcas de tuteo de la lista
  * cerrada de {@see UltronRegisterDetector::MARCAS}, números, y textos del
  * catálogo (el nombre de un plan o un beneficio) sin llaves, sin saltos de
@@ -135,6 +140,45 @@ final class UltronRegenerationNotes
 
     private const N_PS_MEMORIA = 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.';
 
+    // ── Con la lista y el tope firmados: el esqueleto y el presupuesto ──────
+
+    /*
+     * LA CORRECCIÓN (1) DEL TURNO 2 DE LA TERCERA PRUEBA REAL (22-11-2026;
+     * `informe-debugger-a4-turno2.md` §1 y §7). Con la lista ofrecida y el
+     * tope firmado, los tres borradores incumplieron la lista y salió el
+     * respaldo: las notas de arriba dicen qué marcadores usar, pero no cómo
+     * caben ni cuánto ocupan una vez expandidos (el modelo nunca ve un
+     * precio). Estas tres variantes llevan, en palabras (una nota no puede
+     * escribir llaves), el ESQUELETO —una frase con los marcadores, cada uno
+     * una vez y con «para quién es» en su mención; si no caben, dos; una
+     * pregunta corta o ninguna— y el PRESUPUESTO ya expandido: lo que ocupan
+     * los marcadores ofrecidos ({X}) y lo que queda para todo lo demás ({R})
+     * de lo que se le pide ({M}). {K} es cuántos planes tiene la lista.
+     *
+     * SOLO con la lista Y el tope (las elige {@see UltronDraftDefects::of()}).
+     * Sin tope no hay presupuesto que decir, y sin lista la N-L no tiene
+     * marcadores que medir: entonces salen las de arriba, BYTE A BYTE (la N-L
+     * sin lista es además la del fixture de n8n S2, `check-reescribe.json`).
+     *
+     * CABEN JUNTAS: la nota de la lista y la de la longitud, con las cifras
+     * más largas posibles, en {@see self::MAX_NOTES} (N-P1 + N-L, 498; N-P2 +
+     * N-L, 469); y ninguna combinación pierde una nota de más prioridad que
+     * hoy entraba. Lo fija `UltronRegenerationBudgetNotesTest`. Sin tildes,
+     * como el resto. Textos fijos PENDIENTES DE LA APROBACIÓN DEL PROPIETARIO.
+     */
+    private const N_P1_PRESUPUESTO = 'FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_{K} entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan {X} caracteres: quedan {R} de {M}. Si no caben, dos; una pregunta corta o ninguna.';
+
+    private const N_P2_PRESUPUESTO = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_{K} entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan {X} caracteres: quedan {R} de {M}.';
+
+    private const N_L_PRESUPUESTO = 'DEMASIADO LARGO: mide {L} caracteres y el limite publicado es {N}. Reescribelo en unos {M}: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan {X}: quedan {R}. Si no caben, dos planes; una pregunta corta o ninguna.';
+
+    /** Las tres variantes con el presupuesto de la lista: `código` o `código/detalle` → [texto, [parámetro => tipo]]. El `issue` es el de su entrada en {@see self::ENTRIES}. */
+    private const CON_PRESUPUESTO = [
+        self::LENGTH_OVER_CAP => [self::N_L_PRESUPUESTO, ['L' => self::INT, 'N' => self::INT, 'M' => self::INT, 'X' => self::INT, 'R' => self::INT]],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::MISSING => [self::N_P1_PRESUPUESTO, ['K' => self::INT, 'X' => self::INT, 'R' => self::INT, 'M' => self::INT]],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::MIXED => [self::N_P2_PRESUPUESTO, ['K' => self::INT, 'X' => self::INT, 'R' => self::INT, 'M' => self::INT]],
+    ];
+
     /**
      * La tabla: `código` o `código/detalle` → [issue, texto, [parámetro => tipo]].
      * `M` de N-L es `UltronPromptCompiler::composerTargetChars(N)`: lo calcula
@@ -199,6 +243,43 @@ final class UltronRegenerationNotes
     public static function note(string $code, ?string $detail = null, array $params = []): string
     {
         [, $plantilla, $tipos] = self::entrada($code, $detail);
+
+        return self::rellena($code, $plantilla, $tipos, $params);
+    }
+
+    /**
+     * La variante CON EL PRESUPUESTO DE LA LISTA de una nota (las tres de
+     * {@see self::CON_PRESUPUESTO}: N-P1, N-P2 y N-L), con sus parámetros
+     * exactos y los mismos tipos que {@see self::note()}. Quien llama la pide
+     * solo con la lista y el tope firmados ({@see UltronDraftDefects::of()}).
+     *
+     * @param  array<string,mixed>  $params
+     *
+     * @throws InvalidArgumentException código o detalle desconocidos, una nota sin esa variante o parámetros que no son los suyos
+     */
+    public static function budgetNote(string $code, ?string $detail, array $params): string
+    {
+        self::entrada($code, $detail);
+        $clave = $detail === null ? $code : $code.'/'.$detail;
+        if (! isset(self::CON_PRESUPUESTO[$clave])) {
+            throw new InvalidArgumentException("La nota de {$code} no tiene variante con el presupuesto de la lista.");
+        }
+        [$plantilla, $tipos] = self::CON_PRESUPUESTO[$clave];
+
+        return self::rellena($code, $plantilla, $tipos, $params);
+    }
+
+    /**
+     * Una plantilla con sus parámetros: exactamente los que declara, cada uno
+     * con su tipo ({@see self::note()}).
+     *
+     * @param  array<string,string>  $tipos
+     * @param  array<string,mixed>  $params
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function rellena(string $code, string $plantilla, array $tipos, array $params): string
+    {
         $faltan = array_diff_key($tipos, $params);
         $sobran = array_diff_key($params, $tipos);
         if ($faltan !== [] || $sobran !== []) {
@@ -252,6 +333,23 @@ final class UltronRegenerationNotes
     {
         $out = [];
         foreach (self::ENTRIES as $clave => [, $plantilla, $tipos]) {
+            [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
+            $out[] = [$code, $detail, array_keys($tipos), $plantilla];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Las variantes con el presupuesto de la lista ({@see self::CON_PRESUPUESTO}),
+     * con la misma forma que {@see self::entries()}.
+     *
+     * @return list<array{0:string,1:?string,2:list<string>,3:string}>
+     */
+    public static function budgetEntries(): array
+    {
+        $out = [];
+        foreach (self::CON_PRESUPUESTO as $clave => [$plantilla, $tipos]) {
             [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
             $out[] = [$code, $detail, array_keys($tipos), $plantilla];
         }
