@@ -1,17 +1,19 @@
 # Informe de backend · Cierre de la bandeja asistida: R3-1, R3-2, R3-3 y m-1
 
 **22-11-2026 · `backend`.** Rama `cierre/bandeja` (sale de `0c57d7c4` = `main`), árbol `_worktrees/cierre-bandeja`. Sin push, sin producción, sin red.
-Commits: `26685ce9` (código y pruebas) · `60e691b7` (carrera PG) · `3755aeb5` (banco de carga) · este informe.
-Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto.
+Commits, ronda 1: `26685ce9` (código y pruebas) · `60e691b7` (carrera PG) · `3755aeb5` (banco de carga) · `7ec75388` (informe).
+Commits, ronda 2 (§9): `866e856e` · `4828f48a` · `df195258` · `62d44d98` · `2484057a` · este informe.
+Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto. Lo de la ronda 1 que la ronda 2 dejó viejo está marcado con «→ §9».
 
 ## Veredicto
 
 | | Estado |
 |---|---|
-| **R3-1** revocar la voz después de salir | **CERRADO en la retención** [C]. **Salvedad:** el motivo es `policy_unknown`, no `opted_out`: la foto no distingue revocar de un contacto desactivado y eso vive en `Facts/**` (cambio exacto en §7) |
+| **R3-1** revocar la voz después de salir | **CERRADO** [C]. La revocación que consta retiene con `opted_out`; el contacto retirado, con `policy_unknown` (→ §9) |
 | **R3-2** lo que llega entre la comprobación y el `UPDATE` | **CERRADO** [C], SQLite y PG 14 con dos procesos |
 | **R3-3** menor y RNE caducado | **CERRADO** [C] (directiva del 21-11) |
-| **m-1** consultas por fila | **CERRADO** [C]: 42 consultas por página con 50, 500 y 5 000 trabajos |
+| **m-1** consultas por fila | **CERRADO** [C]: 44 consultas por página con 50, 500 y 5 000 trabajos (→ §9) |
+| **F-1, F-2, F-3** | **CERRADOS** en la ronda 2 [C] (§9) |
 
 ## 1 · Qué cambió (`backend/app/Services/Outreach/Run/AssistedQueue.php`)
 
@@ -36,7 +38,7 @@ Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto.
 | Lo que la escalera niega | Bandeja | Motivo | Prueba |
 |---|---|---|---|
 | N1 `do_not_contact` · `do_not_contact_sibling` · `commercial_opt_out` (comercial) · `consent_denied` | Sí | `opted_out` (si no se sabe, `policy_unknown`) | `H9AssistedOptOutStrategyTest::test_n1_la_senal…` [dnc, sibling_dnc, commercial_opt_out, consent_denied]; unitaria |
-| N1 `no_consent_for_purpose_channel`, por **voz** | **Sí (R3-1)** | `policy_unknown` | `H9AssistedEligibilityTest::test_r3_1_…`; unitaria «R3-1: …» |
+| N1 `no_consent_for_purpose_channel`, por **voz** | **Sí (R3-1)** | `opted_out` si consta la revocación; `policy_unknown` si no (contacto retirado) | `H9AssistedEligibilityTest::test_r3_1_revocar…`, `test_r3_1_el_contacto_de_voz_retirado…`; unitaria «R3-1: …» |
 | N1 `no_consent_for_purpose_channel`, por WhatsApp | No, por instrucción (ventana de 24 h; la baja llega como `consent_denied`) | — | unitaria «R3-1: WhatsApp…»; `test_r3_1` (el de WhatsApp sigue) |
 | N1 `voice_excluded` | Sí, por voz | `opted_out` | `test_n1_la_exclusion_de_voz…` |
 | N1 `rne_check_missing` | **Sí (R3-3)**, por voz | `rne_check_missing` / `policy_unknown` | `test_r3_3_la_consulta_al_rne…`, `test_r3_3_el_rne_caducado_no_retiene…whatsapp` |
@@ -44,6 +46,9 @@ Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto.
 | N1 `unknown_subject` | Sí | `policy_unknown` | `test_n1_sin_poder_comprobarlo…` |
 | N2 `master_flag_off` | Sí (409 `outreach_disabled` en toda la ruta) | — | `OutreachIsolationTest` (banderas por defecto) |
 | N2 `outreach_brake_global/channel/strategy` | Sí | `brake` | `H9AssistedConditionsTest::test_i3_la_parada_global…`, `test_m2_…`, `test_mr1_…` |
+| N2 `mode_off` (y la sombra) · N4 `channel_disabled` del asistido | **Sí (F-1)** | `brake` | `test_f1_…` [sombra, off, canal apagado] |
+| N3 `canary_only_declared` · N5 `canary_scope_mismatch` | **Sí (F-2)**, por medio | `canary_scope_mismatch` | `test_f2_el_canario…` [desactivado, revocado], `test_f2_con_la_version_solo_canario…` |
+| N4 `template_not_approved` | **Sí (F-3)** | `template_not_approved` | `test_f3_la_plantilla_retirada…` |
 | N2 `global_suppression` | Sí | `opted_out` | `test_n1_la_senal…` [opt_out_word]; `test_un_trabajo_de_una_persona_suprimida…` |
 | N2 `human_in_control` | No: no aplica (ya hay una persona) | — | — |
 | N2 `ultron_abort_latch` · `marketing_agent_paused` · `voice_braked` · `legacy_autonomy_on` · `legacy_followups_active` | No: **D-3** | — | — |
@@ -53,19 +58,13 @@ Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto.
 | Plazo del trabajo | Sí | `expired` | `test_i2_vencido…` |
 | R3-2: lo que llega antes del `UPDATE` (DNC, pausa, menor) | Sí | el que toque | `test_r3_2_…` (SQLite y PG) y `H9AssistedClaimRaceTest` (PG) |
 
-**Lo que N1–N6 decide al salir y la bandeja no vuelve a mirar:** presupuesto y cupos, horario, ventana, enfriamiento, guarda, Studio y catálogo, plantilla, canario, `success`, `audience` y cartera. No son una petición de la persona. Los que pueden cambiar después de salir están en §6: F-1 a F-4.
+**Lo que N1–N6 decide al salir y la bandeja no vuelve a mirar:** presupuesto y cupos, horario, ventana, enfriamiento, guarda, Studio y catálogo, `success`, `audience` y cartera. No son una petición de la persona. Lo que sí puede cambiar después de salir: F-1 a F-3, cerrados en la ronda 2 (§9); F-4 queda como nota de diseño (§6).
 
 **D-3, la pregunta exacta para el propietario:** «Los frenos ajenos al H9 que N2 aplica por medio son el cerrojo de abortos de ULTRON y la pausa del agente de mercadeo en WhatsApp, el freno de voz en la voz, y las dos banderas del motor anterior. ¿Deben retener también en la bandeja los asistidos que ya salieron? Retener significa no ofrecerlos, no dejarlos reclamar y quitar el enlace y el guion a quien ya los reclamó. ¿O se deja escrito en D9-14 que, para parar a las personas, sirven la PARADA GLOBAL y el freno del canal `assisted`, y no esos frenos?»
 
-## 3 · Motivos para el CRM (sin tocar su repositorio)
+## 3 · Motivos para el CRM
 
-- **Nuevos** en `contactWithheld` y en `outreach.assisted.claim_withheld.reason`:
-  - `subject_minor`: la persona es menor y no se le contacta por este canal.
-  - `rne_check_missing`: falta una consulta vigente al RNE. Se arregla renovándola (`POST voice/rne-checks`).
-- **Cambia el alcance de `policy_unknown`:** ahora incluye también el consentimiento de voz que ya no está concedido, revocado incluido, y el RNE o el contacto de voz que no se pueden leer.
-- **El 201 de `claim`** puede traer ahora cualquier motivo de la lista. Antes solo podía traer `brake`.
-- **Los códigos 409** no cambian.
-- Hoy el CRM trata un motivo desconocido como «no contactes» (revisor, ronda 3). Con eso es seguro, pero conviene darles texto propio.
+→ §9.4, la lista definitiva tras la ronda 2.
 
 ## 4 · Pruebas ejecutadas (línea final)
 
@@ -113,35 +112,116 @@ Banco: `docs/ultron-studio/ops/carga-bandeja/AssistedQueueLoadBench.php`. El com
 
 ## 6 · Hallazgos fuera de alcance (no los he tocado)
 
-- **F-1 · `mode_off` (N2) y `channel_disabled` / `channel_not_live` (N4) del asistido** [L]:
-  - si se cambia la configuración después de salir, la bandeja sigue ofreciendo; solo la maestra apagada da 409;
-  - el camino operativo para parar a las personas (la PARADA GLOBAL y el freno `assisted`) sí retiene;
-  - propuesta para decidir: en `withholdReasons()`, `! isLive() || ! assistedEnabled()` → `brake`.
-- **F-2 · El alcance canario** (N5 `canary_scope_mismatch`, N3 `canary_only_declared`) [L]:
-  - un número canario desactivado después de salir no retiene en la parte `canary`;
-  - `canary.{medio}` ya viene en la foto.
-- **F-3 · El guion de una plantilla que dejó de estar aprobada** [L]:
-  - `OutreachPublishedStrategies::assistedScript()` (`:323`) mira el canal, pero no el estado `APPROVED`;
-  - una plantilla rechazada después de salir sigue dando su guion.
+- **F-1** (modo o canal asistido apagados), **F-2** (alcance canario) y **F-3** (plantilla que deja de estar aprobada): cerrados en la ronda 2 (§9).
 - **F-4 · N6 `success_reached` / `context_changed` / `collections_overdue_blocks_commercial`** [L]: nadie vuelve a evaluarlos mientras la inscripción espera el resultado asistido. Es así por diseño; queda como nota.
 - **F-5 · Para `database-specialist`:** `queueRows()` y `viewParts()` (§5) se ejecutan 1 + ≤ 4 veces por página sobre `outreach_jobs ⨝ enrollments ⨝ strategies` (`channel`, `mode`, `status`, `expires_at`, `id`). Con 5 000 asistidos tardan 7-10 ms. El CRM relee cada ≤ 15 s por pestaña.
 - **F-6 · Para el dueño de `Facts`:** `optedOutPhones()` lee todos los DNC en cada tanda. Se puede memorizar por foto o filtrar por los números de la tanda (m-1 del revisor).
 
-## 7 · El cambio exacto que pide R3-1 para decir `opted_out` (fuera de mis ficheros)
+## 7 · El cambio de `Facts` que pedía R3-1
 
-- **`app/Services/Outreach/Facts/VoiceConsentFacts.php`:**
-  - `:44` `POLICY`: añadir `'voice.consent_revoked'`.
-  - En el bucle de `:117`, junto a `:119`: si `$eventos[$id]` tiene algún evento `VoiceConsentRule::valid($e, false)` y `! VoiceConsentRule::hasConsent($eventos[$id], false)`, entonces `$politica['voice.consent_revoked'] = true`. Eso quiere decir que el último evento válido es `revoked`. No hace ninguna consulta nueva.
-- **`app/Services/Outreach/Facts/FactNames.php:89-95`:** añadir la clave. Si no, `BatchSnapshotBuilder.php:151` la filtra.
-- **Por qué no vale otra vía:** la foto no expone los ids de las fichas de la persona, así que leer `voice_consents` desde `Run` duplicaría el emparejamiento persona ↔ contacto de `VoiceConsentFacts`.
-- **Riesgo:** cambia la forma de `policy` en la foto (`SubjectFacts::toArray()`). Hay que revisar `LeadAndVoiceFactsTest` y las trazas.
-- **Después**, en `AssistedQueue.php:520`, poner `$s->policy('voice.consent_revoked') === true ? true : null`. Además:
-  - `test_r3_1` pasa a esperar `opted_out`;
-  - la unitaria «R3-1» gana un caso con la clave a `true`.
+Hecho en la ronda 2, tal como se describía aquí (`866e856e`, §9.1).
 
 ## 8 · Lo que no he podido verificar
 
 - **Producción:** nada (sin ssh). No sé cuántos prospectos DNC hay ni si existen asistidos por voz en vivo [S].
 - **La batería completa:** no la he lanzado, como pide el encargo. Ni el CRM con los motivos nuevos.
 - **Los tiempos del banco:** son de un Mac con PG local, dentro de la transacción de la prueba y sin red. No son los de producción.
-- **R3-1 con el motivo `opted_out`:** depende de §7.
+
+## 9 · Ronda 2 (22-11-2026): el motivo de R3-1, F-1, F-2 y F-3
+
+### 9.1 · Qué cambió
+
+| Commit | Qué | Dónde |
+|---|---|---|
+| `866e856e` | **R3-1, motivo verdadero.** Clave nueva `voice.consent_revoked`: algún contacto de voz ACTIVO cuyo último evento válido es `revoked`. Sale de los eventos ya leídos, sin consultas nuevas. Con ella, revocado → `opted_out`; contacto retirado u otro caso → `policy_unknown` | `Facts/VoiceConsentFacts.php:37`, `:52`, `:128-130`; `Facts/FactNames.php:94`; `Run/AssistedQueue.php:574` |
+| `4828f48a` | **F-1.** `openBrakes()`: los frenos de siempre (`openScopes()`, la primera consulta) y, si `! isLive() \|\| ! channelEnabled('assisted')`, `global`. Funciona como la PARADA GLOBAL: SQL, `withheld`, `brake`. Se lee en cada petición, así que al volver a encender vuelve. `OutreachConfig` no se modifica | `Run/AssistedQueue.php:375-382` |
+| `df195258` | **F-2.** Fuera del alcance canario retiene. Aplica en la parte `canary` (N5) y en toda versión «solo canario», que es la línea base (N3). La entrada es `canary.{medio}` de la foto, sin consultas nuevas; `runningParts()` lleva el `canaryOnly` de cada parte. Motivo nuevo | `Run/AssistedQueue.php:120`, `:447`, `:518`, `:628`, `canaryOnly` en `runningParts()` |
+| `62d44d98` | La carrera de R3-2 siembra el canario de su socio. Es una consecuencia de F-2 que no vi al cerrarlo: en SQLite esa prueba se salta | `tests/…/H9AssistedClaimRaceTest.php` |
+| `2484057a` | **F-3.** `assistedScript()` solo da el guion si la plantilla sigue `APPROVED`, es íntegra y casa con la huella del sello. Esa huella es opcional, así que la llamada de `OutreachIsolationTest:499` no cambia. La bandeja retiene con motivo propio, detrás de la estrategia; lee una vez por (plantilla, huella) y por petición (`scriptOf()`) | `Run/OutreachPublishedStrategies.php:327`; `Run/AssistedQueue.php:107`, `:164`, `:441`, `:856` |
+
+**Siembras de las pruebas, cambiadas a propósito (F-2):** creaban socios sin número en la parte canario, un estado que la escalera nunca deja salir. Ahora se siembran como canarios del medio con `RunWorld::canaryMember()`, aditivo (`Support/RunWorld.php:288`). No ha cambiado ninguna aserción de las baterías anteriores. La única cuenta exacta que cambia es `H9AssistedConditionsTest`: +1 consulta, la de la plantilla, con su propia aserción.
+
+### 9.2 · Lo que pediste comprobar sobre `voice.consent_revoked`
+
+- **(a) Fixtures del CRM:** el CRM no tiene que regenerar nada [C/L].
+  - Ningún fichero de `tests/fixtures/outreach/**` nombra las claves crudas de la foto: `policyInputs` del catálogo son las entradas de la escalera.
+  - El catálogo y su `VERSION` no cambian.
+  - `FixturesSanityTest`: `OK (78 tests, 13805 assertions)`.
+- **(b) `outreach:replay`:**
+  - Ni `facts_json` (la foto de condiciones) ni la traza (la entrada de la escalera, `CoreProjection::policyInput()`) llevan la clave. Ninguna decisión guardada la contiene, así que ninguna cambia [L].
+  - Prueba nueva, `test_r3_1_la_clave_nueva_no_entra_en_lo_que_se_guarda…`: ninguna decisión la lleva y todas dan `same` [C].
+  - Una foto sin la clave se lee como «no consta»: `policy_unknown`, nunca `opted_out` (unitaria «R3-1: la revocación sin leer») [C].
+  - Las pruebas de `replay` (`OutreachPolicyTest`, `H9ComplaintRecentTest`, `CancelDecisionTimelineTest`, `H9ShadowCanaryOnlyTest`): `OK (22 tests, 178 assertions)`.
+- **(c) `LeadAndVoiceFactsTest`:** `OK (9 tests, 74 assertions)` en SQLite y en PG. Hay un caso nuevo:
+  - revocó → `true`;
+  - volvió a conceder, confirmado → `false`;
+  - una concesión que no vale no tapa la revocación → `true`;
+  - nunca concedió → `false`;
+  - revocó en un contacto retirado → `false`;
+  - los eventos se leen **una** vez para todo el lote.
+- **El resto de `tests/Feature/Outreach/Facts`:** `OK (52 tests, 959 assertions)`.
+
+### 9.3 · Pruebas (línea final) y mutaciones
+
+**SQLite:**
+- `tests/Unit/Outreach`: `OK (1042 tests, 53256 assertions)`.
+- `tests/Feature/Outreach`: `OK, but some tests were skipped! Tests: 718, Assertions: 41711, Skipped: 167`. Son los mismos 167 saltos de diseño.
+- Guardas: `OK (141 tests, 182977 assertions)`.
+
+**PG 14:**
+- `H9AssistedEligibilityTest`: `OK (20 tests, 271 assertions)`.
+- `H9AssistedConditionsTest`: `OK (11, 185)`.
+- `H9AssistedOptOutStrategyTest`: `OK (27, 309)`.
+- `H9AssistedComplaintTest`: `OK (4, 39)`.
+- `H9AssistedClaimRaceTest`: `OK (3, 84)`.
+- `LeadAndVoiceFactsTest`: `OK (9, 74)`.
+- `AssistedQueueOptedOutTest`: `OK (48, 49)`.
+- Banco: `OK (3, 95)`.
+
+**Mutaciones** (todas mueren; los ficheros, restaurados con `cmp`):
+- revocado → `null`;
+- F-1 sin la lectura de la configuración (3/3 caen);
+- F-2 nunca restringido (3/3) y solo la parte canario, sin N3 (cae la de la parte publicada);
+- F-3 sin la rama que retiene, y `assistedScript()` sin mirar el estado.
+
+**Por PostgreSQL** han salido dos cosas que SQLite no vio:
+- un contacto de voz retirado tiene otra forma (`vct_cipher_chk`, `vct_retire_chk`): las pruebas lo retiran con ella;
+- la carrera necesitaba el canario de su socio (`62d44d98`).
+
+**Banco** (consultas · ms, N = 5 000, ahora):
+- `unclaimed` 44·46.5;
+- `mine` 44·28.4;
+- `all` 44·43.4;
+- `claim` 58·26.1;
+- `+20 000 DNC` 44·61.0;
+- peor caso 102·179.6.
+
+Las consultas son las mismas con 50, 500 y 5 000 trabajos, así que sigue sin haber consultas por fila. Respecto a la ronda 1 hay **+1** consulta por la plantilla de F-3. La consulta de canarios no es código nuevo: aparece porque las personas sembradas ya tienen número.
+
+### 9.4 · Motivos de `contactWithheld` y de `outreach.assisted.claim_withheld.reason` (lista definitiva, en orden de prioridad)
+
+Los 409 siguen siendo `not_in_queue`, `enrollment_closed` y `already_claimed`. El 201 de `claim` puede traer cualquiera de estos motivos. Los nuevos de este cierre van en **negrita**.
+
+| # | Código | Texto sugerido para el CRM (solo lo ve quien lo reclamó) |
+|---|---|---|
+| 1 | `brake` | «Está parado: la parada global, un freno o la configuración (el modo o el canal asistido apagados). No contactes.» |
+| 2 | `strategy_stopped` | «La estrategia ya no está en marcha (pausada, retirada o revertida). No contactes.» |
+| 3 | **`template_not_approved`** | «La plantilla de este trabajo ya no está aprobada: no hay guion. No contactes.» |
+| 4 | `opted_out` | «La persona pidió que no se le contacte, o revocó su autorización de llamadas. No contactes.» |
+| 5 | `complaint_recent` | «La persona se quejó hace poco. No contactes.» |
+| 6 | **`subject_minor`** | «La persona es menor de edad: no se le contacta por este canal.» |
+| 7 | **`rne_check_missing`** | «Falta una consulta vigente del Registro de Números Excluidos: no llames hasta renovarla.» |
+| 8 | **`canary_scope_mismatch`** | «Su número ya no es un número de prueba (canario) activo para este medio. No contactes.» |
+| 9 | `policy_unknown` | «No se puede comprobar que se le pueda contactar (por ejemplo, su contacto de voz se retiró). No contactes.» |
+| 10 | `complaint_unknown` | «No se puede comprobar si se quejó hace poco. No contactes.» |
+| 11 | `expired` | «El plazo de este trabajo ya pasó.» |
+
+- **Cambio de semántica:** `opted_out` incluye ahora la revocación de voz que consta.
+- **Un motivo desconocido** el CRM lo sigue tratando como «no contactes».
+
+### 9.5 · Lo que no he podido verificar (ronda 2)
+
+- **El camino HTTP de los canarios** (`POST integrations/canaries/{uuid}/deactivate|revoke`): las pruebas escriben la fila con las mismas columnas que `StudioCanaryNumbers::deactivate()` (`:329`) y `revoke()` (`:358`), y PG acepta esa forma. No he podido montar las rutas del Studio en la prueba de la bandeja: sus rasgos chocan.
+- **La retirada de una plantilla:** no hay ningún servicio que la haga; es la transición `APPROVED → RETIRED` de la base.
+- **Una versión que no declare «solo canario»:** debería dejar de restringir en la parte `rest`. No lo he probado, porque exige una referencia de Studio de tipo `version` [L].
+- **El CRM:** no lo he leído. No he encontrado el espejo local para comprobar que no lleva las claves crudas de la foto.
