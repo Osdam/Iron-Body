@@ -47,13 +47,13 @@ S
 #!/bin/bash
 # supervisorctl del banco: los 14 programas de producción. El pid cambia con cada queue:restart (los cuenta el php del
 # banco); si $B/run/fallo-workers tiene un commit, mientras la «producción» lo sirva un worker queda en BACKOFF. Si
-# $B/run/lento dice «<segundos> [backoff]», el primer worker no coge pid nuevo hasta esos segundos después del último
-# queue:restart (un trabajo largo) y, con «backoff», al cogerlo queda en BACKOFF (la trampa del retardo).
+# $B/run/lento dice «<segundos> [backoff <commit>]», el primer worker no coge pid nuevo hasta esos segundos después del
+# último queue:restart (un trabajo largo) y, con «backoff», al cogerlo queda en BACKOFF si la «producción» sirve <commit>.
 case "\${1:-}" in status) ;; *) exit 0 ;; esac
 r=\$(cat "$B/run/reinicios" 2> /dev/null || echo 0); f=\$(cat "$B/run/fallo-workers" 2> /dev/null || echo -)
 h=\$(git -C "$B/prod" rev-parse HEAD); mal=0; case "\$h" in "\$f"*) mal=1 ;; esac
-lento=""; if [ -s "$B/run/lento" ] && [ "\$r" -gt 0 ]; then read -r ls lm < "$B/run/lento"; t0=\$(cat "$B/run/reinicio-ts" 2> /dev/null || echo 0)
-  if [ \$(( \$(date +%s) - t0 )) -lt "\$ls" ]; then lento=viejo; elif [ "\${lm:-}" = backoff ]; then mal=1; fi; fi
+lento=""; if [ -s "$B/run/lento" ] && [ "\$r" -gt 0 ]; then read -r ls lm lc < "$B/run/lento"; t0=\$(cat "$B/run/reinicio-ts" 2> /dev/null || echo 0)
+  if [ \$(( \$(date +%s) - t0 )) -lt "\$ls" ]; then lento=viejo; elif [ "\${lm:-}" = backoff ]; then case "\$h" in "\${lc:-x}"*) mal=1 ;; esac; fi; fi
 n=0
 linea() { n=\$((n + 1)); local rr=\$r; [ "\$lento" = viejo ] && [ "\$n" = 1 ] && rr=\$((r - 1))
   if [ "\$mal" = 1 ] && [ "\$n" = 1 ]; then printf '%-38s BACKOFF   Exited too quickly (process log may have details)\n' "\$1:\$1_\$2"; else printf '%-38s RUNNING   pid %s, uptime 0:10:00\n' "\$1:\$1_\$2" "\$((20000 + rr * 100 + n))"; fi; }

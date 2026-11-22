@@ -109,6 +109,7 @@ OSG=backend/app/Services/Outreach/Run/OutreachSendGate.php
 RE_SENDS='^outreach\(sends-open\):'
 RE_CALLS='^voice\(calls-open\):'
 DIR_MIG=backend/database/migrations
+MIG_VERSIONADO=backend/docs/iron-ia/ops/ironbody-migrate
 DECLS="migraciones config rutas programador sin_filas"
 # m2 (rev-guion): ninguna expresión de [[ =~ ]] lleva barras invertidas. Escrita en la línea, bash 5 entrega a regcomp
 # lo citado con una barra delante («\>»), y en glibc «\>» es «fin de palabra», no «>» (en el bash 3.2 del Mac, sí): la
@@ -287,15 +288,19 @@ errores_nuevos() { # <lineas_log de antes> <patrón que se descuenta, o vacío> 
   done
   echo "$total"
 }
-legibles() { # <commit A> <commit B>: $WWW lee cada fichero del diff que exista ahora → 0 si todos; deja LEGIBLES «revisados ilegibles»
+# m8 (rev-guion): los ficheros del diff que HEAD tiene, cada uno presente y legible por $WWW. Un lote de ficheros todos
+# NUEVOS, al volver al previo, no deja ninguno: eso es correcto (antes «0 revisados» se leía como fallo y la vuelta
+# acababa en PARAR). Nombres sin comillas (core.quotepath=off): uno con acentos se mira como es.
+legibles() { # <commit A> <commit B> → 0 si todos; deja LEGIBLES «revisados ilegibles»
   local f rev=0 mal=0
   while IFS= read -r f; do
-    [ -n "$f" ] && [ -e "$APP/$f" ] || continue
+    [ -n "$f" ] || continue
     rev=$((rev + 1))
+    if [ ! -e "$APP/$f" ]; then echo "   ✗ $f está en HEAD y no en el disco"; mal=$((mal + 1)); continue; fi
     sudo -u "$WWW" test -r "$APP/$f" || { echo "   ✗ $WWW no puede leer $f ($(stat -c '%U:%G %a' "$APP/$f"))"; mal=$((mal + 1)); }
-  done < <(g diff --name-only --no-renames "$1" "$2")
+  done < <(comm -12 <(g -c core.quotepath=off diff --name-only --no-renames "$1" "$2" | sort) <(g -c core.quotepath=off ls-tree -r --name-only HEAD | sort))
   LEGIBLES="$rev $mal"
-  [ "$rev" -gt 0 ] && [ "$mal" = 0 ]
+  [ "$mal" = 0 ]
 }
 # Una caché: fichero normal (no un enlace) de www-data en 600. Si el modo no es 600, chmod COMO www-data (root no hace
 # chmod en bootstrap/cache: seguiría un enlace puesto en su lugar; H-5 de SEC7).
@@ -513,7 +518,7 @@ va_codigo() {
     ( cd "$APP" && umask 022 && git checkout -q --detach "$P" ) || { echo "   ✗ git checkout --detach $(corto "$P") falló"; return 1; }
   fi
   [ "$(g rev-parse HEAD)" = "$P" ] || { echo "   ✗ HEAD no quedó en $(corto "$P")"; return 1; }
-  if legibles "$P" "$N"; then echo "   · código: HEAD=$(corto HEAD) (checkout --detach, umask 022) · $WWW lee los ${LEGIBLES%% *} ficheros del diff"
+  if legibles "$P" "$N"; then echo "   · código: HEAD=$(corto HEAD) (checkout --detach, umask 022) · $([ "${LEGIBLES%% *}" = 0 ] && echo "ningún fichero del diff existe en $(corto "$P") (todos nuevos): nada que leer" || echo "$WWW lee los ${LEGIBLES%% *} ficheros del diff que existen en $(corto "$P")")"
   else echo "   ✗ código: HEAD=$(corto HEAD), pero hay ficheros que $WWW no lee (arriba)"; return 1; fi
   if [ "$ok" = 2 ]; then
     ( cd "$APP/backend" && sudo -u "$WWW" sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' ) || { echo "   ✗ config:cache o route:cache falló"; return 1; }
@@ -799,7 +804,9 @@ if [ "$NM" -gt 0 ]; then
   [ -x "$MIGRADOR" ] || aborta "falta $MIGRADOR (el envoltorio de las migraciones con el rol dueño)"
   # Este guion cuenta con lo que hace el envoltorio versionado (config:clear antes, config:cache después y --path tal cual)
   # y aguanta también uno que no vacíe la caché; si el instalado no es esa copia, se dice para que el lead lo mire.
-  H_MIG=$(sha256sum < "$MIGRADOR" | cut -c1-16); H_VER=$(g show "$N:backend/docs/iron-ia/ops/ironbody-migrate" 2>/dev/null | sha256sum | cut -c1-16)
+  # m3 (rev-guion): sin la copia en N, «g show | sha256sum» moría por pipefail + set -e sin decir por qué.
+  g cat-file -e "$N:$MIG_VERSIONADO" 2>/dev/null || aborta "falta la copia versionada del envoltorio ($MIG_VERSIONADO) en $(corto "$N"): sin ella no se puede comprobar que $MIGRADOR hace lo que este guion espera (config:clear antes, config:cache después y --path tal cual)"
+  H_MIG=$(sha256sum < "$MIGRADOR" | cut -c1-16); H_VER=$(g show "$N:$MIG_VERSIONADO" | sha256sum | cut -c1-16)
   if [ "$H_MIG" = "$H_VER" ]; then say "   $MIGRADOR = la copia versionada de iron-ia/ops (sha256 $H_MIG…)"
   else say "   AVISO: $MIGRADOR (sha256 $H_MIG…) no es la copia versionada de iron-ia/ops en $(corto "$N") ($H_VER…): mirar qué hace antes de desplegar"; fi
   [ "$BLOQ" = 0 ] || say "   AVISO: hay cerrojos sobre las tablas de las migraciones (lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces)"
@@ -972,7 +979,21 @@ ETAPA=verificacion
 FALLOS=""
 falla() { echo "   ✗ $*"; FALLOS="$FALLOS · $*"; }
 { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
-[ "$REIN" -ge "$RUN0" ] || aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 s (¿un trabajo largo?): volver a mirar supervisorctl status"
+if [ "$REIN" -lt "$RUN0" ]; then
+  # m9 (rev-guion): un worker sin pid nuevo sigue con el código anterior y, si no arranca con el nuevo, se verá en su
+  # reinicio (la trampa del retardo). Antes de avisar, hasta 300 s más a que lo coja; si lo coge, margen y dos lecturas.
+  echo "   solo $REIN de $RUN0 workers con pid nuevo tras 90 s (un trabajo largo termina antes de reiniciar): se espera hasta 300 s más"
+  hasta=$(( $(date +%s) + 300 ))
+  while [ "$(reiniciados "$PIDS_PRE")" -lt "$RUN0" ] && [ "$(date +%s)" -lt "$hasta" ]; do sleep 5; done
+  REIN=$(reiniciados "$PIDS_PRE")
+  if [ "$REIN" -ge "$RUN0" ]; then
+    sleep 15; W1=$(workers "$RUN0" 30); sleep 8; W2=$(workers "$RUN0" 30)
+    echo "   ya con pid nuevo $REIN de $RUN0; pasado el margen: [$W1] y [$W2]"
+    { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers tras el reinicio tardío: [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
+  else
+    aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 + 300 s: esos siguen con el código anterior; mirar supervisorctl status hasta ver los $RUN0 con pid nuevo y en RUNNING (DEPLOY_CIERRE_LOTES.md §7)"
+  fi
+fi
 [ "$FACT1" = "$FACT0" ] || aviso "$SERVICIO_FACT pasó de «$FACT0» a «$FACT1»"
 [ "$(g rev-parse HEAD)" = "$N" ] || falla "producción ya no está en $(corto "$N") (HEAD $(corto HEAD))"
 [ -z "$(g status --porcelain --untracked-files=no)" ] || falla "el checkout tiene cambios tras el despliegue"
@@ -1019,10 +1040,17 @@ else
   [ -z "$F_rutas" ] || ER=$(decl "$F_rutas" | sort)
   echo "   route:list: $(cuenta_lineas "$RUTAS0") → $(cuenta_lineas "$RUTAS") rutas · diferencia [$(printf '%s\n' "$DR" | sed '/^$/d' | sed -n 1,8p | paste -sd '|' -)] (declarada: $(cuenta_lineas "$ER") línea(s))"
   [ "$DR" = "$ER" ] || falla "route:list no tiene exactamente la diferencia declarada"
-  if [ -n "$F_rutas" ] && artisan list --raw 2>/dev/null | grep -q '^auth:coverage '; then
-    COB=$(artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-120 || true)
-    echo "   auth:coverage --unmapped → [${COB:-vacío}]"
-    [ -z "$COB" ] || falla "auth:coverage --unmapped no está vacío: hay rutas sin su llave de permiso"
+  if [ -n "$F_rutas" ]; then
+    # m1 (rev-guion): SIN tubería, como hotfix-backend.sh. Con pipefail, «artisan list --raw | grep -q» lee como «no está»
+    # el SIGPIPE de artisan cuando grep sale al primer acierto, y la cobertura se saltaba en silencio (falso verde).
+    ART_LISTA=$(artisan list --raw 2>/dev/null) || ART_LISTA=""
+    if grep -qE '^auth:coverage[[:space:]]' <<< "$ART_LISTA"; then
+      COB=$(artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-120 || true)
+      echo "   auth:coverage --unmapped → [${COB:-vacío}]"
+      [ -z "$COB" ] || falla "auth:coverage --unmapped no está vacío: hay rutas sin su llave de permiso"
+    else
+      falla "auth:coverage no está en artisan list --raw (como $WWW): sin él no se comprueba que cada ruta nueva tenga su llave"
+    fi
   fi
   if [ -n "$F_rutas" ]; then
     while IFS= read -r u; do
