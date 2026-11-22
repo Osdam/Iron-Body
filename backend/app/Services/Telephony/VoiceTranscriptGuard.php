@@ -142,6 +142,28 @@ final class VoiceTranscriptGuard
     }
 
     /**
+     * Enmienda del 22-11-2026 de D8-10 (H-3, los beneficios en
+     * `consultar_planes`): los códigos que daría ESTA guarda a un texto si el
+     * agente lo dijera tal cual en un turno que no transfiere y sin ningún
+     * precio del catálogo que tapar. Las mismas listas y el mismo camino que
+     * {@see inspect()} (el motor, la lista de negativas, el léxico y sus formas
+     * normalizadas), no una copia: lo que aquí da un código es lo que, leído
+     * literalmente, echaría el freno. Pura, como el resto: ni escribe ni
+     * registra. Un texto que PCRE no puede evaluar, `voice_guard_unprocessable`
+     * (falla cerrado).
+     *
+     * @return list<string> vacía si el texto pasa limpio
+     */
+    public static function spokenCodes(string $text): array
+    {
+        try {
+            return self::contentCodes(new OutboundContentGuard, $text, [], false);
+        } catch (UnexpectedValueException) {
+            return [self::CODE_UNPROCESSABLE];
+        }
+    }
+
+    /**
      * Los códigos del CONTENIDO de un turno (el motor y el léxico; las
      * transferencias van aparte), en orden: el del motor primero, si lo hay.
      *

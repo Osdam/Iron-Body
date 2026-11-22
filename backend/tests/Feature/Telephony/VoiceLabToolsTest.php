@@ -201,6 +201,32 @@ class VoiceLabToolsTest extends TestCase
         }
     }
 
+    /**
+     * Enmienda del 22-11-2026 de D8-10 (H-3): los beneficios llegan al laboratorio por el MISMO camino que a una
+     * llamada, con la misma retención de lo que vigila la guarda y la misma limpieza; el recuento, en la línea
+     * `voice.tool` (el laboratorio no escribe en `voice_*`).
+     */
+    public function test_los_beneficios_llegan_al_laboratorio_por_el_mismo_camino_y_con_la_misma_retencion(): void
+    {
+        Plan::query()->where('name', 'Mensual')->update(['benefits' => json_encode(['["Acceso ilimitado al gimnasio"', 'Primer mes gratis', '"Clases grupales"]'])]);
+        $d = $this->openLab();
+        $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
+        $lineas = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$lineas): void {
+            if ($m->message === 'voice.tool') {
+                $lineas[] = $m->context;
+            }
+        });
+
+        $deLaLlamada = $this->rawPost('/api/voice/tools/consultar_planes', '{"conversation_id":"conv_h8fx_0031"}', $this->auth())->assertOk()->json();
+        $delLaboratorio = $this->tool('consultar_planes', $d['uuid'])->assertOk()->json();
+        $this->assertSame($deLaLlamada, $delLaboratorio, 'los mismos beneficios, la misma retención y la misma nota');
+        $this->assertSame(['Acceso ilimitado al gimnasio', 'Clases grupales'], $delLaboratorio['planes'][0]['beneficios']);
+        $this->assertSame(VoiceTools::BENEFITS_NOTE, $delLaboratorio['nota']);
+        $this->assertSame([[1, 0, false], [1, 0, true]], array_map(static fn (array $c): array => [$c['benefits_withheld'] ?? null, $c['benefits_omitted'] ?? null, $c['lab'] ?? false], $lineas),
+            'el recuento, en la línea de la llamada y en la del laboratorio');
+    }
+
     public function test_terminada_fallida_caducada_inexistente_o_de_otro_uuid_la_negativa_es_identica_y_sin_datos(): void
     {
         // Tal como la serializa la respuesta JSON de Laravel (sus opciones por defecto).
