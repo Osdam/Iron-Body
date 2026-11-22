@@ -12,10 +12,13 @@ use App\Services\Marketing\Ultron\UltronDecideToken;
 use App\Services\UltronStudio\StudioLabEngineContext;
 use App\Services\UltronStudio\StudioPromptBundle;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -195,31 +198,149 @@ class StudioLabEngineContextParityTest extends TestCase
     }
 
     /**
-     * Revisión de seguridad automática sobre `8a084f8c`: con un prospecto sin
-     * id, `where('lead_id', null)` es `IS NULL` y traería filas de otros. El
-     * contexto no pide nada por el prospecto ni por la conversación sintéticos:
-     * ninguna sentencia compara una clave con NULL.
+     * Revisión de seguridad automática sobre `8a084f8c`, reforzada con la sonda
+     * de NB5 de la revisión de seguridad del apartado 5
+     * (`informe-security-lab.md`, P2): con un prospecto sin id,
+     * `where('lead_id', null)` es `IS NULL` y traería filas de otros.
+     *
+     * Se siembran, en CADA tabla ajena al Studio, una fila con sus claves NULAS
+     * (donde la columna lo admite) y otra con id y claves 0, con una marca en
+     * cada texto, y una conversación real con su prospecto y sus mensajes,
+     * también marcados. Se construyen los contextos de los escenarios y de
+     * tres más (un pago pendiente, las citas y el panorama de planes). Ninguna
+     * marca sale; solo se leen las tablas del negocio y el esquema (de los
+     * mensajes, solo la guarda imposible de las relaciones de Laravel); todo es
+     * lectura, y ninguna sentencia compara una clave con NULL.
      */
     public function test_t5_ninguna_lectura_por_la_clave_nula_de_la_persona_sintetica(): void
     {
+        $sembradas = $this->seedEveryTableWithMarks();
+        // La siembra llega a las tablas de las personas: si no, la prueba pasaría en vacío.
+        foreach (['marketing_leads', 'marketing_conversations', 'marketing_messages', 'marketing_appointments', 'members', 'payments'] as $tabla) {
+            $this->assertContains($tabla, $sembradas, "no se sembró {$tabla}");
+        }
+        $this->assertGreaterThan(100, count($sembradas));
+
         $sp = StudioPromptBundle::rolesFor(array_replace(UltronPromptCompiler::BASELINE, self::GOBERNADO))['sp'];
         $sql = [];
         DB::listen(function (QueryExecuted $q) use (&$sql): void {
             $sql[] = strtolower($q->sql);
         });
-        foreach (self::escenarios() as [$turnos, $hechos]) {
-            app(StudioLabEngineContext::class)->build(['turns' => $turnos, 'facts' => $hechos], $sp);
+        $p = static fn (string $t): array => ['role' => 'prospect', 'text' => $t];
+        $a = static fn (string $t): array => ['role' => 'agent', 'text' => $t];
+        $casos = [
+            ...array_values(self::escenarios()),
+            [[$p('Hola, ya pagué'), $a('Lo reviso.'), $p('¿Me confirmas que llegó el pago?')], ['paymentState' => 'pending', 'handoffRequested' => false]],
+            [[$p('¿Tengo alguna cita agendada? ¿y mi plan hasta cuándo va?')], ['paymentState' => 'none', 'handoffRequested' => false]],
+            [[$p('¿Qué planes tienen y cuánto cuestan? Quiero comparar')], ['paymentState' => 'none', 'handoffRequested' => false]],
+        ];
+        $salidas = [];
+        foreach ($casos as [$turnos, $hechos]) {
+            $salidas[] = app(StudioLabEngineContext::class)->build(['turns' => $turnos, 'facts' => $hechos], $sp);
         }
+
+        $todo = (string) json_encode($salidas, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        preg_match_all('/'.self::MARK.'\w*/', $todo, $marcas);
+        $this->assertSame([], array_values(array_unique($marcas[0])), 'el contexto trajo datos de personas reales');
+        $this->assertStringNotContainsString('3001112233', $todo, 'ni el teléfono del prospecto real');
+
         $this->assertNotEmpty($sql, 'la prueba ve las consultas');
+        $leidas = [];
         foreach ($sql as $s) {
             // La guarda de las relaciones de Laravel (`x is null and x is not null`) no devuelve ninguna fila: no cuenta.
             $s = (string) preg_replace('/(\S+) is null and \1 is not null/', 'imposible', $s);
             $this->assertDoesNotMatchRegularExpression('/(lead_id|conversation_id|member_id|user_id)["`]?\s+is\s+null/', $s, $s);
             $this->assertMatchesRegularExpression('/^\s*(select|pragma)\b/', $s, "solo lee: {$s}");
+            preg_match_all('/\b(?:from|join)\s+(?:"?\w+"?\.)?"?(\w+)"?/', $s, $m);
+            foreach ($m[1] as $tabla) {
+                $leidas[$tabla] = true;
+                if ($tabla === 'marketing_messages') {
+                    $this->assertStringContainsString('imposible', $s, "de los mensajes, solo la guarda imposible: {$s}");
+                }
+            }
         }
+        $leidas = array_keys($leidas);
+        sort($leidas);
+        // El negocio (planes, clases, entrenadores, base de conocimiento), el catálogo del esquema de cada motor y la guarda imposible.
+        $esquema = DB::getDriverName() === 'pgsql' ? 'pg_class' : 'sqlite_master';
+        $permitidas = ['classes', 'marketing_knowledge_items', 'marketing_messages', 'plans', $esquema, 'trainers'];
+        sort($permitidas);
+        $this->assertSame([], array_values(array_diff($leidas, $permitidas)), 'el contexto leyó una tabla que no es del negocio');
+        $this->assertContains('plans', $leidas, 'el oído ve las lecturas del negocio');
     }
 
     // ── Andamio ─────────────────────────────────────────────────────────────
+
+    /** La marca de lo sembrado como dato de una persona real: no puede salir en ningún contexto. */
+    private const MARK = 'FUGAREAL';
+
+    /** Lo que no se siembra: el Studio, la infraestructura y el catálogo del motor. */
+    private const NOT_SEEDED = ['migrations', 'jobs', 'failed_jobs', 'job_batches', 'cache', 'cache_locks', 'sessions', 'admin_sessions', 'sqlite_sequence'];
+
+    /**
+     * NB5 (la sonda P2 de security): una conversación real con su prospecto y
+     * sus mensajes, y, en cada tabla ajena al Studio, una fila con sus claves
+     * nulas (las que lo admiten) y otra con id y claves 0, con la marca en
+     * cada texto y en cada JSON. Sin las claves foráneas mientras dura la
+     * prueba (`defer_foreign_keys` en SQLite; `session_replication_role` LOCAL
+     * en PostgreSQL, que vuelve sola al deshacer la transacción de la prueba).
+     * Una fila que la tabla rechaza (un CHECK, un NOT NULL sin valor) se salta.
+     *
+     * @return list<string> las tablas sembradas
+     */
+    private function seedEveryTableWithMarks(): array
+    {
+        $pg = DB::getDriverName() === 'pgsql';
+        DB::statement($pg ? 'SET LOCAL session_replication_role = replica' : 'PRAGMA defer_foreign_keys = ON');
+
+        $lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3001112233', 'name' => self::MARK.'_NOMBRE']);
+        $c = MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open']);
+        DB::table('marketing_conversations')->where('id', $c->id)->update(['detected_objective' => self::MARK.'_OBJETIVO', 'main_barrier' => self::MARK.'_BARRERA']);
+        DB::table('marketing_messages')->insert(['conversation_id' => $c->id, 'direction' => 'inbound', 'sender_type' => 'lead', 'body' => self::MARK.'_MENSAJE ¿cuánto vale?', 'status' => 'received', 'created_at' => now(), 'updated_at' => now()]);
+
+        $sembradas = [];
+        foreach (Schema::getTables() as $t) {
+            $tabla = (string) $t['name'];
+            if (str_starts_with($tabla, 'ultron_studio_') || in_array($tabla, self::NOT_SEEDED, true) || in_array($t['schema'] ?? null, ['information_schema', 'pg_catalog'], true)) {
+                continue;
+            }
+            $columnas = Schema::getColumns($tabla);
+            foreach ([null, 0] as $id) {
+                $fila = [];
+                foreach ($columnas as $col) {
+                    $n = (string) $col['name'];
+                    $tipo = strtolower((string) $col['type_name']);
+                    $clave = str_ends_with($n, '_id') || in_array($n, ['phone', 'email', 'wa_id'], true);
+                    // PostgreSQL sí aplica la longitud de un varchar: la marca, recortada a lo que cabe.
+                    $largo = preg_match('/char[^(]*\((\d+)\)/', strtolower((string) $col['type']), $mm) === 1 ? (int) $mm[1] : null;
+                    if ($n === 'id' || $col['auto_increment']) {
+                        if ($id === 0 && str_contains($tipo, 'int')) {
+                            $fila[$n] = 0;
+                        }
+
+                        continue;
+                    }
+                    $fila[$n] = match (true) {
+                        $clave && $col['nullable'] && $id === null => null,
+                        str_contains($tipo, 'json') => json_encode(['fuga' => self::MARK.'_'.$tabla, 'summary' => self::MARK]),
+                        str_contains($tipo, 'bool') => $col['nullable'] ? null : false,
+                        preg_match('/int|numeric|decimal|float|double|real/', $tipo) === 1 => $clave ? 0 : ($col['nullable'] ? null : 1),
+                        str_contains($tipo, 'date') || str_contains($tipo, 'time') => now(),
+                        str_contains($tipo, 'uuid') => (string) Str::uuid(),
+                        default => substr(self::MARK.'_'.$tabla.'_'.$n, 0, $largo ?? PHP_INT_MAX),
+                    };
+                }
+                try {
+                    DB::transaction(fn () => DB::table($tabla)->insert($fila));
+                    $sembradas[$tabla] = true;
+                } catch (QueryException) {
+                    // La tabla no admite esa fila (un CHECK, un enum, un NOT NULL sin valor): se salta; la otra puede entrar.
+                }
+            }
+        }
+
+        return array_keys($sembradas);
+    }
 
     private int $conversationId = 0;
 
