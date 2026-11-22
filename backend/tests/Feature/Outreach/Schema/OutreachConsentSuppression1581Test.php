@@ -272,10 +272,11 @@ class OutreachConsentSuppression1581Test extends TestCase
             'request_uuid' => $p['uuid'], 'evidence' => 'Verificado por Beto Confirmador', 'confirmed_by_admin_id' => 2, 'confirmed_by_name' => 'Beto Confirmador', 'confirmed_by_role' => 'coordinacion']);
 
         $s = ['ma' => 7101, 'ka' => 'm:7101', 'refsA' => [$ref('A1'), $ref('A2')]];
-        // La persona A: comercial pedida, confirmada y retirada; servicio pedido (pendiente) para OTRO número.
+        // La persona A: comercial pedida, confirmada y retirada (la retirada con el seudónimo de su número de ese momento, C-2:
+        // la supresión también lo pone a NULL); servicio pedido (pendiente) para OTRO número.
         $pa = $pide(7101, 'commercial', 'A1', 'Formulario de Zoila Consentida en recepción');
         $ga = $confirma($pa);
-        $ra = $base(['subject_key' => 'm:7101', 'member_id' => 7101, 'purpose' => 'commercial', 'kind' => 'revoked', 'source' => 'member_request',
+        $ra = $base(['subject_key' => 'm:7101', 'member_id' => 7101, 'purpose' => 'commercial', 'kind' => 'revoked', 'source' => 'member_request', 'phone_ref' => $ref('A1'),
             'evidence' => 'Zoila Consentida pidió la baja', 'actor_type' => 'system', 'recorded_by_admin_id' => null, 'recorded_by_name' => 'Sistema', 'recorded_by_role' => null]);
         $sa = $pide(7101, 'service', 'A2', 'Pidió recordatorios de clase (Zoila Consentida)');
         $s['filasA'] = [$inserta($pa), $inserta($ga), $inserta($ra), $inserta($sa)];

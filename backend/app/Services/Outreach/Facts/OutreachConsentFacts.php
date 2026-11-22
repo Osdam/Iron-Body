@@ -33,10 +33,23 @@ use Illuminate\Support\Facades\Schema;
  * `WhatsappRecipient::leadFor()`). Un número cambiado deja la autorización sin
  * efecto (ni concedida ni retirada: falta). Tener el teléfono no autoriza nada.
  *
- *  - `c9.whatsapp.<finalidad>.revoked` ⇔ el último evento es una retirada.
- *  - `c9.whatsapp.<finalidad>.granted` ⇔ el último evento es una confirmación
- *    y su número es el de destino de hoy.
+ *  - `c9.whatsapp.<finalidad>.revoked` ⇔ el último evento es una retirada, o
+ *    hay una retirada VIVA de OTRA clave con uno de los números de la persona
+ *    (abajo, «la regla de los hermanos»).
+ *  - `c9.whatsapp.<finalidad>.granted` ⇔ el último evento es una confirmación,
+ *    su número es el de destino de hoy y ninguna retirada de otra clave calla
+ *    a uno de sus números.
  *  - Los dos false = ninguna (no hay filas, o el número no coincide). Nunca los dos true.
+ *
+ * LA REGLA DE LOS HERMANOS (C-2 de la revisión de API; la de «no contactar»,
+ * `LeadFacts` y `MarketingMessageDispatcher::phoneOptedOut()`): una retirada
+ * guarda el seudónimo del número que la persona tenía al retirarla
+ * (`phone_ref`, anulable). Calla a toda OTRA clave cuya persona tenga ese
+ * número entre los suyos ({@see FactPass::phonesOf()}: sus prospectos y sus
+ * fichas de socio) mientras siga VIVA: mientras su clave no tenga una
+ * confirmación posterior de la misma finalidad (contada en el lugar de su
+ * petición, la regla de la tanda). Una retirada sin número no calla a nadie
+ * más. Va en LA MISMA sentencia que la tanda: ninguna consulta de más por lote.
  *
  * Dos booleanos y no un enumerado: la política de la foto es `array<string,
  * bool>` (`BatchSnapshot::fromArray()` lo exige) y `SubjectFacts::policy()`
@@ -87,8 +100,17 @@ final class OutreachConsentFacts
             return $salida;
         }
 
-        $ganadores = self::batch($personas);
-        if ($ganadores === []) {
+        // Los números de cada persona, como la foto (`BatchSnapshotBuilder`, L9-29): las filas ya las leyó la política.
+        $numeros = [];
+        $claveApp = null;
+        foreach (array_keys($personas) as $persona) {
+            foreach ($b->phonesOf($b->subjects[$persona]) as $numero) {
+                $numeros[$persona][] = PhoneRef::withKey($numero, $claveApp ??= SubjectRef::appKey());
+            }
+        }
+        $lectura = self::read($personas, $numeros);
+        $ganadores = $lectura['own'];
+        if ($ganadores === [] && $lectura['byNumber'] === []) {
             return $salida;
         }
 
@@ -111,6 +133,13 @@ final class OutreachConsentFacts
                     && hash_equals((string) $destino[$persona], $g['phone_ref'])) {
                     $salida[$persona]["c9.whatsapp.{$finalidad}.granted"] = true;
                 }
+            }
+        }
+        // La regla de los hermanos: gana la negativa (nunca los dos true).
+        foreach ($lectura['byNumber'] as $persona => $finalidades) {
+            foreach (array_keys($finalidades) as $finalidad) {
+                $salida[$persona]["c9.whatsapp.{$finalidad}.revoked"] = true;
+                $salida[$persona]["c9.whatsapp.{$finalidad}.granted"] = false;
             }
         }
 
@@ -136,12 +165,27 @@ final class OutreachConsentFacts
     }
 
     /**
-     * EL ÚLTIMO EVENTO por persona y finalidad (la consulta de la tanda).
+     * EL ÚLTIMO EVENTO por persona y finalidad (la consulta de la tanda), sin la regla de los hermanos.
      *
      * @param  array<string, list<string>>  $personas  persona → sus claves
      * @return array<string, array<string, array{kind: string, phone_ref: ?string, id: int}>> persona → finalidad → ganador
      */
     public static function batch(array $personas): array
+    {
+        return self::read($personas, [])['own'];
+    }
+
+    /**
+     * LA TANDA ENTERA, en una sentencia por tramo: el último evento de cada
+     * persona por SUS claves y las retiradas VIVAS de OTRAS claves con uno de
+     * sus números (la regla de los hermanos). Una persona sin números, solo lo
+     * suyo.
+     *
+     * @param  array<string, list<string>>  $personas  persona → sus claves
+     * @param  array<string, list<string>>  $numeros  persona → los seudónimos de sus números de hoy
+     * @return array{own: array<string, array<string, array{kind: string, phone_ref: ?string, id: int}>>, byNumber: array<string, array<string, true>>}
+     */
+    public static function read(array $personas, array $numeros): array
     {
         $tramos = [];
         $tramo = [];
@@ -150,38 +194,63 @@ final class OutreachConsentFacts
             if ($claves === []) {
                 continue;
             }
-            if ($tramo !== [] && $enTramo + count($claves) > self::MAX_KEYS_PER_QUERY) {
+            $suyos = array_values(array_unique($numeros[$persona] ?? []));
+            $peso = count($claves) + count($suyos);
+            if ($tramo !== [] && $enTramo + $peso > self::MAX_KEYS_PER_QUERY) {
                 $tramos[] = $tramo;
                 $tramo = [];
                 $enTramo = 0;
             }
-            $tramo[(string) $persona] = $claves;
-            $enTramo += count($claves);
+            $tramo[(string) $persona] = [$claves, $suyos];
+            $enTramo += $peso;
         }
         if ($tramo !== []) {
             $tramos[] = $tramo;
         }
 
-        $salida = [];
+        $propios = [];
+        $porNumero = [];
         foreach ($tramos as $t) {
             $valores = [];
             $bindings = [];
-            foreach ($t as $persona => $claves) {
+            foreach ($t as $persona => [$claves]) {
                 foreach ($claves as $clave) {
                     $valores[] = '(?, ?)';
                     array_push($bindings, (string) $persona, (string) $clave);
                 }
             }
-            foreach (DB::select(str_replace('{values}', implode(', ', $valores), self::BATCH_SQL), $bindings) as $f) {
-                $salida[(string) $f->person][(string) $f->purpose] = [
-                    'kind' => (string) $f->kind,
-                    'phone_ref' => $f->phone_ref === null ? null : trim((string) $f->phone_ref),
-                    'id' => (int) $f->id,
-                ];
+            $sql = str_replace('{values}', implode(', ', $valores), self::BATCH_SQL);
+            $deNumeros = [];
+            foreach ($t as $persona => [, $suyos]) {
+                foreach ($suyos as $ref) {
+                    $deNumeros[] = '(?, ?)';
+                    array_push($bindings, (string) $persona, (string) $ref);
+                }
+            }
+            if ($deNumeros !== []) {
+                $sql .= ' UNION ALL '.str_replace('{numbers}', implode(', ', $deNumeros), self::SIBLINGS_SQL);
+            }
+            foreach (DB::select($sql.' ORDER BY via, person, purpose, channel, id', $bindings) as $f) {
+                $persona = (string) $f->person;
+                if ($f->via === 'own') {
+                    $propios[$persona][(string) $f->purpose] = [
+                        'kind' => (string) $f->kind,
+                        'phone_ref' => $f->phone_ref === null ? null : trim((string) $f->phone_ref),
+                        'id' => (int) $f->id,
+                    ];
+                } elseif (! in_array((string) $f->other_key, $t[$persona][0], true)) {
+                    // Una retirada de SU propia clave ya la juzga la tanda (puede haberla superado una confirmación).
+                    $porNumero[$persona][(string) $f->purpose] = true;
+                }
             }
         }
+        foreach ($porNumero as &$finalidades) {
+            ksort($finalidades, SORT_STRING);
+        }
+        unset($finalidades);
+        ksort($porNumero, SORT_STRING);
 
-        return $salida;
+        return ['own' => $propios, 'byNumber' => $porNumero];
     }
 
     /**
@@ -267,10 +336,11 @@ final class OutreachConsentFacts
      * La consulta de la tanda (informe-db-consent §4), en los dos motores:
      * VALUES (columnas `column1` = persona y `column2` = clave en PG y en
      * SQLite) y ventana; sin `WITH`, DISTINCT ON ni unnest. `{values}` =
-     * `(?, ?), (?, ?), …`. Usa `ocon_subject_idx` (cubridor en PG).
+     * `(?, ?), (?, ?), …`. Usa `ocon_subject_idx` (cubridor en PG). Sin ORDER
+     * BY: lo pone {@see read()} detrás de la unión.
      */
     private const BATCH_SQL = <<<'SQL'
-        SELECT person, purpose, channel, kind, phone_ref, id
+        SELECT 'own' AS via, person, purpose, channel, kind, phone_ref, id, NULL AS other_key
           FROM (
             SELECT ev.person, ev.purpose, ev.channel, ev.kind, ev.phone_ref, ev.id,
                    ROW_NUMBER() OVER (PARTITION BY ev.person, ev.purpose, ev.channel
@@ -285,6 +355,28 @@ final class OutreachConsentFacts
               ) AS ev
           ) AS ranked
          WHERE n = 1
-         ORDER BY person, purpose, channel
+        SQL;
+
+    /**
+     * LA REGLA DE LOS HERMANOS, unida a la tanda: las retiradas de WhatsApp
+     * cuyo número (`phone_ref`) es uno de los de la persona y que siguen VIVAS
+     * (ninguna confirmación posterior en su clave y finalidad, contada en el
+     * lugar de su petición). `{numbers}` = `(?, ?), …`: persona, seudónimo.
+     * Devuelve la clave de la retirada para descartar las de la propia persona.
+     * El CAST a CHAR(64) compara `bpchar` con `bpchar` en PG (un índice por
+     * `phone_ref` serviría); en SQLite no cambia nada.
+     */
+    private const SIBLINGS_SQL = <<<'SQL'
+        SELECT 'number' AS via, p.column1 AS person, v.purpose, v.channel, v.kind, v.phone_ref, v.id, v.subject_key AS other_key
+          FROM (VALUES {numbers}) AS p
+          JOIN outreach_consents v ON v.phone_ref = CAST(p.column2 AS CHAR(64))
+         WHERE v.channel = 'whatsapp' AND v.kind = 'revoked'
+           AND NOT EXISTS (
+                SELECT 1
+                  FROM outreach_consents g
+                  JOIN outreach_consents r ON r.uuid = g.request_uuid
+                 WHERE g.subject_key = v.subject_key AND g.purpose = v.purpose AND g.channel = v.channel
+                   AND g.kind = 'granted' AND r.id > v.id
+           )
         SQL;
 }

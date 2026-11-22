@@ -41,7 +41,10 @@ use Illuminate\Support\Str;
  * del número al que se escribiría hoy por WhatsApp (el de su identidad de
  * WhatsApp; si no tiene, su teléfono principal). El cliente nunca envía el
  * teléfono y ninguna respuesta lo devuelve, tampoco el seudónimo: solo si la
- * autorización es para el número de hoy (`numberCurrent`).
+ * autorización es para el número de hoy (`numberCurrent`). Una RETIRADA
+ * guarda también el de hoy, si lo hay (C-2 de la revisión de API): calla a
+ * quien comparta ese número, como «no contactar» ({@see OutreachConsentFacts},
+ * la regla de los hermanos); la lista lo dice con `numberRevoked`.
  *
  * IDEMPOTENTE por `clientRequestId`: repetir lo mismo devuelve lo mismo (200,
  * `replayed`); con otro contenido, 409 `client_request_reused`. Las carreras
@@ -117,7 +120,10 @@ final class OutreachConsents
         $numeros = $this->phoneRefs($p['subject']);
         $hoy = $numeros['current'];
         $identidad = $numeros['whatsapp'] !== null;
-        $ganadores = OutreachConsentFacts::batch(['p' => $claves])['p'] ?? [];
+        // La misma lectura que el motor: lo suyo y las retiradas vivas de otras claves con uno de sus números.
+        $lectura = OutreachConsentFacts::read(['p' => $claves], ['p' => $numeros['all']]);
+        $ganadores = $lectura['own']['p'] ?? [];
+        $porNumero = $lectura['byNumber']['p'] ?? [];
 
         $pendientes = DB::table(self::TABLE.' as c')->whereIn('c.subject_key', $claves)->where('c.kind', OutreachConsent::KIND_REQUESTED)
             ->whereNotExists(fn ($q) => $q->from(self::TABLE.' as r')->whereColumn('r.request_uuid', 'c.uuid'))
@@ -133,8 +139,10 @@ final class OutreachConsents
             $finalidades[$finalidad] = [
                 'state' => $g === null ? 'none' : (string) $g['kind'],
                 'numberCurrent' => $g !== null && $g['kind'] === OutreachConsent::KIND_GRANTED ? $vigente : null,
-                // Lo que el motor usaría HOY: confirmada, para el número de hoy y con identidad de WhatsApp.
-                'effective' => $vigente && $identidad,
+                // Otra ficha con uno de sus números lo retiró y sigue retirado: el motor lo niega aunque aquí esté concedida.
+                'numberRevoked' => isset($porNumero[$finalidad]),
+                // Lo que el motor usaría HOY: confirmada, para el número de hoy, con identidad de WhatsApp y sin retirada por el número.
+                'effective' => $vigente && $identidad && ! isset($porNumero[$finalidad]),
                 'legal' => $legal === null ? null : self::legalView($legal),
                 'pending' => array_map(fn (object $f): array => self::present($f, $hoy) + [
                     'ownRequest' => (int) $f->recorded_by_admin_id === $access->id(),
@@ -345,8 +353,11 @@ final class OutreachConsents
 
     /**
      * RETIRAR: la persona ya no quiere (o nunca quiso) que le escriban por
-     * WhatsApp para esta finalidad. Sin segunda cuenta, sin texto legal y sin
-     * número: vale para la persona. Gana a cualquier autorización anterior.
+     * WhatsApp para esta finalidad. Sin segunda cuenta y sin texto legal: vale
+     * para la persona y gana a cualquier autorización anterior. Guarda el
+     * seudónimo de su número de hoy, si lo tiene: calla también a quien
+     * comparta ese número (la regla de los hermanos del lector). Sin número,
+     * solo a ella.
      *
      * @param  array{clientRequestId: string, personType: string, personId: int, purpose: string, source: string, evidence: string}  $in
      * @return array{http: int, consent: array<string, mixed>, replayed: bool}
@@ -384,7 +395,8 @@ final class OutreachConsents
             'evidence' => $in['evidence'],
             'legal_version' => null,
             'legal_hash' => null,
-            'phone_ref' => null,
+            // El número de hoy (o null): el lector calla con él a quien lo comparta (C-2).
+            'phone_ref' => $this->currentPhoneRef($p['subject']),
             'actor_type' => OutreachConsent::ACTOR_ADMIN,
             ...self::recordedBy($access),
             'confirmed_by_admin_id' => null,
@@ -511,21 +523,24 @@ final class OutreachConsents
 
     /**
      * Los seudónimos de sus números de hoy: el de su identidad de WhatsApp (la
-     * regla del lector de C9-2; null si no tiene) y el que se autoriza al
-     * registrar (ese o, sin identidad de WhatsApp, su teléfono principal).
+     * regla del lector de C9-2; null si no tiene), el que se autoriza al
+     * registrar (ese o, sin identidad de WhatsApp, su teléfono principal) y
+     * todos los suyos (la regla de los hermanos, {@see FactPass::phonesOf()}).
      *
-     * @return array{whatsapp: ?string, current: ?string}
+     * @return array{whatsapp: ?string, current: ?string, all: list<string>}
      */
     private function phoneRefs(Subject $s): array
     {
         $pase = new FactPass(now(), [(string) $s->key => $s]);
         $whatsapp = OutreachConsentFacts::whatsappDestination($s, $pase->leadRows(), OutreachConsentFacts::whatsappLeads(array_map('intval', $s->leadIds)));
         $numero = $whatsapp ?? $pase->primaryPhoneOf($s);
-        $clave = $numero === null ? null : SubjectRef::appKey();
+        $todos = $pase->phonesOf($s);
+        $clave = $numero === null && $todos === [] ? null : SubjectRef::appKey();
 
         return [
             'whatsapp' => $whatsapp === null ? null : PhoneRef::withKey($whatsapp, (string) $clave),
             'current' => $numero === null ? null : PhoneRef::withKey($numero, (string) $clave),
+            'all' => array_map(static fn (string $n): string => PhoneRef::withKey($n, (string) $clave), $todos),
         ];
     }
 
@@ -633,7 +648,8 @@ final class OutreachConsents
     /** @return array<string, mixed> una fila del libro para el CRM: sin número, sin seudónimos, sin la persona */
     private static function present(object $f, ?string $hoy): array
     {
-        $ref = $f->phone_ref !== null ? trim((string) $f->phone_ref) : null;
+        // `numberCurrent` es de una autorización (petición o confirmación); el número de una retirada no se enseña.
+        $ref = $f->phone_ref !== null && $f->kind !== OutreachConsent::KIND_REVOKED ? trim((string) $f->phone_ref) : null;
 
         return [
             'uuid' => (string) $f->uuid,

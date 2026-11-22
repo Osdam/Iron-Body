@@ -3,6 +3,7 @@
 namespace Tests\Feature\Outreach\Schema;
 
 use App\Models\OutreachConsent;
+use App\Services\Outreach\Facts\OutreachConsentFacts;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -398,7 +399,7 @@ class OutreachConsentsSchemaTest extends TestCase
         }
     }
 
-    public function test_el_numero_es_su_seudonimo_y_solo_en_la_peticion_y_su_confirmacion(): void
+    public function test_el_numero_es_su_seudonimo_en_la_peticion_su_confirmacion_y_la_retirada(): void
     {
         foreach ([
             'petición sin número' => ['phone_ref' => null],
@@ -407,7 +408,19 @@ class OutreachConsentsSchemaTest extends TestCase
         ] as $que => $cambio) {
             $this->assertConsentRule($this->consentRequestRow($cambio), 'ocon_phone_chk', $que);
         }
-        $this->assertConsentRule($this->consentRevocationRow(['phone_ref' => $this->phoneRefOf('A')]), 'ocon_phone_chk', 'una retirada vale para la persona, sin número');
+        // C-2: una retirada lleva el seudónimo del número de la persona en ese momento, si lo tenía (calla a quien lo comparta);
+        // nunca el número en claro.
+        foreach ([
+            'una retirada con el número en claro' => ['phone_ref' => '570000000000'],
+            'una retirada con el seudónimo en mayúsculas' => ['phone_ref' => strtoupper($this->phoneRefOf('A'))],
+        ] as $que => $cambio) {
+            $this->assertConsentRule($this->consentRevocationRow($cambio), 'ocon_phone_chk', $que);
+        }
+        $this->assertAccepted($this->consentInsertClosure($this->consentRevocationRow(['phone_ref' => $this->phoneRefOf('A')])), 'una retirada con su número');
+        $this->assertAccepted($this->consentInsertClosure($this->consentRevocationRow(['member_id' => 7002])), 'una retirada sin número (la persona no lo tenía)');
+        // Un rechazo no autoriza nada: sigue sin número.
+        $this->assertConsentRule($this->consentResolutionRow($this->requestConsent(['member_id' => 7003]), 'rejected', ['phone_ref' => $this->phoneRefOf('A')]), 'ocon_phone_chk', 'un rechazo con número');
+        $this->assertSame(3, $this->consentCount());
     }
 
     public function test_quien_registra_es_una_cuenta_y_el_sistema_solo_retira(): void
@@ -507,6 +520,15 @@ class OutreachConsentsSchemaTest extends TestCase
         $this->assertConsentGuard(fn () => $this->db()->table(self::T_CONSENTS)->where('id', $otra['id'])->update(['recorded_by_name' => 'Otra']), $nombres, 'UPDATE', 'a otro nombre');
         $this->assertConsentGuard(fn () => $this->db()->table(self::T_CONSENTS)->where('id', $otra['id'])->update(['confirmed_by_name' => '[suprimido]']), $nombres, 'UPDATE', 'donde no lo hay');
         $this->assertConsentGuard(fn () => $this->db()->table(self::T_CONSENTS)->where('id', $g['id'])->update(['confirmed_by_name' => 'Beto']), $nombres, 'UPDATE', 'deshacerlo');
+
+        // C-2: la retirada con número también se redacta entera: su seudónimo a NULL (sin él no se redacta) y deja de casar.
+        $retirada = $this->revokeConsent(['member_id' => 7005, 'phone_ref' => $this->phoneRefOf('D')]);
+        $this->assertConsentGuard(fn () => $this->db()->table(self::T_CONSENTS)->where('id', $retirada['id'])->update([
+            'subject_key' => 'x:'.$retirada['id'], 'member_id' => null, 'lead_id' => null, 'evidence' => '[suprimido]', 'redacted_at' => '2026-11-22 18:00:00',
+        ]), $redaccion, 'UPDATE', 'una retirada redactada que conserva su número');
+        $this->assertSame(1, $this->redactSubject('m:7005'));
+        $this->assertNull($this->db()->table(self::T_CONSENTS)->where('id', $retirada['id'])->value('phone_ref'));
+        $this->assertSame(['own' => [], 'byNumber' => []], OutreachConsentFacts::read(['otra' => ['l:9']], ['otra' => [$this->phoneRefOf('D')]]), 'ni por la persona ni por el número');
     }
 
     // ── down() ──────────────────────────────────────────────────────────────
@@ -592,8 +614,11 @@ class OutreachConsentsSchemaTest extends TestCase
                 $this->resolveConsent($this->requestConsent(['member_id' => 7002]));
                 $this->assertSame(0, $this->db()->table(self::T_CONSENTS)->insertOrIgnore(array_merge($this->consentRequestRow(), ['client_request_id' => $p['client_request_id']])));
                 $this->assertSame(['a' => 'granted', 'b' => 'granted'], array_map(static fn (array $f): string => $f['commercial']['kind'], $this->consentBatch(['a' => ['m:7001'], 'b' => ['m:7002']])));
-                $this->assertSame(5, $this->consentCount());
-                $this->assertSame(5, OutreachConsent::query()->count(), 'el modelo lee');
+                // C-2: una retirada con su número, y la lectura del lector con la regla de los hermanos, también como la aplicación.
+                $this->revokeConsent(['member_id' => 7003, 'phone_ref' => $this->phoneRefOf('C')]);
+                $this->assertSame(['otra' => ['commercial' => true]], OutreachConsentFacts::read(['otra' => ['l:9']], ['otra' => [$this->phoneRefOf('C')]])['byNumber']);
+                $this->assertSame(6, $this->consentCount());
+                $this->assertSame(6, OutreachConsent::query()->count(), 'el modelo lee');
             });
             $this->assertNull($estado, "el rol de la aplicación no completa el ciclo: {$mensaje}");
 

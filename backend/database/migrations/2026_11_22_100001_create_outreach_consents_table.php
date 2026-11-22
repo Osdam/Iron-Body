@@ -32,7 +32,10 @@ use Illuminate\Support\Facades\Schema;
  *  · rejected  — la petición no se confirma (cualquier cuenta, también la que
  *                la pidió: retirarla es seguro).
  *  · revoked   — se retira: sin petición ni segunda cuenta (retirar siempre es
- *                seguro). Vale para la persona × finalidad × canal, sin número.
+ *                seguro). Vale para la persona × finalidad × canal y, si la
+ *                persona tenía número, lleva su seudónimo de ese momento
+ *                (anulable): el lector calla también a quien comparta ese
+ *                número, como «no contactar» (C-2 de la revisión de API).
  *                Es lo único que puede registrar el sistema (la palabra de baja).
  * Una resolución por petición (`ocon_request_unique`). Una petición anterior a
  * una revocación de lo mismo ya no se confirma (`ocon_grant_not_superseded`):
@@ -237,8 +240,11 @@ return new class extends Migration
         $legal = static fn (string $version, string $hash): string => "(kind IN ('requested', 'granted') AND legal_version IS NOT NULL AND {$version} "
             ."AND legal_hash IS NOT NULL AND {$hash}) OR (kind NOT IN ('requested', 'granted') AND legal_version IS NULL AND legal_hash IS NULL)";
         $legalLite = "(length(legal_version) BETWEEN 1 AND 48 AND substr(legal_version, 1, 1) GLOB '[A-Za-z0-9]' AND legal_version NOT GLOB '*[^A-Za-z0-9._:/-]*')";
+        // Una retirada lleva, si la persona lo tenía, el seudónimo de su número de ese momento (C-2 de la revisión de API):
+        // calla también a quien comparta ese número, como «no contactar». Anulable: puede no tener número.
         $telefono = static fn (string $hex): string => "(redacted_at IS NULL AND ((kind IN ('requested', 'granted') AND phone_ref IS NOT NULL AND {$hex}) "
-            ."OR (kind NOT IN ('requested', 'granted') AND phone_ref IS NULL))) OR (redacted_at IS NOT NULL AND phone_ref IS NULL)";
+            ."OR (kind = 'revoked' AND (phone_ref IS NULL OR {$hex})) "
+            ."OR (kind NOT IN ('requested', 'granted', 'revoked') AND phone_ref IS NULL))) OR (redacted_at IS NOT NULL AND phone_ref IS NULL)";
         // Texto plano sin datos de contacto: sin controles, sin 7 dígitos seguidos, sin la serie de 8 con separadores
         // de StudioCanaryPhone::CONTACT_DIGIT_RUN y sin correos (CONTACT_EMAIL); o la marca de la supresión.
         $evidenciaPg = "(redacted_at IS NULL AND ".$filled('evidence')." AND evidence !~ '[[:cntrl:]]' AND evidence !~ '[0-9]{7,}' "
@@ -263,7 +269,7 @@ return new class extends Migration
             'ocon_legal_chk' => [$legal("legal_version ~ '".self::LEGAL_VERSION_PATTERN."'", $hexPg('legal_hash')), $legal($legalLite, $hexLite('legal_hash')),
                 'una petición y su confirmación llevan la versión y el sha256 del texto legal aceptado; un rechazo y una retirada, no'],
             'ocon_phone_chk' => [$telefono($hexPg('phone_ref')), $telefono($hexLite('phone_ref')),
-                'una petición y su confirmación llevan el seudónimo del número (64 hex), nunca el número; un rechazo y una retirada, no'],
+                'una petición y su confirmación llevan el seudónimo del número (64 hex), nunca el número; una retirada, el suyo si lo tenía; un rechazo, no'],
             'ocon_evidence_chk' => [$evidenciaPg, $evidenciaLite, 'la evidencia es texto plano de 1 a 300 sin teléfonos ni correos'],
         ];
     }

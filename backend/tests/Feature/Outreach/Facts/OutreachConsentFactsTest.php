@@ -34,6 +34,8 @@ use Tests\TestCase;
  *  - Gana la negativa: prospecto denegado + socio concedido → denegado; una
  *    retirada posterior → denegado; lo pedido antes de una retirada no revive.
  *  - El número cuenta: cambiado → falta. Cada finalidad por su fila.
+ *  - La retirada vale para el NÚMERO (C-2 de la revisión de API): calla a
+ *    quien lo comparta mientras siga viva; sin número, solo a su persona.
  *  - La consulta del lector da lo mismo que la de referencia del informe.
  */
 class OutreachConsentFactsTest extends TestCase
@@ -151,12 +153,23 @@ class OutreachConsentFactsTest extends TestCase
                 $this->assertSame(self::before($s->policy, 'voice_call', $p), $entrada['consent']['voice'], "{$clave} {$p}");
             }
         }
-        // Lo que lee el adaptador con el libro vacío: UNA sentencia (la tanda), ninguna a las conversaciones.
+        // Lo que lee el adaptador con el libro vacío: UNA sentencia (la tanda, con la regla de los hermanos dentro), ninguna a las
+        // conversaciones. Los números de cada persona (C-2) son filas que la pasada COMPARTE (`FactPass`): en la foto ya las leyó
+        // `LeadFacts`, que corre antes; en una pasada en frío, el adaptador las pide una vez y solo esas.
         $pase = $this->pass($claves, self::NOW);
         (new OutreachConsentFacts)->hasLedger();
+        $frio = $this->capture(fn () => (new OutreachConsentFacts)->facts($pase));
+        $this->assertCount(3, $frio, implode("\n", $frio));
+        $this->assertStringContainsString('"marketing_leads"', $frio[0]);
+        $this->assertStringContainsString('"members"', $frio[1]);
+        $pase = $this->pass($claves, self::NOW);
+        $pase->leadRows();
+        $pase->memberPhones();
         $sql = $this->capture(fn () => (new OutreachConsentFacts)->facts($pase));
         $this->assertCount(1, $sql, implode("\n", $sql));
         $this->assertStringContainsString('outreach_consents', $sql[0]);
+        $this->assertStringContainsString('UNION ALL', $sql[0], 'la regla de los hermanos va en la misma sentencia que la tanda');
+        $this->assertSame($sql[0], $frio[2]);
         // La foto con C9 se serializa y se vuelve a leer igual (las claves nuevas son de política y booleanas).
         $this->assertSame($foto->hash(), BatchSnapshot::fromArray(json_decode($foto->canonicalJson(), true))->hash());
     }
@@ -290,6 +303,72 @@ class OutreachConsentFactsTest extends TestCase
         $this->assertContains('do_not_contact', $this->decide($p['key']));
     }
 
+    // ── C-2: la retirada vale para el NÚMERO (la regla de los hermanos) ──────
+
+    /**
+     * La sonda P10 de la revisión de API, en el motor: un socio con su
+     * prospecto de WhatsApp (número X) y un prospecto SUELTO con X en otro
+     * formato, su conversación y su propia concesión. Retirar la comercial del
+     * socio calla también al suelto; deja de callarlo cuando la persona de la
+     * retirada vuelve a autorizar (petición y confirmación posteriores).
+     */
+    public function test_una_retirada_calla_tambien_a_quien_comparte_el_numero_mientras_siga_viva(): void
+    {
+        $p = $this->socioConWhatsapp();
+        $suelto = $this->lead(['phone' => '+57 300 111 0001', 'consent_status' => 'granted']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $clave = SubjectKey::lead($suelto);
+        $this->assertSame('granted', $this->consent($clave), 'antes, el suelto concede por sí mismo');
+
+        $this->revokeConsent(['member_id' => $p['member'], 'phone_ref' => $p['ref'], 'actor_type' => 'admin', 'recorded_by_admin_id' => 1, 'recorded_by_name' => 'Ana']);
+        $this->assertSame('denied', $this->consent($p['key']));
+        $s = $this->foto([$clave])->subject($clave);
+        $this->assertTrue($s->policy['c9.whatsapp.commercial.revoked'], 'por el número');
+        $this->assertFalse($s->policy['c9.whatsapp.commercial.granted']);
+        $this->assertFalse($s->policy['c9.whatsapp.service.revoked'], 'solo la finalidad retirada');
+        $this->assertSame('denied', $this->consent($clave));
+        $this->assertContains('consent_denied', $this->decide($clave));
+        // En el mismo lote, los dos: la retirada propia del socio no vuelve a entrar por su número.
+        $lote = $this->foto([$p['key'], $clave]);
+        $this->assertSame(['denied', 'denied'], [CoreProjection::policyInput($lote->subject($p['key']), 'commercial', null)['consent']['whatsapp'],
+            CoreProjection::policyInput($lote->subject($clave), 'commercial', null)['consent']['whatsapp']]);
+
+        // La persona de la retirada vuelve a autorizar: la retirada ya no está viva y el suelto vuelve a su propia concesión.
+        $this->resolveConsent($this->requestConsent(['member_id' => $p['member'], 'phone_ref' => $p['ref']]));
+        $this->assertSame('granted', $this->consent($p['key']));
+        $this->assertSame('granted', $this->consent($clave));
+    }
+
+    public function test_tambien_al_reves_y_tambien_a_una_autorizacion_de_c9(): void
+    {
+        $p = $this->socioConWhatsapp();
+        $this->resolveConsent($this->requestConsent(['member_id' => $p['member'], 'phone_ref' => $p['ref']]));
+        $this->assertSame('granted', $this->consent($p['key']));
+        // Un prospecto suelto con el mismo número retira (su retirada, por su clave `l:`): el socio deja de poder.
+        $suelto = $this->lead(['phone' => self::PHONE, 'consent_status' => 'unknown']);
+        $this->revokeConsent(['member_id' => null, 'lead_id' => $suelto, 'phone_ref' => $p['ref']]);
+        $s = $this->foto([$p['key']])->subject($p['key']);
+        $this->assertSame([true, false], [$s->policy['c9.whatsapp.commercial.revoked'], $s->policy['c9.whatsapp.commercial.granted']], 'gana la negativa, nunca los dos');
+        $this->assertSame('denied', $this->consent($p['key']));
+        // Por el número de su ficha de socio también (la regla de los hermanos mira todos sus números, como «no contactar»).
+        $otro = $this->socio([], ['phone' => '3001110009']);
+        $this->revokeConsent(['member_id' => null, 'lead_id' => $this->lead(['phone' => '3001110009']), 'phone_ref' => PhoneRef::fromRaw('3001110009')]);
+        $this->assertTrue($this->foto([SubjectKey::member($otro['member'])])->subject(SubjectKey::member($otro['member']))->policy['c9.whatsapp.commercial.revoked']);
+    }
+
+    public function test_una_retirada_sin_numero_no_calla_a_nadie_mas(): void
+    {
+        // La persona no tenía número al retirar; después tiene un prospecto con X, que comparte con un suelto.
+        $socio = $this->socio([], ['phone' => null]);
+        $this->revokeConsent(['member_id' => $socio['member']]);
+        $suyo = $this->lead(['member_id' => $socio['member'], 'phone' => self::PHONE, 'consent_status' => 'granted']);
+        $this->conversation($suyo, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $suelto = $this->lead(['phone' => self::PHONE, 'consent_status' => 'granted']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $this->assertSame('denied', $this->consent(SubjectKey::member($socio['member'])), 'a ella sí');
+        $this->assertSame('granted', $this->consent(SubjectKey::lead($suelto)), 'la retirada es de la persona, no de un número que no tenía');
+    }
+
     // ── La consulta y el canal ──────────────────────────────────────────────
 
     public function test_la_consulta_del_lector_da_lo_mismo_que_la_de_referencia(): void
@@ -331,6 +410,24 @@ class OutreachConsentFactsTest extends TestCase
         $muchas['p2'] = ['m:7002'];
         $sql = $this->capture(fn () => $this->assertSame(['p2' => $lector['p2']], OutreachConsentFacts::batch($muchas)));
         $this->assertCount(2, $sql);
+        // Con los números (C-2), el tramo cuenta claves Y números: 600 personas con una clave y un número son dos sentencias, y
+        // la retirada viva de m:7003 (con su número) llega a quien lo comparte, esté en el tramo que esté.
+        $this->revokeConsent(['member_id' => 7003, 'phone_ref' => $refA]);
+        $pocas = [];
+        $numeros = [];
+        for ($i = 1; $i <= 600; $i++) {
+            $pocas['q'.$i] = ['l:'.(200000 + $i)];
+            $numeros['q'.$i] = [$this->phoneRefOf('Q'.$i)];
+        }
+        $numeros['q600'] = [$refA];
+        $sql = $this->capture(function () use ($pocas, $numeros): void {
+            $this->assertSame(['own' => [], 'byNumber' => ['q600' => ['commercial' => true]]], OutreachConsentFacts::read($pocas, $numeros));
+        });
+        $this->assertCount(2, $sql);
+        // La propia retirada de una persona (m:7003, con el número A) no vuelve a entrar por su número: la juzga la tanda.
+        $propia = OutreachConsentFacts::read(['p3' => ['m:7003']], ['p3' => [$refA]]);
+        $this->assertSame(['collections' => 'revoked', 'commercial' => 'revoked'], array_map(fn ($g) => $g['kind'], $propia['own']['p3']));
+        $this->assertSame([], $propia['byNumber']);
     }
 
     public function test_el_canal_de_plantillas_comprueba_con_la_misma_combinacion_al_despachar(): void

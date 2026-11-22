@@ -358,6 +358,58 @@ class OutreachConsentsApiTest extends TestCase
         $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk();
     }
 
+    /**
+     * C-2 · La sonda P10 de la revisión de API, por HTTP: un socio con su
+     * prospecto de WhatsApp (número X) y un prospecto SUELTO con X en otro
+     * formato, su conversación y su propia concesión. Retirar la comercial del
+     * socio guarda el seudónimo de X y calla también al suelto (como «no
+     * contactar»); la lista del suelto lo dice (`numberRevoked`) y ninguna
+     * respuesta lleva el número ni su seudónimo.
+     */
+    public function test_retirar_calla_tambien_al_prospecto_suelto_con_el_mismo_numero(): void
+    {
+        $p = $this->socioConWhatsapp();
+        $suelto = $this->lead(['phone' => '+57 300 111 0001', 'consent_status' => 'granted']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $claveSuelto = SubjectKey::lead($suelto);
+        $this->assertSame('granted', $this->motor($claveSuelto), 'antes, el suelto concede por sí mismo');
+        $ana = $this->cuenta('Ana', self::ALL);
+
+        $r = $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $ana)->assertCreated()->assertJsonPath('data.numberCurrent', null);
+        $this->assertSame($p['ref'], DB::table('outreach_consents')->where('uuid', $r->json('data.uuid'))->value('phone_ref'), 'la retirada guarda el número de hoy');
+        $this->assertSame('denied', $this->motor($p['key']));
+        $this->assertSame('denied', $this->motor($claveSuelto), 'el suelto, por el número');
+
+        $lista = $this->getJson(self::BASE.'consents?personType=lead&personId='.$suelto, $ana)->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'none')->assertJsonPath('data.purposes.commercial.numberRevoked', true)
+            ->assertJsonPath('data.purposes.commercial.effective', false)->assertJsonPath('data.purposes.service.numberRevoked', false)
+            ->assertJsonPath('data.events', []);
+        $socio = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'revoked')->assertJsonPath('data.purposes.commercial.numberRevoked', false)
+            ->assertJsonPath('data.events.0.numberCurrent', null);
+        foreach ([$r, $lista, $socio] as $respuesta) {
+            foreach (['3001110001', '573001110001', '+57 300', (string) $p['ref'], (string) SubjectRef::of($p['key']), $p['key']] as $privado) {
+                $this->assertStringNotContainsString($privado, (string) $respuesta->getContent());
+            }
+        }
+    }
+
+    /** C-2 · Una retirada sin número (la persona no lo tenía) es solo de su persona: no calla a quien tenga después ese número. */
+    public function test_una_retirada_sin_numero_no_calla_a_nadie_mas(): void
+    {
+        $s = $this->socio([], ['phone' => null]);
+        $uuid = $this->postJson(self::BASE.'consents/revoke', $this->retirada(['member' => $s['member']]), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $this->assertNull(DB::table('outreach_consents')->where('uuid', $uuid)->value('phone_ref'));
+        $suyo = $this->lead(['member_id' => $s['member'], 'phone' => self::PHONE, 'consent_status' => 'granted']);
+        $this->conversation($suyo, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $suelto = $this->lead(['phone' => self::PHONE, 'consent_status' => 'granted']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
+        $this->assertSame('denied', $this->motor(SubjectKey::member($s['member'])), 'a ella sí');
+        $this->assertSame('granted', $this->motor(SubjectKey::lead($suelto)), 'el suelto no');
+        $this->getJson(self::BASE.'consents?personType=lead&personId='.$suelto, $this->cuenta('Ana', self::ALL))->assertOk()
+            ->assertJsonPath('data.purposes.commercial.numberRevoked', false);
+    }
+
     public function test_sin_numero_no_hay_a_que_autorizar(): void
     {
         $s = $this->socio([], ['phone' => null]);
@@ -420,8 +472,11 @@ class OutreachConsentsApiTest extends TestCase
         $p = $this->socioConWhatsapp();
         $ana = $this->cuenta('Ana', self::ALL);
         $beto = $this->cuenta('Beto', self::ALL);
+        // C-2: un prospecto suelto con el mismo número, al que la retirada del socio tiene que callar también como la aplicación.
+        $suelto = $this->lead(['phone' => self::PHONE, 'consent_status' => 'granted']);
+        $this->conversation($suelto, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
 
-        $this->withAppRole(function () use ($p, $ana, $beto): void {
+        $this->withAppRole(function () use ($p, $ana, $beto, $suelto): void {
             $m = $this->consentMigration();
             $m->down();
             $m->up();
@@ -436,7 +491,7 @@ class OutreachConsentsApiTest extends TestCase
             DB::listen(function (QueryExecuted $q) use (&$sql): void {
                 $sql[] = $q->sql;
             });
-            [$estado, $mensaje] = $this->asApp(function () use ($p, $ana, $beto): void {
+            [$estado, $mensaje] = $this->asApp(function () use ($p, $ana, $beto, $suelto): void {
                 $pet = $this->postJson(self::BASE.'consents', $this->peticion($p), $ana)->assertCreated()->json('data.uuid');
                 $this->postJson(self::BASE.'consents', $this->peticion($p), $ana)->assertStatus(409);
                 $this->postJson(self::BASE."consents/{$pet}/confirm", ['clientRequestId' => (string) Str::uuid()], $beto)->assertCreated();
@@ -445,6 +500,8 @@ class OutreachConsentsApiTest extends TestCase
                 $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $beto)->assertCreated();
                 $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk()->assertJsonPath('data.purposes.commercial.state', 'revoked');
                 $this->assertSame('denied', $this->motor($p['key']));
+                $this->assertSame('denied', $this->motor(SubjectKey::lead($suelto)), 'la regla de los hermanos, como la aplicación');
+                $this->getJson(self::BASE.'consents?personType=lead&personId='.$suelto, $ana)->assertOk()->assertJsonPath('data.purposes.commercial.numberRevoked', true);
                 $this->assertSame($this->appRoleName(), DB::scalar('SELECT current_user'));
             });
             DB::getEventDispatcher()->forget(QueryExecuted::class);

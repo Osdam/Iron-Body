@@ -136,7 +136,7 @@ trait OutreachConsentFixtures
         ], $o);
     }
 
-    /** La retirada: sin petición, sin número, sin texto legal; por defecto la registra el sistema (la palabra de baja). */
+    /** La retirada: sin petición ni texto legal y, por defecto, sin número; por defecto la registra el sistema (la palabra de baja). */
     private function consentRevocationRow(array $o = []): array
     {
         $member = array_key_exists('member_id', $o) ? $o['member_id'] : 7001;
