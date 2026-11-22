@@ -639,6 +639,7 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
      - `do_not_contact`, suyo o de un prospecto con su número;
      - el *opt-out* comercial, con finalidad comercial;
      - el consentimiento del medio denegado (`lead.consent_denied`);
+     - por WhatsApp, la retirada de la autorización del libro de C9 para la finalidad del trabajo (`c9.whatsapp.<finalidad>.revoked`, la suya o la de otra ficha con uno de sus números; C-1 de `informe-apisec-consent.md`, lote 4);
      - por voz, la revocación del consentimiento que consta (`voice.consent_revoked`: el último evento válido de algún contacto de voz activo es `revoked`; R3-1);
      - la exclusión de voz, en un trabajo por voz;
      - la supresión del libro (`SubjectSuppressions`), también la palabra de baja POSIBLE sin resolver (SC-2).
@@ -646,7 +647,7 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
   6. `subject_minor` (R3-3): N1, se sabe que es menor. Retiene en cualquier medio y finalidad. Si la edad no se sabe, no retiene, igual que la escalera (D9-15: la edad no se infiere).
   7. `rne_check_missing` (R3-3): N1, solo por voz. Algún contacto de voz activo no tiene una consulta al RNE vigente.
   8. `canary_scope_mismatch` (F-2): en la parte canario (N5) o en una versión que declara «solo canario» (N3 `canary_only_declared`), su número ya no es un canario activo del medio del trabajo: se desactivó o se revocó después de salir.
-  9. `policy_unknown` (L9-118): lo de los puntos 4, 6, 7 u 8 no se puede comprobar. Puede ser una persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido. Por voz, también un consentimiento que ya no está concedido sin que conste una revocación, como un contacto retirado (R3-1).
+  9. `policy_unknown` (L9-118): lo de los puntos 4, 6, 7 u 8 no se puede comprobar. Puede ser una persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido. Por voz, también un consentimiento que ya no está concedido sin que conste una revocación, como un contacto retirado (R3-1). Por WhatsApp COMERCIAL, también un consentimiento que ya no es `granted` sin que conste un `denied` (un prospecto nuevo de la persona con `consent_status` nulo, el más reciente, que es el que lee N1; I-1 de `informe-reviewer-bandeja.md`, lote 4). El servicio y la cobranza por WhatsApp no cambian.
   10. `complaint_unknown`: N6 sin datos de eventos.
   11. `expired`: `expires_at <= ahora`, el borde del despachador. La política se evaluó para ese plazo: pasado, no se contacta con esa decisión.
 
@@ -663,6 +664,8 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
   - **F-3:** la plantilla que deja de estar aprobada retiene (`template_not_approved`).
   - **m-1:** la inscripción que se cierra entre la comprobación y la escritura da 409 `enrollment_closed`.
   - **m-2:** la referencia del Studio que deja de valer retiene (`strategy_stopped`).
+
+  **Lote 4 (22-11-2026), autorizado por el lead:** C-1 (la retirada de C9 retiene con `opted_out`) e I-1 (por WhatsApp comercial, perder el consentimiento sin un `denied` retiene con `policy_unknown`; decisión del lead por la directiva del propietario). Igual que la enmienda anterior, solo retienen más: no hay códigos nuevos ni consultas nuevas, y con el libro vacío o sin la tabla C-1 no cambia nada. Informe: `plans/informes-cierre/informe-be-lote4.md`.
 
   Los cuatro códigos nuevos son `template_not_approved`, `subject_minor`, `rne_check_missing` y `canary_scope_mismatch`. Son aditivos: el CRM trata un motivo desconocido como «no contactes», y los textos que le faltan son C-1 de `informe-security-bandeja-r3.md`.
 
@@ -1733,6 +1736,8 @@ Dentro, además, una persona y la llave de VER a la persona (`members.view` o `m
 - **M-6 · Qué se audita.** Las ESCRITURAS: el propio libro (solo inserción: quién, qué, cuándo, evidencia, texto legal) y `Log` `outreach.consent.*` con el uuid, la finalidad, la fuente y la cuenta (sin persona, número, nombres ni evidencia; sin IP ni sesión). Además `outreach.consent.four_eyes_denied` y `outreach.consent.out_of_trainer_scope`. Las LECTURAS (la evidencia y los nombres del personal que enseña la lista) no se registran, como en el resto del CRM.
 - **C-2:** la retirada guarda UN número (el de hoy: el de su identidad de WhatsApp o, sin ella, el principal), no todos; una retirada sin número no calla a nadie más; lo que levanta la regla de los hermanos es una autorización nueva de la persona de la retirada para ese número (la del hermano, no), o su supresión 1581.
 
+**6. Lote 4 (22-11-2026): C-1 hecho** (`informe-be-lote4.md`). La bandeja asistida respeta la retirada: por WhatsApp, `c9.whatsapp.<finalidad del trabajo>.revoked = true` retiene lo no reclamado y quita la ficha y el guion a quien ya lo reclamó (`opted_out`, D9-9.5), también si la retirada llega entre la comprobación y la escritura de la reclamación. El pendiente (e) queda resuelto así. Con el libro vacío o sin la tabla, la bandeja es la de antes.
+
 ## Enmienda Q1-8 (22-11-2026), autorizada por el lead por la directiva definitiva del propietario (§11: quejas)
 
 Rama `cierre/quejas`. Pieza Q1-8 de `plans/cierre/plan-quejas-consentimiento-cuatro-ojos.md` §1. Informe: `plans/informes-cierre/informe-be-quejas-y-baja.md`. **Aditiva:** la escalera (`PolicyLadder`, N6 `complaint_recent`) y su fixture no cambian; cambian quién puede escribir una queja y qué queja cuenta.
@@ -1751,3 +1756,27 @@ Rama `cierre/quejas`. Pieza Q1-8 de `plans/cierre/plan-quejas-consentimiento-cua
 
 **Pendiente del propietario (el código no lo decide):** (a) si el Administrador o la recepción deben recibir por defecto `complaints_record` (hoy solo Super Admin; es la dirección segura: frena); (b) si descartar una queja (levanta un freno) debe exigir una llave propia en vez de la capacidad de resolver revisiones del Inbox; (c) si una queja resuelta sin categoría (clientes anteriores) debe poder descartarse después: hoy no (la ventana empieza en la resolución siguiente).
 
+**7. Lote 4 (22-11-2026), tras la revisión de API** (`plans/informes-cierre/informe-apisec-quejas.md`; informe `informe-be-lote4.md`). Decisiones del lead; el pendiente (b) queda resuelto:
+- **B1 · Descartar exige su propia llave.** `commercial_automation.complaints_dismiss`, **solo Super Admin por defecto** (fuera del Administrador, como `release`: soltar un freno). Con `complaint_category = not_a_complaint`, la ruta de resolver del Inbox la exige ANTES de leer la conversación y de abrir la transacción. Sin ella: 403 `forbidden` con `required_permission`, nada escrito, la revisión pendiente y la queja frenando. Confirmarla, `other` y resolver sin categoría siguen como antes para todos. Va en `AuthorizationMap::CONTROLLER_ENFORCED`, para que Configuración → Roles la ofrezca.
+- **NB1 · Solo con la revisión pendiente.** `not_a_complaint` sin `staff_review_pending` → 409 `staff_review_not_pending`, sin escribir.
+- **NB2 · La queja que llegó mientras se decidía.** Campo opcional `last_seen_ai_action_id`: la acción de la IA más reciente que vio quien decide (`ai_actions[].id`, que el detalle de la conversación lleva desde ahora). Si la IA marcó después otra queja en esa conversación (motivo o intención, el criterio del observador), 409 `complaint_newer_than_seen` y nada se descarta. Sin el campo, como antes.
+- **NB3 · Tope diario por cuenta al registrar.** `outreach.complaints.per_account_per_day` (`COMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY`): de 1 a 200; vacío, 0 o ilegible → 20 (no se puede quitar). Cuenta por día de Bogotá. Pasado el tope, 429 `complaint_daily_limit_reached` (+`limit`) y no se escribe. Repetir una petición ya hecha no cuenta. Contar y registrar van con la fila de la cuenta bloqueada. `commercial.complaint.staff_recorded` dice sobre quién fue (`subject_type`, `subject_id`: la persona canónica), nunca su nombre ni su teléfono.
+- **NB6 · La línea de baja no admite una negación delante.** «no», «nunca» o «jamás» en las dos palabras anteriores al verbo anulan esa instrucción (`opt_out_text_missing` si no hay otra). El resto de las burlas lo ve la revisión a cuatro ojos. Las cinco plantillas propuestas siguen siendo válidas.
+
+**Las rutas, para el CRM** (aditivo; lo que no se nombra no cambia):
+- `POST /api/admin/marketing/inbox/conversations/{id}/staff-review/resolve` `{note?, complaint_category?, last_seen_ai_action_id?}`. Con `not_a_complaint`, además de lo de §2:
+  - **403** `{ok: false, code: "forbidden", message, required_permission: "commercial_automation.complaints_dismiss"}`, también si la conversación no existe;
+  - **409** `staff_review_not_pending` · `complaint_newer_than_seen` (la revisión sigue pendiente);
+  - **422** de validación si `last_seen_ai_action_id` no es un entero ≥ 1.
+  - El CRM ofrece «No era una queja» solo a quien tiene la llave, y envía el mayor `ai_actions[].id` que pintó. Ante `complaint_newer_than_seen`: «La IA marcó otra queja mientras decidías. Vuelve a abrir la conversación antes de decidir».
+- `GET /api/admin/marketing/inbox/conversations/{id}`: cada `ai_actions[]` lleva `id`.
+- `POST /api/admin/commercial-automation/complaints`: **429** `{ok: false, code: "complaint_daily_limit_reached", message, limit}`. Texto: «Ya registraste {limit} quejas hoy, el tope diario de una cuenta. Si hace falta registrar más, pídeselo a un Super Admin».
+- Plantillas del Studio: `content.bodyPreview: opt_out_text_missing` también con una negación delante del verbo («No responda BAJA»).
+
+**Límites conocidos** (aceptados o a la lista; para el propietario y Mercadeo):
+- **NB4 · Oráculo prospecto↔socio.** Con la llave de registrar y `marketing.view`, sin `members.view`: un prospecto enlazado da 403 `members.view`, uno inexistente 404 y uno suelto 201. Es el mismo patrón ya revisado de C9-3. Para cerrarlo: 403 uniforme sin `members.view`.
+- **NB5 · Idempotencia de una petición fusionada.** La segunda queja del día de una persona (con otro `clientRequestId`) responde 201 sin guardar su id. Repetida otro día, crea una queja nueva y alarga el freno un día. El mismo `clientRequestId`, a la vez y para dos personas, deja dos filas: no hay índice único sobre `payload->client_request_id`.
+- **NB7 · La nota del Inbox va DESPUÉS del commit.** Si falla, da 500 con el descarte ya hecho, como en `resolve()`.
+- **NB8 · Volver a resolver pisa `staff_review_resolved_by/at`**, como `resolve()`. La constancia del descarte (`dismissed_by`) no se pierde.
+- **NB9 · Logs tras la supresión 1581.** `commercial.complaint.dismissed` conserva `conversation_id` y `by`, y `staff_recorded` lleva ahora `subject_type` y `subject_id`. La retención de los logs es de operación.
+- **NB2, la ventana que queda:** una queja de la IA que se confirma entre la comprobación y el commit del descarte (milisegundos), y los ids de secuencia, que en PostgreSQL pueden confirmarse fuera de orden. El observador vuelve a mirar el descarte tras un duplicado; lo demás lo cubre el campo.
