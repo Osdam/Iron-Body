@@ -39,9 +39,12 @@ class StudioLabIsolationTest extends TestCase
 
     private const IMPURO = ['now', 'today', 'Carbon', 'CarbonImmutable', 'DB', 'Log', 'Cache', 'Queue', 'Bus', 'Mail', 'Notification', 'Event', 'Storage', 'File', 'dispatch', 'event', 'cache', 'logger', 'info', 'report', 'env', 'StudioLabVerdict'];
 
-    /** El núcleo puro (paso 2 del Hito 4). */
+    /**
+     * El núcleo puro (paso 2 del Hito 4). Apartado 5 del cierre: el port del
+     * recorrido S2 (`StudioLabEngineFlow`), puro y sin nombrar el motor.
+     */
     private const NUCLEO = [
-        'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineChecks.php', 'StudioLabFakeClient.php',
+        'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineChecks.php', 'StudioLabEngineFlow.php', 'StudioLabFakeClient.php',
         'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
     ];
 

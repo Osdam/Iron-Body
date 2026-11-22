@@ -7,6 +7,7 @@ use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
 use App\Models\UltronStudio\StudioLabScenario;
 use App\Models\UltronStudio\StudioLabVerdict;
+use App\Models\UltronStudio\StudioPublication;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\UltronStudio\StudioLabPrompts;
@@ -112,7 +113,7 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
 
         // Lo que se firma en la entrada: los cuatro campos de siempre.
         $this->publishAs($root, $v->uuid)->assertCreated()->assertJsonPath('data.labGate', ['mode' => 'required']);
-        $fila = \App\Models\UltronStudio\StudioPublication::query()->sole()->lab_gate;
+        $fila = StudioPublication::query()->sole()->lab_gate;
         $this->assertSame(['mode' => 'required', 'runUuid' => $veredicto->run->uuid, 'verdictId' => $veredicto->id, 'promptVersion' => StudioLabPrompts::PROMPT_VERSION], $fila);
     }
 
