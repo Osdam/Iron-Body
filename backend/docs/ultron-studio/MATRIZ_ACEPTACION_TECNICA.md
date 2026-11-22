@@ -1,6 +1,6 @@
 # ULTRON STUDIO FULL · Matriz de aceptación técnica
 
-**22-11-2026 · pendiente PT-13 del control de cierre · la escribe el lead.** Cada función con su estado, dónde vive y la evidencia que lo respalda. El detalle de cada pendiente está en `MATRIZ_CIERRE_V2.md` §11; el porcentaje sale de `ops/herramientas-lead/avance.py` (nunca de cabeza).
+**22-11-2026 (al día a las 21:52 UTC) · pendiente PT-13 del control de cierre · la escribe el lead.** Cada función con su estado, dónde vive y la evidencia que lo respalda. El detalle de cada pendiente está en `MATRIZ_CIERRE_V2.md` §11; el porcentaje sale de `ops/herramientas-lead/avance.py` (nunca de cabeza).
 
 ## Cómo leerla
 
@@ -16,7 +16,7 @@
 
 **Tipos de evidencia.** *Batería*: la batería completa de PHPUnit sobre el commit exacto. *Revisión*: seguridad, seguridad de API o revisión final independiente, con su informe. *Ensayo*: despliegue y vuelta atrás en el banco local. *Simulado*: de extremo a extremo con simuladores. *Producción*: leído en el servidor. *Real*: una interacción real (WhatsApp o llamada). **Una prueba simulada no equivale a una interacción real**, y aquí nunca se presenta como tal.
 
-## 1. Dónde está cada cosa (22-11-2026, 21:10 UTC)
+## 1. Dónde está cada cosa (22-11-2026, 21:52 UTC)
 
 **Producción** (leído en el servidor): API `f1fe6cac` (desde las 16:11 UTC), CRM `a9e7e7a`, n8n con el flujo S2 activo, versión 3 del Studio en canario (huella `26d57565…`, compilador 4), conversación canaria #931. Las llamadas y los envíos automáticos, cerrados por una constante del código. El resto de clientes, con el motor anterior (Legacy).
 
@@ -29,9 +29,9 @@
 | Lote 5 · laboratorio frente al motor | `cierre/lab` `bdb93199` | 19 412 pruebas, 0 regresiones | Seguridad, base de datos y revisión final: 0 bloqueantes abiertos |
 | Turno de planes · compilador 5 (PT-17) | `cierre/planes-c5` `e5a673c1` | 19 259 pruebas, solo los fallos esperados | Seguridad: apto con condiciones. Revisión final: aprobado, 0 bloqueantes |
 | Cobro manual con IVA adicional (PT-16) | `cierre/pagos-guarda-iva` `e1c2af3c` | Dentro de la integración definitiva | Revisión final: aprobado, 0 bloqueantes |
-| Condiciones previas a ampliar WhatsApp (PT-15) | `cierre/planes-condiciones` | Ver §3 | Ver §3 |
+| Condiciones previas a ampliar WhatsApp (PT-15) | `cierre/planes-condiciones` `a994b050` | Dentro de la integración definitiva | Revisión final: aprobado con condiciones, 0 bloqueantes. Seguridad: 0 bloqueantes |
 | CRM · tres pantallas nuevas | repositorio del CRM, `cierre/crm-lote5` `9d5a8e6` | 1 453 pruebas del Studio y 814 de automatización, Inbox y quejas; compilación de producción | Revisión final (dos pases): aprobado con condiciones, 0 bloqueantes |
-| **Todo junto** | `integracion/final` `c4323242` | **19 643 pruebas, 543 581 aserciones; el único fallo es la puerta de diff, que pasa sola al subir** | Recorridos de extremo a extremo simulados (PT-12) |
+| **Todo junto** | `integracion/final` `269736bd` | **19 730 pruebas, 544 039 aserciones; el único fallo es la puerta de diff con los siete ficheros esperados, que pasa sola al subir** | Recorridos de extremo a extremo simulados (PT-12), hechos sobre `c4323242` (antes de entrar PT-15) |
 | Guion de despliegue por lotes | `ops/deploy-cierre-lote.sh` (sha256 `7c7298d8…`) | — | Ensayado en el banco con los tres lotes: comprobar, desplegar y volver atrás, 0 · 0 · 0 |
 
 ## 2. Función por función
@@ -39,7 +39,7 @@
 ### Apartados 1 a 3 · Recuperar el estado, coordinación, laboratorio de aceptación y canario
 Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la traza y la reversión están **OPERATIVOS Y PROBADOS** desde el 12-11 y el 18-11 (`MATRIZ_CIERRE_V2.md` §1 y §2).
 
-### Apartado 4 · El Studio gobierna WhatsApp (85,0 %)
+### Apartado 4 · El Studio gobierna WhatsApp (87,0 %)
 
 | Función | Estado | Evidencia | Qué falta |
 |---|---|---|---|
@@ -50,7 +50,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | El texto fijo de respaldo como última red | **OPERATIVO Y PROBADO** | Real: turno 2 de las pruebas tercera y cuarta, con los precios del catálogo | — |
 | **El turno «¿qué planes tienen?» escrito por el modelo** | **EN INTEGRACIÓN** (PT-17). **La aceptación NO está superada**: la cuarta prueba real falló en ese turno | Batería, seguridad y revisión final sin bloqueantes; la forma pedida (175 caracteres, tres planes) pasa la comprobación del servidor con el catálogo de producción | Medirlo con el modelo real en el laboratorio; autorizar el despliegue; publicar una versión nueva; quinta prueba real |
 | Frases prohibidas de las reglas del Studio | **OPERATIVO** en el compilador; sin prueba real (la versión publicada no lleva frases) | Batería; 29 917 frases candidatas contra las anclas, 0 fallos (seguridad de PT-17) | Una prueba real con una versión que lleve frases |
-| Condiciones previas a ampliar más allá del canario (PT-15) | Ver §3 | Ver §3 | Ver §3 |
+| Condiciones previas a ampliar más allá del canario (PT-15): la lista de planes no tapa otra pregunta y la comprobación del borrador tiene su propio cupo | **EN INTEGRACIÓN** | Batería (19 730, dentro de la integración); 304 y 6 pruebas propias que caen con el código de antes; Legacy byte a byte; revisión final y seguridad, 0 bloqueantes | Autorizar su despliegue. Antes de ampliar: valorar los tres huecos de la regla de la lista (`MATRIZ_CIERRE_V2.md` §11.2) y corregir el orden del limitador y el secreto (PT-19) |
 | Ampliar el Studio a más conversaciones | **BLOQUEADO** | — | La aceptación del turno de planes y la decisión del propietario, por etapas |
 
 ### Apartado 5 · Laboratorio de texto frente al motor real (57,6 %)
@@ -99,7 +99,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | Los once motivos y el aviso del reclamo en el CRM | **OPERATIVO** (publicado) | Producción: CRM `a9e7e7a` | Verlo con una sesión real |
 | Modo asistido en vivo | **BLOQUEADO** | — | Estrategias publicadas; la decisión D-3 |
 
-### Apartado 10 · Consentimientos, quejas y cuatro ojos (58,4 %)
+### Apartado 10 · Consentimientos, quejas y cuatro ojos (61,3 %)
 
 | Función | Estado | Evidencia | Qué falta |
 |---|---|---|---|
@@ -141,7 +141,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 
 | Función | Estado | Evidencia |
 |---|---|---|
-| Batería completa sobre la integración definitiva | **HECHO** | 19 643 pruebas; un único fallo, la puerta de diff |
+| Batería completa sobre la integración definitiva | **HECHO** | 19 730 pruebas; un único fallo, la puerta de diff |
 | Recorridos de extremo a extremo simulados | **HECHO**, con la voz parcial | `plans/informes-cierre/informe-tester-e2e-final.md` |
 | Pruebas canarias reales de los cinco recorridos | Pendiente (real) | — |
 | Aceptación final | Pendiente | Después de las pruebas reales |
@@ -164,10 +164,11 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | PT-12 | Recorridos de extremo a extremo simulados | CERRADO (voz parcial) | `informe-tester-e2e-final.md` |
 | PT-13 | Esta matriz | CERRADO con este documento | — |
 | PT-14 | Quién gobierna lo que Sofía dice de los planes | ESPERA LA DECISIÓN DEL PROPIETARIO | `informe-security-lote3.md`, B-1 |
-| PT-15 | Condiciones previas a ampliar WhatsApp | Ver `MATRIZ_CIERRE_V2.md` §11 | — |
+| PT-15 | Condiciones previas a ampliar WhatsApp | CERRADO | `informe-backend-pt15-condiciones.md`, `informe-reviewer-pt15.md`, `informe-security-pt15.md` |
 | PT-16 | Cobro manual con IVA adicional | CERRADO | `informe-reviewer-pt17-pt16.md`, parte B |
 | PT-17 | Instrucciones del turno de planes (compilador 5) | CERRADO en lo técnico; la aceptación exige la medición y la quinta prueba | `informe-security-pt17.md`, `informe-reviewer-pt17-pt16.md` |
 | PT-18 | El identificador del socio en autorizaciones y quejas | CERRADO | `informe-apisec-ids.md`, `informe-reviewer-ids.md`; batería completa del lote 4 |
+| PT-19 | Las puertas internas cuentan la petición antes de comprobar el secreto (anterior a este trabajo; en producción) | PROPUESTO: espera la autorización del propietario | `ops/evidencia-h9/2026-11-22/10-puertas-internas-cupo-sin-secreto.txt` |
 
 ## 4. Lo que solo demuestra una prueba real
 
@@ -188,10 +189,12 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | Autorización específica del lote 3; después, A0 a A3 del runbook | Voz y primera llamada |
 | Decidir PT-14 | Llamar a clientes reales |
 | Autorizar el despliegue de PT-16 y de PT-15 | Pagos con IVA adicional; ampliar WhatsApp |
+| **Decidir PT-19** (corregir que las puertas internas cuenten antes de comprobar el secreto) | Que nadie pueda dejar sin respuesta al asesor de WhatsApp, ni sin notificaciones a los socios, con peticiones sin credenciales |
 | Vincular a dos personas reales; rotar la clave de ElevenLabs; clave restringida de Twilio | Sombra con estrategias, plantillas de Meta, voz |
 
 ## 6. Hallazgos adyacentes, fuera del alcance congelado (documentados, sin tocar)
 
+- **Puertas internas, en producción desde antes de este cierre (el más serio):** el limitador corre antes que la comprobación del secreto y su cubo es global; 120 peticiones por minuto sin credenciales, desde internet, dejan sin respuesta al asesor de WhatsApp, y 600, sin notificaciones a los socios. No expone datos. Reproducido en local y comprobado en producción en solo lectura (`ops/evidencia-h9/2026-11-22/10-puertas-internas-cupo-sin-secreto.txt`). Propuesto como PT-19.
 - **Pagos, en producción desde antes de este cierre:** con el precio nuevo apagado, marcar «importe distinto» sin escribir el motivo acepta cualquier importe para un plan (`informe-reviewer-pt17-pt16.md`, NB-B3).
 - **CRM de producción:** el botón flotante de IRON tapa «Crear borrador» en «Nueva versión de plantilla» a 1 440 px (`informe-tester-e2e-final.md`, NB-1).
 - Los no bloqueantes de cada revisión, en `MATRIZ_CIERRE_V2.md` §11.2.

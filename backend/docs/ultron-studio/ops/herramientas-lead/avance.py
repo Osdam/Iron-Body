@@ -43,7 +43,9 @@ BLOQUES_4 = [
     ("B · Trato de usted, textos de respaldo y lista fija", 14, 14.0),
     ("C · Regenerar antes de sustituir", 40, 40.0),
     ("D · Despliegue, n8n S2, versión 3, publicación y tercera prueba real", 12, 9.0),  # la cuarta prueba (22-11) tampoco se superó: sigue en 9,0
-    ("E · Frases prohibidas en real, ampliación por etapas, pendientes H4-11 y H4-13", 12, 0.0),
+    # E no tenía reparto interno; desde el 22-11 sus tres partes valen 4 cada una: frases prohibidas en real (0),
+    # ampliación por etapas (0) y las dos condiciones previas, H4-11 y el cubo de H4-13 (PT-15: integradas, 0,50 × 4 = 2,0).
+    ("E · Frases prohibidas en real, ampliación por etapas, pendientes H4-11 y H4-13", 12, 2.0),
 ]
 
 # (apartado): base, [(función, peso, valor de la etapa, nota, tipo)]
