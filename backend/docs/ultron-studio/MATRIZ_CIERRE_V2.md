@@ -271,3 +271,20 @@ Después de V-1, en este orden: V-2 (permisos geográficos y key restringida de 
 **Lo que esta decisión enmienda:** la protección 6 del contrato del H8 (el número de voz no puede ser el de WhatsApp) y D8-4/D8-5 en lo de la subcuenta. Lo que NO toca: consentimiento, canarios, horario legal, frecuencia, presupuesto, cupos, freno, corte, deriva del agente, la integración de WhatsApp de Meta y las entrantes (que siguen sin ruta: un identificador verificado no recibe llamadas).
 
 **Cómo se ejecuta, sin cruzarse con los demás frentes:** rama `cierre/telefonia` (sale de la punta confirmada de `cierre/voz`, `b875875f`), árbol `_worktrees/cierre-telefonia`. Orden: `arq-telefonia` (diseño mínimo y verificación de que es seguro) → backend → mandos → security → integración. **Nada se despliega ni se habilita sin su autorización específica.**
+
+---
+
+## 10. Cómo se calcula el avance desde la directiva definitiva (22-11-2026)
+
+Un solo cálculo, repetible: `ops/herramientas-lead/avance.py` (`python3 -I avance.py`). Los pesos por apartado son los de siempre y no se tocan. Lo que cambia el 22-11 es que los apartados 5 a 14 dejan de llevar una estimación a ojo y pasan a calcularse así:
+
+- **Base:** lo que ya existía y funcionaba antes de la directiva (la estimación anterior de cada apartado).
+- **Lo que falta** se reparte entre las funciones pendientes del apartado, cada una con su peso (suman 100).
+- **Cada función de código avanza por etapas con un valor fijo:** implementada y probada en local, con su revisión de seguridad si la exige, 0,40 · integrada (batería completa y revisión final sin bloqueantes), 0,50 · desplegada y verificada en producción, 0,70 · aceptada con una prueba real, 1,00.
+- Una función que no es código (una decisión, un trámite, una verificación en producción) vale 1,00 cuando está hecha.
+- **Avance del apartado = base + (1 − base) × Σ(peso de la función × valor de su etapa).**
+- **Dos lecturas, que suman el avance:** la técnica (implementar e integrar, y los entregables técnicos) y la operativa (desplegar, verificar, probar en real y las acciones del propietario).
+
+El apartado 4 conserva sus bloques A a E. Para actualizar se cambia solo la etapa de la función que avanzó, nunca los pesos ni las bases.
+
+**Primera lectura con este cálculo (22-11-2026, 07:30 UTC): Global 59,0 %** (58,96). Con la estimación anterior era 53,2 %. Los 5,8 puntos de diferencia son 5,4 técnicos (código implementado, probado y revisado esta noche, todavía sin desplegar) y 0,4 operativos (los permisos de Meta verificados en producción). Nada de esto está desplegado: cada lote que se despliegue y se verifique sube la parte operativa de su función de 0,50 a 0,70, y cada prueba real, hasta 1,00.
