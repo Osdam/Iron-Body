@@ -52,7 +52,7 @@ BLOQUES_4 = [
 APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
-        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.28, "B0 a B6 y B8 hechos y probados en los dos motores; faltan T8 y T9, seguridad y revisión final", "c"),
+        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.34, "backend completo y probado en los dos motores, con el recorrido de punta a punta; en revisión de seguridad y de base de datos", "c"),
         ("CRM: lanzar y ver una ejecución del motor", 15, 0.00, "espera al backend", "c"),
         ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
     ]),
