@@ -22,7 +22,9 @@ use Tests\TestCase;
  *    UPDATE (el disparador terminal ya la cubre), también con el rol de la
  *    aplicación, que no es el dueño (PostgreSQL);
  *  - la migración no se lleva los disparadores (11 de fila en los dos; 16 con
- *    los de TRUNCATE en PostgreSQL), ni en up() ni en down() y up() otra vez.
+ *    los de TRUNCATE en PostgreSQL), ni en up() ni en down() y up() otra vez;
+ *  - C-A1 de database-specialist: down() se niega, sin cambiar nada, si algún
+ *    caso lleva `engine` (se perdería la verificación de su `results_hash`).
  */
 class UltronStudioLabEngineColumnTest extends TestCase
 {
@@ -77,6 +79,48 @@ class UltronStudioLabEngineColumnTest extends TestCase
         $caso = $this->runningCase();
         StudioLabRunCase::advance($caso->id, [StudioLabRunCase::STATUS_RUNNING], ['status' => StudioLabRunCase::STATUS_ERROR, 'error_code' => 'timeout', 'finished_at' => now()]);
         $this->assertBlocked(fn () => DB::table('ultron_studio_lab_run_cases')->where('id', $caso->id)->update(['engine' => json_encode([])]));
+    }
+
+    public function test_c_a1_down_se_niega_con_casos_del_motor_y_no_cambia_nada(): void
+    {
+        $esperados = $this->isPostgres() ? 16 : 11;
+        // Un caso del motor terminado, con su recorrido, y una simulación (engine NULL).
+        $motor = $this->runningCase();
+        $this->assertTrue(StudioLabRunCase::advance($motor->id, [StudioLabRunCase::STATUS_RUNNING], ['status' => StudioLabRunCase::STATUS_DONE, 'outcome' => 'pass', 'engine' => ['flowRev' => 'S2', 'path' => ['strategist']], 'finished_at' => now()]));
+        $this->runningCase();
+        $antes = DB::table('ultron_studio_lab_run_cases')->orderBy('id')->get()->map(static fn (object $f): array => (array) $f)->all();
+
+        $migracion = require database_path('migrations/'.self::MIGRATION);
+        $negativa = null;
+        try {
+            $migracion->down();
+        } catch (RuntimeException $e) {
+            $negativa = $e;
+        }
+        $this->assertNotNull($negativa, 'down() quitó la columna con un caso del motor dentro.');
+        $this->assertStringContainsString('down() se niega a quitar la columna engine con 1 casos del recorrido del motor', $negativa->getMessage());
+        $this->assertStringContainsString('results_hash', $negativa->getMessage());
+
+        $this->assertTrue(Schema::hasColumn('ultron_studio_lab_run_cases', 'engine'));
+        $this->assertSame($antes, DB::table('ultron_studio_lab_run_cases')->orderBy('id')->get()->map(static fn (object $f): array => (array) $f)->all(), 'ninguna fila cambia');
+        $this->assertSame(['flowRev' => 'S2', 'path' => ['strategist']], $motor->fresh()->engine);
+        $this->assertSame($esperados, $this->triggers());
+    }
+
+    public function test_c_a1_down_sin_casos_del_motor_quita_la_columna_aunque_haya_simulaciones(): void
+    {
+        $esperados = $this->isPostgres() ? 16 : 11;
+        $simulacion = $this->runningCase();
+        StudioLabRunCase::advance($simulacion->id, [StudioLabRunCase::STATUS_RUNNING], ['status' => StudioLabRunCase::STATUS_DONE, 'outcome' => 'pass', 'finished_at' => now()]);
+
+        $migracion = require database_path('migrations/'.self::MIGRATION);
+        $migracion->down();
+
+        $this->assertFalse(Schema::hasColumn('ultron_studio_lab_run_cases', 'engine'));
+        $this->assertSame(1, DB::table('ultron_studio_lab_run_cases')->where('id', $simulacion->id)->where('status', StudioLabRunCase::STATUS_DONE)->count(), 'la simulación no pierde nada');
+        $this->assertSame($esperados, $this->triggers(), 'down() conserva los disparadores');
+        $migracion->up();
+        $this->assertTrue(Schema::hasColumn('ultron_studio_lab_run_cases', 'engine'));
     }
 
     public function test_en_postgres_el_rol_de_la_aplicacion_la_escribe_viva_y_no_terminal(): void
