@@ -163,12 +163,12 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | PT-11 | Integración definitiva y su batería | CERRADO | `integracion/final` `c4323242` |
 | PT-12 | Recorridos de extremo a extremo simulados | CERRADO (voz parcial) | `informe-tester-e2e-final.md` |
 | PT-13 | Esta matriz | CERRADO con este documento | — |
-| PT-14 | Quién gobierna lo que Sofía dice de los planes | ESPERA LA DECISIÓN DEL PROPIETARIO | `informe-security-lote3.md`, B-1 |
+| PT-14 | Quién gobierna lo que Sofía dice de los planes | DECIDIDO (las dos protecciones, A y B); en implementación | `plans/informes-cierre/diseno-arq-pt14.md` (rama `cierre/voz-catalogo`) |
 | PT-15 | Condiciones previas a ampliar WhatsApp | CERRADO | `informe-backend-pt15-condiciones.md`, `informe-reviewer-pt15.md`, `informe-security-pt15.md` |
 | PT-16 | Cobro manual con IVA adicional | CERRADO | `informe-reviewer-pt17-pt16.md`, parte B |
 | PT-17 | Instrucciones del turno de planes (compilador 5) | CERRADO en lo técnico; la aceptación exige la medición y la quinta prueba | `informe-security-pt17.md`, `informe-reviewer-pt17-pt16.md` |
 | PT-18 | El identificador del socio en autorizaciones y quejas | CERRADO | `informe-apisec-ids.md`, `informe-reviewer-ids.md`; batería completa del lote 4 |
-| PT-19 | Las puertas internas cuentan la petición antes de comprobar el secreto (anterior a este trabajo; en producción) | PROPUESTO: espera la autorización del propietario | `ops/evidencia-h9/2026-11-22/10-puertas-internas-cupo-sin-secreto.txt` |
+| PT-19 | Las puertas internas contaban la petición antes de comprobar el secreto (anterior a este trabajo; en producción) | CERRADO en lo técnico (autorizado por el propietario el 22-11); sin desplegar | `informe-backend-pt19-puertas-internas.md`, `informe-apisec-pt19.md` (rama `cierre/puertas-internas`); evidencia del defecto: `ops/evidencia-h9/2026-11-22/10-…` |
 
 ## 4. Lo que solo demuestra una prueba real
 
@@ -189,7 +189,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | Autorización específica del lote 3; después, A0 a A3 del runbook | Voz y primera llamada |
 | Decidir PT-14 | Llamar a clientes reales |
 | Autorizar el despliegue de PT-16 y de PT-15 | Pagos con IVA adicional; ampliar WhatsApp |
-| **Decidir PT-19** (corregir que las puertas internas cuenten antes de comprobar el secreto) | Que nadie pueda dejar sin respuesta al asesor de WhatsApp, ni sin notificaciones a los socios, con peticiones sin credenciales |
+| **Autorizar el despliegue de PT-19** (la corrección ya está implementada, revisada y probada) | Que nadie pueda dejar sin respuesta al asesor de WhatsApp, ni sin notificaciones a los socios, con peticiones sin credenciales |
 | Vincular a dos personas reales; rotar la clave de ElevenLabs; clave restringida de Twilio | Sombra con estrategias, plantillas de Meta, voz |
 
 ## 6. Hallazgos adyacentes, fuera del alcance congelado (documentados, sin tocar)
