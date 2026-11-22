@@ -11,6 +11,7 @@ use App\Services\Outreach\Facts\Subject;
 use App\Services\Outreach\Facts\SubjectKey;
 use App\Services\Outreach\Facts\SubjectRef;
 use App\Services\Outreach\Facts\SubjectResolver;
+use App\Support\Access\TrainerMemberScope;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\QueryException;
@@ -30,7 +31,11 @@ use Illuminate\Support\Str;
  * prospecto `marketing.view` (y, si el prospecto es de un socio, también la
  * de socios), comprobadas ANTES de leer nada de ella: sin la llave, 403 sin
  * decir si existe. Por `uuid`, una autorización de una persona que no se
- * puede ver es 404, igual que una que no existe.
+ * puede ver es 404, igual que una que no existe. Y el ALCANCE DEL ENTRENADOR
+ * ({@see TrainerMemberScope}, C-3 de la revisión de API): una cuenta de
+ * entrenador solo alcanza a los socios que tiene asignados; un socio ajeno
+ * (o su prospecto) es 404, como en el resto del CRM, en la lectura y en las
+ * cuatro escrituras.
  *
  * EL TEXTO LEGAL ({@see OutreachConsentConfig}): sin él, pedir y confirmar
  * dan 409 `consent_legal_text_missing` y no escriben nada. Se guarda su
@@ -463,6 +468,9 @@ final class OutreachConsents
         $canonica = SubjectKey::parse($s->key);
         $tipo = $canonica['kind'] === SubjectKey::MEMBER ? self::PERSON_MEMBER : self::PERSON_LEAD;
         self::assertMayView($access, $tipo);
+        if ($tipo === self::PERSON_MEMBER && ! self::inTrainerScope($access, (int) $canonica['id'])) {
+            throw OutreachException::notFound('person');
+        }
 
         return [
             'subject' => $s, 'key' => $s->key, 'type' => $type, 'id' => $id,
@@ -495,12 +503,33 @@ final class OutreachConsents
         if ($s === null || ! $s->resolved() || $s->key === null) {
             throw OutreachException::notFound('consent');
         }
-        $canonica = SubjectKey::parse($s->key)['kind'] === SubjectKey::MEMBER ? self::PERSON_MEMBER : self::PERSON_LEAD;
+        $partes = SubjectKey::parse($s->key);
+        $canonica = $partes['kind'] === SubjectKey::MEMBER ? self::PERSON_MEMBER : self::PERSON_LEAD;
         if (! $access->can(self::PERSON_VIEW[$canonica])) {
+            throw OutreachException::notFound('consent');
+        }
+        if ($canonica === self::PERSON_MEMBER && ! self::inTrainerScope($access, (int) $partes['id'])) {
             throw OutreachException::notFound('consent');
         }
 
         return ['row' => $f, 'subject' => $s];
+    }
+
+    /**
+     * ¿Alcanza esta cuenta al socio? El alcance del entrenador del CRM
+     * ({@see TrainerMemberScope::allowsMember()}): inerte para quien no es una
+     * cuenta de entrenador. Fuera de su alcance, el socio no existe para ella
+     * (404); el registro lo dice sin la persona.
+     */
+    private static function inTrainerScope(OutreachAccess $access, int $memberId): bool
+    {
+        if (app(TrainerMemberScope::class)->allowsMember($memberId)) {
+            return true;
+        }
+        // Un entrenador tanteando socios ajenos es señal, no ruido (como `EnforceTrainerMemberScope`), sin la persona.
+        Log::warning('outreach.consent.out_of_trainer_scope', ['by' => $access->id()]);
+
+        return false;
     }
 
     /** @throws OutreachException 403 */

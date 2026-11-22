@@ -6,6 +6,7 @@ use App\Http\Controllers\Crm\CommercialAutomation\OutreachConsentController;
 use App\Http\Middleware\LimitRequestBodySize;
 use App\Models\Admin;
 use App\Models\AdminRole;
+use App\Models\MemberTrainerAssignment;
 use App\Models\RolePermission;
 use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\PhoneRef;
@@ -168,6 +169,52 @@ class OutreachConsentsApiTest extends TestCase
             ->assertStatus(404)->assertJsonPath('code', 'consent_not_found');
         // Retirar: basta UNA de las dos.
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $this->cuenta('SoloConfirma', [OutreachAccess::CONSENTS_CONFIRM, 'members.view']))->assertCreated();
+    }
+
+    /**
+     * C-3 · La sonda P2 de la revisión de API: una cuenta de Entrenador
+     * vinculada, con `members.view` y las dos llaves del libro, solo alcanza a
+     * los socios que tiene asignados, como el resto del CRM (404, no 403): de un
+     * socio ajeno, la lectura (también por su prospecto, que es el socio) y las
+     * cuatro escrituras responden 404 y no escriben nada. Del suyo, sí.
+     */
+    public function test_el_entrenador_solo_alcanza_a_los_socios_que_tiene_asignados(): void
+    {
+        Log::spy();
+        $ajeno = $this->socioConWhatsapp();
+        $suyo = $this->socioConWhatsapp([], '3001110002');
+        $entrenador = $this->trainer();
+        MemberTrainerAssignment::create(['member_id' => $suyo['member'], 'trainer_id' => $entrenador, 'status' => MemberTrainerAssignment::STATUS_ACTIVE, 'assigned_at' => now()]);
+        foreach (self::ALL as $llave) {
+            RolePermission::query()->updateOrCreate(['role' => CrmPermission::ROLE_ENTRENADOR, 'permission' => $llave], ['granted' => true]);
+        }
+        Cache::forget('crm.role_permissions.v1');
+        app(RolePermissionPolicy::class)->flush();
+        $cuenta = Admin::create(['name' => 'Coach', 'email' => 'coach-'.uniqid().'@c9.test', 'password' => 'secret-password', 'role' => CrmPermission::ROLE_ENTRENADOR,
+            'trainer_id' => $entrenador, 'status' => 'active']);
+        $h = $this->actingAsAdmin($cuenta);
+        $pet = $this->postJson(self::BASE.'consents', $this->peticion($ajeno), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $antes = DB::table('outreach_consents')->count();
+
+        // Como el resto del CRM: la ficha del socio ajeno no existe para él.
+        $this->getJson('/api/admin/members/'.$ajeno['member'], $h)->assertStatus(404);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ajeno['member'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->getJson(self::BASE.'consents?personType=lead&personId='.$ajeno['lead'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->postJson(self::BASE.'consents', ['clientRequestId' => (string) Str::uuid()] + $this->peticion($ajeno), $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->postJson(self::BASE.'consents/revoke', $this->retirada($ajeno), $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->postJson(self::BASE."consents/{$pet}/confirm", ['clientRequestId' => (string) Str::uuid()], $h)->assertStatus(404)->assertJsonPath('code', 'consent_not_found');
+        $this->postJson(self::BASE."consents/{$pet}/reject", ['clientRequestId' => (string) Str::uuid(), 'evidence' => 'La firma no coincide con la del contrato'], $h)
+            ->assertStatus(404)->assertJsonPath('code', 'consent_not_found');
+        $this->assertSame($antes, DB::table('outreach_consents')->count(), 'ninguna escritura sobre un socio ajeno');
+        $this->assertSame('missing', $this->motor($ajeno['key']));
+        Log::shouldHaveReceived('warning')->with('outreach.consent.out_of_trainer_scope', Mockery::on(fn (array $c): bool => $c === ['by' => $cuenta->id]));
+
+        // Su socio asignado, sí: leer y retirar.
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['member'], $h)->assertOk();
+        $this->postJson(self::BASE.'consents/revoke', $this->retirada($suyo), $h)->assertCreated();
+        // Y una asignación terminada ya no es una llave.
+        MemberTrainerAssignment::query()->where('member_id', $suyo['member'])->update(['status' => MemberTrainerAssignment::STATUS_INACTIVE]);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['member'], $this->actingAsAdmin($cuenta))->assertStatus(404);
     }
 
     // ── El texto legal: falla cerrado ───────────────────────────────────────
