@@ -86,7 +86,7 @@ APARTADOS = {
     ]),
     10: (0.35, [
         ("Libro de autorizaciones, lector y rutas", 30, 0.40, "implementado, unido a la bandeja y revalidado por seguridad de API el 22-11 (0 bloqueantes); revisión final sin bloqueantes; falta la batería completa del lote 4", "c"),
-        ("CRM: pantalla de autorizaciones de contacto", 10, 0.00, "", "c"),
+        ("CRM: pantalla de autorizaciones de contacto", 10, 0.34, "implementada y probada (814 pruebas del CRM en verde y compilación de producción, verificadas por el lead el 22-11); falta su revisión final (PT-10)", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
         ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.40, "implementado, probado en los dos motores y revalidado por seguridad de API el 22-11 (0 bloqueantes); falta la batería completa del lote 4", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
