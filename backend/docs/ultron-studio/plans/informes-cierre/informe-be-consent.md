@@ -1,0 +1,92 @@
+# C9-2 y C9-3 · El motor lee el libro de autorizaciones y el personal lo escribe — informe de backend
+
+Rama `cierre/consent` · 22-11-2026 · Plan §2.3 (C9-2, C9-3, C9-8) · Contrato H9: **Enmienda C9** (al final del contrato).
+Commits: `a9723e6a` (C9-2), `5d3fbc55` (C9-3) y el de este informe. **Aditivo e inerte:** con el libro vacío (o sin la tabla) ninguna decisión ni traza cambia; sin texto legal configurado no se puede registrar nada.
+
+## 1 · Qué cambió (fichero:línea)
+
+**C9-2 · el lector y la decisión**
+- `app/Services/Outreach/Facts/OutreachConsentFacts.php` (nuevo, solo lectura): `facts()` :76; la tanda `batch()` :144 con `BATCH_SQL` :272 = la de referencia de database-specialist (`CONSENT_BATCH_SQL`) escrita con subconsultas en vez de `WITH` (la guarda `FactsReadOnlyTest` exige que toda sentencia empiece por SELECT y nombre solo tablas reales); `whatsappDestination()` :197 (el número de hoy: el prospecto más reciente con conversación de WhatsApp y número normalizable, la regla de `LeadFacts` y `WhatsappRecipient::leadFor`); `hasLedger()` :229 (sin la tabla, todo false; detección una vez por proceso). Tramos de 1 000 claves por sentencia.
+- `Facts/FactNames.php:107` `C9_POLICY` (6 claves `c9.whatsapp.<f>.granted|revoked`) y `:114` `isPolicy()`: **constante aparte, sin tocar las líneas de `POLICY`** que amplía la rama bandeja (`'voice.consent_revoked'`): la fusión no choca.
+- `Facts/BatchSnapshotBuilder.php:104` monta el adaptador con la política; `:154` conserva sus claves. `Facts/BatchSnapshot.php:186` las admite al leer.
+- `Facts/CoreProjection.php:210` `consentFor()` (pura): la regla de §2; `policyInput()` la usa (:153).
+- `Run/Channels/WhatsappTemplateChannel.php:240`: **la comprobación al despachar miraba `consent.whatsapp.<f>` en crudo** (habría ignorado una retirada de C9 y bloqueado una concesión de C9); ahora usa la misma `consentFor()`. No estaba en la lista de vetados.
+
+**C9-3 · las rutas**
+- `routes/commercial-automation.php` (nuevo) + `bootstrap/app.php:54-59`. **`routes/commercial-automation.php` no existía**: L9-43 llevó la ejecución a `routes/ultron-studio.php`. Lo creo como dice §7 del contrato (fichero propio, prefijo `/api/admin/commercial-automation`); así no cambian `StudioRouteCount::TOTAL` (125) ni las 13 de `outreach/**`, y `OutreachRoutesMapGuardTest` ya rastreaba ese prefijo.
+- `app/Http/Controllers/Crm/CommercialAutomation/OutreachConsentController.php` (nuevo): `ROUTES`, `routes()`, `authorizationMap()`.
+- `Run/OutreachConsents.php` (nuevo): `list()` :113, `record()` :169, `confirm()` :246, `reject()` :314, `revoke()` :356, `evidenceErrors()` :412, `person()` :442 y `visibleRequest()` :471 (BOLA), `phoneRefs()` :519. Escribe con `insertOrIgnore` (:229, :284, :333, :396); ni UPDATE, ni DELETE, ni `FOR UPDATE`.
+- `Run/OutreachConsentConfig.php` (nuevo, lector propio: no toco `OutreachConfig`) + `config/outreach_consents.php` + 6 variables vacías en `.env.example`.
+- Llaves: `Run/OutreachAccess.php:33,36` (+`requireAny()` :71), `Support/Access/PermissionCatalog.php:185-186,272-273,378`, `CrmPermission.php:336-337` (fuera del Administrador), `AuthorizationMap.php:898-902`.
+
+## 2 · La regla de combinación (`consentFor`) y la prueba de cada fila
+
+`denied` si el prospecto está denegado (o el valor falta: falla cerrado) **o** C9 dice `revoked` para esa finalidad (solo WhatsApp). `granted` si el prospecto concede **o** C9 dice `granted` —que el lector solo da si el `phone_ref` de la confirmación ganadora es el del número de WhatsApp de HOY— y se sabe (`=== false`) que no hay `do_not_contact` ni de un hermano. Si no, `missing`. Voz: sin cambios. Dos booleanos y no un enumerado: la política es `array<string,bool>` (`fromArray` lo exige) y `SubjectFacts::policy(): ?bool` convertiría «revoked» en `true`.
+
+| Prospecto | Libro C9 (ganador) | Otros | → | Prueba (`OutreachConsentFactsTest`, escalera real con la base del fixture de TEST9-a) |
+|---|---|---|---|---|
+| denegado | concedida, mismo número | — | **denied** (`consent_denied`) | `test_prospecto_denegado_y_socio_concedido_gana_la_negativa` |
+| concede | retirada | — | **denied** | `test_el_prospecto_concede_y_una_retirada_de_c9_niega` |
+| no concede | concedida y después retirada | — | **denied** | `test_una_retirada_posterior_niega` (y vuelve con petición y confirmación NUEVAS) |
+| no concede | concedida, mismo número | — | **granted**, N1 `pass` | `test_un_socio_con_c9_concedida_pasa_n1_y_sin_ella_no` (también por su clave `l:`) |
+| no concede | concedida, el número cambió | — | **missing** | `test_el_telefono_cambiado_deja_la_autorizacion_sin_efecto` |
+| no concede | comercial concedida | se pide cobranza / servicio | **missing** | `test_la_comercial_no_vale_para_cobranza_ni_para_servicio` |
+| no concede | concedida | `do_not_contact` | **missing** (+`do_not_contact`) | `test_no_contactar_gana_a_una_autorizacion_de_c9` |
+| no concede | pedida en `l:` antes de una retirada en `m:`, confirmada después | — | **denied** | `test_lo_pedido_antes_de_una_retirada_en_la_otra_clave_no_revive_al_confirmarse` |
+| — | suprimida (1581) | — | nada casa | `test_lo_redactado_no_casa` |
+| socio sin prospecto | concedida | — | **missing** (sin número de destino) | `test_sin_identidad_de_whatsapp_la_autorizacion_no_concede_nada` |
+
+Las 14 filas puras (incluidas «C9 no toca la voz» y «cobranza por su fila»): `test_la_tabla_de_verdad_de_la_combinacion`. Al despachar: `test_el_canal_de_plantillas_comprueba_con_la_misma_combinacion_al_despachar`. **No son pruebas vacías:** quitar la retirada de `consentFor` pone 5 en rojo; contar la confirmación en su propio `id` (y no en el de su petición) pone 2 en rojo; restaurado byte a byte (`cmp`).
+
+## 3 · Con el libro vacío, nada cambia
+
+- `test_sin_c9_la_combinacion_es_la_de_antes_en_todo_su_dominio`: **972 casos** (2 canales × 3 finalidades × 3⁴ valores de las 4 entradas × C9 ausente o en false) contra la regla de `dfcee951` copiada tal cual: idénticos. La única diferencia de `personState()` es más estricta y no se produce (un `lead.consent_denied` ausente; `LeadFacts` siempre lo da).
+- `test_con_el_libro_vacio_…`: en un mundo variado las 6 claves salen en false, `policyInput` da lo de antes, el lector hace **1 sentencia** (ninguna a las conversaciones) y la foto se serializa y relee con la misma huella. `test_sin_la_tabla_…`: misma foto byte a byte.
+- `tests/fixtures/outreach/**`: **0 ficheros cambiados** (`git diff dfcee951..HEAD`). **El CRM no regenera nada.** La forma de la entrada de la escalera no cambia.
+- `outreach:replay`: las 3 pruebas `--filter replay` de `tests/Feature/Outreach/Run` en verde en SQLite y en PG.
+- La foto completa pasa de 39 a **40 consultas** por lote: justo el tope de `SubjectAndSnapshotTest` (≤ 40). Ver §9.
+
+## 4 · Las rutas, para el CRM (pantalla «Autorizaciones de contacto»)
+
+Prefijo `/api/admin/commercial-automation/`. Una persona (Bearer de su sesión), su llave y la de VER a la persona (`members.view` para socios; `marketing.view` para prospectos, y además `members.view` si el prospecto es de un socio). Tope 16 KB; cupos 120 lecturas/min y 30 escrituras/min por persona (429).
+
+- **`GET consents?personType=member|lead&personId=<int>`** (`consents_record` o `consents_confirm`) → 200 `{ok, data: {person: {type, id, recordsAs: {type, id}}, whatsappIdentity, hasPhone, purposes: {commercial|collections|service: {state: none|granted|revoked, numberCurrent: bool|null, effective: bool, legal: {version, text, hash}|null, pending: [Consent + {ownRequest, superseded}]}}, events: [Consent] (≤ 200, recientes primero), sources: [...], revokeSources: [...], can: {record, confirm}}}`. `effective` = lo que el motor usaría hoy (confirmada, número de hoy e identidad de WhatsApp).
+- **`POST consents`** (`consents_record`) `{clientRequestId (uuid), personType, personId, purpose, source, evidence (3–300), legalVersion, legalHash}` (la versión y la huella que la pantalla recibió en `legal`) → 201 `{ok, data: Consent, meta: {replayed: false, legal}}`; repetida, 200 `replayed: true`.
+- **`POST consents/{uuid}/confirm`** (`consents_confirm`, OTRA cuenta) `{clientRequestId}` → 201 `{ok, data: Consent (granted), meta: {replayed}}`.
+- **`POST consents/{uuid}/reject`** (`consents_confirm`; sin cuatro ojos: es la dirección segura) `{clientRequestId, evidence}` → 201.
+- **`POST consents/revoke`** (`consents_record` o `consents_confirm`, sin segunda cuenta, sin texto legal) `{clientRequestId, personType, personId, purpose, source (las tres siempre), evidence}` → 201.
+- `Consent` = `{uuid, kind, purpose, channel, source, evidence, requestUuid, legalVersion, legalHash, numberCurrent, recordedBy: {type, id, name, role}, confirmedBy: {id, name, role}|null, createdAt (Z)}`. **Nunca** el número, el `phone_ref`, el seudónimo de la persona ni su clave.
+- Errores `{ok: false, code, message, …}`: **403** `person_required` · `forbidden` (+`required_permission`) · `four_eyes_required`; **404** `person_not_found` · `consent_not_found`; **409** `consent_legal_text_missing` (pedir y confirmar, antes de validar el cuerpo) · `consent_legal_text_changed` (+`legal` vigente) · `consent_no_phone` · `consent_request_pending` (+`pendingUuid`) · `consent_request_resolved` · `consent_request_superseded` · `consent_number_changed` · `client_request_reused`; **422** `validation_failed` (+`errors.<campo>: [invalid|length|contact_data|in]`, sin valores); 413; 429.
+- **Aviso de UX:** una fecha con año completo («22/11/2026») es una serie de 8 cifras y la base la rechaza: 422 `contact_data`. Escribir «22 de noviembre».
+
+## 5 · Pruebas ejecutadas (línea final)
+
+- **SQLite:** `OutreachConsentFactsTest` `OK (16 tests, 1152 assertions)` · `OutreachConsentsApiTest` `Tests: 17, Assertions: 300, Skipped: 3` (las 3 solo PG) · `tests/Feature/Outreach` `Tests: 749, Assertions: 44321, Skipped: 172` · `tests/Unit/Outreach` `OK (1015 tests, 53228 assertions)` · permisos y rutas (`tests/Feature/Access`, `OutreachRoutesMapGuardTest`, `UltronStudioPermissionsTest`, `…IntegrationsPermissionsTest`, `TelephonyRoutesTest`, `MetaTemplateRoutesTest`, `AdminNoStoreCacheTest`, `PlanTransferPermissionsTest`, `UltronStudioStatusCatalogTest`) `OK (201 tests, 3572 assertions)` · guardas estáticas `OK (141 tests, 183195 assertions)` · `SecretExposureTest` `OK (22 tests, 225 assertions)` · Pint en verde.
+- **PostgreSQL 14.24** (`ultron_studio_cierre_consent`): `tests/Feature/Outreach/Facts` `OK (67 tests, 2146 assertions)` · `OutreachConsentsApiTest` `OK (17 tests, 545 assertions)` · `tests/Feature/Outreach/Schema` `Tests: 341, Assertions: 2838, Skipped: 1` (la de `CONCURRENTLY`, previa) · `tests/Feature/Outreach/W9` `Tests: 50, Assertions: 1728, Skipped: 1` · `OutreachConsentFactsTest` + `FactsReadOnlyTest` `OK (17 tests, 1745 assertions)`. Al acabar: 0 filas en el libro y 0 conexiones abiertas.
+- **Rol no dueño (PG):** `test_solo_en_postgres_el_ciclo_entero_por_http_como_el_rol_de_la_aplicacion_sin_update_ni_delete`: con el libro en `SELECT, INSERT` y nada más (`privileges()` = `[t, t, f, f, f]`), pedir, 409 por pendiente, confirmar, pedir otra, rechazar, retirar, listar y leer el motor POR HTTP con `SET LOCAL ROLE`; ninguna sentencia `UPDATE/DELETE/TRUNCATE` sobre el libro ni `FOR UPDATE/SHARE`.
+- **Carrera 1, dos confirmaciones** (`test_solo_en_postgres_dos_confirmaciones_a_la_vez_una_gana_y_la_otra_409`): (a) dos conexiones reales, la segunda asíncrona ESPERA a la primera (`pg_blocking_pids`) y al confirmarse no inserta ni falla (`ON CONFLICT DO NOTHING`, la sentencia del servicio); (b) con el servicio real, otra conexión confirma justo antes de su sentencia (`DB::beforeExecuting`) y el servicio responde **409 `consent_request_resolved`**; una sola confirmación en la base.
+- **Carrera 2, confirmar y retirar** (`test_solo_en_postgres_confirmar_y_retirar_a_la_vez_gana_la_retirada`): (a) la retirada se confirma justo antes: la guarda de la base la ve y el servicio responde **409 `consent_request_superseded`**; (b) las dos en vuelo sin verse: entran las dos y **al leer gana la retirada** (`granted` mientras la retirada no se confirma, `denied` después).
+- Plan de PG (150 000 filas sintéticas en una transacción deshecha, 600 claves): la forma del lector y la de referencia dan **el mismo plan**; sin paralelismo, bucle anidado + Index Only Scan de `ocon_subject_idx` (`Index Cond: subject_key = column2 AND channel`); con el paralelismo por defecto y la tabla recién cargada sin VACUUM, los dos eligen Parallel Seq Scan + Hash Join. No es una medición: la de rendimiento es la de database-specialist.
+
+## 6 · A quién ayuda C9 hoy (sin la identidad de socios de C9-5)
+
+Solo a quien YA tiene identidad de WhatsApp: (1) **socios enlazados** a un prospecto con conversación de WhatsApp cuyo prospecto no está en `granted` (comercial), y (2) prospectos y socios enlazados para **cobranza** (hoy ninguna fuente) y **servicio** fuera de la ventana de 24 h. Un **socio sin prospecto: nada** (no hay número de destino de WhatsApp; N1 niega y N4 negaría `no_whatsapp_identity`). Se puede registrar su autorización (queda con el número de su ficha) y valdrá si mañana tiene identidad de WhatsApp con ese mismo número. Volumen sin medir.
+
+## 7 · Lo que security debe mirar primero
+
+1. **Autorización a nivel de objeto** (`OutreachConsents.php:442`, `:471`): la llave de ver por tipo de persona, antes de leer; prospecto de socio exige las dos; por uuid, 404. ¿Basta `members.view`/`marketing.view` o hace falta algo más fino?
+2. **Cuatro ojos POR CUENTA** (`:262` y `ocon_four_eyes_chk`): una persona con dos cuentas se confirma a sí misma. Super Admin tiene las dos llaves por defecto.
+3. **La evidencia** (texto libre ≤ 300, sin teléfonos ni correos) y los **nombres y ids del personal** salen en las respuestas a quien tiene las llaves.
+4. **`WhatsappTemplateChannel::personState()`** cambia la comprobación al despachar (`:240`).
+5. La **auditoría** es el propio libro (quién registra y confirma, cuándo y con qué evidencia; solo inserción) más `Log::info|warning('outreach.consent.*')` con uuid, finalidad, fuente y cuenta: **no** escribo en `ultron_studio_audit_events` porque su CHECK `usae_subject_type_chk` no admite el sujeto (sería una migración de database-specialist).
+
+## 8 · Lo que NO pude verificar
+
+Producción (ni despliegue ni migración); el CRM (la forma se prueba solo con pruebas de rutas); el idioma de la base de producción (aquí `[[:cntrl:]]` no incluye U+2028: el servicio lo rechaza igual, es más estricto); el rendimiento con volumen real; la batería completa (la corre el lead); C9-5 y las decisiones legales. `SendMessage` no estaba disponible en mi contexto: los avisos al lead van solo aquí.
+
+## 9 · Listas cerradas ampliadas, decisiones mías y hallazgos fuera de alcance
+
+- **Lista cerrada ampliada (por el encargo):** `OutreachRoutesMapGuardTest::H9_KEYS` +2 llaves (comentario «Enmienda C9»). `FactsReadOnlyTest`: caso nuevo del adaptador y `outreach_consents` en las tablas contadas (más cobertura, nada relajado).
+- **Integración con la rama bandeja:** `Run/AssistedQueue.php:484` (vetado) solo retiene por `denied` si viene de `lead.consent_denied`: **una retirada de C9 posterior a planificar no retiene un trabajo asistido de WhatsApp** (la escalera sí la niega en la pasada siguiente). Una línea: aceptar también `$s->policy("c9.whatsapp.{$purpose}.revoked") === true` cuando el medio es WhatsApp.
+- **Tope de consultas:** la foto queda en 40/40 en `SubjectAndSnapshotTest`; si la rama bandeja añade una lectura por lote, ese tope caerá al fusionar.
+- Fuera de alcance, sin tocar: `OutreachStop::iso()` traga cualquier `Throwable` y devuelve null (respaldo silencioso, previo); el contrato y el plan ya no nombran `legal_text_*` ni un `app/Models/Outreach/**` real (corregidos en este commit).
