@@ -1,8 +1,11 @@
-# Lote 4 · --config (cierre/consent, config/outreach_consents.php): el texto legal NO EXISTE todavía (lo fija el
-# propietario con su asesoría); vacío, registrar y confirmar responden 409 y no escriben nada.
+# Lote 4 · --config. config/outreach_consents.php (nuevo, C9): el texto legal NO EXISTE todavía (lo fija el propietario
+# con su asesoría); vacío, registrar y confirmar responden 409 y no escriben nada.
 outreach_consents.legal.commercial.version=null
 outreach_consents.legal.commercial.text=null
 outreach_consents.legal.collections.version=null
 outreach_consents.legal.collections.text=null
 outreach_consents.legal.service.version=null
 outreach_consents.legal.service.text=null
+# config/outreach.php (Q1-8): el tope de quejas por cuenta y día. Sin la variable en el entorno, $entero(…) da 0 y «?: null»
+# lo deja en null; OutreachConfig::staffComplaintsPerAccountPerDay() lo lee como 20.
+outreach.complaints.per_account_per_day=null

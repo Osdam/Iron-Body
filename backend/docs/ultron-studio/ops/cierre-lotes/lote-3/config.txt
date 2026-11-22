@@ -1,2 +1,5 @@
-# Lote 3 · --config (cierre/telefonia, config/voice.php): la condición del número, apagada.
+# LOTE 3 · NO SE DESPLIEGA SIN LA AUTORIZACIÓN ESPECÍFICA DEL PROPIETARIO (voz y telefonía), dada en la conversación.
+# --config (config/voice.php, enmienda 20): la identidad compartida del número, APAGADA. Sin la variable en el entorno,
+# filter_var(env(…, false)) da false. Las llamadas siguen cerradas por VoiceCallPolicy::CALLS_ENABLED_IN_CODE (lo exige
+# el paso 0 en los dos commits).
 voice.number.shared_with_messaging=false

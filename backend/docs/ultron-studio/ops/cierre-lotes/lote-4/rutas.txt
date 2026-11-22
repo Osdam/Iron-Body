@@ -1,7 +1,9 @@
-# Lote 4 · --rutas: la diferencia EXACTA de route:list (medida con route:list --json de Laravel 12.58 sobre el previo y
-# sobre la fusión de cierre/consent en el banco). routes/commercial-automation.php es NUEVO y se monta en bootstrap/app.php
-# como routes/voice.php; las 5 de OutreachConsentController::ROUTES, cada una con su llave commercial_automation.consents_*.
+# Lote 4 · --rutas: la diferencia EXACTA de route:list (route:list --json de Laravel 12.58 sobre fddd3450 y sobre la
+# fusión de integracion/consent 80657d66 en el banco del 22-11). routes/commercial-automation.php es NUEVO y se monta en
+# bootstrap/app.php como routes/voice.php: las 5 de OutreachConsentController::ROUTES (llaves commercial_automation.
+# consents_record / consents_confirm) y la 1 de OutreachComplaintController::ROUTES (commercial_automation.complaints_record).
 +GET|HEAD api/admin/commercial-automation/consents
++POST api/admin/commercial-automation/complaints
 +POST api/admin/commercial-automation/consents
 +POST api/admin/commercial-automation/consents/revoke
 +POST api/admin/commercial-automation/consents/{uuid}/confirm

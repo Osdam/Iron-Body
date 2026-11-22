@@ -1,0 +1,7 @@
+# Lote 5 · --migraciones (cierre/lab, laboratorio frente al motor): nombre tipo tabla objeto marca privilegios vuelta.
+# Añade ultron_studio_lab_run_cases.engine, json NULA y sin defecto: solo catálogo (ACCESS EXCLUSIVE sobre esa tabla, 10 ms
+# en el banco de database-specialist; la tabla no se reescribe). ORDEN: primero la migración y después el código (el
+# código nuevo lee y escribe la columna; el previo no la ve: el modelo es guarded y lista sus columnas).
+# VUELTA: CONSERVAR, NUNCA deshacer: quitar la columna con filas borra el recorrido de casos que la base declara inmutables
+# y rompe para siempre la verificación de results_hash de las ejecuciones del motor (informe-db-cierre.md, C-A1).
+2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases columna ultron_studio_lab_run_cases engine json - conservar
