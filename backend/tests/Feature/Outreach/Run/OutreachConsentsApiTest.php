@@ -185,7 +185,7 @@ class OutreachConsentsApiTest extends TestCase
         }
         $this->assertContains('commercial_automation', CrmPermission::SHARED_TOKEN_EXCLUDED_DOMAINS);
         $p = $this->socioConWhatsapp();
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->sharedTokenHeaders())->assertStatus(403);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->sharedTokenHeaders())->assertStatus(403);
     }
 
     public function test_cada_ruta_exige_su_llave_y_la_de_ver_a_la_persona_sin_ser_un_oraculo(): void
@@ -193,9 +193,9 @@ class OutreachConsentsApiTest extends TestCase
         $p = $this->socioConWhatsapp();
         $lista = self::BASE.'consents?personType=member&personId=';
         // Sin ninguna de las dos llaves: la puerta.
-        $this->getJson($lista.$p['member'], $this->cuenta('Sin', ['members.view']))->assertStatus(403)->assertJsonPath('code', 'forbidden');
+        $this->getJson($lista.$p['user'], $this->cuenta('Sin', ['members.view']))->assertStatus(403)->assertJsonPath('code', 'forbidden');
         // Con la llave pero sin ver socios: 403 ANTES de leer la persona; igual exista o no (no es un oráculo).
-        foreach ([$p['member'], 999999] as $id) {
+        foreach ([$p['user'], 999999] as $id) {
             $this->getJson($lista.$id, $this->cuenta('Ciega', [OutreachAccess::CONSENTS_RECORD]))->assertStatus(403)
                 ->assertJsonPath('code', 'forbidden')->assertJsonPath('required_permission', 'members.view');
         }
@@ -250,7 +250,7 @@ class OutreachConsentsApiTest extends TestCase
 
         // Como el resto del CRM: la ficha del socio ajeno no existe para él.
         $this->getJson('/api/admin/members/'.$ajeno['member'], $h)->assertStatus(404);
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$ajeno['member'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ajeno['user'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
         $this->getJson(self::BASE.'consents?personType=lead&personId='.$ajeno['lead'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
         $this->postJson(self::BASE.'consents', ['clientRequestId' => (string) Str::uuid()] + $this->peticion($ajeno), $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($ajeno), $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
@@ -262,11 +262,11 @@ class OutreachConsentsApiTest extends TestCase
         Log::shouldHaveReceived('warning')->with('outreach.consent.out_of_trainer_scope', Mockery::on(fn (array $c): bool => $c === ['by' => $cuenta->id]));
 
         // Su socio asignado, sí: leer y retirar.
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['member'], $h)->assertOk();
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['user'], $h)->assertOk();
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($suyo), $h)->assertCreated();
         // Y una asignación terminada ya no es una llave.
         MemberTrainerAssignment::query()->where('member_id', $suyo['member'])->update(['status' => MemberTrainerAssignment::STATUS_INACTIVE]);
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['member'], $this->actingAsAdmin($cuenta))->assertStatus(404);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$suyo['user'], $this->actingAsAdmin($cuenta))->assertStatus(404);
     }
 
     // ── El texto legal: falla cerrado ───────────────────────────────────────
@@ -285,7 +285,7 @@ class OutreachConsentsApiTest extends TestCase
             ->assertStatus(409)->assertJsonPath('code', 'consent_legal_text_missing');
         $this->assertSame($antes, DB::table('outreach_consents')->count(), 'no escribe nada');
         // La lista lo dice (sin texto: null), y rechazar y retirar siguen funcionando.
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Beto', self::ALL))->assertOk()
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Beto', self::ALL))->assertOk()
             ->assertJsonPath('data.purposes.commercial.legal', null);
         $this->postJson(self::BASE."consents/{$pet}/reject", ['clientRequestId' => (string) Str::uuid(), 'evidence' => 'La firma no coincide con la del contrato'], $this->cuenta('Beto', self::ALL))->assertCreated();
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $this->cuenta('Beto', self::ALL))->assertCreated();
@@ -301,9 +301,9 @@ class OutreachConsentsApiTest extends TestCase
     {
         $p = $this->socioConWhatsapp();
         $legal = ['version' => self::LEGAL_VERSION, 'text' => self::LEGAL_TEXT, 'hash' => hash('sha256', self::LEGAL_TEXT)];
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Ana', self::ALL))->assertOk()
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Ana', self::ALL))->assertOk()
             ->assertJsonPath('data.purposes.commercial.legal', $legal)->assertJsonPath('data.purposes.collections.legal', null)
-            ->assertJsonPath('data.person.recordsAs', ['type' => 'member', 'id' => $p['member']])->assertJsonPath('data.whatsappIdentity', true)
+            ->assertJsonPath('data.person.recordsAs', ['type' => 'member', 'id' => $p['user']])->assertJsonPath('data.whatsappIdentity', true)
             ->assertJsonPath('data.can', ['record' => true, 'confirm' => true]);
         $r = $this->postJson(self::BASE.'consents', $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertCreated();
         $r->assertJsonPath('meta.legal', $legal)->assertJsonPath('data.legalVersion', self::LEGAL_VERSION)->assertJsonPath('data.legalHash', $legal['hash']);
@@ -332,7 +332,7 @@ class OutreachConsentsApiTest extends TestCase
             ->assertJsonPath('data.kind', 'requested')->assertJsonPath('data.numberCurrent', true)->assertJsonPath('data.recordedBy.id', $ana->id)
             ->assertJsonPath('meta.replayed', false)->json('data.uuid');
         $this->assertSame('missing', $this->motor($p['key']), 'una petición sola no autoriza nada');
-        $lista = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Beto', self::ALL))->assertOk();
+        $lista = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Beto', self::ALL))->assertOk();
         $lista->assertJsonPath('data.purposes.commercial.state', 'none')->assertJsonPath('data.purposes.commercial.pending.0.uuid', $pet)
             ->assertJsonPath('data.purposes.commercial.pending.0.ownRequest', false)->assertJsonPath('data.purposes.commercial.pending.0.superseded', false);
 
@@ -343,7 +343,7 @@ class OutreachConsentsApiTest extends TestCase
         $ok->assertJsonPath('data.kind', 'granted')->assertJsonPath('data.requestUuid', $pet)->assertJsonPath('data.confirmedBy.id', $beto->id)
             ->assertJsonPath('data.recordedBy.id', $ana->id)->assertJsonPath('data.numberCurrent', true);
         $this->assertSame('granted', $this->motor($p['key']));
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Ana', self::ALL))->assertOk()
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Ana', self::ALL))->assertOk()
             ->assertJsonPath('data.purposes.commercial.state', 'granted')->assertJsonPath('data.purposes.commercial.effective', true)
             ->assertJsonPath('data.purposes.commercial.pending', []);
         // Confirmar otra vez la misma petición (otra cuenta, otro identificador): ya está resuelta.
@@ -353,7 +353,7 @@ class OutreachConsentsApiTest extends TestCase
         // Retirar, sin segunda cuenta: el motor deja de poder.
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $this->cuenta('Ana', self::ALL))->assertCreated()->assertJsonPath('data.kind', 'revoked');
         $this->assertSame('denied', $this->motor($p['key']));
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Ana', self::ALL))->assertOk()
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Ana', self::ALL))->assertOk()
             ->assertJsonPath('data.purposes.commercial.state', 'revoked')->assertJsonPath('data.purposes.commercial.effective', false);
 
         // El registro: el uuid, la finalidad, la fuente y la cuenta; nada de la persona.
@@ -369,7 +369,7 @@ class OutreachConsentsApiTest extends TestCase
         $pet = $this->postJson(self::BASE.'consents', $this->peticion($p) + ['phone' => '3009999999', 'phone_ref' => str_repeat('a', 64)], $this->cuenta('Ana', self::ALL))->assertCreated();
         $this->assertSame(PhoneRef::fromRaw(self::PHONE), DB::table('outreach_consents')->where('uuid', $pet->json('data.uuid'))->value('phone_ref'), 'el número lo calcula el servidor');
         $ok = $this->postJson(self::BASE.'consents/'.$pet->json('data.uuid').'/confirm', ['clientRequestId' => (string) Str::uuid()], $this->cuenta('Beto', self::ALL));
-        $lista = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Beto', self::ALL));
+        $lista = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Beto', self::ALL));
         foreach ([$pet, $ok, $lista] as $r) {
             foreach (['3001110001', '573001110001', (string) PhoneRef::fromRaw(self::PHONE), (string) SubjectRef::of($p['key']), $p['key']] as $privado) {
                 $this->assertStringNotContainsString($privado, (string) $r->getContent());
@@ -424,7 +424,7 @@ class OutreachConsentsApiTest extends TestCase
         $p = $this->socioConWhatsapp();
         $pet = $this->postJson(self::BASE.'consents', $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $this->cuenta('Ana', self::ALL))->assertCreated();
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Beto', self::ALL))
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Beto', self::ALL))
             ->assertJsonPath('data.purposes.commercial.pending.0.superseded', true);
         $this->postJson(self::BASE."consents/{$pet}/confirm", ['clientRequestId' => (string) Str::uuid()], $this->cuenta('Beto', self::ALL))
             ->assertStatus(409)->assertJsonPath('code', 'consent_request_superseded');
@@ -444,7 +444,7 @@ class OutreachConsentsApiTest extends TestCase
         $this->postJson(self::BASE.'consents', ['source' => 'member_request'] + $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertStatus(422)->assertJsonPath('errors.source.0', 'in');
         $this->postJson(self::BASE.'consents', $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertCreated();
         $this->postJson(self::BASE.'consents/revoke', ['source' => 'member_request'] + $this->retirada($p), $this->cuenta('Ana', self::ALL))->assertCreated();
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $this->cuenta('Ana', self::ALL))
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $this->cuenta('Ana', self::ALL))
             ->assertJsonPath('data.sources', ['reception_form'])->assertJsonPath('data.revokeSources', ['contract_checkbox', 'reception_form', 'member_request']);
     }
 
@@ -458,7 +458,7 @@ class OutreachConsentsApiTest extends TestCase
         $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $ana)->assertStatus(429);
         $this->assertSame(30, DB::table('outreach_consents')->count());
         // Las lecturas van con su propio cupo.
-        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk();
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $ana)->assertOk();
     }
 
     /**
@@ -487,7 +487,7 @@ class OutreachConsentsApiTest extends TestCase
             ->assertJsonPath('data.purposes.commercial.state', 'none')->assertJsonPath('data.purposes.commercial.numberRevoked', true)
             ->assertJsonPath('data.purposes.commercial.effective', false)->assertJsonPath('data.purposes.service.numberRevoked', false)
             ->assertJsonPath('data.events', []);
-        $socio = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk()
+        $socio = $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $ana)->assertOk()
             ->assertJsonPath('data.purposes.commercial.state', 'revoked')->assertJsonPath('data.purposes.commercial.numberRevoked', false)
             ->assertJsonPath('data.events.0.numberCurrent', null);
         foreach ([$r, $lista, $socio] as $respuesta) {
@@ -501,7 +501,7 @@ class OutreachConsentsApiTest extends TestCase
     public function test_una_retirada_sin_numero_no_calla_a_nadie_mas(): void
     {
         $s = $this->socio([], ['phone' => null]);
-        $uuid = $this->postJson(self::BASE.'consents/revoke', $this->retirada(['member' => $s['member']]), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $uuid = $this->postJson(self::BASE.'consents/revoke', $this->retirada(['user' => $s['user']]), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
         $this->assertNull(DB::table('outreach_consents')->where('uuid', $uuid)->value('phone_ref'));
         $suyo = $this->lead(['member_id' => $s['member'], 'phone' => self::PHONE, 'consent_status' => 'granted']);
         $this->conversation($suyo, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
@@ -516,7 +516,7 @@ class OutreachConsentsApiTest extends TestCase
     public function test_sin_numero_no_hay_a_que_autorizar(): void
     {
         $s = $this->socio([], ['phone' => null]);
-        $this->postJson(self::BASE.'consents', $this->peticion(['member' => $s['member']]), $this->cuenta('Ana', self::ALL))->assertStatus(409)->assertJsonPath('code', 'consent_no_phone');
+        $this->postJson(self::BASE.'consents', $this->peticion(['user' => $s['user']]), $this->cuenta('Ana', self::ALL))->assertStatus(409)->assertJsonPath('code', 'consent_no_phone');
         $this->assertSame(0, DB::table('outreach_consents')->count());
     }
 
@@ -725,7 +725,7 @@ class OutreachConsentsApiTest extends TestCase
                 $otra = $this->postJson(self::BASE.'consents', ['purpose' => 'commercial', 'clientRequestId' => (string) Str::uuid()] + $this->peticion($p), $ana)->assertCreated()->json('data.uuid');
                 $this->postJson(self::BASE."consents/{$otra}/reject", ['clientRequestId' => (string) Str::uuid(), 'evidence' => 'Duplicada por error'], $beto)->assertCreated();
                 $this->postJson(self::BASE.'consents/revoke', $this->retirada($p), $beto)->assertCreated();
-                $this->getJson(self::BASE.'consents?personType=member&personId='.$p['member'], $ana)->assertOk()->assertJsonPath('data.purposes.commercial.state', 'revoked');
+                $this->getJson(self::BASE.'consents?personType=member&personId='.$p['user'], $ana)->assertOk()->assertJsonPath('data.purposes.commercial.state', 'revoked');
                 $this->assertSame('denied', $this->motor($p['key']));
                 $this->assertSame('denied', $this->motor(SubjectKey::lead($suelto)), 'la regla de los hermanos, como la aplicación');
                 $this->getJson(self::BASE.'consents?personType=lead&personId='.$suelto, $ana)->assertOk()->assertJsonPath('data.purposes.commercial.numberRevoked', true);
@@ -967,21 +967,21 @@ class OutreachConsentsApiTest extends TestCase
         return SubjectKey::lead($suelto);
     }
 
-    /** @param  array{member: int}  $p  @return array<string, mixed> */
+    /** @param  array{user: int}  $p  el socio, por su `users.id` (PT-18)  @return array<string, mixed> */
     private function peticion(array $p): array
     {
         return [
-            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $p['member'], 'purpose' => 'commercial',
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $p['user'], 'purpose' => 'commercial',
             'source' => 'reception_form', 'evidence' => 'Formulario firmado en recepción, carpeta de noviembre',
             'legalVersion' => self::LEGAL_VERSION, 'legalHash' => hash('sha256', self::LEGAL_TEXT),
         ];
     }
 
-    /** @param  array{member: int}  $p  @return array<string, mixed> */
+    /** @param  array{user: int}  $p  el socio, por su `users.id` (PT-18)  @return array<string, mixed> */
     private function retirada(array $p): array
     {
         return [
-            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $p['member'], 'purpose' => 'commercial',
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $p['user'], 'purpose' => 'commercial',
             'source' => 'member_request', 'evidence' => 'Pidió en recepción que no le escriban más',
         ];
     }

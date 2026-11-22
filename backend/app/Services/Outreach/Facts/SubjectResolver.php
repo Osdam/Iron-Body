@@ -72,7 +72,8 @@ final class SubjectResolver
     }
 
     /**
-     * Para los prefiltros que encuentran usuarios (membresía, asistencia).
+     * Para los prefiltros que encuentran usuarios (membresía, asistencia), y
+     * para las rutas del CRM que nombran a un socio por su `users.id` (PT-18).
      *
      * @param  list<int>  $userIds
      * @return array<int, Subject> por id de usuario; los que no tienen ficha de socio no salen

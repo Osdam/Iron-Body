@@ -34,7 +34,8 @@ use Illuminate\Support\Facades\Validator;
  * vez → la llave de VER a la persona (`members.view` o `marketing.view`, y la
  * de socios si el prospecto es de un socio), ANTES de leer nada de ella: sin
  * ella, 403 sin decir si existe. Con el registro de hechos apagado, 409
- * `commercial_events_disabled` y no escribe.
+ * `commercial_events_disabled` y no escribe. Un socio es su `users.id`, como
+ * en las autorizaciones (PT-18).
  *
  * SIN TEXTO LIBRE: la persona, el medio y una categoría de listas cerradas.
  * IDEMPOTENTE por `clientRequestId` (200 `replayed`; con otro contenido, 409
@@ -102,9 +103,9 @@ class OutreachComplaintController extends Controller
 
         $previa = $emitter->staffComplaintByRequest($crid);
         if ($previa !== null) {
-            $suya = $p['recordsAs']['type'] === OutreachConsents::PERSON_MEMBER
-                ? $previa['member_id'] === $p['recordsAs']['id']
-                : $previa['marketing_lead_id'] === $p['recordsAs']['id'];
+            $suya = $p['canonical']['type'] === OutreachConsents::PERSON_MEMBER
+                ? $previa['member_id'] === $p['canonical']['id']
+                : $previa['marketing_lead_id'] === $p['canonical']['id'];
             $igual = $suya && ($previa['payload']['recorded_by'] ?? null) === $access->id()
                 && ($previa['payload']['channel'] ?? null) === $canal && ($previa['payload']['category'] ?? null) === $categoria;
             if (! $igual) {
@@ -128,7 +129,7 @@ class OutreachComplaintController extends Controller
                     'complaint_daily_limit_reached', 429, ['limit' => $tope]);
             }
             try {
-                return $emitter->recordStaffComplaint($p['recordsAs']['type'], $p['recordsAs']['id'], $canal, $categoria, $access->id(), $crid, $ahora);
+                return $emitter->recordStaffComplaint($p['canonical']['type'], $p['canonical']['id'], $canal, $categoria, $access->id(), $crid, $ahora);
             } catch (\RuntimeException $e) {
                 Log::error('commercial.complaint.staff_record_failed', ['by' => $access->id(), 'exception' => class_basename($e)]);
 
@@ -137,7 +138,7 @@ class OutreachComplaintController extends Controller
         });
         // NB3: sobre quién fue, con su identificador interno (tipo e id de la persona canónica); nunca nombre ni teléfono.
         Log::info('commercial.complaint.staff_recorded', ['channel' => $canal, 'category' => $categoria, 'result' => $resultado, 'by' => $access->id(),
-            'subject_type' => $p['recordsAs']['type'], 'subject_id' => $p['recordsAs']['id']]);
+            'subject_type' => $p['canonical']['type'], 'subject_id' => $p['canonical']['id']]);
 
         return self::respond($p, $canal, $categoria, $ahora, false, 201);
     }
@@ -146,24 +147,27 @@ class OutreachComplaintController extends Controller
      * La persona: primero la llave de verla (sin ella, 403 sin leer nada);
      * después, 404 si no es nadie. Un prospecto de un socio se registra como el
      * socio, y verlo exige también ver socios (como las autorizaciones de C9-3).
+     * Un socio es su `users.id` (PT-18, {@see OutreachConsents::requestedSubject()}):
+     * `canonical` es el sujeto donde se escribe (`members.id` o `marketing_leads.id`)
+     * y `recordsAs`, cómo lo nombra el CRM.
      *
-     * @return array{type: string, id: int, recordsAs: array{type: string, id: int}}
+     * @return array{type: string, id: int, canonical: array{type: string, id: int}, recordsAs: array{type: string, id: int}}
      *
      * @throws OutreachException
      */
     private static function person(OutreachAccess $access, SubjectResolver $resolver, string $type, int $id): array
     {
         self::assertMayView($access, $type);
-        $pedida = $type === OutreachConsents::PERSON_MEMBER ? SubjectKey::member($id) : SubjectKey::lead($id);
-        $s = $resolver->forKeys([$pedida])[$pedida] ?? null;
-        if ($s === null || ! $s->resolved() || $s->key === null) {
+        $s = OutreachConsents::requestedSubject($resolver, $type, $id);
+        if ($s === null) {
             throw OutreachException::notFound('person');
         }
-        $canonica = SubjectKey::parse($s->key);
+        $canonica = SubjectKey::parse((string) $s->key);
         $tipo = $canonica['kind'] === SubjectKey::MEMBER ? OutreachConsents::PERSON_MEMBER : OutreachConsents::PERSON_LEAD;
         self::assertMayView($access, $tipo);
 
-        return ['type' => $type, 'id' => $id, 'recordsAs' => ['type' => $tipo, 'id' => (int) $canonica['id']]];
+        return ['type' => $type, 'id' => $id, 'canonical' => ['type' => $tipo, 'id' => (int) $canonica['id']],
+            'recordsAs' => OutreachConsents::recordsAs($s, $type, $id)];
     }
 
     /** @throws OutreachException 403 */
@@ -178,7 +182,7 @@ class OutreachComplaintController extends Controller
         }
     }
 
-    /** @param  array{type: string, id: int, recordsAs: array{type: string, id: int}}  $p */
+    /** @param  array{type: string, id: int, canonical: array{type: string, id: int}, recordsAs: array{type: string, id: int}}  $p */
     private static function respond(array $p, string $canal, string $categoria, Carbon $cuando, bool $replayed, int $http): JsonResponse
     {
         return response()->json(['ok' => true, 'data' => [

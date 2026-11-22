@@ -152,7 +152,7 @@ class OutreachComplaintsApiTest extends TestCase
         $this->assertStringContainsString('No llega por defecto al Administrador', (string) array_column(PermissionCatalog::rows(), null, 'key')[$llave]['help']);
         // El token compartido no entra (el dominio está excluido).
         $s = $this->socio();
-        $this->postJson(self::URL, self::queja('member', $s['member']), $this->sharedTokenHeaders())->assertStatus(403);
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->sharedTokenHeaders())->assertStatus(403);
         $this->assertSame([], self::quejas());
     }
 
@@ -162,12 +162,12 @@ class OutreachComplaintsApiTest extends TestCase
         $lead = $this->lead(['member_id' => $s['member']]);
         $suelto = $this->lead();
         // Sin la llave: la puerta, exista o no la persona.
-        foreach ([$s['member'], 999999] as $id) {
+        foreach ([$s['user'], 999999] as $id) {
             $this->postJson(self::URL, self::queja('member', $id), $this->sesion('SinLlave', ['members.view', 'marketing.view']))
                 ->assertStatus(403)->assertJsonPath('code', 'forbidden');
         }
         // Con la llave pero sin ver socios: 403 ANTES de leer la persona, igual exista o no.
-        foreach ([$s['member'], 999999] as $id) {
+        foreach ([$s['user'], 999999] as $id) {
             $this->postJson(self::URL, self::queja('member', $id), $this->sesion('Ciega', [OutreachAccess::COMPLAINTS_RECORD]))
                 ->assertStatus(403)->assertJsonPath('code', 'forbidden')->assertJsonPath('required_permission', 'members.view');
         }
@@ -190,7 +190,7 @@ class OutreachComplaintsApiTest extends TestCase
             'sin identificador' => [['clientRequestId' => null], 'clientRequestId'], 'identificador que no es uuid' => [['clientRequestId' => 'x'], 'clientRequestId'],
             'tipo de persona' => [['personType' => 'user'], 'personType'], 'id 0' => [['personId' => 0], 'personId'],
         ] as $nombre => [$cambio, $campo]) {
-            $r = $this->postJson(self::URL, array_filter(self::queja('member', $s['member'], $cambio), static fn ($v) => $v !== null), $this->recepcion())
+            $r = $this->postJson(self::URL, array_filter(self::queja('member', $s['user'], $cambio), static fn ($v) => $v !== null), $this->recepcion())
                 ->assertStatus(422)->assertJsonPath('code', 'validation_failed');
             $this->assertSame(['invalid'], $r->json("errors.{$campo}"), $nombre);
             $this->assertStringNotContainsString('cobraron', (string) $r->getContent(), 'el 422 no repite el valor');
@@ -198,7 +198,7 @@ class OutreachComplaintsApiTest extends TestCase
         $this->assertSame([], self::quejas());
 
         // Un campo de más (un texto) se ignora: no se guarda.
-        $this->postJson(self::URL, self::queja('member', $s['member'], ['note' => 'Se quejó a gritos de Ana', 'text' => 'x']), $this->recepcion())->assertCreated();
+        $this->postJson(self::URL, self::queja('member', $s['user'], ['note' => 'Se quejó a gritos de Ana', 'text' => 'x']), $this->recepcion())->assertCreated();
         $q = self::quejas()[0];
         $this->assertSame(['category', 'channel', 'client_request_id', 'recorded_by', 'source'], array_keys(self::sorted(json_decode((string) $q->payload, true))));
         $this->assertStringNotContainsString('gritos', (string) $q->payload);
@@ -214,7 +214,7 @@ class OutreachComplaintsApiTest extends TestCase
         $crid = (string) Str::uuid();
         $r = $this->postJson(self::URL, self::queja('lead', $lead, ['clientRequestId' => strtoupper($crid), 'channel' => 'phone', 'category' => 'attention']), $sesion)->assertCreated();
         $this->assertSame([
-            'personType' => 'lead', 'personId' => $lead, 'recordsAs' => ['type' => 'member', 'id' => $s['member']], 'channel' => 'phone', 'category' => 'attention',
+            'personType' => 'lead', 'personId' => $lead, 'recordsAs' => ['type' => 'member', 'id' => $s['user']], 'channel' => 'phone', 'category' => 'attention',
             'source' => 'staff', 'day' => '2026-11-17', 'brake' => ['days' => 30, 'purposes' => ['collections', 'commercial']],
         ], $r->json('data'));
         $this->assertFalse($r->json('meta.replayed'));
@@ -232,18 +232,18 @@ class OutreachComplaintsApiTest extends TestCase
     public function test_dos_el_mismo_dia_una_sola_y_la_respuesta_no_dice_si_ya_habia_otra(): void
     {
         $s = $this->socio();
-        $a = $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertCreated();
-        $b = $this->postJson(self::URL, self::queja('member', $s['member'], ['channel' => 'phone']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
+        $a = $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated();
+        $b = $this->postJson(self::URL, self::queja('member', $s['user'], ['channel' => 'phone']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
         $this->assertCount(1, self::quejas(), 'una al día de Bogotá por persona');
         $this->assertSame(array_keys($a->json()), array_keys($b->json()), 'la misma forma: no es un oráculo de «ya se quejó»');
         $this->assertSame([false, false], [$a->json('meta.replayed'), $b->json('meta.replayed')]);
 
         // 23:59:59 de Bogotá: el mismo día. 00:00 del 18: otro.
         $this->reloj('2026-11-18 04:59:59');
-        $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertCreated();
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated();
         $this->assertCount(1, self::quejas());
         $this->reloj('2026-11-18 05:00:00');
-        $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
         $this->assertSame(['member:'.$s['member'].':complaint:staff:20261117', 'member:'.$s['member'].':complaint:staff:20261118'],
             array_map(static fn (object $q): string => substr((string) $q->dedupe_key, strlen('complaint_created:')), self::quejas()));
     }
@@ -252,7 +252,7 @@ class OutreachComplaintsApiTest extends TestCase
     {
         $s = $this->socio();
         $otro = $this->socio();
-        $peticion = self::queja('member', $s['member']);
+        $peticion = self::queja('member', $s['user']);
         $this->postJson(self::URL, $peticion, $this->recepcion())->assertCreated();
         // Lo mismo: 200 `replayed`, sin fila nueva (también al día siguiente).
         $r = $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk();
@@ -261,7 +261,7 @@ class OutreachComplaintsApiTest extends TestCase
         $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true)->assertJsonPath('data.day', '2026-11-17');
         $this->assertCount(1, self::quejas());
         // Otro contenido, otra persona u otra cuenta con el mismo identificador: 409.
-        foreach ([['channel' => 'phone'], ['category' => 'other'], ['personId' => $otro['member']]] as $cambio) {
+        foreach ([['channel' => 'phone'], ['category' => 'other'], ['personId' => $otro['user']]] as $cambio) {
             $this->postJson(self::URL, array_replace($peticion, $cambio), $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
         }
         $this->postJson(self::URL, $peticion, $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
@@ -273,7 +273,7 @@ class OutreachComplaintsApiTest extends TestCase
         $s = $this->socio();
         config(['commercial.events_enabled' => false]);
         $this->postJson(self::URL, [], $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'commercial_events_disabled');
-        $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'commercial_events_disabled');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'commercial_events_disabled');
         $this->assertSame(0, DB::table('commercial_events')->count());
     }
 
@@ -282,7 +282,7 @@ class OutreachComplaintsApiTest extends TestCase
         $s = $this->socio();
         // La frontera: el registrador contiene el fallo y devuelve null (lo que hace ante un INSERT que falla).
         $this->app->instance(CommercialEventRecorder::class, Mockery::mock(CommercialEventRecorder::class, ['record' => null]));
-        $this->postJson(self::URL, self::queja('member', $s['member']), $this->recepcion())->assertStatus(503)->assertJsonPath('code', 'complaint_not_recorded');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertStatus(503)->assertJsonPath('code', 'complaint_not_recorded');
         $this->assertSame([], self::quejas());
     }
 
@@ -297,15 +297,15 @@ class OutreachComplaintsApiTest extends TestCase
     {
         config(['outreach.complaints.per_account_per_day' => 3]);
         $gente = [$this->socio(), $this->socio(), $this->socio(), $this->socio()];
-        $primera = self::queja('member', $gente[0]['member']);
+        $primera = self::queja('member', $gente[0]['user']);
         $this->postJson(self::URL, $primera, $this->recepcion())->assertCreated();
         foreach ([1, 2] as $i) {
-            $this->postJson(self::URL, self::queja('member', $gente[$i]['member']), $this->recepcion())->assertCreated();
+            $this->postJson(self::URL, self::queja('member', $gente[$i]['user']), $this->recepcion())->assertCreated();
         }
         $this->assertCount(3, self::quejas());
 
         // La cuarta persona del día: 429, sin escribir y sin decir nada de la persona.
-        $this->postJson(self::URL, self::queja('member', $gente[3]['member']), $this->recepcion())->assertStatus(429)->assertExactJson([
+        $this->postJson(self::URL, self::queja('member', $gente[3]['user']), $this->recepcion())->assertStatus(429)->assertExactJson([
             'ok' => false, 'code' => 'complaint_daily_limit_reached', 'limit' => 3,
             'message' => 'Ya registraste 3 quejas hoy, el tope diario de una cuenta. No se ha guardado nada: si hace falta registrar más, pídeselo a un Super Admin.',
         ]);
@@ -314,13 +314,13 @@ class OutreachComplaintsApiTest extends TestCase
         $this->postJson(self::URL, $primera, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true);
         $this->assertCount(3, self::quejas());
         // Otra cuenta: su propio tope.
-        $this->postJson(self::URL, self::queja('member', $gente[3]['member']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
+        $this->postJson(self::URL, self::queja('member', $gente[3]['user']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
         $this->assertCount(4, self::quejas());
         // 23:59:59 de Bogotá: el mismo día, sigue en el tope. 00:00 del 18: vuelve a empezar.
         $this->reloj('2026-11-18 04:59:59');
-        $this->postJson(self::URL, self::queja('member', $gente[0]['member']), $this->recepcion())->assertStatus(429);
+        $this->postJson(self::URL, self::queja('member', $gente[0]['user']), $this->recepcion())->assertStatus(429);
         $this->reloj('2026-11-18 05:00:00');
-        $this->postJson(self::URL, self::queja('member', $gente[0]['member']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
+        $this->postJson(self::URL, self::queja('member', $gente[0]['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
         $this->assertCount(5, self::quejas());
     }
 
@@ -333,9 +333,9 @@ class OutreachComplaintsApiTest extends TestCase
         $this->assertStringContainsString("\nCOMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY=\n", (string) file_get_contents(base_path('.env.example')));
         // Por la ruta: 20 al día, la 21 da 429.
         for ($i = 0; $i < 20; $i++) {
-            $this->postJson(self::URL, self::queja('member', $this->socio()['member']), $this->recepcion())->assertCreated();
+            $this->postJson(self::URL, self::queja('member', $this->socio()['user']), $this->recepcion())->assertCreated();
         }
-        $this->postJson(self::URL, self::queja('member', $this->socio()['member']), $this->recepcion())->assertStatus(429)->assertJsonPath('limit', 20);
+        $this->postJson(self::URL, self::queja('member', $this->socio()['user']), $this->recepcion())->assertStatus(429)->assertJsonPath('limit', 20);
         $this->assertCount(20, self::quejas());
         // Un entero de 1 a 200 manda (más, 200); 0, un negativo, un texto o nada dejan los 20: no hay forma de quitarlo.
         foreach ([[7, 7], [1, 1], [200, 200], [500, 200], [0, 20], [-3, 20], ['7', 20], [null, 20], [1.5, 20], [true, 20]] as [$valor, $esperado]) {
@@ -360,7 +360,7 @@ class OutreachComplaintsApiTest extends TestCase
         DB::listen(function ($q) use (&$sql): void {
             $sql[] = strtolower((string) $q->sql);
         });
-        $this->postJson(self::URL, self::queja('member', $s['member']), $sesion)->assertCreated();
+        $this->postJson(self::URL, self::queja('member', $s['user']), $sesion)->assertCreated();
         $bloqueo = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "admins"') && str_ends_with($q, 'for update')));
         $cuenta = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "commercial_events"') && str_contains($q, '"occurred_at" <')));
         $insercion = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with($q, 'insert into "commercial_events"')));
@@ -439,7 +439,7 @@ class OutreachComplaintsApiTest extends TestCase
         $this->liveStrategy($this->validContent($this->assistedTemplate(), ['exclusions' => null]));
         $socio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234567');
         $limpio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234568');
-        $this->postJson(self::URL, self::queja('member', $socio['member'], ['channel' => 'in_person']), $this->recepcion())->assertCreated();
+        $this->postJson(self::URL, self::queja('member', $socio['user'], ['channel' => 'in_person']), $this->recepcion())->assertCreated();
 
         // Comercial, por el planificador real: la inscripción sale por N6 y no hay trabajo para ella.
         $planner = new OutreachPlanner;

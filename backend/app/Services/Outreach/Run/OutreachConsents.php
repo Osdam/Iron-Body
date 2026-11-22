@@ -39,6 +39,10 @@ use Illuminate\Support\Str;
  * (o su prospecto) es 404, como en el resto del CRM, en la lectura y en las
  * cuatro escrituras.
  *
+ * LA PERSONA (PT-18): `personType=member` es un socio del CRM y `personId` su
+ * `users.id`; `lead`, un prospecto y su `marketing_leads.id`
+ * ({@see requestedSubject()}). Lo guardado es siempre el sujeto canónico.
+ *
  * EL TEXTO LEGAL ({@see OutreachConsentConfig}): sin él, pedir y confirmar
  * dan 409 `consent_legal_text_missing` y no escriben nada. Se guarda su
  * versión y el sha256 del texto EXACTO que la pantalla enseñó (el CRM devuelve
@@ -453,13 +457,64 @@ final class OutreachConsents
         return [];
     }
 
+    // ── La persona que nombra el CRM (PT-18) ────────────────────────────────
+
+    /**
+     * PT-18 · LA PERSONA QUE NOMBRA EL CRM, resuelta al sujeto de la
+     * automatización. Un SOCIO se nombra por su `users.id` (su ficha y
+     * `GET /api/users`), NO por `members.id`: se llega a su ficha por
+     * `members.user_id` y por identidad ({@see SubjectResolver::forUserIds()}),
+     * y el sujeto es el canónico de siempre (`m:<members.id>`). Un PROSPECTO,
+     * por su `marketing_leads.id` (si es de un socio, el sujeto es el socio).
+     * null si no es nadie, también un usuario sin ficha de socio: quien llama
+     * responde el mismo 404 en los dos casos.
+     *
+     * Un solo sitio para las autorizaciones (C9-3) y las quejas del personal (Q1-8).
+     */
+    public static function requestedSubject(SubjectResolver $resolver, string $type, int $id): ?Subject
+    {
+        if ($type === self::PERSON_MEMBER) {
+            $s = $resolver->forUserIds([$id])[$id] ?? null;
+        } else {
+            $clave = SubjectKey::lead($id);
+            $s = $resolver->forKeys([$clave])[$clave] ?? null;
+        }
+
+        return $s !== null && $s->resolved() && $s->key !== null ? $s : null;
+    }
+
+    /**
+     * PT-18 · `recordsAs`: dónde se registra, nombrado como lo nombra el CRM
+     * (un socio por su `users.id`; nunca un `members.id`, que el CRM no conoce).
+     * Un socio pedido es él mismo. Un prospecto de un socio es el usuario de su
+     * ficha canónica (o, si no tiene, el menor de los de la persona). Si ninguna
+     * ficha de la persona tiene usuario, el CRM no tiene a quién señalar: es el
+     * propio prospecto (lo guardado sigue siendo del socio canónico).
+     *
+     * @return array{type: string, id: int}
+     */
+    public static function recordsAs(Subject $s, string $type, int $id): array
+    {
+        $canonica = SubjectKey::parse((string) $s->key);
+        if ($canonica['kind'] !== SubjectKey::MEMBER) {
+            return ['type' => self::PERSON_LEAD, 'id' => (int) $canonica['id']];
+        }
+        if ($type === self::PERSON_MEMBER) {
+            return ['type' => self::PERSON_MEMBER, 'id' => $id];
+        }
+
+        return $s->primaryUserId !== null ? ['type' => self::PERSON_MEMBER, 'id' => $s->primaryUserId] : ['type' => $type, 'id' => $id];
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     /**
      * La persona, si quien llama puede verla: la llave de su tipo ANTES de leer
      * nada (sin ella, 403 sin decir si existe); después, 404 si no es nadie,
      * si es un prospecto de un socio y no puede ver socios, o si es un socio
-     * fuera del alcance del entrenador.
+     * fuera del alcance del entrenador. `memberId`/`leadId` y `key` son el
+     * sujeto canónico (lo que se guarda); `type`/`id` y `recordsAs`, como los
+     * nombra el CRM (PT-18).
      *
      * @return array{subject: Subject, key: string, memberId: ?int, leadId: ?int, type: string, id: int, recordsAs: array{type: string, id: int}}
      *
@@ -468,9 +523,8 @@ final class OutreachConsents
     private function person(OutreachAccess $access, string $type, int $id): array
     {
         self::assertMayView($access, $type);
-        $pedida = $type === self::PERSON_MEMBER ? SubjectKey::member($id) : SubjectKey::lead($id);
-        $s = $this->resolver->forKeys([$pedida])[$pedida] ?? null;
-        if ($s === null || ! $s->resolved() || $s->key === null) {
+        $s = self::requestedSubject($this->resolver, $type, $id);
+        if ($s === null) {
             throw OutreachException::notFound('person');
         }
         // El socio manda: un prospecto de un socio se registra como el socio, y verlo exige también ver socios. Sin esa llave,
@@ -488,7 +542,7 @@ final class OutreachConsents
             'subject' => $s, 'key' => $s->key, 'type' => $type, 'id' => $id,
             'memberId' => $tipo === self::PERSON_MEMBER ? (int) $canonica['id'] : null,
             'leadId' => $tipo === self::PERSON_LEAD ? (int) $canonica['id'] : null,
-            'recordsAs' => ['type' => $tipo, 'id' => (int) $canonica['id']],
+            'recordsAs' => self::recordsAs($s, $type, $id),
         ];
     }
 
