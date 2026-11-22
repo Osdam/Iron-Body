@@ -125,9 +125,59 @@ final class UltronDraftCheck
             return self::respuesta(self::MODE_LEGACY, $attempt, [], false, ['max_drafts' => self::LEGACY_MAX_DRAFTS, 'elapsed_s' => null, 'reason' => self::REASON_LEGACY]);
         }
 
-        $draft = (array) $data['draft'];
-        $raw = (string) $draft['reply_draft'];
-        $intent = (string) $draft['intent'];
+        $defectos = $this->inspect($conversationId, $messageId, $sp, $token['extra']['po'] ?? null, (array) $data['draft'])['defects'];
+
+        $elapsed = max(0, now()->getTimestamp() - (int) $token['issued_at']);
+        $reason = match (true) {
+            $attempt >= self::MAX_DRAFTS => self::REASON_LAST_ATTEMPT,
+            $elapsed > self::TIME_BUDGET_SECONDS => self::REASON_TIME_BUDGET,
+            default => null,
+        };
+        $respuesta = self::respuesta(self::MODE_STUDIO, $attempt, $defectos, $reason === null, ['max_drafts' => self::MAX_DRAFTS, 'elapsed_s' => $elapsed, 'reason' => $reason]);
+
+        // Una nota que no se pudo escribir (C6): el defecto va sin ella, y aquí queda dicho (códigos, sin parámetros).
+        $sinNota = array_values(array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], array_filter($defectos, fn (array $d): bool => $d['note'] === '')));
+        if ($sinNota !== []) {
+            ChannelLog::warning('ultron.check.note_unavailable', ['conversation_id' => $conversationId, 'codes' => $sinNota]);
+        }
+
+        // Códigos y números: ni el borrador, ni el entrante, ni las notas, ni el token.
+        ChannelLog::info('ultron.check.result', [
+            'conversation_id' => $conversationId,
+            'attempt' => $attempt,
+            'codes' => array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], $defectos),
+            'may_rewrite' => $respuesta['may_rewrite'],
+            'rewrite' => $respuesta['rewrite'],
+            'reason' => $reason,
+            'elapsed_s' => $elapsed,
+        ]);
+
+        return $respuesta;
+    }
+
+    /**
+     * LO QUE ESTA COMPROBACIÓN LE ENCUENTRA A UN BORRADOR, sin el token ni el
+     * presupuesto de intentos: los defectos de {@see self::check()} (los
+     * cuatro de §4.4 y, detrás, los de la política, con el tope
+     * {@see UltronDraftDefects::MAX_DEFECTS}) y la medida del texto expandido
+     * ({@see UltronReplyFitter::measure()}), con el `sp` y la lista que firmó
+     * `decide` para ESE turno. Quien llama ya verificó el token.
+     *
+     * La usan `check()` y el commit (corrección (1b) del turno 2 de la tercera
+     * prueba real, 22-11-2026): cuando el revisor rechaza el último borrador,
+     * la fila del respaldo anota lo que el servidor le habría encontrado, para
+     * separar «lo rechazó el revisor» de «el revisor y el servidor». Las MISMAS
+     * lecturas, de solo lectura, que `check()`.
+     *
+     * @param  array<string,mixed>  $sp  el `sp` firmado; sin `m = studio`, ningún defecto
+     * @param  mixed  $po  la lista firmada tal cual (`x.po`); una forma rara cuenta como «sin lista»
+     * @param  array{reply_draft:string,intent:string,recommended_plan_id?:mixed,tools_requested?:list<string>|null}  $draft
+     * @return array{defects:list<array{code:string,detail:?string,issue:string,note:string}>,length:int}
+     */
+    public function inspect(int $conversationId, int $messageId, array $sp, mixed $po, array $draft): array
+    {
+        $raw = (string) ($draft['reply_draft'] ?? '');
+        $intent = (string) ($draft['intent'] ?? '');
         $tools = array_values((array) ($draft['tools_requested'] ?? []));
 
         /*
@@ -137,7 +187,7 @@ final class UltronDraftCheck
          * trata como «sin lista» sin avisar aquí, porque el commit del mismo
          * turno lo registra (`ultron.commit.plans_overview_invalid`).
          */
-        $po = UltronPlansOverview::signedList($token['extra']['po'] ?? null) ?? [];
+        $po = UltronPlansOverview::signedList($po) ?? [];
         $poDelTurno = UltronPlansOverview::isMoneyTurn($intent, $tools) ? [] : $po;
 
         $catalog = $this->knowledge->activePlans();
@@ -170,32 +220,7 @@ final class UltronDraftCheck
             ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
 
-        $elapsed = max(0, now()->getTimestamp() - (int) $token['issued_at']);
-        $reason = match (true) {
-            $attempt >= self::MAX_DRAFTS => self::REASON_LAST_ATTEMPT,
-            $elapsed > self::TIME_BUDGET_SECONDS => self::REASON_TIME_BUDGET,
-            default => null,
-        };
-        $respuesta = self::respuesta(self::MODE_STUDIO, $attempt, $defectos, $reason === null, ['max_drafts' => self::MAX_DRAFTS, 'elapsed_s' => $elapsed, 'reason' => $reason]);
-
-        // Una nota que no se pudo escribir (C6): el defecto va sin ella, y aquí queda dicho (códigos, sin parámetros).
-        $sinNota = array_values(array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], array_filter($defectos, fn (array $d): bool => $d['note'] === '')));
-        if ($sinNota !== []) {
-            ChannelLog::warning('ultron.check.note_unavailable', ['conversation_id' => $conversationId, 'codes' => $sinNota]);
-        }
-
-        // Códigos y números: ni el borrador, ni el entrante, ni las notas, ni el token.
-        ChannelLog::info('ultron.check.result', [
-            'conversation_id' => $conversationId,
-            'attempt' => $attempt,
-            'codes' => array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], $defectos),
-            'may_rewrite' => $respuesta['may_rewrite'],
-            'rewrite' => $respuesta['rewrite'],
-            'reason' => $reason,
-            'elapsed_s' => $elapsed,
-        ]);
-
-        return $respuesta;
+        return ['defects' => $defectos, 'length' => UltronReplyFitter::measure($expandido)];
     }
 
     /**

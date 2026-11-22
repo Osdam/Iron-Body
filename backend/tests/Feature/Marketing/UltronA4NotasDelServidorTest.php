@@ -41,6 +41,12 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *    comprobación sin códigos, cabe en lo que la nota dice que queda y sale
  *    por el commit como escrito por el modelo, con la lista válida, dentro
  *    del tope y de usted.
+ *  - (1b) el borrador 3 EXACTO por el commit: con el revisor aprobando o
+ *    rechazando sale el MISMO texto fijo (el comportamiento de hoy, fijado);
+ *    en el rechazo la fila anota lo que el servidor le encontró
+ *    (`discarded_draft_check`: `plans_overview/mixed`, `length_over_cap` y
+ *    251). Si el servidor lo aceptaba, lo dice; sin versión del Studio, la
+ *    fila no lleva la clave.
  */
 class UltronA4NotasDelServidorTest extends TestCase
 {
@@ -79,7 +85,27 @@ class UltronA4NotasDelServidorTest extends TestCase
     /** Lo que el servidor le dice al redactor de ese borrador: las dos notas con el presupuesto, unidas por un espacio (469 caracteres). */
     private const NOTAS_DEL_BORRADOR_3 = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. DEMASIADO LARGO: mide 251 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.';
 
+    /** La lista fija de hoy con el tope de la canaria (la de `UltronA4ListaDelModeloTest`): la que le llegó a la persona en la prueba. */
+    private const PRECIOS_200 = 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?';
+
     private const APROBADO = ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9];
+
+    /** El «no» de «Critic Comercial 3» en la prueba real (0,4). */
+    private const RECHAZADO_3 = ['verdict' => 'fail', 'attempt' => 3, 'score' => 0.4, 'issues' => ['naturalness', 'repetition', 'progressive_disclosure', 'question_discipline']];
+
+    /** Lo que mandó S2 en ese turno: dos reescrituras del servidor y un solo revisor. */
+    private const REGENERACION = [
+        'contract' => 'ultron-regen/1',
+        'drafts' => 3,
+        'critics' => 1,
+        'checks' => 2,
+        'check_errors' => 0,
+        'rewrites' => [
+            ['by' => 'server', 'codes' => ['plans_overview'], 'issues' => ['relevance']],
+            ['by' => 'server', 'codes' => ['plans_overview', 'length_over_cap'], 'issues' => ['relevance', 'progressive_disclosure']],
+        ],
+        'tokens' => null,
+    ];
 
     private MarketingConversation $conversation;
 
@@ -180,6 +206,73 @@ class UltronA4NotasDelServidorTest extends TestCase
         $this->assertArrayNotHasKey('fallback_mode', $fila->metadata);
     }
 
+    // ── (1b) La causa determinista en la fila del respaldo ──────────────────
+
+    /**
+     * El borrador 3 EXACTO de la prueba real por el commit: con el revisor
+     * APROBANDO sale la lista fija (la lista no vale y no cabe: la rama de la
+     * política) y con el revisor RECHAZANDO sale el MISMO texto, byte a byte
+     * (es el comportamiento de hoy, y se fija). En el rechazo, la fila lleva
+     * además lo que el servidor le encontró al borrador: `mixed` y 251.
+     */
+    public function test_el_borrador_3_sale_igual_con_el_revisor_aprobando_o_rechazando_y_el_rechazo_anota_la_causa_del_servidor(): void
+    {
+        $this->publica('profesional', 200);
+
+        // El revisor aprueba.
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        $aprobado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3, null), self::APROBADO))->assertOk()->json();
+        $filaAprobada = $this->ultimaAccion();
+        $this->assertSame(self::PRECIOS_200, $aprobado['reply_final']);
+        $this->assertSame(['policy_length_exceeded', 'policy_plans_overview'], $filaAprobada->metadata['policy_violations']);
+        $this->assertSame(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'mixed'], $filaAprobada->metadata['plans_overview']);
+        $this->assertSame(251, $filaAprobada->metadata['length']['from']);
+        $this->assertArrayNotHasKey('discarded_draft_check', $filaAprobada->metadata, 'solo en el rechazo del revisor');
+
+        // El revisor rechaza el tercero (S2: dos reescrituras del servidor y un solo revisor).
+        $this->nuevaConversacion();
+        $this->publica('profesional', 200);
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        $rechazado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
+        $fila = $this->ultimaAccion();
+
+        $this->assertSame(self::PRECIOS_200, $rechazado['reply_final'], 'el mismo texto fijo, byte a byte');
+        $this->assertSame($aprobado['reply_final'], $this->ultimoSaliente()?->body);
+        $this->assertSame('SAFE_CURATED_REPLY', $fila->metadata['fallback_mode']);
+        $this->assertSame([3, 'fail'], [$fila->metadata['critic']['attempt'], $fila->metadata['critic']['verdict']]);
+        $this->assertSame(['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251], $fila->metadata['discarded_draft_check']);
+
+        $origen = UltronReplyOrigin::classify($fila->metadata);
+        $this->assertSame([UltronReplyOrigin::FALLBACK, UltronReplyOrigin::REASON_CRITIC, UltronReplyOrigin::SERVER_WOULD_REJECT, ['plans_overview/mixed', 'length_over_cap']],
+            [$origen['origin'], $origen['fallback_reason'], $origen['server_verdict'], $origen['server_codes']]);
+    }
+
+    /** El revisor rechaza un borrador que el servidor sí aceptaba: la fila lo dice; sin versión del Studio, la fila no lleva la clave (como hoy). */
+    public function test_el_rechazo_de_un_borrador_que_el_servidor_aceptaba_y_sin_studio_nada(): void
+    {
+        $this->publica('profesional', 200);
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        $referencia = 'Claro. Tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. ¿Cuál le interesa?';
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $referencia, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
+        $fila = $this->ultimaAccion();
+        $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el rechazo del revisor da el respaldo, como hoy');
+        $this->assertSame(['pass' => true, 'codes' => [], 'length' => 120], $fila->metadata['discarded_draft_check']);
+        $this->assertSame(UltronReplyOrigin::SERVER_WOULD_ACCEPT, UltronReplyOrigin::classify($fila->metadata)['server_verdict']);
+
+        // Legacy (sin negociar los prompts): ni la comprobación ni la clave.
+        $this->nuevaConversacion();
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m, false);
+        $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, 'Claro, el Plan Valera es de un mes. ¿Le interesa?', 3), ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.3]))->assertOk();
+        $fila = $this->ultimaAccion();
+        $this->assertSame('SAFE_CURATED_REPLY', $fila->metadata['fallback_mode']);
+        $this->assertArrayNotHasKey('discarded_draft_check', $fila->metadata);
+        $this->assertSame(UltronReplyOrigin::SERVER_UNKNOWN, UltronReplyOrigin::classify($fila->metadata)['server_verdict'], 'sin dato, como una fila de antes');
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     private function beneficiosDistintos(): void
@@ -246,11 +339,11 @@ class UltronA4NotasDelServidorTest extends TestCase
         ]);
     }
 
-    private function decide(MarketingMessage $m): array
+    private function decide(MarketingMessage $m, bool $negocia = true): array
     {
         return $this->postJson('/api/internal/marketing/ai/decide', [
-            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1',
-        ], $this->headers())->assertOk()->json();
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
     }
 
     private function check(MarketingMessage $m, string $token, string $borrador, int $attempt): TestResponse
