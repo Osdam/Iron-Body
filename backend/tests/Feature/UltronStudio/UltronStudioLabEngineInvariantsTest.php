@@ -10,6 +10,7 @@ use App\Models\UltronStudio\StudioLabVerdict;
 use App\Models\UltronStudio\StudioPublication;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
+use App\Services\UltronStudio\StudioLabCatalog;
 use App\Services\UltronStudio\StudioLabEngineFlow;
 use App\Services\UltronStudio\StudioLabPrompts;
 use App\Services\UltronStudio\StudioLabRuns;
@@ -50,6 +51,9 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
     /** La huella de `2026-11-12.6`, la misma que fija `StudioLabPromptsTest`. */
     private const PROMPTS_HASH = '01fc520af225f0373d6d4a3312e93fa1fca72cd8eb74037526da222102c51f0b';
 
+    /** La huella del catálogo `2026-10-20.1`, la misma que fija `StudioLabCatalogTest`. */
+    private const CATALOG_HASH = '9dfdd4f741f1d22ca06baba739d897f78315c81a996371e01e70134a0dc44cbc';
+
     /** El `resultsHash` de la ejecución sembrada de {@see goldenRun()}, calculado con el código de `296cf5a1`. */
     private const GOLDEN_RESULTS_HASH = '0084bb78bdfc8e7024544d9734fe1d3c4223159de7bd96ce5876f5ec7d1c5c1a';
 
@@ -63,6 +67,18 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
     {
         $this->assertSame('2026-11-12.6', StudioLabPrompts::PROMPT_VERSION);
         $this->assertSame(self::PROMPTS_HASH, StudioLabPrompts::hash());
+    }
+
+    /**
+     * Decisión del lead del 22-11-2026: el modo motor recorre los escenarios
+     * del catálogo de hoy, sin añadir ni cambiar ninguno (los escenarios «solo
+     * del motor» quedan fuera de este cierre). El catálogo y su huella, iguales.
+     */
+    public function test_el_catalogo_de_escenarios_y_su_huella_no_se_mueven(): void
+    {
+        $this->assertSame('2026-10-20.1', StudioLabCatalog::VERSION);
+        $this->assertSame(self::CATALOG_HASH, StudioLabCatalog::hash());
+        $this->assertSame(['C-01', 'C-02', 'C-03', 'C-04', 'C-05', 'C-06', 'C-07', 'C-08', 'C-09', 'C-10', 'C-12'], StudioLabCatalog::codes());
     }
 
     public function test_el_compilador_la_base_y_la_huella_legacy_solo_se_leen(): void
