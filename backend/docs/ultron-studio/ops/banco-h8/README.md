@@ -19,6 +19,7 @@ Es la parte **OPS8-a** del contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, fila OPS8).
 | `sembrar.sh` | La cuenta del smoke; con `--canarios-voz`, dos canarios de voz activos |
 | `ensayar.sh` | Arranca y para la pila; ensaya la valla, el `voice:doctor`, el worker de voz y el cierre |
 | `ensayar-ops8c.sh` | (OPS8-c) El ensayo del mando, el registro de secretos y la comprobación de Twilio (abajo, «OPS8-c») |
+| `ensayar-ops8f.sh` | (OPS8-f, 22-11-2026) El ensayo de la enmienda 20 (el número empresarial como origen, cuenta principal): su propio banco, los dos mandos y el código anterior (abajo, «OPS8-f») |
 | `sim-elevenlabs.cjs` | Simulador de ElevenLabs: lado proveedor (13 rutas) y emisor hacia Laravel |
 | `sim-twilio.cjs` | Simulador de la subcuenta de voz de Twilio: 10 rutas y el emisor de avisos de gasto |
 | `sim-comun.cjs` | Lo comparten los dos: registro, fallos inyectables, firmas y emisión solo a `127.0.0.1` |
@@ -477,3 +478,21 @@ bash $O/ensayar-otp-token.sh "$B"                  # el ensayo completo; deja el
 - **Lo que deja en el banco:** Twilio reconocida en el Studio (`authorized`, con la huella del token original), las copias previas `root/env-pre-otp-token-*` (600) y los tokens del ensayo en `tokens/otp-nuevo-*` (600, para el barrido).
 - **B-4:** `ensayar-ops8e.sh` comprueba ahora que `h7 estado` dice el **usuario efectivo** de `schedule:run` (en el Mac, sin permiso para leer los crontab: «ninguna»). La lógica, con 11 crontabs sintéticos (evidencia `14-*`): 11 OK · 0 FALLO.
 - **Las tareas de voz:** `comun.sh` trae `tareas_voz_banco <banco>` (4, o 5 si el código del banco trae `voice:webhook-health`): `ensayar-ops8c.sh`, `ensayar-ops8d.sh` y `ensayar-ops8e.sh` ya no fijan 4. Con el árbol actual (B-T5 de `h8-hardening`), el monitor de voz programa 5 (27 → 32; evidencia `15-*`). `ensayar-ops8e.sh` otra vez: **55 OK · 0 FALLO**.
+
+## OPS8-f (22-11-2026): la enmienda 20, el número empresarial como origen de las salientes
+
+Por la **decisión del propietario del 22-11-2026** (`MATRIZ_CIERRE_V2.md` §9: el visible de WhatsApp como origen, en la cuenta principal de Twilio, sin comprar números ni subcuenta). Informe: `plans/informes-cierre/informe-ops-telefonia.md`.
+
+**`ensayar-ops8f.sh <banco> montar|arrancar|ensayar|parar|borrar`** monta su PROPIO banco a partir de la «producción» del banco de telefonía (`BANCO_ORIGEN`, por defecto `~/.cache/ironbody-banco-telefonia`, el de `banco-h9/telefonia-prep.sh`: el entorno sintético de producción con ElevenLabs verificado): copia el clon, pone el código en `HEAD` del worktree (el `composer.lock` tiene que ser el mismo), crea la base `ultron_studio_banco_h8_ops8f` con `CREATE DATABASE … TEMPLATE`, migra como `h5_owner`, genera piezas SINTÉTICAS para los dos simuladores y arranca valla, simuladores y API (puertos 8461–8464). **Cada `ensayar` rehace la base desde la plantilla** (una pasada deja el freno echado y la observación del número en la caché; soltarlo exige una persona con `ultron.voice_publish`) y repite la verificación de ElevenLabs contra el simulador.
+
+```bash
+O=backend/docs/ultron-studio/ops/banco-h8; B=$HOME/.cache/ironbody-banco-h8-ops8f
+bash $O/ensayar-ops8f.sh $B montar && bash $O/ensayar-ops8f.sh $B arrancar
+bash $O/ensayar-ops8f.sh $B ensayar        # 87 OK · 0 FALLO (22-11-2026, dos pasadas seguidas iguales); registro en $B/logs/ (600)
+bash $O/ensayar-ops8f.sh $B parar          # o «borrar»: para, borra su base y el directorio
+```
+
+- **Qué recorre:** las negativas del camino sin declarar (la clave por `fase 2 set`, sin `--autorizacion`, sin «Outbound Only», el visible sin la declaración, otro protegido); `fase 2 secreto --terminal` en una pty de verdad (sin terminal se niega; un Account SID se niega; la key buena se escribe y **ni el SID ni el secreto salen en la terminal**); la declaración con su cita, `INBOUND_CAPABLE=true` con ella, otro protegido con ella, el visible «pendiente de conciliar» (aviso, no desvío); `h8-twilio-check.sh` escenario a escenario (APTA · cuenta principal, llamada ajena, key que lee mensajes, token de firma, Account SID, el visible comprado, la subcuenta como regresión); `monitor on` con el número importado sin `supports_inbound`, con entrantes, con agente, de otro número y bien; la conciliación real del número (`ayudante-ops8d.php observar-numero`) con agente, con entrantes y bien, y `estado`/`salientes on` frente a cada veredicto; `entrantes on` con la declaración; `numero-compartido off` y su vuelta atrás exacta byte a byte; y los dos mandos con el **código anterior** a la enmienda (el del origen): fallan cerrado y lo de siempre sigue. Cierre: 0 violaciones en los dos simuladores, la valla sin hosts de fuera, ningún secreto de las piezas ni teléfono completo en el registro.
+- **Cambios de los simuladores** (opcionales: sin el control, todo igual que antes, porque el E2E del H8 usa estos mismos simuladores): `sim-elevenlabs.cjs` gana el control **`/__numero?phone=voz|whatsapp|<E.164>&supports_inbound=true|false|ausente&agente=ninguno|ajeno`** (por defecto el número no trae `supports_inbound`, como hasta hoy) y la saliente llama desde el número importado; `sim-twilio.cjs` gana **`numero=voz|whatsapp`** y **`compartido=0|1`** en `/__numero`: el número de WhatsApp como `From` deja de ser violación solo con `numero=whatsapp`, `tipo=caller_id` y `compartido=1`.
+- **`node sim-pruebas.cjs`: 95 OK · 0 FALLO · 0 OMITIDO** (93 de antes y 2 nuevas, sección M).
+- **Qué no prueba:** lo de «Qué no prueba» de arriba, y además: qué número ve de verdad el teléfono de destino (Twilio no lo garantiza en Colombia), la forma real de `GET /v1/convai/phone-numbers/{id}` (si `supports_inbound`, obsoleto, sigue llegando), los permisos reales de las dos keys restringidas y la importación con API key en ElevenLabs.
