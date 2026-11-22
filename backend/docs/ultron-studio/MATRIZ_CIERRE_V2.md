@@ -220,7 +220,7 @@ Evidencia: `ops/evidencia-h9/2026-11-22/01-voz-y-meta-lectura-de-partida.txt`.
 
 | Gate | Frente | Qué se pide | Estado |
 |---|---|---|---|
-| V-1 | A · Voz | En Twilio: crear la subcuenta «Voz» y verificar en ella, como identificador de llamada, un número que no sea el de WhatsApp del gimnasio (…5483) ni el teléfono que recibirá la llamada. Gratis. Si no hay una segunda línea, se le presenta la compra con su costo | **PEDIDO el 22-11 a las 05:00 UTC** |
+| V-1 | A · Voz | En Twilio: un número de origen para la llamada. Se pidió el 22-11 a las 05:00 UTC (subcuenta «Voz» y un identificador verificado que no fuera el de WhatsApp) y se reformuló a las 06:12 UTC (V-1b: elegir entre recibir en otro teléfono, verificar otra línea o comprar un número) | **CERRADO POR DECISIÓN DEL PROPIETARIO (22-11, 06:20 UTC; §9):** el origen es el número empresarial …5483, el primer destino canario es …6026, sin compras ni subcuenta. Exige adaptar la restricción del número de WhatsApp (rama `cierre/telefonia`) y su autorización específica para desplegar |
 | 4-M | 4 · WhatsApp | Publicar la versión 3 en canario | Se pide al abrirse la ventana (07:00 de Bogotá) |
 
 Después de V-1, en este orden: V-2 (permisos geográficos y key restringida de voz, instalada en el servidor sin pasar por el chat), V-3 (importar el número en ElevenLabs como solo saliente), las autorizaciones A0 a A3 del runbook, la aprobación de la revisión 3 del perfil, el veredicto del laboratorio hablado, la publicación de la voz en canario, el canario de voz y la llamada (`ops/RUNBOOK_PRIMERA_LLAMADA.md`).
@@ -230,3 +230,44 @@ Después de V-1, en este orden: V-2 (permisos geográficos y key restringida de 
 1. Cuando termine cada agente: leer su informe, repetir sus pruebas clave, pasar el cambio por security y por reviewer, integrar en `feat/ultron-studio-h9` por *merge*, batería completa en el árbol `ultron-suite` y preparar el lote de despliegue con su reversión para pedir la autorización. Cerrar el agente.
 2. A las 07:00 de Bogotá: verificar en solo lectura y pedir el gate 4-M; después, la tercera prueba real.
 3. Siguiente tanda de agentes, según quede memoria libre: C9 (`database-specialist` y `backend`), cuatro ojos por regla (B2), el CRM de los motivos y estados nuevos, y las pruebas de extremo a extremo.
+
+---
+
+## 9. Decisión del propietario sobre la telefonía (22-11-2026, 01:20 a. m. en Bogotá), literal
+
+> CORRECCIÓN DEFINITIVA DE TELEFONÍA — ULTRON STUDIO FULL
+>
+> Iron Body tiene un único número empresarial, terminado en 5483. Ese número debe mantenerse como su identidad principal para WhatsApp y llamadas salientes de Sofía.
+>
+> En Twilio Console confirmé que el 5483 ya está registrado como Verified Caller ID.
+>
+> DECISIÓN:
+> - Origen empresarial de llamadas: 5483.
+> - Primer destino canario: mi celular terminado en 6026.
+> - Destinos de futuras pruebas: números configurados y autorizados desde ULTRON Studio.
+> - No comprar números adicionales ni crear una subcuenta innecesaria.
+> - No modificar la integración de Meta WhatsApp.
+>
+> Revisa y adapta los cuatro controles del backend que actualmente prohíben usar el número de WhatsApp como origen.
+>
+> No elimines los controles de consentimiento, canarios, horarios, presupuestos, límites ni detención de llamadas. Modifica únicamente la restricción que impide compartir el identificador empresarial entre WhatsApp y llamadas salientes, después de verificar que es técnicamente seguro.
+>
+> Comprueba que ULTRON Studio permite registrar, aprobar y activar números de prueba, y que el motor de llamadas utiliza exclusivamente el destino canario autorizado.
+>
+> Conserva las restricciones de seguridad para contactos comerciales reales.
+>
+> Realiza las pruebas automatizadas y la revisión de seguridad correspondientes. Prepara la configuración de Twilio y ElevenLabs con el número empresarial ya verificado.
+>
+> No despliegues esta modificación ni habilites llamadas sin mi autorización específica.
+>
+> Mantén los demás agentes trabajando. Esta instrucción corrige solamente la arquitectura de telefonía, sin reiniciar el looping ni abrir otro proyecto.
+>
+> El resultado esperado es: 5483 → Twilio Voice + Sofía → número canario autorizado desde Studio.
+>
+> Para llamadas entrantes, documenta por separado la necesidad de enrutamiento; no las declares resueltas por verificar el identificador saliente.
+
+**Antes de la decisión, el lead le informó** (22-11, 06:12 UTC): que mostrar el 5483 como origen no cambia nada del registro del número en Meta; que las devoluciones de llamada sonarán en la línea del gimnasio y no en Sofía; que un identificador verificado es solo saliente; que el riesgo sobre WhatsApp es indirecto (bloqueos o reportes del chat por llamadas no deseadas a clientes) y que el lead recomendaba no levantar el cerrojo. El propietario decidió con esa información.
+
+**Lo que esta decisión enmienda:** la protección 6 del contrato del H8 (el número de voz no puede ser el de WhatsApp) y D8-4/D8-5 en lo de la subcuenta. Lo que NO toca: consentimiento, canarios, horario legal, frecuencia, presupuesto, cupos, freno, corte, deriva del agente, la integración de WhatsApp de Meta y las entrantes (que siguen sin ruta: un identificador verificado no recibe llamadas).
+
+**Cómo se ejecuta, sin cruzarse con los demás frentes:** rama `cierre/telefonia` (sale de la punta confirmada de `cierre/voz`, `b875875f`), árbol `_worktrees/cierre-telefonia`. Orden: `arq-telefonia` (diseño mínimo y verificación de que es seguro) → backend → mandos → security → integración. **Nada se despliega ni se habilita sin su autorización específica.**
