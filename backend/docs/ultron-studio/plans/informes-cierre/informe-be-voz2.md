@@ -107,3 +107,69 @@
 - La rama local `tmp/voz-abierta-medicion-2` en el árbol desechable, que vuelve a estar en `tmp/voz-abierta-medicion`; no la he borrado.
 - Las bases `ultron_studio_cierre_voz` y `ultron_studio_h8_e2e_cvoz`.
 - Las ejecuciones del arnés, en `~/.cache/ironbody-h8-e2e/`.
+
+## 9. E19-3 · la migración (database-specialist, 22-11-2026)
+
+**Motor:** PostgreSQL 14 (producción; probado en 14.24 local) y SQLite 3.54 (la batería). Commits `271fa4cb` (la migración y todo lo que la acompaña, en uno) y `7a73dbec` (`h8-schema-check.sql`). La migración de DB8 no se toca. `CALLS_ENABLED_IN_CODE` sigue en `false`; ningún fichero de `app/Services/**`.
+
+**Esquema, antes → después** (`2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start`):
+- Solo cambia `vc_status_forward`: la rama de `ambiguous` pasa de `dialing, completed, busy, no_answer, failed` a lo mismo **+ `failed_to_start`**. El mismo nombre, el mismo evento (`BEFORE UPDATE OF status`), la misma función (`voice_forbid()`, con la misma huella) y el mismo motivo. El WHEN es el de `forwardOnly()` de DB8 sobre su grafo, leído de su migración. Es idéntico, carácter a carácter, al de la simulación del autor.
+- PostgreSQL: `CREATE OR REPLACE TRIGGER` (PG 14; la migración se niega en una versión anterior). En SQLite, `DROP` + `CREATE` en la transacción, con el mensaje de `message()` de DB8.
+- Comprueba su recuento antes y después: un `vc_status_forward`, los mismos disparadores en `voice_%`, con `voice_forbid()` y encendido. Si no cuadra, falla y no se registra.
+- Recuentos sin cambio: 27 disparadores y 51 CHECK en `voice_%` (21 disparadores en SQLite).
+- **Ningún CHECK cambia [C]:**
+  - Una `ambiguous` solo puede ser una saliente de Laravel: solo se llega desde `requested`, una entrante no puede (`vc_direction_status_chk`) y un tramo nunca nace así (`vc_starts_live`). Además, sin ningún id del proveedor: `vc_provider_binding_chk` pone `ambiguous` y `failed_to_start` en el mismo grupo «sin ids».
+  - `failed_to_start` exige `ended_at` (`vc_ended_chk`) y ningún motivo de política (`vc_authorization_chk`). Es justo lo que escribe `transitionValues()`.
+  - Probado en PostgreSQL con la matriz completa y con `violatedChecks()` sobre la fila cerrada: 0 CHECK la rechazan. Siguen negando el cierre sin `ended_at`, el que trae un id del proveedor y el que lleva motivo.
+- `down()` devuelve el disparador exacto de DB8: comparado con el que crea DB8 de verdad. Es reversible también con filas ya cerradas así, porque el disparador no revisa las filas existentes y una `failed_to_start` cumple el esquema de DB8.
+
+**En el mismo commit:**
+- `VoiceCall::TRANSITIONS` con la transición: `schemaAllows()` pasa a `true`.
+- `state-transitions.json`, regenerado con su generador (`sec_states.py`): la fila del contrato (`D8-13, E19-3`), DF-S3 enmendado (sigue «nunca `canceled`») y dos secuencias. Los otros 9 fixtures salen iguales byte a byte. El comprobador independiente: `RESULTADO: OK`, 885 casos sin discrepancias y 80/80 variantes, también con `--php`.
+- `VoiceAmbiguousResolutionTest`: la expectativa `schema_pending` pasa a la salida real, y la simulación borrada es ahora una prueba de punta a punta: en seco, consola, automática, reserva liberada y anomalía.
+
+**Guardas del esquema de la voz** (ninguna comparación relajada):
+- `VoiceCallTransitionsTest`: la matriz completa, con el grafo del contrato enmendado.
+- `VoiceSchemaTest`: la ida y vuelta de DB8 reaplica E19-3, como las otras enmiendas.
+- `TelephonyIsolationTest`: recorre `2026_11_*voice*` en vez de `2026_11_1*voice*`, para que la migración nueva quede cubierta (más cobertura).
+- Prueba nueva: `VoiceUnstartedAmbiguousMigrationTest` (7 pruebas).
+- Dos mutaciones de la migración (sin la transición; un `down()` que no devuelve DB8) ponen en rojo 5 y 1 pruebas.
+
+**Ejecutado [C], sobre `7a73dbec`:**
+- Voz y telefonía, SQLite: `OK, Tests: 924, Skipped: 164` (917 + 7).
+- PostgreSQL 14, `Feature/{Telephony,Voice}`: `OK, Tests: 555, Skipped: 27` (548 + 7).
+- `VoiceUnstartedAmbiguousMigrationTest`: PostgreSQL `OK (7 tests, 78 assertions)`; SQLite 7, con 1 solo de PostgreSQL.
+- **Rol que no es el dueño** (privilegios por defecto de producción, como `iron_app`): `voice:resolve-ambiguous` cierra la fila (con `FOR UPDATE`, la transición y su evento), y también la transición directa de la conciliación. `DISABLE TRIGGER`, `DROP TRIGGER`, `CREATE OR REPLACE TRIGGER` y `session_replication_role` dan **42501**. `ambiguous → canceled` da **P0001**.
+- Guardas estáticas: `OK (141 tests)`.
+- E2E (`todas`): cerrada 6/113, abierta 9/301, salientes 11/247, **el mismo hash `832085b4ae85…`**. Evidencia en `ops/evidencia-h8/2026-11-22/20261122T063839Z-7a73dbec`.
+- Parches de la apertura, en el árbol desechable, rama local nueva `tmp/voz-abierta-medicion-3` = `7a73dbec` + `cbf94374` + `git am` de los tres:
+  - **limpios**, y `range-diff` da «=» en los tres;
+  - solo tocan `backend/tests/`;
+  - abierta y con los parches, voz y telefonía `OK (933)` (926 + 7). **No hay que rehacer nada.**
+- `h8-schema-check.sql`, bloque nuevo «E19-3», ensayado en una base desechable migrando todo y quitando solo E19-3. Cambian exactamente `e193_admite_la_salida` (f → t) y `e193_migracion_registrada` (0 → 1); el resto es igual. `supresion-1581.sql` no nombra el disparador ni el grafo, y no cambia: `vc_status_forward` es `UPDATE OF status` y nunca salta con lo que redacta.
+
+**Producción** (no la he tocado; correrla exige la autorización del propietario):
+1. Con el rol dueño (`iron`), por `ironbody-migrate --path=<dir de root> --realpath`, nunca como `www-data`. Lee la migración de DB8 por `database_path()`: el código desplegado tiene que llevarla (la lleva).
+2. **Orden: primero la migración, después el código.** El código nuevo cree admitida la transición (`schemaAllows()` lee el modelo, no la base). Sin la migración, una salida real daría P0001 y la pasada caería sin cambiar nada. Hoy no puede ocurrir: 0 llamadas y salientes cerradas. Al volver atrás, al revés: primero el código, después el esquema.
+3. **Cerrojo:** SHARE ROW EXCLUSIVE sobre `voice_calls`, medido. Frena a quien escribe en la tabla, no a quien lee ni a un `FOR UPDATE`. Un `DROP TRIGGER` tomaría ACCESS EXCLUSIVE. Con `lock_timeout` de 5 s, una transacción que escriba allí la hace caer limpia (55P03) y se reintenta. La tabla tiene 0 filas y no se toca ninguna. **Duración:** 4 ms la subida y 10 ms la bajada, en local.
+4. **Antes y después:** `h8-schema-check.sql`, el bloque «E19-3» (y su consulta de cerrojos: 0 filas antes de lanzarla).
+5. **Vuelta atrás:** `migrate:rollback` está prohibido en producción. El equivalente exacto de `down()`, con el dueño, es esta sentencia (la genera la propia migración):
+```sql
+CREATE OR REPLACE TRIGGER vc_status_forward BEFORE UPDATE OF status ON voice_calls FOR EACH ROW WHEN (OLD.status <> NEW.status AND NOT ((OLD.status = 'requested' AND NEW.status IN ('canceled', 'failed_to_start', 'ambiguous', 'dialing', 'completed', 'busy', 'no_answer', 'failed')) OR (OLD.status = 'ambiguous' AND NEW.status IN ('dialing', 'completed', 'busy', 'no_answer', 'failed')) OR (OLD.status = 'dialing' AND NEW.status IN ('active', 'completed', 'busy', 'no_answer', 'failed', 'hung_up')) OR (OLD.status = 'active' AND NEW.status IN ('completed', 'failed', 'hung_up')))) EXECUTE FUNCTION voice_forbid('una llamada solo avanza por los estados de D8-13 y un estado final no cambia');
+```
+
+**Lo que NO pude verificar:** producción (la versión exacta de PostgreSQL, el `lock_timeout` de la sesión de `ironbody-migrate` y la migración allí), y nada contra los proveedores reales.
+
+**Para otros, sin tocar:**
+- **CRM** (`_worktrees/cierre-crm/Iron-Body_Front`): el grafo está copiado dos veces. Una a mano, `VOICE_CALL_TRANSITIONS` en `ultron-studio/studio-voice-api.types.ts:118-123`. Otra generada, `sets.callTransitions` en `ultron-studio/testing/backend-voice.testing.ts` («no editar a mano», `gen-backend-voice-3.py`). `studio-voice-parity.spec.ts:97` exige que coincidan: hay que añadir `failed_to_start` a `ambiguous` en la constante y regenerar la copia desde el `state-transitions.json` de `271fa4cb`, las dos juntas.
+- **Textos que siguen diciendo «pendiente»** (no son míos):
+  - `VoiceAmbiguousResolution.php`, la cabecera;
+  - `VoiceReconciler.php:58`;
+  - la rama `schema_pending` de `VoiceResolveAmbiguousCommand.php:85`, ahora inalcanzable;
+  - el contrato del H8 (`:361` y la fila E19-3, «MIGRACIÓN PENDIENTE»);
+  - `RUNBOOK_PRIMERA_LLAMADA.md`.
+- **Hallazgo:** `schemaAllows()` mira el modelo y no la base. Leer el disparador (o fallar cerrado ante P0001) lo haría robusto ante un despliegue en mal orden. Para backend.
+- En la máquina:
+  - la rama `tmp/voz-abierta-medicion-3`, en el árbol desechable (no se integra ni se borra);
+  - la base `ultron_studio_h8_e2e_cvoz` y la ejecución en `~/.cache/ironbody-h8-e2e/run-20261122T063839Z-7a73dbec`.
+  - Las bases de los ensayos, borradas.
