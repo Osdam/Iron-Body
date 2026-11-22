@@ -260,26 +260,45 @@ final class StudioRulePhraseAuthors
      * tiene persona). Una línea sin revisión legible no cuenta, así que esa
      * revisión queda sin rastro.
      *
+     * Del `diff` solo viaja `toRevision` (M-2 de la revisión de API): quien
+     * puede editar reglas puede encadenar revisiones, y traer el `diff`
+     * entero de cada una hacía crecer la memoria con su tamaño (unos 4 KB por
+     * línea). Viaja como FRAGMENTO JSON (`2`, `"2"`, `2.0`, `true`…) y se
+     * decodifica aquí, así que «entero o sin rastro» es lo mismo que antes.
+     * `->` con una etiqueta a secas es el mismo operador en PostgreSQL
+     * (`json`) y en SQLite (≥ 3.38). En SQLite la columna es texto, y un
+     * `diff` que no es JSON (solo por SQL) haría fallar la consulta: se
+     * guarda con `json_valid` y cuenta como sin revisión, igual que antes. En
+     * PostgreSQL ya lo garantiza el tipo `json`.
+     *
      * @param  list<string>  $codes
      * @return array<string,list<array{0:int,1:int|null}>>
      */
     private static function revisionLines(array $codes): array
     {
-        $filas = DB::table('ultron_studio_audit_events as e')
+        $consulta = DB::table('ultron_studio_audit_events as e');
+        $diff = $consulta->getGrammar()->wrap('e.diff');
+        $fragmento = DB::connection()->getDriverName() === 'pgsql'
+            ? "{$diff} -> 'toRevision'"
+            : "case when json_valid({$diff}) then {$diff} -> 'toRevision' end";
+
+        $filas = $consulta
             ->join('ultron_studio_rules as r', 'r.uuid', '=', 'e.subject_uuid')
             ->where('e.subject_type', StudioAuditEvent::SUBJECT_RULE)
             ->whereIn('e.event', self::REVISION_EVENTS)
             ->whereIn('r.code', $codes)
             ->orderBy('e.id')
-            ->get(['r.code', 'e.event', 'e.actor_admin_id', 'e.diff']);
+            ->select(['r.code', 'e.event', 'e.actor_admin_id'])
+            ->selectRaw("{$fragmento} as to_revision")
+            ->get();
 
         $out = [];
         foreach ($filas as $f) {
             if ($f->event === 'rule.created') {
                 $revision = 1;
             } else {
-                $diff = is_string($f->diff) ? json_decode($f->diff, true) : null;
-                $revision = is_array($diff) && is_int($diff['toRevision'] ?? null) ? $diff['toRevision'] : null;
+                $revision = is_string($f->to_revision) ? json_decode($f->to_revision, true) : null;
+                $revision = is_int($revision) ? $revision : null;
             }
             if ($revision === null || $revision < 1) {
                 continue;

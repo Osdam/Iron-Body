@@ -407,6 +407,47 @@ class UltronStudioRulePhraseAuthorsTest extends TestCase
         ]);
     }
 
+    /**
+     * M-2 de la revisión de API: quien edita reglas puede encadenar
+     * revisiones, y cada versión nueva copia todas las reglas vivas. La
+     * lectura de la autoría no trae el `diff` de las líneas, así que no
+     * depende de su tamaño: con un `diff` enorme, la misma consulta, el mismo
+     * resultado, ningún valor largo leído y la memoria acotada.
+     */
+    public function test_la_lectura_del_libro_no_trae_el_diff_ni_depende_de_su_tamano(): void
+    {
+        $regla = $this->frases($this->ana, ['te lo regalo']);
+        $this->editar($this->beto, $regla, ['priority' => 'high']);
+        $uuid = $this->submittedVersion($this->root);
+        $contenido = StudioVersion::query()->where('uuid', $uuid)->sole()->content;
+        $esperado = [['code' => 'S-001', 'revision' => 2, 'authored' => [2], 'unverified' => false]];
+
+        $normal = $this->medirLectura($contenido, $this->beto->id);
+        $this->assertSame($esperado, $normal['autoria']);
+        $this->assertSame(1, $normal['consultas']);
+        $this->assertLessThan(64, $normal['mayor'], 'solo el código, el evento, el actor y la revisión');
+
+        // Líneas con un `diff` de 512 KiB (8 MiB en total): una más de Beto
+        // para la revisión 2, la copiada, y quince posteriores a la copia. Por
+        // SQL: la API acota cada texto, pero la lectura no debe depender de eso.
+        $relleno = str_repeat('x', 512 * 1024);
+        foreach (range(2, 17) as $k) {
+            DB::table('ultron_studio_audit_events')->insert([
+                'event' => 'rule.updated', 'subject_type' => StudioAuditEvent::SUBJECT_RULE, 'subject_uuid' => $regla->uuid,
+                'actor_type' => 'admin', 'actor_admin_id' => $this->beto->id, 'actor_name' => $this->beto->name,
+                'summary' => "Editó la regla S-001 (revisión {$k})",
+                'diff' => json_encode(['fromRevision' => max(1, $k - 1), 'toRevision' => $k, 'changes' => [['field' => 'description', 'from' => '', 'to' => $relleno]]]),
+                'created_at' => now(),
+            ]);
+        }
+
+        $enorme = $this->medirLectura($contenido, $this->beto->id);
+        $this->assertSame($esperado, $enorme['autoria'], 'las líneas nuevas no cambian quién escribió lo copiado');
+        $this->assertSame($normal['consultas'], $enorme['consultas']);
+        $this->assertLessThan(64, $enorme['mayor'], 'la lectura no trae el diff');
+        $this->assertLessThan(1024 * 1024, $enorme['pico'], 'la memoria no crece con el tamaño del diff');
+    }
+
     // ── Voz ─────────────────────────────────────────────────────────────────
 
     public function test_la_voz_igual_que_whatsapp(): void
@@ -521,6 +562,43 @@ class UltronStudioRulePhraseAuthorsTest extends TestCase
     private function ultimoDenegado(): StudioAuditEvent
     {
         return StudioAuditEvent::query()->where('event', 'version.four_eyes_denied')->orderByDesc('id')->firstOrFail();
+    }
+
+    /**
+     * La autoría de `$adminId` leída como en las rutas, con lo que costó: las
+     * consultas, el valor más largo que traen (se repiten aparte, con sus
+     * valores) y el pico de memoria de la lectura, en bytes.
+     *
+     * @param  array<string, mixed>  $contenido
+     * @return array{autoria:list<array<string,mixed>>|null,consultas:int,mayor:int,pico:int}
+     */
+    private function medirLectura(array $contenido, int $adminId): array
+    {
+        $consultas = [];
+        $midiendo = true;
+        DB::listen(static function ($q) use (&$consultas, &$midiendo): void {
+            if ($midiendo) {
+                $consultas[] = [$q->sql, $q->bindings];
+            }
+        });
+
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $antes = memory_get_usage();
+        $autoria = StudioRulePhraseAuthors::of($contenido, $adminId);
+        $pico = memory_get_peak_usage() - $antes;
+        $midiendo = false;
+
+        $mayor = 0;
+        foreach ($consultas as [$sql, $valores]) {
+            foreach (DB::select($sql, $valores) as $fila) {
+                foreach ((array) $fila as $valor) {
+                    $mayor = max($mayor, strlen((string) $valor));
+                }
+            }
+        }
+
+        return ['autoria' => $autoria, 'consultas' => count($consultas), 'mayor' => $mayor, 'pico' => $pico];
     }
 
     /** Cuántas veces se lee la autoría en el libro (la consulta de StudioRulePhraseAuthors) mientras corre `$accion`. */
