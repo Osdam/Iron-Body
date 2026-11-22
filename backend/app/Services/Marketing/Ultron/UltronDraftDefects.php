@@ -40,6 +40,9 @@ use InvalidArgumentException;
  *      quitar la pregunta final: §4.4).
  *  (d) `benefit_misattributed`: {@see UltronBenefitAttribution} sobre el texto
  *      expandido.
+ * Con la lista y el tope firmados, la nota de (a) cuando falta la lista o va
+ * mezclada o repetida, y la de (c), van con el esqueleto y el presupuesto de la
+ * lista ({@see self::listBudget()}; 22-11-2026). Los códigos no cambian.
  * Sin versión del Studio (`sp.m` ≠ `studio`), ninguno: Legacy no cambia.
  *
  * Y DETRÁS, LAS REGLAS DE POLÍTICA CORREGIBLES (ola 4b, decisión L-3 del lead;
@@ -77,9 +80,10 @@ final class UltronDraftDefects
      * @param  list<int>  $po  la lista firmada; vacía si no se ofreció o si es un turno de cobro
      * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
      * @param  string  $inbound  el texto de la persona (solo para saber si pregunta el precio)
+     * @param  array<int,string>  $listTexts  plan_id → su texto ya expandido ({@see UltronPlansOverview::item()}) de los planes de `po` que se venden AHORA; el que falta cuenta como su marcador literal (así lo deja la expansión)
      * @return list<array{code:string,detail:?string,issue:string,note:string}>
      */
-    public static function of(array $draft, string $expanded, array $sp, array $po, array $catalog, string $inbound): array
+    public static function of(array $draft, string $expanded, array $sp, array $po, array $catalog, string $inbound, array $listTexts = []): array
     {
         if (($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO) {
             return [];
@@ -87,6 +91,23 @@ final class UltronDraftDefects
         $raw = (string) ($draft['reply_draft'] ?? '');
         $po = array_values(array_map('intval', $po));
         $defectos = [];
+        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+
+        /*
+         * EL PRESUPUESTO DE LA LISTA (corrección (1) del turno 2 de la tercera
+         * prueba real): con la lista Y el tope firmados, las notas de la lista
+         * (falta, mezclada o repetida) y la de la longitud van en su variante
+         * con el esqueleto y lo que ocupan los marcadores ofrecidos ya
+         * expandidos. Sin una de las dos cosas, las notas de siempre.
+         */
+        $presupuesto = null;
+        if ($po !== [] && $tope !== null) {
+            $textos = [];
+            foreach (array_slice($po, 0, UltronPlansOverview::MAX_PLANS) as $i => $id) {
+                $textos[] = $listTexts[$id] ?? UltronPlansOverview::marker($i + 1);
+            }
+            $presupuesto = ['K' => count($textos)] + self::listBudget($textos, $tope);
+        }
 
         // (a) La lista de planes.
         $conHerramientas = (array) ($draft['tools_requested'] ?? []) !== [];
@@ -103,7 +124,9 @@ final class UltronDraftDefects
             // Fuera de la condición, lo demás de la lista no se mira (como en el commit); el marcador inexistente, sí.
             $detalle = UltronPlansOverview::UNKNOWN_MARKER;
         }
-        if ($detalle !== null) {
+        if ($detalle !== null && $presupuesto !== null && in_array($detalle, [UltronPlansOverview::MISSING, UltronPlansOverview::MIXED], true)) {
+            $defectos[] = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $detalle, $presupuesto, true);
+        } elseif ($detalle !== null) {
             $params = $detalle === UltronPlansOverview::UNKNOWN_MARKER ? ['K' => count($po)] : [];
             $defectos[] = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $detalle, $params);
         }
@@ -117,12 +140,12 @@ final class UltronDraftDefects
             }
         }
 
-        // (c) La longitud.
-        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+        // (c) La longitud; con la lista, con su presupuesto.
         if ($tope !== null && UltronReplyFitter::measure($expanded) > $tope) {
-            $defectos[] = self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, [
-                'L' => UltronReplyFitter::measure($expanded), 'N' => $tope, 'M' => UltronPromptCompiler::composerTargetChars($tope),
-            ]);
+            $params = ['L' => UltronReplyFitter::measure($expanded), 'N' => $tope, 'M' => UltronPromptCompiler::composerTargetChars($tope)];
+            $defectos[] = $presupuesto === null
+                ? self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params)
+                : self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params + ['X' => $presupuesto['X'], 'R' => $presupuesto['R']], true);
         }
 
         // (d) El beneficio de otro plan: el primero, con el marcador si la frase nombra el plan por él.
@@ -206,6 +229,38 @@ final class UltronDraftDefects
     }
 
     /**
+     * LA CIFRA DE LA LISTA QUE SE LE DICE AL MODELO: el ÚNICO sitio donde se
+     * calcula (corrección (1) del turno 2 de la tercera prueba real).
+     *
+     * `X` = lo que miden, ya expandidos y con la medida del tope
+     * ({@see UltronReplyFitter::measure()}), los marcadores ofrecidos, sumados;
+     * `M` = lo que se le pide al redactor con ese tope
+     * ({@see UltronPromptCompiler::composerTargetChars()}); `R` = lo que queda
+     * de `M` para todo lo demás, nunca negativo.
+     *
+     * LO QUE REVELA (para `security`): el modelo ya ve los nombres y las
+     * duraciones de la lista (`plans_overview.plans`), pero ningún precio. Con
+     * `X` exacto puede restar el formato conocido («Nombre ($… COP)») y saber
+     * cuánto miden JUNTAS las cifras de los precios: su orden de magnitud
+     * agregado (con el catálogo de la prueba, 65.000 + 80.000 + 180.000 →
+     * 5 + 5 + 6 cifras). No la cifra de ninguno ni la de cada plan. `R` sale
+     * de `X` y de `M`, que el modelo ya sabe, así que no revela más. Si
+     * `security` pide redondear (por ejemplo, a la decena de arriba), se
+     * cambia SOLO la línea de `$x` (y `R` se recalcula sola con la cifra
+     * redondeada, que es la que verá el modelo).
+     *
+     * @param  list<string>  $textos  el texto expandido de cada marcador ofrecido (o el marcador literal, si su plan ya no se vende)
+     * @return array{X:int,R:int,M:int}
+     */
+    public static function listBudget(array $textos, int $tope): array
+    {
+        $x = array_sum(array_map(UltronReplyFitter::measure(...), $textos));
+        $m = UltronPromptCompiler::composerTargetChars($tope);
+
+        return ['X' => $x, 'R' => max(0, $m - $x), 'M' => $m];
+    }
+
+    /**
      * Si la nota lanza (un parámetro que no es el de su entrada), el defecto va
      * igual, sin nota: n8n sabe por qué reescribir por el código y el `issue`,
      * y la puerta no responde 500 (C6). El código y el detalle son constantes
@@ -213,10 +268,12 @@ final class UltronDraftDefects
      *
      * @return array{code:string,detail:?string,issue:string,note:string}
      */
-    private static function defecto(string $code, ?string $detail, array $params): array
+    private static function defecto(string $code, ?string $detail, array $params, bool $conPresupuesto = false): array
     {
         try {
-            $nota = UltronRegenerationNotes::note($code, $detail, $params);
+            $nota = $conPresupuesto
+                ? UltronRegenerationNotes::budgetNote($code, $detail, $params)
+                : UltronRegenerationNotes::note($code, $detail, $params);
         } catch (InvalidArgumentException) {
             // A propósito: la nota es una ayuda; el defecto se dice sin ella (quien llama lo deja en el log).
             $nota = '';

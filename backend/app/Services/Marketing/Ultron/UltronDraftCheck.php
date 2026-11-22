@@ -155,7 +155,8 @@ final class UltronDraftCheck
         $modoMemoria = ($politica['memory_mode'] ?? false) === true;
         $conEnlaces = ! $modoMemoria && in_array(SalesIntents::TOOL_APP_LINKS_SEND, $tools, true);
 
-        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $politica);
+        $textosDeLaLista = $this->textosDeLaLista($poDelTurno);
+        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $textosDeLaLista, $politica);
         $defectos = array_slice([
             ...UltronDraftDefects::of(
                 ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
@@ -164,6 +165,7 @@ final class UltronDraftCheck
                 $poDelTurno,
                 $catalog,
                 $inbound,
+                $textosDeLaLista,
             ),
             ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
@@ -216,21 +218,16 @@ final class UltronDraftCheck
      *
      * @param  list<string>  $tools
      * @param  list<int>  $po
+     * @param  array<int,string>  $textosDeLaLista  {@see self::textosDeLaLista()}
      * @param  array<string,mixed>|null  $politica  la política del turno, si se pudo leer
      */
-    private function expandido(string $raw, mixed $planId, array $tools, array $po, ?array $politica = null): string
+    private function expandido(string $raw, mixed $planId, array $tools, array $po, array $textosDeLaLista, ?array $politica = null): string
     {
         $texto = $raw;
 
         if ($po !== []) {
-            $nombra = UltronPlansOverview::expand($texto, array_fill_keys($po, ''), $po)['used'];
-            $textos = [];
-            if ($nombra !== []) {
-                foreach (Plan::query()->sellable()->whereIn('id', $nombra)->get() as $plan) {
-                    $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
-                }
-            }
-            $texto = UltronPlansOverview::expand($texto, $textos, $po)['text'];
+            // Solo se sustituyen los marcadores que lleva el borrador: los demás textos de la lista no cambian nada.
+            $texto = UltronPlansOverview::expand($texto, $textosDeLaLista, $po)['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {
@@ -257,6 +254,30 @@ final class UltronDraftCheck
         }
 
         return $texto;
+    }
+
+    /**
+     * El texto de cada plan de la lista del turno que se vende AHORA
+     * («Nombre ($precio COP)», {@see UltronPlansOverview::item()}), en una
+     * sola consulta: el de un plan que ya no se vende falta (su marcador queda
+     * literal, eso lo decide el commit). Sirve para expandir el borrador y
+     * para el presupuesto de la lista de las notas
+     * ({@see UltronDraftDefects::listBudget()}): de TODOS los ofrecidos, los
+     * nombre o no el borrador. Vacío sin lista.
+     *
+     * @param  list<int>  $po
+     * @return array<int,string> plan_id → su texto
+     */
+    private function textosDeLaLista(array $po): array
+    {
+        $textos = [];
+        if ($po !== []) {
+            foreach (Plan::query()->sellable()->whereIn('id', $po)->get() as $plan) {
+                $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
+            }
+        }
+
+        return $textos;
     }
 
     /**
