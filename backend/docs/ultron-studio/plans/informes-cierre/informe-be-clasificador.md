@@ -1,6 +1,6 @@
 # Informe backend · el clasificador de respuestas (AI9)
 
-Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migración), `db237c18` (clasificador e integración con W9), `70950447` (transporte). Hay dos pasos que tienen que hacer otros: **la migración** (§5) y **el enlace del transporte** (§6). Sin ellos, el clasificador existe pero no llama a nadie.
+Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migración), `db237c18` (clasificador e integración con W9), `70950447` (transporte). Hay dos pasos que tienen que hacer otros: **la migración** (§5) y **el enlace del transporte** (§6). Sin ellos, el clasificador existe pero no llama a nadie. **Ronda 2 (§12):** el lead aceptó la migración y autorizó el enlace, la prueba de esquema, `.env.example` y la enmienda del contrato; todo hecho. En producción la migración sigue pendiente del rol dueño.
 
 ## 1. Diseño corto
 
@@ -94,13 +94,15 @@ Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migr
 - el libro de resultados no admite filas de fallo;
 - la caché se borra al desplegar.
 
-**Choca con una guarda de DB9.** `OutreachSchemaTest::test_down_sin_filas_y_up_dejan_el_mismo_esquema_y_no_tocan_el_gobierno` hace ida y vuelta de `100002`, que recrea el CHECK estrecho. Cae en PostgreSQL **solo** por esta migración: sin ella, verde, comprobado apartándola del árbol.
+**Choca con una guarda de DB9** (resuelto en la ronda 2, §12). `OutreachSchemaTest::test_down_sin_filas_y_up_dejan_el_mismo_esquema_y_no_tocan_el_gobierno` hace ida y vuelta de `100002`, que recrea el CHECK estrecho. Cae en PostgreSQL **solo** por esta migración: sin ella, verde, comprobado apartándola del árbol.
 - No toqué la prueba.
 - Tampoco se puede editar `100002`: el guion de despliegue (`deploy-h9-backend-cierre.sh:456`) prohíbe tocar una migración ya desplegada.
 - Cambio propuesto para el lead o DB9: tras `$m->up();`, volver a aplicar las migraciones posteriores que cambian esas tablas, como haría `migrate`: `(require database_path('migrations/2026_11_22_100001_allow_classifier_budget_scope.php'))->up();`.
 - Además, `MIG_OLA` y sus efectos (`pg_get_constraintdef` de `obud_scope_chk`) en el guion de despliegue (devops/ops9).
 
 ## 6. Lo que falta para encender (no es mío)
+
+El enlace y `.env.example` quedaron hechos en la ronda 2 (§12). Siguen pendientes la migración en producción, el mando y el modelo real.
 
 - **El enlace del transporte**, en `app/Providers/AppServiceProvider.php::register()`:
   ```php
@@ -158,3 +160,39 @@ Rama `cierre/motores` (sale de `0c57d7c4`). Commits: `678ad816` (contador y migr
 - La salida JSON de `outreach:whatsapp-outcomes` gana `classifier` (`calls`, `costMicros`, `<estado>.<motivo>`).
 - Ningún fixture compartido (`tests/fixtures/outreach/**`) cambia.
 - `ca-panel.ts:66` puede pasar de «no implementado» a leer `classifierSetup.effective`.
+
+## 12. Ronda 2 (22-11-2026): lo que autorizó el lead
+
+Un commit por punto: `cabbceb6`, `0b768a97`, `326d7e5b` y `8aa7f5f6`. El mando, los guiones de despliegue, `SOURCES_AVAILABLE` y la salida humana de la orden no se tocaron.
+
+1. **La prueba de esquema** (`tests/Feature/Outreach/Schema/OutreachSchemaTest.php`):
+   - `LATER_EXECUTION_MIGRATIONS` (`:273`) es una lista cerrada, una línea por migración con lo que toca. Hoy solo está la de AI9. Para `outreach_consents`, si llega a tocar las tablas de `100002`, sería una línea más.
+   - La ida y vuelta la vuelve a aplicar tras el `up()` de `100002`, en `:607`. La comparación del esquema no cambia.
+   - Prueba nueva `test_las_migraciones_posteriores_que_tocan_la_ejecucion_estan_en_su_lista` (`:629`), con el rastreo `TOUCHES_EXECUTION` (`:279`): ocho tablas, prefijos de guardas, funciones y `OutreachTables::*`. Cae si una migración posterior toca la ejecución sin estar en la lista, o si la lista nombra una que no la toca. Lo comprobé con una migración de prueba que nombra `outreach_jobs` y quitando la entrada: las dos caen.
+2. **El enlace del transporte y su guarda:**
+   - `app/Providers/AppServiceProvider.php:127`, con sus `use` en `:40-41`.
+   - Guarda nueva `tests/Feature/Outreach/Guards/ReplyClassifierStaticGuardsTest.php` (entra sola en el paquete por su nombre):
+     - `:56`: el espacio solo contiene el adaptador;
+     - `:65`: es el único implementador, solo lo nombra su línea de enlace, y el contenedor lo resuelve;
+     - `:86`: el H9 solo conoce el puerto;
+     - `:98`: una URL, un `Http::`, sin redirecciones ni `retry`, también en ejecución (un 302 a otro host, un 500, un 429 y un corte son una petición cada uno);
+     - `:129` y `:147`: sin clave propia o con la compartida no sale ninguna petición, tampoco por el clasificador entero.
+   - Seis mutaciones la ponen en rojo: sin `withoutRedirecting`, con `retry`, el H9 importa el adaptador, otra URL, otro implementador y la redirección comprobada solo en ejecución.
+   - `ReplyClassifierEndToEndTest` cambia donde suponía «sin transporte». Con el enlace real, la bandera sola da `not_configured`. Sin enlace (`unset`, `:100`) da `transport_unbound`. El estado dice `transport: true` (`:476`).
+3. **`.env.example:477-491`:** las ocho variables con una línea de comentario cada una y a 0 o vacías. Evaluadas así, `config/outreach.php` deja el clasificador inerte. Pasan `SecretExposureTest` y las cuatro pruebas que leen el fichero.
+4. **El contrato del H9:** «Enmienda AI9» al final (`ULTRON_STUDIO_H9_CONTRACT.md:1632`). La tabla de L9 no se tocó.
+
+**Pruebas de la ronda 2 (línea final)**
+
+SQLite
+- `tests/Feature/Outreach`: `Tests: 762, Assertions: 42859, Skipped: 167.` (todas de solo PostgreSQL).
+- `tests/Unit/Outreach`: `OK (1048 tests, 53495 assertions)`.
+- Paquete de guardas estáticas: `OK (147 tests, 183435 assertions)`.
+
+PostgreSQL 14
+- `tests/Feature/Outreach/AI9`: `OK (61 tests, 457 assertions)`.
+- `tests/Feature/Outreach/Schema`: `Tests: 320, Assertions: 2092, Skipped: 1.` En verde; la omitida ya lo estaba antes.
+- `OutreachIsolationTest`: `OK (5 tests, 2612 assertions)`, cero red con todo por defecto y con la configuración de producción.
+- `ReplyClassifierStaticGuardsTest`: `OK (6 tests, 253 assertions)`.
+
+**Fuera de alcance.** `AppServiceProvider.php` ya no pasaba Pint en `HEAD` (los mismos cuatro fixers): no lo reformateé. Mis dos `use` van en su orden.
