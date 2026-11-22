@@ -41,12 +41,29 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
  *      expandido.
  * Sin versión del Studio (`sp.m` ≠ `studio`), ninguno: Legacy no cambia.
  *
+ * Y DETRÁS, LAS REGLAS DE POLÍTICA CORREGIBLES (ola 4b, decisión L-3 del lead;
+ * {@see self::ofPolicy()}): las seis de {@see UltronRegenerationNotes::POLICY_CODES}
+ * que {@see CommercialTurnPolicy::violations()} marca con la política del
+ * turno calculada como en el commit, sobre el texto que miraría el commit.
+ *
  * PURA: sin base de datos, sin config, sin reloj y sin log; las notas no
  * llevan nada del entrante ni del borrador (solo marcas de la lista cerrada,
  * números y textos del catálogo).
  */
 final class UltronDraftDefects
 {
+    /**
+     * Como mucho estos defectos en una comprobación, uno por código (ola 4b:
+     * era 4, uno por cada código de §4.4). Los cuatro de §4.4 pueden coincidir;
+     * de la política, como mucho cuatro a la vez: el saludo que vende va solo
+     * con el modo recepción, que apaga `answer_first` (sin el dato y solo
+     * preguntas no pueden saltar) y excluye el modo memoria; sin el dato no
+     * salta en modo memoria (no lo exige); así que el máximo es la visita a
+     * medias, el plan equivocado y dos de {sin el dato, solo preguntas,
+     * memoria}. 4 + 4 = 8. El corte es defensivo: por construcción no actúa.
+     */
+    public const MAX_DEFECTS = 8;
+
     /**
      * @param  array{reply_draft:string,intent:string,tools_requested?:list<string>|null}  $draft  el borrador SIN expandir, con su intención y sus herramientas
      * @param  string  $expanded  el mismo con sus marcadores sustituidos (lo que mediría el commit)
@@ -109,6 +126,74 @@ final class UltronDraftDefects
                 'PLAN' => self::comoSeNombra($mal['plan_id'], $raw, $po, $catalog),
                 'BENEFICIO' => $mal['benefit'],
             ]);
+        }
+
+        return $defectos;
+    }
+
+    /**
+     * LAS REGLAS DE POLÍTICA QUE EL MODELO PUEDE CORREGIR (ola 4b; decisión
+     * L-3 del lead). Las seis de {@see UltronRegenerationNotes::POLICY_CODES}
+     * que {@see CommercialTurnPolicy::violations()} marca, en ese orden, cada
+     * una con su `issue` y su nota fija. El saludo repetido no entra: el commit
+     * lo arregla recortando la fórmula (y aquí, igual que allí, se recorta y se
+     * vuelve a mirar, para que lo demás se juzgue sobre el mismo texto).
+     *
+     * EL MISMO TEXTO QUE MIRA EL COMMIT. El commit llama a `violations()`
+     * después de dos recortes, y aquí se hacen los dos con las mismas
+     * funciones: (1) con tope firmado, si el texto se pasa y quitándole la
+     * pregunta final cabe (regla F1, {@see UltronReplyFitter::draft()}), se
+     * mira sin ella; (2) con «profesional», si el tuteo está SOLO en la
+     * pregunta final y el turno lleva un bloque que pega Laravel (los enlaces
+     * de la app; `$laravelBlock`), se mira sin ella. Si la longitud lo
+     * descartaría, no hay recorte por registro (como en el commit).
+     *
+     * @param  string  $expanded  el borrador expandido (lo que mediría el commit)
+     * @param  array<string,mixed>  $sp  el `sp` firmado en el token
+     * @param  array<string,mixed>  $policy  la política del turno ({@see CommercialTurnPolicy::decide()}, como en el commit)
+     * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
+     * @param  list<string>  $facts  los hechos del gimnasio ({@see CommercialTurnPolicy::knownFacts()}); vacío si la política no los exige
+     * @param  bool  $laravelBlock  el texto lleva los enlaces de la app que pega Laravel
+     * @return list<array{code:string,detail:null,issue:string,note:string}>
+     */
+    public static function ofPolicy(string $expanded, array $sp, array $policy, array $catalog, array $facts, bool $laravelBlock = false): array
+    {
+        if (($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO) {
+            return [];
+        }
+        // El tono como lo lee el commit (`turnoDelStudio()`): uno del catálogo del compilador, o ninguno.
+        $tono = is_string($sp['t'] ?? null) && in_array($sp['t'], UltronPromptCompiler::TONES, true) ? $sp['t'] : null;
+        $texto = $expanded;
+
+        // (1) La longitud: la regla F1 quita la pregunta final si así cabe.
+        $descartado = false;
+        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+        if ($tope !== null) {
+            $recorte = UltronReplyFitter::draft($texto, $tope);
+            $descartado = $recorte === null;
+            if ($recorte !== null && $recorte['dropped'] > 0) {
+                $texto = $recorte['text'];
+            }
+        }
+
+        // (2) El registro: con el bloque de Laravel, la pregunta final que tutea se quita si es lo único que tutea.
+        if ($laravelBlock && ! $descartado && UltronFormalReplies::aplica($tono) && UltronRegisterDetector::tuteo($texto, $catalog) !== []) {
+            $sinPregunta = UltronReplyFitter::withoutFinalQuestion($texto);
+            if ($sinPregunta !== null && UltronRegisterDetector::tuteo($sinPregunta, $catalog) === []) {
+                $texto = $sinPregunta;
+            }
+        }
+
+        $violaciones = CommercialTurnPolicy::violations($texto, $policy, $catalog, $facts, $tono);
+        if (in_array(CommercialTurnPolicy::VIOLACION_SALUDO_REPETIDO, $violaciones, true)) {
+            $violaciones = CommercialTurnPolicy::violations(CommercialTurnPolicy::withoutRepeatedGreeting($texto), $policy, $catalog, $facts, $tono);
+        }
+
+        $defectos = [];
+        foreach (UltronRegenerationNotes::POLICY_CODES as $codigo) {
+            if (in_array($codigo, $violaciones, true)) {
+                $defectos[] = self::defecto($codigo, null, []);
+            }
         }
 
         return $defectos;

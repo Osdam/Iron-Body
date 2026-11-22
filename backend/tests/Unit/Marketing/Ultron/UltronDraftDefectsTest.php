@@ -3,9 +3,12 @@
 namespace Tests\Unit\Marketing\Ultron;
 
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\Ultron\CommercialTurnPolicy as P;
 use App\Services\Marketing\Ultron\UltronDraftDefects as D;
 use App\Services\Marketing\Ultron\UltronPlansOverview as O;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes as N;
+use App\Services\Marketing\Ultron\UltronReplyFitter;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -18,6 +21,13 @@ use PHPUnit\Framework\TestCase;
  * `issue` y su nota. El orden es el de §4.1: (a) la lista de planes, (b) el
  * tuteo, (c) la longitud y (d) el beneficio de otro plan. Sin versión del
  * Studio, ninguno. Pura: aún no la llama nadie (la usará la ola 4).
+ *
+ * OLA 4b (decisión L-3 del lead): `ofPolicy()` da, DESPUÉS de esos cuatro, las
+ * seis reglas de política corregibles que `CommercialTurnPolicy::violations()`
+ * marca sobre el texto que miraría el commit (con el recorte de la pregunta
+ * final por el tope o por el registro con un bloque de Laravel, y el saludo
+ * repetido recortado como hace el commit), en el orden de
+ * `UltronRegenerationNotes::POLICY_CODES`. El saludo repetido no entra.
  */
 class UltronDraftDefectsTest extends TestCase
 {
@@ -190,6 +200,114 @@ class UltronDraftDefectsTest extends TestCase
         $d = self::defectos('El Élite incluye clases grupales.', po: [], entrante: '¿El Élite tiene clases?', intent: SalesIntents::GENERAL_INFO);
         $this->assertSame(['benefit_misattributed'], self::codigos($d));
         $this->assertSame(N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'Élite', 'BENEFICIO' => 'Clases grupales']), $d[0]['note'], 'nombrado a mano: el nombre del catálogo');
+    }
+
+    // ── Ola 4b · las reglas de política corregibles ─────────────────────────
+
+    /** La política mínima de un turno: lo que lee `violations()`. */
+    private static function politica(array $cambios = []): array
+    {
+        return array_replace([
+            'greet_required' => true, 'answer_first' => false, 'required_plan_id' => null, 'forbidden_plan_ids' => [],
+            'required_facts' => [], 'goal_takes_turn' => false, 'reception_mode' => false, 'memory_mode' => false,
+        ], $cambios);
+    }
+
+    private const HECHOS = ['Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m.'];
+
+    /** @return array<string, array{string, array<string,mixed>, list<string>}> */
+    public static function reglas(): array
+    {
+        $hecho = ['answer_first' => true, 'required_facts' => ['gym_identity']];
+
+        return [
+            'saludo que vende' => ['¡Hola! Bienvenido a Iron Body. El Plan Mensual es el más pedido.', ['reception_mode' => true], [P::VIOLACION_SALUDO_COMERCIAL]],
+            'saludo que recibe' => ['¡Hola! Bienvenido a Iron Body. ¿En qué le puedo ayudar?', ['reception_mode' => true], []],
+            'visita a medias que vende' => ['Perfecto. Mientras tanto, el Plan Mensual le sirve para empezar.', ['goal_takes_turn' => true], [P::VIOLACION_OBJETIVO_PERDIDO]],
+            'visita a medias que la retoma' => ['Perfecto. ¿A qué hora le queda bien venir?', ['goal_takes_turn' => true], []],
+            'otro plan primero' => ['El Plan Valera y el Plan Mensual son de un mes.', ['required_plan_id' => 4], [P::VIOLACION_PLAN_EQUIVOCADO]],
+            'el obligatorio primero' => ['El Plan Mensual y el Plan Valera son de un mes.', ['required_plan_id' => 4], []],
+            'un plan rechazado' => ['Con el Plan Valera puede venir cuando quiera.', ['forbidden_plan_ids' => [3]], [P::VIOLACION_PLAN_EQUIVOCADO]],
+            'sin el dato' => ['Con gusto le cuento: somos un gimnasio para entrenar a su ritmo. ¿Qué le gustaría saber?', $hecho, [P::VIOLACION_SIN_HECHO]],
+            'con el dato' => ['Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le gustaría venir?', $hecho, []],
+            'solo pregunta' => ['¿Para qué día le gustaría saber el horario?', ['answer_first' => true], [P::VIOLACION_SOLO_DESCUBRIMIENTO]],
+            'pregunta con respuesta' => ['Abrimos a las 5:00 a. m. ¿Le sirve?', ['answer_first' => true], []],
+            'memoria que vende' => ['No veo una visita registrada todavía. Si quiere, le cuento sobre los planes.', ['memory_mode' => true, 'answer_first' => true], [P::VIOLACION_MEMORIA_VENDE]],
+            'memoria que contesta' => ['No veo una visita registrada todavía. ¿Qué día le gustaría venir?', ['memory_mode' => true, 'answer_first' => true], []],
+        ];
+    }
+
+    /** @param list<string> $esperadas */
+    #[DataProvider('reglas')]
+    public function test_cada_regla_de_la_politica_con_su_issue_y_su_nota(string $texto, array $politica, array $esperadas): void
+    {
+        $d = D::ofPolicy($texto, self::SP, self::politica($politica), self::catalogo(), self::HECHOS);
+
+        $this->assertSame($esperadas, array_column($d, 'code'));
+        $this->assertSame($esperadas, array_values(array_intersect(P::violations($texto, self::politica($politica), self::catalogo(), self::HECHOS, 'profesional'), $esperadas)), 'lo mismo que violations()');
+        foreach ($d as $x) {
+            $this->assertNull($x['detail']);
+            $this->assertSame(N::issue($x['code']), $x['issue']);
+            $this->assertSame(N::note($x['code']), $x['note']);
+        }
+    }
+
+    public function test_la_politica_sin_version_del_studio_ninguna(): void
+    {
+        $vende = '¡Hola! Bienvenido. El Plan Mensual es el más pedido.';
+        $this->assertNotSame([], D::ofPolicy($vende, self::SP, self::politica(['reception_mode' => true]), self::catalogo(), []));
+        $this->assertSame([], D::ofPolicy($vende, ['m' => 'legacy', 'r' => 'prompts_off'], self::politica(['reception_mode' => true]), self::catalogo(), []));
+        $this->assertSame([], D::ofPolicy($vende, [], self::politica(['reception_mode' => true]), self::catalogo(), []));
+    }
+
+    /** En el orden de `POLICY_CODES`, no en el de `violations()` (que pone la memoria antes que la visita). */
+    public function test_el_orden_de_la_politica(): void
+    {
+        $politica = self::politica(['memory_mode' => true, 'answer_first' => true, 'goal_takes_turn' => true, 'forbidden_plan_ids' => [3]]);
+        $d = D::ofPolicy('¿Le cuento del Plan Valera?', self::SP, $politica, self::catalogo(), []);
+
+        $this->assertSame([P::VIOLACION_OBJETIVO_PERDIDO, P::VIOLACION_PLAN_EQUIVOCADO, P::VIOLACION_SOLO_DESCUBRIMIENTO, P::VIOLACION_MEMORIA_VENDE], array_column($d, 'code'));
+        $this->assertSame(array_column($d, 'code'), array_values(array_intersect(N::POLICY_CODES, array_column($d, 'code'))), 'un subconjunto, en el orden de POLICY_CODES');
+        $this->assertLessThanOrEqual(D::MAX_DEFECTS - 4, count($d), 'como mucho cuatro de política a la vez');
+    }
+
+    /**
+     * El saludo repetido no es un código (lo arregla el commit recortando), y
+     * las demás se miran sobre el texto recortado, como en el commit. Hoy el
+     * recorte no cambia ninguna de las seis (ninguna mira la fórmula del
+     * principio): quitarlo es una mutación equivalente (M1), y se hace igual
+     * para que la paridad no dependa de eso si mañana una regla la mira.
+     */
+    public function test_el_saludo_repetido_se_recorta_como_en_el_commit(): void
+    {
+        $politica = self::politica(['greet_required' => false, 'answer_first' => true]);
+        $texto = 'Buenas tardes. Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le sirve?';
+        $this->assertContains(P::VIOLACION_SALUDO_REPETIDO, P::violations($texto, $politica, self::catalogo(), [], 'profesional'));
+
+        $this->assertSame([], D::ofPolicy($texto, self::SP, $politica, self::catalogo(), []));
+        $this->assertSame([P::VIOLACION_SOLO_DESCUBRIMIENTO], array_column(D::ofPolicy('Buenas tardes. ¿Qué le gustaría saber?', self::SP, $politica, self::catalogo(), []), 'code'));
+    }
+
+    /**
+     * El commit mira la política DESPUÉS de quitar la pregunta final a un
+     * borrador que se pasa del tope (F1) o que tutea solo en ella con un bloque
+     * de Laravel: la comprobación mira ese mismo texto.
+     */
+    public function test_mira_el_texto_que_miraria_el_commit_tras_sus_recortes(): void
+    {
+        $recepcion = self::politica(['reception_mode' => true]);
+        $largo = 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle por aquí. Estamos para resolver cualquier duda que tenga sobre el gimnasio y para acompañarle desde el primer día, con calma. ¿Cuál es su objetivo?';
+        $this->assertGreaterThan(200, UltronReplyFitter::measure($largo));
+        $this->assertNotNull(UltronReplyFitter::draft($largo, 200), 'el commit lo recorta (F1)');
+
+        $this->assertSame([], D::ofPolicy($largo, self::SP, $recepcion, self::catalogo(), []), 'con tope 200: la pregunta del objetivo no llega a la política');
+        $this->assertSame([P::VIOLACION_SALUDO_COMERCIAL], array_column(D::ofPolicy($largo, ['n' => 480] + self::SP, $recepcion, self::catalogo(), []), 'code'), 'con 480 cabe entero y vende');
+
+        // El registro: el tuteo SOLO en la pregunta final y un bloque de Laravel (los enlaces de la app) → el commit la quita.
+        $corto = 'Hola, bienvenido a Iron Body, qué gusto atenderle. ¿Cuál es tu objetivo?';
+        $this->assertSame([], D::ofPolicy($corto, self::SP, $recepcion, self::catalogo(), [], true), 'con el bloque: recortada');
+        $this->assertSame([P::VIOLACION_SALUDO_COMERCIAL], array_column(D::ofPolicy($corto, self::SP, $recepcion, self::catalogo(), [], false), 'code'), 'sin bloque: el commit la descarta entera y la política la ve');
+        $this->assertSame([P::VIOLACION_SALUDO_COMERCIAL], array_column(D::ofPolicy($corto, ['t' => 'cercano'] + self::SP, $recepcion, self::catalogo(), [], true), 'code'), 'sin «profesional» no hay recorte por registro');
     }
 
     public function test_el_entrante_con_datos_personales_no_sale_en_las_notas(): void

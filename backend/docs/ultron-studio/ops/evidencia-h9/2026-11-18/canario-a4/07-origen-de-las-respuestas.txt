@@ -32,3 +32,10 @@ LECTURA DEL LEAD
 - 3 (3 %) fueron texto del servidor por la política del commit (2 saludos que vendían, 1 visita a medias perdida).
 - El revisor: 59 aprobadas al primer intento, 11 tras la reescritura, 12 rechazadas dos veces (la reescritura rescató 11 de 23).
 - Son conversaciones de prueba del propietario, no de clientes; ninguna con el compilador 4.
+
+CORRECCIÓN DEL 21-11-2026 (lead; leído otra vez en producción, solo conteos)
+- De las 71 respuestas que esta consulta cuenta como «del modelo», 4 son la hora de la visita: un texto que escribe el servidor desde la fila del CRM (no tienen revisor ni `fallback_mode`, y por eso la consulta las ponía del lado del modelo).
+- Lo que de verdad escribió el modelo fueron 67 de 88 (76,1 %), no el 81 % que se le dijo al propietario el 19-11.
+- El reparto honesto: modelo 67 (76,1 %) · hora de la visita, texto del servidor, 4 (4,5 %) · respaldo tras dos rechazos del revisor o con el revisor caído 14 (15,9 %) · texto del servidor por la política 3 (3,4 %).
+- El informe `ultron:origin-report` usa ya esta regla para el objetivo del 90 %.
+

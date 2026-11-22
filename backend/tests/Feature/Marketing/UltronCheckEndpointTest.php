@@ -9,6 +9,8 @@ use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\Ultron\ConversationMemoryService;
+use App\Services\Marketing\Ultron\UltronDraftDefects;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,7 +54,11 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *  - el presupuesto: `attempt` 3 → `last_attempt`; 26 s desde `decide` →
  *    `time_budget` (con `Carbon::setTestNow` EN UTC, la trampa conocida);
  *  - sin versión del Studio, `legacy` y sin leer nada;
- *  - `decide` ofrece el bloque `regeneration` solo con versión del Studio.
+ *  - `decide` ofrece el bloque `regeneration` solo con versión del Studio;
+ *  - ola 4b: las seis reglas de política corregibles, cada una con su nota
+ *    LITERAL (encargo de la ola 4b), DETRÁS de los cuatro de §4.4 y con el
+ *    tope de `UltronDraftDefects::MAX_DEFECTS`; la política se LEE (con la
+ *    memoria: ni una escritura) y su lector no nombra nada que escriba.
  *
  * El escenario es el de `UltronA4ListaDelModeloTest`: la versión publicada en
  * la canaria («profesional», 200), los 13 planes vendibles de producción y la
@@ -638,6 +644,128 @@ class UltronCheckEndpointTest extends TestCase
         $this->assertStringContainsString('->peek(', $codigo, 'usa peek(), no verify()');
     }
 
+    // ── Ola 4b · las reglas de política corregibles ─────────────────────────
+
+    /** Las seis notas, LITERALES (copiadas a mano del encargo de la ola 4b). */
+    private const POLITICA = [
+        'policy_greeting_sells' => 'SALUDO QUE VENDE: la persona solo saludo. Saluda, da la bienvenida y pregunta en que le puede ayudar. No nombres planes, precios ni pagos y no preguntes todavia su objetivo.',
+        'policy_active_goal_lost' => 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.',
+        'policy_wrong_first_plan' => 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.',
+        'policy_answer_without_fact' => 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.',
+        'policy_general_info_only_discovery' => 'SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.',
+        'policy_memory_turn_sells' => 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.',
+    ];
+
+    /** @return array<string, array{string, string, string, ?int, string, string, string}> entrante, intención, borrador, plan, memoria, código, issue */
+    public static function reglasDeLaPolitica(): array
+    {
+        return [
+            'saludo que vende' => ['Hola buenas tardes', SalesIntents::GREETING, 'Hola, buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. ¿Ya ha entrenado antes?', null, '', 'policy_greeting_sells', 'customer_fit'],
+            'visita a medias que vende' => ['en la mañana', SalesIntents::UNKNOWN, 'Perfecto. Mientras tanto, el Plan Mensual le sirve para empezar.', 4, 'visita', 'policy_active_goal_lost', 'phase_alignment'],
+            'primer plan equivocado' => ['¿Cuánto cuesta el Plan Mensual?', SalesIntents::PRICING_QUESTION, 'El Plan Valera cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?', 3, '', 'policy_wrong_first_plan', 'phase_alignment'],
+            'información sin el dato' => ['Quiero información del gimnasio', SalesIntents::GENERAL_INFO, 'Con gusto le cuento: somos un gimnasio para entrenar a su ritmo. ¿Qué le gustaría saber primero?', null, '', 'policy_answer_without_fact', 'relevance'],
+            'solo preguntas' => [self::HORARIO, SalesIntents::SCHEDULE_QUESTION, '¿Para qué día de la semana le gustaría saber el horario?', null, '', 'policy_general_info_only_discovery', 'relevance'],
+            'memoria que vende' => ['¿A qué hora era mi visita?', SalesIntents::UNKNOWN, 'No veo una visita registrada todavía. Si quiere, le cuento sobre los planes.', null, '', 'policy_memory_turn_sells', 'customer_fit'],
+        ];
+    }
+
+    #[DataProvider('reglasDeLaPolitica')]
+    public function test_cada_regla_de_la_politica_con_su_nota_literal(string $entrante, string $intent, string $borrador, ?int $plan, string $memoria, string $codigo, string $issue): void
+    {
+        $this->memoria($memoria);
+        [$m, $token] = $this->turno($entrante);
+
+        $r = $this->check($m, $token, $borrador, intent: $intent, plan: $plan)->assertOk();
+
+        $this->assertSame([['code' => $codigo, 'detail' => null, 'issue' => $issue]], $r->json('defects'));
+        $this->assertSame([$issue], $r->json('issues'));
+        $this->assertSame(self::POLITICA[$codigo], $r->json('notes'));
+        $this->assertSame([false, true, true], [$r->json('pass'), $r->json('may_rewrite'), $r->json('rewrite')]);
+    }
+
+    /** Primero los de §4.4 (lista, registro, longitud, beneficio) y después los de política; las notas, en ese orden. */
+    public function test_primero_los_cuatro_y_despues_la_politica(): void
+    {
+        [$m, $token] = $this->turno('Hola buenas tardes');
+
+        $r = $this->check($m, $token, 'Hola, buenas tardes. Bienvenido a Iron Body. ¿Ya has entrenado antes?', intent: SalesIntents::GREETING)->assertOk();
+
+        $this->assertSame([
+            ['code' => 'register_tuteo', 'detail' => null, 'issue' => 'naturalness'],
+            ['code' => 'policy_greeting_sells', 'detail' => null, 'issue' => 'customer_fit'],
+        ], $r->json('defects'));
+        $this->assertSame(['naturalness', 'customer_fit'], $r->json('issues'));
+        $this->assertSame(str_replace('(te)', '(has)', self::N_R_TE).' '.self::POLITICA['policy_greeting_sells'], $r->json('notes'));
+        $this->assertSame(8, UltronDraftDefects::MAX_DEFECTS, 'cuatro de §4.4 y como mucho cuatro de política a la vez');
+        $this->assertLessThanOrEqual(UltronDraftDefects::MAX_DEFECTS, count($r->json('defects')));
+    }
+
+    /** Sin versión del Studio, la política tampoco se mira: Legacy no cambia y no se lee nada. */
+    public function test_sin_version_del_studio_la_politica_tampoco(): void
+    {
+        [$m, $token] = $this->turno('Hola buenas tardes', negocia: false);
+        $sql = $this->escuchaLasConsultas();
+
+        $r = $this->check($m, $token, 'Hola, buenas tardes. Bienvenido a Iron Body. ¿Ya has entrenado antes?', intent: SalesIntents::GREETING)->assertOk();
+
+        $this->assertSame(['legacy', true, []], [$r->json('mode'), $r->json('pass'), $r->json('defects')]);
+        $this->assertSame([], $sql(), 'ni la memoria ni nada');
+    }
+
+    /** Leer la política (la memoria, el resolutor, los hechos del gimnasio) es solo `select`: ni una fila, ni la memoria, ni un cerrojo. */
+    public function test_la_politica_solo_lee(): void
+    {
+        $this->memoria('visita');
+        $this->memoria('rechazado');
+        [$m, $token] = $this->turno('Quiero información del gimnasio');
+        $antes = $this->filasDeMarketing();
+        $conversacion = $this->conversation->fresh()->toArray();
+
+        Cache::partialMock()->shouldReceive('lock')->never();
+        Queue::fake();
+        Bus::fake();
+        $sql = $this->escuchaLasConsultas();
+
+        $r = $this->check($m, $token, '¿Qué le gustaría saber del Plan Valera?', intent: SalesIntents::GENERAL_INFO)->assertOk();
+
+        $this->assertSame(['policy_answer_without_fact', 'policy_general_info_only_discovery'], array_slice(array_column($r->json('defects'), 'code'), -2), 'leyó la política (y los hechos del gimnasio)');
+        $consultas = $sql();
+        $this->assertNotSame([], $consultas);
+        foreach ($consultas as $q) {
+            $this->assertMatchesRegularExpression('/^\s*select\b/i', $q);
+        }
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        Bus::assertNothingDispatched();
+        $this->assertSame($antes, $this->filasDeMarketing(), 'cero filas nuevas');
+        $this->assertSame($conversacion, $this->conversation->fresh()->toArray(), 'ni la memoria ni nada de la conversación');
+    }
+
+    /**
+     * El lector de la política sí nombra el servicio de la memoria (para LEERLA
+     * igual que el commit), así que la guarda estática de la comprobación no
+     * le alcanza: la suya, más estricta. Del servicio solo llama a `load()` y a
+     * `sellablePlansForMemory()`, que no escriben.
+     */
+    public function test_el_lector_de_la_politica_no_nombra_nada_que_escriba(): void
+    {
+        $codigo = '';
+        foreach (token_get_all((string) file_get_contents(base_path('app/Services/Marketing/Ultron/UltronTurnPolicyReader.php'))) as $t) {
+            if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $codigo .= is_array($t) ? $t[1] : $t;
+        }
+        foreach (['Cache', 'lock(', 'Http', 'dispatch', 'Bus::', 'Queue::', 'DB::', '->save(', '->update(', '->create(', '->delete(', 'forceFill(', 'increment(',
+            'insert(', 'upsert(', 'lockForUpdate', 'sharedLock', 'Dispatcher', 'UltronPublishedConfig', 'UltronCommitService', '->verify(', 'record', 'forget', 'remember'] as $prohibido) {
+            $this->assertStringNotContainsString($prohibido, $codigo, "UltronTurnPolicyReader nombra {$prohibido}");
+        }
+        preg_match_all('/->memoryService->(\w+)\(/', $codigo, $m);
+        $this->assertNotSame([], $m[1]);
+        $this->assertSame([], array_values(array_diff($m[1], ['load', 'sellablePlansForMemory'])), 'del servicio de la memoria, solo lecturas');
+        $this->assertStringContainsString('CommercialTurnPolicy::decide(', $codigo, 'la MISMA función que el commit');
+    }
+
     // ── Andamio ──────────────────────────────────────────────────────────────
 
     /** Un turno con su `decide` negociado: el mensaje y el token. @return array{MarketingMessage,string} */
@@ -662,6 +790,17 @@ class UltronCheckEndpointTest extends TestCase
                 'tools_requested' => $tools,
             ],
         ];
+    }
+
+    /** La memoria del turno, escrita ANTES de `decide` (es el andamio, no la puerta). */
+    private function memoria(string $estado): void
+    {
+        $servicio = app(ConversationMemoryService::class);
+        match ($estado) {
+            '' => null,
+            'visita' => $servicio->recordCourtesyCollecting($this->conversation->fresh(), ['date' => '2026-11-21']),
+            'rechazado' => $servicio->recordPlanRejected($this->conversation->fresh(), 3),
+        };
     }
 
     private function check(MarketingMessage $m, string $token, string $borrador, int $attempt = 1, string $intent = SalesIntents::PRICING_QUESTION, ?int $plan = null, array $tools = []): TestResponse

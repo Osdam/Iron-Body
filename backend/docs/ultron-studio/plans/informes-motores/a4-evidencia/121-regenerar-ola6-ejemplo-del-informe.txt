@@ -1,0 +1,107 @@
+Ejemplo real de php artisan ultron:origin-report --precio-entrada=2.5 --precio-salida=10, sobre datos de PRUEBA (una canaria inventada con S2: diez turnos con traza y un bloqueo; SQLite en memoria; 21-11-2026). Ningún dato de producción.
+
+== texto ==
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde el principio · hasta ahora · conversaciones: todas
+  Respuestas enviadas: 10 (con traza de regeneración: 10)
+  Escrito por la IA: 8 de 10 (80,0 %) · objetivo 90 %: NO
+    al primer intento: 4 (40,0 %) · regeneradas: 4 (40,0 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 1
+    La hora de la visita (texto del servidor que la línea base cuenta como del modelo): 0 · sin ella: 80,0 %
+  Reescrituras: 7 (servidor: 4, revisor: 3)
+    por código: register_tuteo: 2, length_over_cap: 1, policy_greeting_sells: 1
+  Respaldos: 2 de 10 (20,0 %)
+    el revisor rechazó todos los intentos: 1
+    la política del commit: 1 (memory_turn_wrong_commitment: 1)
+  Latencia del entrante al saliente: p50 10 s · p95 27 s · máx 27 s (n = 10)
+  Llamadas al modelo por turno: media 4,1 · máx 7 (n = 10) · comprobaciones del servidor por turno: media 1,4 · máx 2 (n = 10)
+  Tokens: entrada 325900 · salida 6610 (n = 10) · costo estimado: 0,8809 (con los precios dados, por millón de tokens)
+  Reintentos del job: 1 de 10 turnos con evento (máx. intentos 2)
+  Fuera del reparto: no_reply/executed: 1
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 10.
+
+== --json ==
+{
+    "window": {
+        "since": null,
+        "until": null,
+        "conversations": null
+    },
+    "total": 10,
+    "traced": 10,
+    "ai": {
+        "count": 8,
+        "pct": 80.0,
+        "target_pct": 90,
+        "meets_target": false,
+        "first_attempt": {
+            "count": 4,
+            "pct": 40.0
+        },
+        "regenerated": {
+            "count": 4,
+            "pct": 40.0
+        },
+        "unknown_attempt": {
+            "count": 0,
+            "pct": 0.0
+        },
+        "trimmed": 1,
+        "visit_hour": 0,
+        "pct_without_visit_hour": 80.0
+    },
+    "rewrites": {
+        "count": 7,
+        "by": {
+            "server": 4,
+            "critic": 3
+        },
+        "codes": {
+            "register_tuteo": 2,
+            "length_over_cap": 1,
+            "policy_greeting_sells": 1
+        }
+    },
+    "fallbacks": {
+        "count": 2,
+        "pct": 20.0,
+        "by_reason": {
+            "critic_rejected": 1,
+            "policy": 1
+        },
+        "policy_codes": {
+            "memory_turn_wrong_commitment": 1
+        },
+        "recovery_reasons": []
+    },
+    "latency_s": {
+        "samples": 10,
+        "p50": 10,
+        "p95": 27,
+        "max": 27
+    },
+    "model_calls": {
+        "samples": 10,
+        "mean": 4.1,
+        "max": 7
+    },
+    "server_checks": {
+        "samples": 10,
+        "mean": 1.4,
+        "max": 2
+    },
+    "tokens": {
+        "samples": 10,
+        "input": 325900,
+        "output": 6610,
+        "cost": 0.8809
+    },
+    "job": {
+        "events": 10,
+        "retried": 1,
+        "max_attempts": 2
+    },
+    "outside": {
+        "no_reply/executed": 1
+    }
+}

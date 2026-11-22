@@ -9,12 +9,15 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
+use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\OutboundContentGuard;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\CommercialTurnPolicy;
+use App\Services\Marketing\Ultron\ConversationMemoryService;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
+use App\Services\Marketing\Ultron\UltronTurnPolicyReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -81,6 +84,32 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *      membresía inventados, guard de contenido, presión, transición ilegal,
  *      efecto sin autoridad) no llega a medirse: el 422 no es por estas
  *      causas. Lo fija `UltronCheckEndpointTest::test_no_es_un_oraculo_de_las_guardas`.
+ *      Igual con la política (ola 4b): un `PLAN_k` desconocido o una cifra son
+ *      un 422 antes de `violations()`; la comprobación puede decir además una
+ *      regla de política (pide la reescritura de todos modos). Y la respuesta
+ *      repetida o la reventa sustituyen el texto antes de mirar la política.
+ *
+ * OLA 4b · LAS REGLAS DE POLÍTICA CORREGIBLES (decisión L-3 del lead). La
+ * comprobación calcula la política del turno IGUAL que el commit
+ * (`UltronTurnPolicyReader`: la intención del borrador con el saludo puro como
+ * saludo, la memoria LEÍDA, el resolutor, el catálogo y el entrante) y marca
+ * cada una de las seis (`policy_greeting_sells`, `policy_active_goal_lost`,
+ * `policy_wrong_first_plan`, `policy_answer_without_fact`,
+ * `policy_general_info_only_discovery`, `policy_memory_turn_sells`) SI Y SOLO
+ * SI el commit la pone en `policy_violations`. Para que sea el mismo texto, la
+ * comprobación hace lo que hace el commit ANTES de `violations()`: el plan que
+ * impone la política pone `{{PLAN_NAME}}`/`{{PLAN_PRICE}}` (antes, E5), el modo
+ * memoria quita los enlaces de la app, el tope quita la pregunta final (F1) y
+ * el registro la quita con el bloque de Laravel, y el saludo repetido se
+ * recorta. Además, en cada fila que la política sustituyó, la política que leyó
+ * la comprobación es LA MISMA que guardó el commit (`metadata.policy`). Quedan:
+ *  E5'. La realineación del precio (`price_sentence`) sigue siendo E5.
+ *  E8.  Los textos que el commit reescribe tras ejecutar herramientas (las
+ *       actas de la cortesía, E2): pueden quitar una frase que nombraba un
+ *       plan. Sin prueba propia; no hay herramientas en estos turnos.
+ *  E9.  La memoria se lee unos segundos antes que en el commit: un objetivo
+ *       que caduca justo entre los dos (horas de antigüedad) lo verían
+ *       distinto. Sin prueba propia.
  */
 class UltronCheckCommitParityTest extends TestCase
 {
@@ -119,7 +148,7 @@ class UltronCheckCommitParityTest extends TestCase
 
     private const HORARIO_LARGO = 'El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados, domingos y festivos de 8:00 a. m. a 2:00 p. m. Es el horario de apertura del gimnasio, no el de las clases, así que puede entrenar cuando más le convenga. ¿Le gustaría venir esta semana?';
 
-    /** Las causas en un orden fijo, el de los códigos. */
+    /** Las causas en un orden fijo, el de los códigos (con las seis de la política detrás, ola 4b). */
     private const ORDEN = UltronRegenerationNotes::CODES;
 
     private MarketingConversation $conversation;
@@ -235,6 +264,123 @@ class UltronCheckCommitParityTest extends TestCase
         $this->assertSame($marca, $causas, 'el commit, por la misma causa');
     }
 
+    // ── Ola 4b · las seis reglas de política corregibles ────────────────────
+
+    private const SALUDO_LARGO = 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle por aquí. Estamos para resolver cualquier duda que tenga sobre el gimnasio y para acompañarle desde el primer día, con calma. ¿Cuál es su objetivo?';
+
+    /**
+     * entrante, intención, borrador, plan propuesto, memoria, causas esperadas.
+     *
+     * @return array<string, array{string, string, string, ?int, string, list<string>}>
+     */
+    public static function matrizDeLaPolitica(): array
+    {
+        $saludo = SalesIntents::GREETING;
+        $precio = SalesIntents::PRICING_QUESTION;
+        $info = SalesIntents::GENERAL_INFO;
+        $horario = SalesIntents::SCHEDULE_QUESTION;
+        $otra = SalesIntents::UNKNOWN;
+        $mensual = '¿Cuánto cuesta el Plan Mensual?';
+        $infoGym = 'Quiero información del gimnasio';
+        $visita = '¿A qué hora era mi visita?';
+
+        return [
+            // 1. El saludo que vende (modo recepción).
+            'saludo que pregunta si ha entrenado' => ['Hola buenas tardes', $saludo, 'Hola, buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. ¿Ya ha entrenado antes?', null, '', ['policy_greeting_sells']],
+            'saludo puro con la intención de precio (el commit lo vuelve saludo)' => ['Hola', $precio, 'Hola, bienvenido a Iron Body. El Plan Mensual es el más pedido. ¿En qué le puedo ayudar?', null, '', ['policy_greeting_sells']],
+            'saludo que recibe' => ['Hola buenas tardes', $saludo, 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?', null, '', []],
+            'saludo largo con el objetivo al final (el tope quita la pregunta)' => ['Hola', $saludo, self::SALUDO_LARGO, null, '', ['length_over_cap']],
+            // 2. La visita a medias.
+            'visita a medias que vende' => ['en la mañana', $otra, 'Perfecto. Mientras tanto, el Plan Mensual le sirve para empezar.', 4, 'visita', ['policy_active_goal_lost']],
+            'visita a medias que la retoma' => ['en la mañana', $otra, 'Perfecto, en la mañana. ¿A qué hora le queda mejor venir?', null, 'visita', []],
+            // 3. El primer plan equivocado (el que nombró la persona, o uno que ya rechazó).
+            'el plan que nombró la persona no va primero' => [$mensual, $precio, 'El Plan Valera cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?', 3, '', ['policy_wrong_first_plan']],
+            'el marcador del nombre con el plan que impone la política' => [$mensual, $precio, 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?', 3, '', []],
+            'el que nombró va primero' => [$mensual, $precio, 'El Plan Mensual cuesta {{PLAN_PRICE}} al mes. ¿Le cuento qué incluye?', 4, '', []],
+            'nombra un plan que rechazó' => [self::HORARIO, $horario, 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. Con el Plan Valera puede venir cuando quiera. ¿Le sirve?', null, 'rechazado', ['policy_wrong_first_plan']],
+            'nombra otro plan' => [self::HORARIO, $horario, 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. Con el Plan Mensual puede venir cuando quiera. ¿Le sirve?', null, 'rechazado', []],
+            // 4 y 5. La información: sin el dato, y solo preguntas.
+            'información sin el dato' => [$infoGym, $info, 'Con gusto le cuento: somos un gimnasio para entrenar a su ritmo. ¿Qué le gustaría saber primero?', null, '', ['policy_answer_without_fact']],
+            'información con el dato' => [$infoGym, $info, 'Con gusto. Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. y los sábados de 8:00 a. m. a 2:00 p. m. ¿Qué le gustaría saber?', null, '', []],
+            'información que solo pregunta' => [$infoGym, $info, '¿Qué le gustaría saber del gimnasio?', null, '', ['policy_answer_without_fact', 'policy_general_info_only_discovery']],
+            'el horario que solo pregunta' => [self::HORARIO, $horario, '¿Para qué día de la semana le gustaría saber el horario?', null, '', ['policy_general_info_only_discovery']],
+            // 6. La pregunta de memoria.
+            'memoria que vende' => [$visita, $otra, 'No veo una visita registrada todavía. Si quiere, le cuento sobre los planes.', null, '', ['policy_memory_turn_sells']],
+            'memoria que contesta' => [$visita, $otra, 'No veo una visita registrada todavía. ¿Qué día le gustaría venir?', null, '', []],
+        ];
+    }
+
+    /** @param list<string> $esperadas */
+    #[DataProvider('matrizDeLaPolitica')]
+    public function test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations(
+        string $entrante, string $intent, string $borrador, ?int $plan, string $memoria, array $esperadas,
+    ): void {
+        [$m, $token] = $this->turno($entrante, $memoria);
+        $leida = app(UltronTurnPolicyReader::class)->read($this->conversation->fresh(), $entrante, $intent, app(MarketingKnowledgeBaseService::class)->activePlans())['policy'];
+
+        $marca = $this->loQueMarcaLaComprobacion($m, $token, $borrador, $intent, $plan, []);
+        $commit = $this->commit($m, $token, $borrador, $intent, $plan, []);
+        $causas = $this->causasDelCommit($commit, false);
+
+        $this->assertSame($esperadas, $marca, 'la comprobación');
+        $this->assertSame($marca, $causas, 'el commit, por la misma causa');
+
+        $fila = $this->ultimaAccion()->metadata;
+        if (array_intersect(UltronRegenerationNotes::POLICY_CODES, $esperadas) !== []) {
+            $this->assertArrayHasKey('policy', $fila, 'la política sustituyó el borrador');
+            $this->assertSame(self::ordenada($fila['policy']), self::ordenada($leida), 'la misma política que el commit');
+        }
+    }
+
+    /** Lo mismo, con las claves de los objetos ordenadas (`jsonb` las reordena en PostgreSQL); las listas, en su orden. */
+    private static function ordenada(mixed $valor): mixed
+    {
+        if (! is_array($valor)) {
+            return $valor;
+        }
+        $valor = array_map(self::ordenada(...), $valor);
+        if (! array_is_list($valor)) {
+            ksort($valor);
+        }
+
+        return $valor;
+    }
+
+    /**
+     * En modo memoria el commit retira los enlaces de la app (la herramienta y
+     * el marcador) antes de medir: la comprobación tampoco los cuenta. Con
+     * ellos (unos 30 caracteres de «Android: · iPhone: · Web:»), este borrador
+     * de 196 pasaría de 200 y pediría una reescritura que el commit no pide.
+     */
+    public function test_en_modo_memoria_los_enlaces_de_la_app_no_cuentan(): void
+    {
+        $borrador = 'No veo una visita registrada todavía a su nombre. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados de 8:00 a. m. a 2:00 p. m. ¿Qué día le gustaría venir a conocernos?';
+        $this->assertSame(196, UltronReplyFitter::measure($borrador));
+
+        foreach ([[['app_links_send'], $borrador], [[], $borrador.' {{APP_LINKS}}']] as [$herramientas, $texto]) {
+            [$m, $token] = $this->turno('¿A qué hora era mi visita?');
+            $this->assertTrue(app(UltronTurnPolicyReader::class)->read($this->conversation->fresh(), '¿A qué hora era mi visita?', SalesIntents::UNKNOWN, app(MarketingKnowledgeBaseService::class)->activePlans())['policy']['memory_mode'], 'es un turno de memoria');
+
+            $marca = $this->loQueMarcaLaComprobacion($m, $token, $texto, SalesIntents::UNKNOWN, null, $herramientas);
+            $commit = $this->commit($m, $token, $texto, SalesIntents::UNKNOWN, null, $herramientas);
+
+            $this->assertSame([], $marca, 'la comprobación');
+            $this->assertSame($marca, $this->causasDelCommit($commit, false), 'el commit');
+            $this->assertLessThanOrEqual(200, $this->ultimaAccion()->metadata['length']['from'], 'el commit midió sin los enlaces');
+        }
+    }
+
+    /** La política se LEE: ni la comprobación ni el lector tocan la memoria (lo demás de solo lectura, en `UltronCheckEndpointTest`). */
+    public function test_leer_la_politica_no_cambia_la_memoria(): void
+    {
+        [$m, $token] = $this->turno('en la mañana', 'visita');
+        $antes = $this->conversation->fresh()->memory;
+
+        $this->assertSame(['policy_active_goal_lost'], $this->loQueMarcaLaComprobacion($m, $token, 'Perfecto. Mientras tanto, el Plan Mensual le sirve para empezar.', SalesIntents::UNKNOWN, 4, []));
+        $this->assertSame($antes, $this->conversation->fresh()->memory);
+        $this->assertSame(0, MarketingAiAction::query()->where('conversation_id', $this->conversation->id)->count());
+    }
+
     // ── Las excepciones que se ejercitan (E1 a E3) ──────────────────────────
 
     /** E1. El plan deja de venderse entre los dos: la comprobación no lo ve; el commit da la lista fija. */
@@ -249,8 +395,13 @@ class UltronCheckCommitParityTest extends TestCase
 
         $this->assertSame(['plans_overview'], $this->causasDelCommit($commit, true), 'la divergencia declarada');
         $this->assertSame('not_sellable', $this->ultimaAccion()->metadata['plans_overview']['detail']);
-        // Si se volviera a comprobar ahora, tampoco: no lo arregla una reescritura (no es un código corregible).
-        $this->assertSame([], $this->loQueMarcaLaComprobacion($m, $token, self::TRES, SalesIntents::PRICING_QUESTION, null, []));
+        // Si se volviera a comprobar ahora, la lista tampoco: no lo arregla una reescritura (no es un código corregible).
+        // Ola 4b: ahora la política se lee de la memoria que este commit ACABA de escribir (saludó y ofreció la lista
+        // fija, cuya PROMO X4 el resolutor da por referida en «la mensualidad»): el turno de después ya obliga ese plan,
+        // y el borrador, que nombra antes el Valera, incumple ESA política. En la vida real la comprobación va antes.
+        $despues = app(UltronTurnPolicyReader::class)->read($this->conversation->fresh(), self::PANORAMA, SalesIntents::PRICING_QUESTION, app(MarketingKnowledgeBaseService::class)->activePlans())['policy'];
+        $this->assertSame([14, 'resolved_reference'], [$despues['required_plan_id'], $despues['required_plan_source']]);
+        $this->assertSame(['policy_wrong_first_plan'], $this->loQueMarcaLaComprobacion($m, $token, self::TRES, SalesIntents::PRICING_QUESTION, null, []));
     }
 
     /** E2. El commit retira la frase de una clase que no existe antes de medir: con ella, se pasaba; sin ella, cabe. */
@@ -338,6 +489,12 @@ class UltronCheckCommitParityTest extends TestCase
         if (in_array(UltronCommitService::VIOLACION_BENEFICIO, $violaciones, true)) {
             $causas[] = UltronRegenerationNotes::BENEFIT_MISATTRIBUTED;
         }
+        // Ola 4b: las seis de la política, con su mismo nombre.
+        foreach (UltronRegenerationNotes::POLICY_CODES as $codigo) {
+            if (in_array($codigo, $violaciones, true)) {
+                $causas[] = $codigo;
+            }
+        }
 
         return self::enOrden($causas);
     }
@@ -349,9 +506,17 @@ class UltronCheckCommitParityTest extends TestCase
     }
 
     /** @return array{MarketingMessage,string,bool} el mensaje, el token y si `decide` firmó la lista */
-    private function turno(string $entrante): array
+    private function turno(string $entrante, string $memoria = ''): array
     {
         $this->nuevaConversacion();
+        $servicio = app(ConversationMemoryService::class);
+        match ($memoria) {
+            '' => null,
+            // Una visita a medio concretar: el objetivo vivo (como `UltronA4RegistroYPanoramaTest::visitaAMedias()`).
+            'visita' => $servicio->recordCourtesyCollecting($this->conversation->fresh(), ['date' => '2026-11-21']),
+            // La persona ya rechazó el Plan Valera.
+            'rechazado' => $servicio->recordPlanRejected($this->conversation->fresh(), 3),
+        };
         $m = $this->entrante($entrante);
         $decide = $this->decide($m);
 

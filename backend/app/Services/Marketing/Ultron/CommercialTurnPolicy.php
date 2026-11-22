@@ -965,6 +965,38 @@ final class CommercialTurnPolicy
         return false;
     }
 
+    /**
+     * Lo que el CRM sabe del gimnasio, como lista de contenidos: los
+     * `$knownFacts` de {@see self::violations()}. Son las categorías que
+     * describen QUÉ es Iron Body —identidad, lo que ofrece, dónde está, cuándo
+     * abre— más los nombres de las clases.
+     *
+     * Extraída tal cual del commit (`hechosDelGimnasio()`) para que la
+     * comprobación de solo lectura (`ai/check`, «regenerar antes de
+     * sustituir», ola 4b) mire la regla del hecho con los MISMOS hechos. Pura:
+     * quien llama pasa los elementos de la base de conocimiento y las clases.
+     *
+     * @param  iterable<object>  $items  los elementos activos de la base de conocimiento (`category`, `content`)
+     * @param  array<int,mixed>  $classes  `GymFactsProvider::forPrompt()['classes']`
+     * @return list<string>
+     */
+    public static function knownFacts(iterable $items, array $classes): array
+    {
+        $hechos = [];
+        foreach ($items as $item) {
+            if (in_array($item->category, ['business_identity', 'gym_info', 'location', 'schedule'], true)) {
+                $hechos[] = trim((string) $item->content);
+            }
+        }
+        foreach ($classes as $clase) {
+            if (is_array($clase) && ! empty($clase['name'])) {
+                $hechos[] = (string) $clase['name'];
+            }
+        }
+
+        return array_values(array_filter($hechos, fn ($h) => $h !== ''));
+    }
+
     /** La persona rechaza la visita con sus palabras. */
     public static function declinesVisit(string $inbound): bool
     {

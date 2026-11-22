@@ -26,6 +26,17 @@ use InvalidArgumentException;
  * tildes como el resto de los prompts. Son textos fijos PENDIENTES DE LA
  * APROBACIÓN DEL PROPIETARIO (gate 4-H): no se retocan aquí.
  *
+ * OLA 4b (decisión L-3 del lead: la condición 2 del propietario dice «o alguna
+ * regla corregible»): las SEIS reglas de política que el modelo puede
+ * corregir reescribiendo entran con el MISMO código que la violación del
+ * commit ({@see CommercialTurnPolicy::violations()}), sin detalle ni
+ * parámetros, y con su nota fija del encargo de la ola 4b (literal, también
+ * pendiente del gate 4-H). NO entran: el saludo repetido (el commit lo arregla
+ * recortando la fórmula), la contradicción con el compromiso de la visita (el
+ * dato lo pone la fila del CRM), el panorama, la longitud, el registro y el
+ * beneficio (ya tienen su código de arriba), el guard, el dinero, la
+ * membresía, el no contactar, el relevo y las herramientas.
+ *
  * LOS PARÁMETROS NO LLEVAN TEXTO DE LA PERSONA: marcas de tuteo de la lista
  * cerrada de {@see UltronRegisterDetector::MARCAS}, números, y textos del
  * catálogo (el nombre de un plan o un beneficio) sin llaves, sin saltos de
@@ -45,8 +56,27 @@ final class UltronRegenerationNotes
 
     public const BENEFIT_MISATTRIBUTED = 'benefit_misattributed';
 
-    /** Los códigos corregibles, cerrados (P-5). */
-    public const CODES = [self::REGISTER_TUTEO, self::LENGTH_OVER_CAP, self::PLANS_OVERVIEW, self::BENEFIT_MISATTRIBUTED];
+    /** Ola 4b: las reglas de política corregibles, con el código de su violación (en este orden van en la respuesta). */
+    public const POLICY_GREETING_SELLS = CommercialTurnPolicy::VIOLACION_SALUDO_COMERCIAL;
+
+    public const POLICY_ACTIVE_GOAL_LOST = CommercialTurnPolicy::VIOLACION_OBJETIVO_PERDIDO;
+
+    public const POLICY_WRONG_FIRST_PLAN = CommercialTurnPolicy::VIOLACION_PLAN_EQUIVOCADO;
+
+    public const POLICY_ANSWER_WITHOUT_FACT = CommercialTurnPolicy::VIOLACION_SIN_HECHO;
+
+    public const POLICY_ONLY_DISCOVERY = CommercialTurnPolicy::VIOLACION_SOLO_DESCUBRIMIENTO;
+
+    public const POLICY_MEMORY_TURN_SELLS = CommercialTurnPolicy::VIOLACION_MEMORIA_VENDE;
+
+    /** Ola 4b: las seis de la política, en el orden en que van detrás de los cuatro de §4.4. */
+    public const POLICY_CODES = [
+        self::POLICY_GREETING_SELLS, self::POLICY_ACTIVE_GOAL_LOST, self::POLICY_WRONG_FIRST_PLAN,
+        self::POLICY_ANSWER_WITHOUT_FACT, self::POLICY_ONLY_DISCOVERY, self::POLICY_MEMORY_TURN_SELLS,
+    ];
+
+    /** Los códigos corregibles, cerrados (P-5): los cuatro de §4.4 y, detrás, los seis de la política (ola 4b). */
+    public const CODES = [self::REGISTER_TUTEO, self::LENGTH_OVER_CAP, self::PLANS_OVERVIEW, self::BENEFIT_MISATTRIBUTED, ...self::POLICY_CODES];
 
     /** Los detalles de `plans_overview` (§4.4). */
     public const DETAILS = UltronPlansOverview::DETAILS;
@@ -84,6 +114,20 @@ final class UltronRegenerationNotes
 
     private const N_B = 'BENEFICIO DE OTRO PLAN: el borrador atribuye a {PLAN} un beneficio que en active_plans es de otro plan ("{BENEFICIO}"). A cada plan, solo los benefits de su plan_id.';
 
+    // ── Ola 4b, literales del encargo (`encargo-be-r4.md`) ─────────────────
+
+    private const N_PS_SALUDO = 'SALUDO QUE VENDE: la persona solo saludo. Saluda, da la bienvenida y pregunta en que le puede ayudar. No nombres planes, precios ni pagos y no preguntes todavia su objetivo.';
+
+    private const N_PS_VISITA = 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.';
+
+    private const N_PS_PLAN = 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.';
+
+    private const N_PS_DATO = 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.';
+
+    private const N_PS_PREGUNTAS = 'SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.';
+
+    private const N_PS_MEMORIA = 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.';
+
     /**
      * La tabla: `código` o `código/detalle` → [issue, texto, [parámetro => tipo]].
      * `M` de N-L es `UltronPromptCompiler::composerTargetChars(N)`: lo calcula
@@ -99,6 +143,20 @@ final class UltronRegenerationNotes
         self::PLANS_OVERVIEW.'/'.UltronPlansOverview::NO_LIST => ['relevance', self::N_P5, []],
         self::PLANS_OVERVIEW.'/'.UltronPlansOverview::PRICE_WRITTEN => ['factuality', self::N_P6, []],
         self::BENEFIT_MISATTRIBUTED => ['factuality', self::N_B, ['PLAN' => self::TEXT, 'BENEFICIO' => self::TEXT]],
+        /*
+         * Ola 4b. El `issue`, del vocabulario del revisor y con su definición
+         * en `critic.txt`: el saludo y la memoria son `customer_fit` (ahí
+         * define el revisor el modo recepción y el modo memoria, :18); la
+         * visita a medias y el plan obligatorio, `phase_alignment` («coherente
+         * con la fase y el objetivo de la estrategia», :15); el dato y las
+         * preguntas, `relevance` («responde lo que la persona pregunto», :6).
+         */
+        self::POLICY_GREETING_SELLS => ['customer_fit', self::N_PS_SALUDO, []],
+        self::POLICY_ACTIVE_GOAL_LOST => ['phase_alignment', self::N_PS_VISITA, []],
+        self::POLICY_WRONG_FIRST_PLAN => ['phase_alignment', self::N_PS_PLAN, []],
+        self::POLICY_ANSWER_WITHOUT_FACT => ['relevance', self::N_PS_DATO, []],
+        self::POLICY_ONLY_DISCOVERY => ['relevance', self::N_PS_PREGUNTAS, []],
+        self::POLICY_MEMORY_TURN_SELLS => ['customer_fit', self::N_PS_MEMORIA, []],
     ];
 
     /** Los códigos que llevan detalle (los demás, ninguno). */

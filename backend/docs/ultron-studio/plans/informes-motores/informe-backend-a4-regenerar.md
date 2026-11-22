@@ -715,3 +715,347 @@ Su segunda aserción, la de los ficheros nuevos sin seguimiento en zonas protegi
 
 - Ninguna migración, ningún `config/` y ninguna variable de entorno.
 - **Sí hay una ruta nueva:** al desplegar hace falta `route:cache` y comprobar con `route:list` que existen `internal/marketing/ai/{decide,check,commit,ultron/incidents}`. Lo dice el plan, §9, paso 1; `hotfix-backend.sh` rechaza `backend/routes/*`.
+
+---
+
+## 5. Ola 4b
+
+19 y 21-11-2026 · rama `feat/ultron-studio-h9`, HEAD `05f7109c` (olas 1 a 4 confirmadas; los tres commits del lead posteriores a `d63fbd50` solo tocan `docs/` y `ops/`) · **sin commit**: todo está en el árbol de trabajo, nada desplegado, sin producción y sin n8n (ni MCP ni API).
+Guía: el encargo del lead (`encargos-regenerar/encargo-be-r4.md`, idéntico al que seguí) y `plan-arquitecto-a4-regenerar.md` §3 P-5, §4.1, §4.4, §11 y §13 (L-3).
+
+### 5.0 Resumen
+
+- **Entran las seis reglas** de política del encargo: `policy_greeting_sells`, `policy_active_goal_lost`, `policy_wrong_first_plan`, `policy_answer_without_fact`, `policy_general_info_only_discovery` y `policy_memory_turn_sells`. **No hubo que dejar ninguna fuera:** la paridad sale limpia para las seis **[C]**.
+- **La política se calcula igual que en el commit** y sin escribir: un lector nuevo de solo lectura, `UltronTurnPolicyReader`, con las mismas funciones y entradas del commit. La política que lee la comprobación es **la misma, clave a clave, que guarda el commit en `metadata.policy`** en cada fila que la política sustituyó. Se probó en SQLite y en PostgreSQL **[C]**.
+- **El texto que se mira es el del commit:**
+  - el plan que impone la política pone `{{PLAN_NAME}}`/`{{PLAN_PRICE}}`;
+  - el modo memoria quita los enlaces de la app;
+  - el tope y el registro quitan la pregunta final (F1 y G2-bis);
+  - el saludo repetido se recorta.
+  Cada uno está fijado con una prueba o una mutación (§5.4 y §5.9).
+- **El orden:** primero los cuatro de §4.4 y después los de política, en el orden del encargo. **El tope de `defects` sube de 4 a 8** (`UltronDraftDefects::MAX_DEFECTS`): 4 + 4, porque de la política no pueden coincidir más de cuatro (§5.5, decisión 3). Al mismo 8 baja el tope de `regeneration.rewrites.*.codes` del commit, que si no habría crecido solo a 10.
+- **El commit no cambia de comportamiento.** Sigue sustituyendo cuando la violación llega en el último borrador. Su único cambio es una extracción sin efecto: `hechosDelGimnasio()` llama a `CommercialTurnPolicy::knownFacts()`.
+- **Invariantes [C]:**
+  - las dos instantáneas Legacy, en verde y **sin regenerar** (`git status` limpio en `tests/fixtures` y en `n8n/`);
+  - sin versión del Studio, la puerta contesta `legacy` sin una sola sentencia, también con un borrador que vende al saludar;
+  - las pruebas de solo lectura de la ola 4, en verde, y una nueva con la memoria en juego.
+- **Tres de las seis notas no cuadran del todo con lo que exige la regla** (§5.3). Las he puesto LITERALES, como pide el encargo, y propongo la corrección con la línea.
+
+### 5.1 Ficheros tocados
+
+| Fichero | Cambio | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronRegenerationNotes.php` | +60/−2 | `POLICY_*` (el código = la constante de la violación en `CommercialTurnPolicy`), `POLICY_CODES` y `CODES` = los 4 de §4.4 + los 6 de la política. Las seis notas LITERALES, **extraídas del encargo por guion**: cada una aparece tal cual en el encargo, comprobado con `grep -F`. Sus seis entradas en la tabla (sin detalle ni parámetros), con su `issue` y su porqué (decisión 2). Docblock |
+| `app/Services/Marketing/Ultron/UltronDraftDefects.php` | +85 | `MAX_DEFECTS = 8`, con la cuenta en el docblock. `ofPolicy()`: pura; los dos recortes del commit, `violations()` y el saludo repetido recortado; las seis en el orden de `POLICY_CODES` |
+| `app/Services/Marketing/Ultron/UltronTurnPolicyReader.php` | **nuevo**, 82 | La política del turno leída como en el commit: la intención con el saludo puro como saludo, la fase normalizada, `load()` de la memoria, el resolutor sobre `sellablePlansForMemory()`, `CommercialTurnPolicy::decide()` y los hechos del gimnasio solo si la política los exige. Del servicio de la memoria, solo `load()` y `sellablePlansForMemory()` |
+| `app/Services/Marketing/Ultron/UltronDraftCheck.php` | +60/−15 | Lee la conversación y la política (con el lector). La expansión ve la política: el plan impuesto y el modo memoria. Concatena `of()` + `ofPolicy()` y corta a `MAX_DEFECTS`. Docblock |
+| `app/Services/Marketing/Ultron/CommercialTurnPolicy.php` | +32 | `knownFacts(iterable $items, array $classes)`: pura, **extraída tal cual** de `hechosDelGimnasio()` del commit |
+| `app/Services/Marketing/Ultron/UltronCommitService.php` | +2/−13 | `hechosDelGimnasio()` llama a `knownFacts()`. **Nada más del commit** |
+| `app/Http/Controllers/Api/Internal/UltronController.php` | +3/−1 | `regeneration.rewrites.*.codes`: `max:` pasa de `count(CODES)` a `UltronDraftDefects::MAX_DEFECTS` (decisión 3) |
+| Pruebas: 6 tocadas | | §5.6 y §5.7 |
+| `docs/…/a4-evidencia/112` a `120` (y `118a`) | nuevos | Salidas (§5.9 y §6.7) |
+
+**Sin tocar:**
+- el compilador y los prompts base;
+- `config/`, las migraciones y las rutas;
+- `SalesConversationReplyService`, `SalesObjectionResponderService`, el guard y `CourtesyRequestService`;
+- el CRM y n8n;
+- `ConversationMemoryService` y `ReferenceResolver`: se usan, no se tocan.
+
+### 5.2 Cómo calcula la comprobación la política «igual que el commit»
+
+| Entrada | En el commit | En la comprobación |
+|---|---|---|
+| La intención | `sanitize()` + «un saludo puro es un saludo» (`UltronCommitService.php:640-645`) | La del borrador (la puerta ya exige una del catálogo, y `sanitize()` solo cambia la intención fuera de él) con el mismo «saludo puro» (`intentForPolicy()`) |
+| La fase | `UltronDecideService::currentPhase()` = `CommercialPhaseMachine::normalize()` | `normalize()`, la misma. No influye en `violations()` |
+| La memoria | `memoryService->load($conversation)` (`:729`), la de ANTES del turno. Los rechazos que anota el commit van después de `decide()` y no la cambian | `load()`, que LEE: la pregunta sin resolver y el objetivo caducado se derivan al leer y no se guardan |
+| El referente | `references->resolve(body, memoria, sellablePlansForMemory())` | Lo mismo |
+| El catálogo y el entrante | `activePlans()` y `message->body` | Lo mismo (el catálogo ya lo leía la puerta) |
+| Los hechos | `hechosDelGimnasio()` | `knownFacts()`, la misma función, solo si `required_facts` lleva `gym_identity`: `violations()` no los mira en otro caso, así que el resultado es idéntico y se ahorran las consultas |
+| El tono | `turnoDelStudio()`: `sp.t` si es de `UltronPromptCompiler::TONES` | Lo mismo |
+
+**El texto que se pasa a `violations()`, como el del commit:**
+1. **El plan impuesto.** Con `required_plan_id` de la prioridad comercial o nombrado por la persona, y distinto del propuesto, `{{PLAN_NAME}}`/`{{PLAN_PRICE}}` se expanden con él, como en «LA POLÍTICA PISA EL PLAN DEL MODELO» (`:839-868`). Antes era la mitad de E5.
+2. **El modo memoria** quita el marcador y no pega los enlaces de la app (`:798-806`).
+3. **El tope:** si el texto se pasa y quitándole la pregunta final cabe (F1, `UltronReplyFitter::draft()`), se mira sin ella (`:1661-1673`).
+4. **El registro:** con «profesional», un bloque de Laravel (aquí, `app_links_send` pedida) y el tuteo SOLO en la pregunta final, se mira sin ella (`:1702-1716`).
+5. **El saludo repetido:** si salta, se recorta y se vuelve a mirar (`:1741-1744`).
+
+**Qué no se puede leer sin efectos, y por qué no hizo falta dejar ninguna regla fuera.** La política la decide `decide()` ANTES de las herramientas, con entradas que se leen sin escribir. Lo que depende de herramientas ya ejecutadas no es la política, sino el TEXTO. El commit lo retoca después de ejecutarlas: las actas de la cortesía, el cobro pegado. Es la familia de E2/E4 de la ola 4 (E8 abajo) y no cambia qué regla se aplica. Ninguno de los turnos de las seis reglas lleva herramientas.
+
+### 5.3 Las notas: tres no cuadran del todo con lo que exige la regla (no las he tocado)
+
+| Nota | Qué exige de verdad el código | Por qué no cuadra | Corrección que propongo (sin tildes) |
+|---|---|---|---|
+| `policy_active_goal_lost` | Salta solo con `goal_takes_turn` = visita a medias **y la persona NO pregunta nada ni saca los planes** (`CommercialTurnPolicy.php:435`). Basta con nombrar un plan o una cifra (`:703`) | «Contesta en una frase lo que pregunto»: cuando la regla salta, por construcción no hubo pregunta. Si la hubo, el turno es `resume_goal_after_answer` y la regla no salta. «No vendas» se queda corto: nombrar un plan sin vender también salta | `VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.` |
+| `policy_wrong_first_plan` | (a) El primer plan nombrado tiene que ser `commercial_turn_policy.required_plan_id` (`:740-747`). (b) **El mismo código salta si se nombra, en cualquier sitio, un plan de `forbidden_plan_ids`**, uno que la persona rechazó (`:749-755`) | «El de la estrategia de este turno»: el obligatorio es el de la política, no el del estratega (el commit lo impone sobre el del estratega, `UltronCommitService.php:839`; el redactor lo conoce como «required_plan_id es el plan de este turno», `composer.txt:94`). Y en (b), «los demas, solo despues y si aportan» autoriza justo lo que tumba el turno: nombrar después el plan rechazado | `PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.` |
+| `policy_general_info_only_discovery` | Salta con `answer_first` y solo preguntas (`:731`). `answer_first` vale para `general_info`, `pricing_question`, `location_question`, `schedule_question`, `greeting` (no puro), la duda de precio y el modo memoria (`:525`, `:585`) | «La persona pidio informacion general» y «Da primero informacion concreta del gimnasio»: a quien preguntó el horario o el precio, lo que hay que darle es eso. La prueba lo ejercita (`el horario que solo pregunta`) | `SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.` |
+
+**Dos observaciones menores, sin contradicción:**
+- `policy_answer_without_fact` se cumple solo si el texto lleva, tal cual, los primeros 25 caracteres normalizados de un hecho del CRM o el nombre de una clase (`factPresent()`, `:953`). Una paráfrasis del horario no cuenta. Si el propietario quiere, la nota podría decir «copia el dato de knowledge_base tal cual».
+- `policy_greeting_sells` dice «Saluda». Si `greet_required` es falso, el commit recorta el saludo de más y no sustituye, así que no se contradice.
+
+### 5.4 La paridad (`UltronCheckCommitParityTest`)
+
+Sobre el MISMO turno (misma conversación, mismo token y la memoria escrita ANTES de `decide`), la comprobación marca cada código de política **si y solo si** el commit lo pone en `policy_violations`. Las causas del commit son las de la ola 4 más `policy_violations ∩ POLICY_CODES`. Además, si la política sustituyó el borrador, **la política leída por la comprobación es `metadata.policy` del commit**, comparada con las claves ordenadas (`jsonb` las reordena).
+
+| # | Regla | Turno (memoria) | Borrador | Las dos dicen |
+|---|---|---|---|---|
+| 1 | saludo | «Hola buenas tardes», `greeting` | «… ¿Ya ha entrenado antes?» | `policy_greeting_sells` |
+| 2 | saludo | «Hola», **`pricing_question`** (el saludo puro manda) | «… El Plan Mensual es el más pedido. …» | `policy_greeting_sells` |
+| 3 | saludo (neg.) | «Hola buenas tardes» | «… Cuénteme, ¿en qué le podemos ayudar hoy?» | — |
+| 4 | saludo + tope | «Hola», 216 caracteres que acaban en «¿Cuál es su objetivo?» | F1 quita la pregunta | solo `length_over_cap` (el objetivo no llega a la política) |
+| 5 | visita | «en la mañana» (visita a medias) | «… el Plan Mensual le sirve para empezar.» | `policy_active_goal_lost` |
+| 6 | visita (neg.) | «en la mañana» (visita a medias) | «… ¿A qué hora le queda mejor venir?» | — |
+| 7 | plan | «¿Cuánto cuesta el Plan Mensual?» | «El Plan Valera cuesta {{PLAN_PRICE}}…» (plan 3) | `policy_wrong_first_plan` |
+| 8 | plan (neg.) | lo mismo | «El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}…» (plan 3: la política impone el 4) | — |
+| 9 | plan (neg.) | lo mismo | «El Plan Mensual cuesta…» (plan 4) | — |
+| 10 | plan | horario (rechazó el Valera) | «… Con el Plan Valera puede venir…» | `policy_wrong_first_plan` |
+| 11 | plan (neg.) | horario (rechazó el Valera) | «… Con el Plan Mensual…» | — |
+| 12 | dato | «Quiero información del gimnasio» | sin un hecho del CRM | `policy_answer_without_fact` |
+| 13 | dato (neg.) | lo mismo | con «lunes a viernes de 5:00 a. m. …» | — |
+| 14 | dato + preguntas | lo mismo | «¿Qué le gustaría saber del gimnasio?» | `policy_answer_without_fact`, `policy_general_info_only_discovery` |
+| 15 | preguntas | horario | «¿Para qué día … le gustaría saber el horario?» | `policy_general_info_only_discovery` |
+| 16 | memoria | «¿A qué hora era mi visita?» | «… Si quiere, le cuento sobre los planes.» | `policy_memory_turn_sells` |
+| 17 | memoria (neg.) | lo mismo | «… ¿Qué día le gustaría venir?» | — |
+| 18-19 | memoria + enlaces | lo mismo, con `app_links_send` y con `{{APP_LINKS}}` | 196 caracteres (226 con los enlaces) | — (los dos miden sin los enlaces) |
+
+**La matriz de la ola 4 (23 borradores) sigue en verde** con las causas ampliadas: ninguno de sus turnos incumple una de las seis. Las excepciones E1 a E7 del docblock siguen, con dos cambios y tres añadidos:
+- **E5 se recorta:** el plan que impone la política ya no es excepción (fila 8; mutación M2). Queda la realineación del precio.
+- **E7 se amplía:** un `PLAN_k` desconocido o una cifra son un 422 antes de `violations()`, y la respuesta repetida o la reventa sustituyen el texto antes de mirar la política. La comprobación puede decir además una regla de política, pero en esos turnos pide la reescritura de todos modos.
+- **E8 (nueva):** los textos que el commit reescribe tras ejecutar herramientas (las actas de la cortesía) pueden quitar una frase que nombraba un plan. No tiene prueba propia; los turnos de las seis reglas no llevan herramientas.
+- **E9 (nueva):** la memoria se lee unos segundos antes que en el commit. Un objetivo que caduca justo entre los dos (tras horas de antigüedad) lo verían distinto. No tiene prueba propia.
+- **E1, la aserción final** (§5.7): volver a comprobar DESPUÉS del commit ya lee la memoria que ese commit escribió.
+
+### 5.5 Decisiones mías (el encargo no las fija)
+
+1. **Un lector aparte, en lugar de leer la memoria desde `UltronDraftCheck`.** La guarda estática de la ola 4 (`test_el_servicio_no_nombra_nada_que_escriba`) prohíbe que la puerta nombre `MemoryService`; relajarla está fuera. El lector tiene su **propia guarda, más estricta**: nada que escriba, ni `record`, `forget` o `remember`, y del servicio de la memoria solo `load` y `sellablePlansForMemory`. Además debe llamar a `CommercialTurnPolicy::decide(`.
+2. **El `issue` de cada regla**, según la definición de `critic.txt`:
+   - saludo y memoria → `customer_fit` (ahí define el revisor el modo recepción y el modo memoria, `:18`);
+   - visita y plan → `phase_alignment` («coherente con la fase y el objetivo de la estrategia», `:15`);
+   - dato y solo preguntas → `relevance` («responde lo que la persona pregunto», `:6`).
+3. **El tope, 8 y no 10.** Los cuatro de §4.4 pueden coincidir. De la política, como mucho cuatro:
+   - el saludo que vende exige el modo recepción, que apaga `answer_first` y excluye el modo memoria;
+   - «sin el dato» no salta en modo memoria;
+   - así que el máximo es la visita, el plan y dos de {sin el dato, solo preguntas, memoria}.
+
+   La prueba unitaria construye una de cuatro (visita, plan, preguntas, memoria) y la de solo lectura otra (visita, plan, dato, preguntas). El corte es defensivo: por construcción no actúa. El mismo 8 vale para `codes` en el commit: son los códigos de UNA comprobación.
+4. **El orden dentro de la política** es el del encargo (`POLICY_CODES`), no el de `violations()`, que pone la memoria antes que la visita. Con el corte a 500 por notas enteras, tras N-R y N-L (unos 460 caracteres) ya no cabe ninguna de política. Eso está previsto («`notes` sigue cortándose»): el `issue` y el código siguen en `defects`.
+5. **Los hechos, perezosos:** solo se leen si la política los exige. El resultado es idéntico, porque `violations()` no los mira en otro caso.
+6. **El recorte del saludo repetido se hace aunque hoy no cambie nada** (mutación equivalente, M1): ninguna de las seis mira la fórmula del principio. Se mantiene para que la paridad no dependa de eso.
+7. **La conversación borrada** entre `decide` y la comprobación (el token la ata, así que es raro): sin política, solo los de §4.4.
+
+### 5.6 Pruebas nuevas
+
+| Fichero | Pruebas | Qué fija |
+|---|---|---|
+| `UltronCheckCommitParityTest` | +19 (3 métodos; uno con 17 casos) | §5.4: la matriz de las seis con sus negativos y la política del commit; el modo memoria con los enlaces (dos formas); leer la política no cambia la memoria ni crea filas |
+| `UltronCheckEndpointTest` | +10 (5 métodos; uno con 6 casos) | Cada regla con su nota LITERAL (copiadas a mano del encargo), su `issue` y `rewrite`. El orden (tuteo y saludo: `[register_tuteo, policy_greeting_sells]`) y las notas en ese orden. `MAX_DEFECTS = 8`. Sin Studio, ni la política: cero sentencias. **Solo lectura con la memoria en juego** (visita a medias y plan rechazado): solo `select`, sin cerrojo, sin cola ni bus, sin HTTP, las filas iguales y la conversación (memoria incluida) igual. La guarda estática del lector |
+| `UltronDraftDefectsTest` | +17 (5 métodos; uno con 13 casos) | `ofPolicy()`: cada regla y su negativo, lo mismo que `violations()`; sin Studio, nada; el orden; el saludo repetido; los dos recortes (con 200 y con 480; con y sin bloque; con y sin «profesional») |
+| `UltronRegenerationNotesTest` | +2 (métodos) | Las seis con su `issue` y su nota LITERAL, ASCII imprimible; el código es la constante de la violación; las que no entran siguen fuera (saludo repetido, panorama, la contradicción con el compromiso, longitud, registro y beneficio) |
+| `UltronRegenerationTraceTest` | +1 | Los códigos de política pasan a la traza; `policy_greeting_repeated`, no |
+
+### 5.7 Aserciones existentes cambiadas, y por qué
+
+Todas, porque las seis reglas pasan a ser códigos. **Ninguna se relaja**:
+
+| Fichero | Cambio | Por qué |
+|---|---|---|
+| `UltronRegenerationNotesTest` | `CODES`: 4 → 10. Entradas: 9 → 15 (dos recuentos). El «código desconocido» pasa de `policy_greeting_sells` a `policy_greeting_repeated` (en la lista y en `issue()`). Se añaden dos casos malos: la política con detalle y con parámetros | `policy_greeting_sells` ya es un código. El sustituto es la regla que NO entra, así que la prueba fija además la exclusión |
+| `UltronRegenerationCommitTest` (`bloquesQueNoValen`) | «código inventado»: `policy_greeting_sells` → `policy_greeting_repeated`. «cinco códigos» → «nueve códigos» (los 9 válidos y distintos, con el tope en 8) | Lo mismo, y el tope nuevo: sigue habiendo una lista que no cabe |
+| `UltronCheckCommitParityTest::test_e1_…` | La comprobación de DESPUÉS del commit: `[]` → `['policy_wrong_first_plan']`, y se afirma por qué. La política leída ahora obliga al plan 14 (`resolved_reference`): el commit saludó y ofreció la lista fija, y el resolutor da por referida su PROMO X4 en «la mensualidad» | Es la memoria que ese commit acaba de escribir: en la vida real la comprobación va antes. Lo que la aserción fijaba (la lista `not_sellable` no es un código corregible) sigue: no sale `plans_overview`. Es más estricta: fija el valor exacto y su causa |
+| `UltronRegenerarPiezasPurasTest` | `UltronReplyOrigin` entra en las puras; el lector y el comando, en «sin `\p{…}`» | Ampliada |
+
+**Mis propias pruebas, corregidas antes de darlas por buenas:**
+- (a) La aserción «subconjunto ordenado» de `test_el_orden_de_la_politica` estaba mal escrita: comparaba con un `array_unique` de la concatenación.
+- (b) El orden de las claves del esperado en `UltronReplyOriginTest`.
+- (c) La consulta de la línea base por PDO (118a, §6.7).
+- (d) El docblock de la prueba del saludo repetido, tras ver que M1 es equivalente.
+
+### 5.8 Lo que no comprobé
+
+- **[S] Que el modelo corrija con estas notas.** Aquí no corre ningún modelo, y las tres de §5.3 lo ponen más difícil.
+- **E8 y E9**, sin prueba propia (§5.4).
+- **La latencia de la puerta:** ahora lee además la conversación, la memoria (los seis últimos mensajes), los planes para la memoria y, si la política los exige, los hechos del gimnasio (la base de conocimiento, las clases y sus ocupaciones, y los entrenadores: `forPrompt()` entero). Son unas 6 a 12 sentencias `select` en lugar de 3 o 4. En SQLite en memoria no significa nada; el plan supone de 0,1 a 0,3 s y el nodo tiene 3 s.
+- **La sonda de PCRE:** esta ola no añade expresiones a la política (usa las de siempre). Las nuevas son `/\A[a-z][a-z0-9_]{0,63}\z/`, `/\A[A-Za-z0-9_.:-]{1,64}\z/` y `/\A[1-9][0-9]{0,18}\z/` (ola 6, sin `\p{}`).
+- **Para `security` / `api-security-specialist`:**
+  - la puerta lee ahora la memoria de la conversación, con su lector y su guarda (§5.5, decisión 1);
+  - la respuesta sigue sin texto de la persona: códigos, `issue` y notas fijas;
+  - las notas de política no llevan parámetros.
+- **Casos límite para `tester`:**
+  - la memoria con un objetivo que caduca entre la comprobación y el commit (E9);
+  - una regla de política en un turno con herramientas de cortesía (E8);
+  - la conversación borrada entre `decide` y la comprobación.
+
+---
+
+## 6. Ola 6
+
+21-11-2026 · misma rama y mismo HEAD · **sin commit**. Guía: el encargo de la ola 4b (es el mismo encargo) y el plan §3 P-7, §6 «Ola 6» y §12.
+
+### 6.0 Resumen
+
+- **`UltronReplyOrigin::classify($metadata, $actionType)`**, pura, aplica las MISMAS reglas que la consulta C de la línea base y en su orden:
+  1. `fallback_mode` → respaldo (del revisor o de la rendición);
+  2. si no, la política con su borrador descartado → respaldo de la política;
+  3. si no, el modelo, recortado si quitó su pregunta final.
+
+  Del modelo dice además si fue al primer intento, regenerado (y quién lo pidió, con qué códigos) o sin dato. Con la traza de la ola 4 lo lee de ella; sin traza, del intento del revisor (en S1 solo el revisor reescribía). **La hora de la visita se marca aparte:** es texto del servidor que la consulta cuenta como del modelo.
+- **`php artisan ultron:origin-report`**, de SOLO LECTURA (ninguna sentencia de escritura, fijado por prueba), con `--conversation=*`, `--since`, `--until`, `--json`, `--precio-entrada` y `--precio-salida`, según la «Ola 6» del plan.
+- **Reproduce la línea base [C]:** sobre 88 filas equivalentes a las históricas, 71 del modelo (80,7 %), 14 respaldos del revisor o de la rendición y 3 de la política. **En PostgreSQL, la consulta C del `.sql`, ejecutada tal cual sobre las mismas filas, da lo mismo**: 70 + 1 recortada, 3 y 14.
+- **`ultron:canary-report` no se toca** (`git status`: sin cambios).
+
+### 6.1 Ficheros
+
+| Fichero | Cambio | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronReplyOrigin.php` | **nuevo**, 224 | La clasificación y `modelCalls()` |
+| `app/Console/Commands/Marketing/UltronOriginReport.php` | **nuevo**, 477 | El comando (se descubre solo, como los demás de `app/Console/Commands`) |
+| `tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php` | **nuevo** | 21 pruebas (5 métodos) |
+| `tests/Feature/Marketing/UltronOriginReportCommandTest.php` | **nuevo** | 7 pruebas; una solo en PostgreSQL |
+
+### 6.2 La clasificación
+
+`classify()` devuelve, con forma cerrada:
+- `origin`: `model` o `fallback`.
+- `attempt`: `first`, `regenerated`, `unknown` o null en un respaldo.
+- `drafts`, `critics` y `checks`.
+- `rewrites`: `[{by, codes, issues}]`.
+- `fallback_reason`: `critic_rejected`, `recovery`, `policy`, `last_resort` o `unknown`.
+- `policy_codes` y `recovery_reason`.
+- `trimmed`, `server_text` (`visit_hour`), `traced` y `tokens`.
+
+| Camino (metadata de fixture) | Origen |
+|---|---|
+| El revisor aprueba al primer intento | modelo, `first`, 3 llamadas |
+| Recortado por el tope o por el registro | modelo, `trimmed` |
+| Histórica: `critic.attempt` 2 aprobada | modelo, `regenerated`, una reescritura del revisor, 5 llamadas |
+| Con traza: la pidió el servidor | modelo, `regenerated`, `by: server` con sus códigos, 4 llamadas, tokens |
+| Con traza: dos reescrituras | modelo, `drafts` 3 |
+| `policy_violations` + `policy_discarded_draft` | respaldo `policy`, con los códigos |
+| `fallback_mode` + revisor `fail` | respaldo `critic_rejected` (también con 3 borradores y traza) |
+| `fallback_mode` + `recovery` | respaldo `recovery`, con su etiqueta (`critic_unavailable`) |
+| `fallback_mode` solo | respaldo `unknown` |
+| `visit_hour` | modelo (como la consulta), `attempt unknown`, `server_text: visit_hour` |
+| `repeated_reply_recovered` / `resell_blocked_recovered` | respaldo `last_resort` (fuera del reparto en el informe) |
+| Sin nada | modelo, `unknown` |
+
+**Nada fuera de vocabulario sale:**
+- de la política, solo códigos con forma `^[a-z][a-z0-9_]{0,63}$`;
+- de la rendición, etiquetas con la forma que ya admite el commit;
+- de las reescrituras, solo `CODES` y `DIMENSIONS`;
+- los números, solo en su rango.
+
+### 6.3 El comando
+
+**El universo** es el de la consulta: `marketing_ai_actions` con `source_type = inbound_message`, `action_type = reply` y `status = executed`. Lo demás del motor va en «Fuera del reparto». Las filas sin `source_type` (Legacy, el enrutador: `inbound_skipped`, `unsupported_message`) no son turnos de ULTRON y no cuentan.
+
+**Lo que dice:**
+- **El reparto:** el total y los turnos con traza. El porcentaje de la IA frente al 90 % (`sí`/`NO`) y, aparte, al primer intento, regeneradas y sin dato. Los recortes. La hora de la visita y el porcentaje sin ella.
+- **Las reescrituras**, por autor y por código.
+- **Los respaldos**, por causa, con los códigos de la política y las etiquetas de la rendición.
+- **La latencia** (s) del `created_at` del entrante al del saliente (`metadata.outbound.message_id`): p50, p95 y máximo, por rango más cercano.
+- **Las llamadas al modelo por turno** (1 + redacciones + revisores) y **las comprobaciones del servidor**: media y máximo.
+- **Los tokens y el costo**, solo con los dos precios: Σ entrada/10⁶ × precio + Σ salida/10⁶ × precio, sin moneda impuesta.
+- **Los reintentos del job:** turnos del reparto con su evento, con `attempts > 1` y el máximo.
+- **El aviso:** el 90 % se juzga con al menos 30 turnos con traza (§12).
+
+**Sin datos personales:**
+- de los mensajes solo se leen `id` y `created_at`;
+- de la metadata solo salen códigos y números;
+- no hay ids de conversación (la ventana dice cuántas, no cuáles).
+
+**Ejemplo real con datos de prueba** (una canaria inventada con S2: diez turnos con traza y un bloqueo, volcados con el comando de verdad sobre SQLite; evidencia 121):
+
+```
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde el principio · hasta ahora · conversaciones: todas
+  Respuestas enviadas: 10 (con traza de regeneración: 10)
+  Escrito por la IA: 8 de 10 (80,0 %) · objetivo 90 %: NO
+    al primer intento: 4 (40,0 %) · regeneradas: 4 (40,0 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 1
+    La hora de la visita (texto del servidor que la línea base cuenta como del modelo): 0 · sin ella: 80,0 %
+  Reescrituras: 7 (servidor: 4, revisor: 3)
+    por código: register_tuteo: 2, length_over_cap: 1, policy_greeting_sells: 1
+  Respaldos: 2 de 10 (20,0 %)
+    el revisor rechazó todos los intentos: 1
+    la política del commit: 1 (memory_turn_wrong_commitment: 1)
+  Latencia del entrante al saliente: p50 10 s · p95 27 s · máx 27 s (n = 10)
+  Llamadas al modelo por turno: media 4,1 · máx 7 (n = 10) · comprobaciones del servidor por turno: media 1,4 · máx 2 (n = 10)
+  Tokens: entrada 325900 · salida 6610 (n = 10) · costo estimado: 0,8809 (con los precios dados, por millón de tokens)
+  Reintentos del job: 1 de 10 turnos con evento (máx. intentos 2)
+  Fuera del reparto: no_reply/executed: 1
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 10.
+```
+
+### 6.4 Decisiones mías
+
+1. **La hora de la visita, del lado de la consulta.** La regla del encargo es «clasificar las filas históricas igual que la consulta de la línea base», y la consulta la cuenta como del modelo. Pero el texto lo escribe Laravel desde la fila del CRM. No la pinto como respaldo para no romper la comparación con la línea base; la marco y el informe da el porcentaje con y sin ella. **Si el lead prefiere contarla como respaldo**, es una línea en `classify()`, y la comparación con la línea base cambiaría en esas filas (hoy no sé cuántas hay entre las 88: son parte de las 6 «sin dato» del revisor, que la consulta F no desglosa).
+2. **«Recortadas»** cuenta también el recorte por registro (H4-9, posterior a la línea base), que no cambia el origen.
+3. **Las reescrituras se cuentan en todos los turnos del reparto**, también en los respaldos (el revisor que pidió una reescritura y luego volvió a rechazar). «Regeneradas» son solo las del modelo.
+4. **Las llamadas al modelo sin dato** (la rendición, la hora de la visita, filas viejas) no entran en la media.
+5. **`--until` sin incluirla**, y las fechas sin zona en UTC (la de la aplicación).
+6. **Los órdenes** son los de los vocabularios (autores, causas, `CODES`), y lo demás por frecuencia, para que la salida no dependa del orden de las filas.
+
+### 6.5 Aserciones existentes cambiadas
+
+Ninguna.
+
+### 6.6 Lo que no comprobé
+
+- **Los tokens reales:** dependen de que n8n entregue `usage` (plan P-7 [S]). Aquí solo se prueban con fixtures.
+- **La latencia** se mide con `created_at` de segundo entero, sin milisegundos.
+- **Contra producción no ejecuté nada.** El reparto real lo da el comando en el servidor con orden, o la consulta del `.sql`.
+
+### 6.7 Números (olas 4b y 6)
+
+| # | Qué | Resultado |
+|---|---|---|
+| 112 | Las pruebas nuevas y tocadas con `app/` = HEAD (19-11) | **ROJO:** 183 pruebas, 68 errores, 15 fallos, 1 aviso y 1 omitida. El aviso es el proveedor de `UltronReplyOriginTest` sin su clase: sus 17 casos no se contaron (183 + 17 = 200) |
+| 113 | Las mismas, en verde (con `--display-warnings`) | **OK (200 pruebas, 1 656 aserciones)**, 1 omitida (solo PostgreSQL) |
+| 114 | Motor: `tests/Unit/Marketing/Ultron`, las tres A4, `UltronCheckEndpointTest`, `UltronCheckCommitParityTest`, `UltronDecideTest`, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest`, `UltronRegenerationCommitTest`, `UltronPromptsN8nCommandTest`, `UltronPromptsTraceCommandTest` y el informe | **OK (1 857 pruebas, 37 567 aserciones)**, 1 omitida |
+| 115 | `tests/Feature/Marketing tests/Unit/Marketing` (19-11) | **OK (6 777 pruebas, 59 114 aserciones)**, 1 omitida: las 6 701 de la ola 4 + 76 (las 77 nuevas, menos la del modo memoria con enlaces, añadida después) |
+| 116 | El motor otra vez, tras la pausa (21-11), con la prueba del modo memoria con enlaces | **OK (1 858 pruebas, 37 586 aserciones)**, 1 omitida |
+| 117 | Mutaciones a mano, una cada vez, restaurado cada fichero byte a byte (y sha256 de los seis al final) | **11 de 12 cazadas**. M1 (sin el recorte del saludo repetido) sobrevive: es equivalente (§5.5, decisión 6) |
+| 118a | PostgreSQL, primera pasada | 390 pruebas, **1 error, de la prueba**: la consulta de la línea base por PDO toma el `?` de `jsonb` por un parámetro. Corregido en la prueba con el escape de PDO (`??`) solo en esos dos operadores, contados; el `.sql` no cambia |
+| 118 | PostgreSQL (`UNIT_DB=ultron_studio_lead_ola5`, local y desechable): las cuatro de Feature y las tres A4 | **OK (390 pruebas, 4 055 aserciones)**, **ninguna omitida**: la consulta C real coincide con el informe |
+| 119 | Guardas: los 16 ficheros | 141 pruebas, **1 fallo esperado** (`OutreachIsolationTest::test_la_puerta_de_diff…`) |
+| 120 | `tests/Feature/Marketing tests/Unit/Marketing`, final | **OK (6 778 pruebas, 59 133 aserciones)**, 1 omitida (solo PostgreSQL): las 6 701 de la ola 4 + 77 nuevas |
+| 121 | El ejemplo del informe (§6.3) | Volcado |
+| — | `vendor/bin/pint` sobre los 18 PHP tocados o nuevos | `passed` |
+
+**La puerta de diff del H9** nombra **21** ficheros, y **esta ola no añade ninguno**: los seis de producto que toca ya estaban en el diff de HEAD frente a `origin/main` (comprobado con `comm`). Su segunda aserción, la de los ficheros nuevos sin seguimiento en zonas protegidas, no llega a ejecutarse porque falla la primera. Al subir nombrará `UltronTurnPolicyReader.php` y `UltronReplyOrigin.php`. Van a la Enmienda A4-3.
+
+**Las mutaciones** (117):
+
+| # | Mutación | Pruebas que fallan |
+|---|---|---|
+| M1 | Sin el recorte del saludo repetido | **ninguna (equivalente)** |
+| M2 | La puerta no pone el plan que impone la política | 1 (fila 8 de la paridad) |
+| M3 | En modo memoria cuenta los enlaces de la app | 1 |
+| M4 | El lector no vuelve saludo un saludo puro | 1 (fila 2) |
+| M5 | Sin el recorte por el tope | 2 |
+| M6 | Sin el recorte por el registro | 1 |
+| M7 | El lector no lee los hechos del gimnasio | 4 |
+| M8 | El origen mira la política antes que `fallback_mode` | 1 |
+| M9 | El informe mete en el reparto lo que no es `reply`/`executed` | 3 |
+| M10 | El percentil con `floor` | 1 |
+| M11 | Una tilde en una nota de política | 3 |
+| M12 | La puerta no marca la política (el commit sí) | 11 |
+
+### 6.8 Variables, migraciones y configuración
+
+Ninguna: ni migraciones, ni `config/`, ni rutas, ni variables de entorno. El comando nuevo no necesita registro.
+
+### 6.9 Añadido del lead tras la entrega (21-11)
+
+1. **Cuatro notas corregidas** (§5.3 tenía razón: tres no cuadraban con lo que exige su regla, y una cuarta dejaba pasar una paráfrasis que la regla no admite). Quedan así, y son las que aprobará el propietario:
+   - `policy_active_goal_lost`: «VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.»
+   - `policy_wrong_first_plan`: «PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.»
+   - `policy_answer_without_fact`: «FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.»
+   - `policy_general_info_only_discovery`: «SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.»
+   - Cambiadas en `UltronRegenerationNotes` y en las dos pruebas que las fijan literales. Las otras dos (`policy_greeting_sells`, `policy_memory_turn_sells`) no cambian.
+2. **El objetivo del 90 % se mide con lo que de verdad escribió el modelo** (decisión pendiente de §6.4, resuelta). La hora de la visita la escribe el servidor desde la fila del CRM: contarla como «escrita por la IA» inflaba la cifra. `classify()` no cambia (la sigue marcando aparte, `server_text = visit_hour`); cambia el informe: el titular «Escrito por la IA» y `meets_target` usan `written_count` y `written_pct` (sin la hora de la visita), y la regla de la línea base queda en una línea aparte para poder comparar. Prueba nueva: `test_la_hora_de_la_visita_no_cuenta_para_el_objetivo` (ocho del modelo y una hora de la visita: 100 % con la regla antigua, 88,9 % de verdad, objetivo NO cumplido). Roja antes, verde después.
+3. **La línea base, corregida.** Leído en producción el 21-11 (solo conteos): de las 71 respuestas que la consulta contó como del modelo, 4 eran la hora de la visita. Lo que escribió el modelo fueron **67 de 88 (76,1 %)**, no 71 (80,7 %). El fixture de la línea base de `UltronOriginReportCommandTest` ya lo refleja.
+4. Tras estos cambios: dirigidas del motor, de la puerta y del informe, **1 862 en verde** (1 omitida, la que solo corre en PostgreSQL); `pint`, passed.
+

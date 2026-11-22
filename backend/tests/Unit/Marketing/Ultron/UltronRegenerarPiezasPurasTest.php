@@ -27,12 +27,18 @@ class UltronRegenerarPiezasPurasTest extends TestCase
         'app/Services/Marketing/Ultron/UltronDraftDefects.php',
         // Ola 4: la traza de las reescrituras (bloque → metadata), también pura.
         'app/Services/Marketing/Ultron/UltronRegenerationTrace.php',
+        // Ola 6: de dónde salió el texto de una respuesta (metadata → origen), también pura.
+        'app/Services/Marketing/Ultron/UltronReplyOrigin.php',
     ];
 
     /** Ola 4: la comprobación de solo lectura no es pura (lee `Plan` y el mensaje), pero su PCRE es el de producción. */
     private const SOLO_PCRE = [
         'app/Services/Marketing/Ultron/UltronDecideToken.php',
         'app/Services/Marketing/Ultron/UltronDraftCheck.php',
+        // Ola 4b: el lector de la política (lee la memoria igual que el commit).
+        'app/Services/Marketing/Ultron/UltronTurnPolicyReader.php',
+        // Ola 6: el informe de origen.
+        'app/Console/Commands/Marketing/UltronOriginReport.php',
     ];
 
     /** Lo que una pieza pura no puede usar: clases y métodos de consulta o escritura. */

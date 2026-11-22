@@ -1,0 +1,85 @@
+Mutaciones a mano · olas 4b y 6 (una cada vez, deshecha y comprobada con cmp)
+
+M1 · Sin recortar el saludo repetido antes de mirar lo demás
+  fichero: app/Services/Marketing/Ultron/UltronDraftDefects.php
+  pruebas: tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php
+  resultado: OK (28 tests, 142 assertions) (código 0)
+  fallan: NINGUNA
+  restaurado byte a byte: sí
+
+M2 · La comprobación no pone el plan que impone la política
+  fichero: app/Services/Marketing/Ultron/UltronDraftCheck.php
+  pruebas: tests/Feature/Marketing/UltronCheckCommitParityTest.php
+  resultado: Tests: 45, Assertions: 306, Failures: 1. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations
+  restaurado byte a byte: sí
+
+M3 · En modo memoria, la comprobación cuenta los enlaces de la app
+  fichero: app/Services/Marketing/Ultron/UltronDraftCheck.php
+  pruebas: tests/Feature/Marketing/UltronCheckCommitParityTest.php
+  resultado: Tests: 45, Assertions: 294, Failures: 1. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_en_modo_memoria_los_enlaces_de_la_app_no_cuentan
+  restaurado byte a byte: sí
+
+M4 · El lector no vuelve saludo un saludo puro
+  fichero: app/Services/Marketing/Ultron/UltronTurnPolicyReader.php
+  pruebas: tests/Feature/Marketing/UltronCheckCommitParityTest.php
+  resultado: Tests: 45, Assertions: 304, Failures: 1. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations
+  restaurado byte a byte: sí
+
+M5 · Sin el recorte por el tope antes de la política
+  fichero: app/Services/Marketing/Ultron/UltronDraftDefects.php
+  pruebas: tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php tests/Feature/Marketing/UltronCheckCommitParityTest.php
+  resultado: Tests: 73, Assertions: 444, Failures: 2. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations; Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_mira_el_texto_que_miraria_el_commit_tras_sus_recortes
+  restaurado byte a byte: sí
+
+M6 · Sin el recorte por el registro con el bloque de Laravel
+  fichero: app/Services/Marketing/Ultron/UltronDraftDefects.php
+  pruebas: tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php
+  resultado: Tests: 28, Assertions: 140, Failures: 1. (código 1)
+  fallan: Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_mira_el_texto_que_miraria_el_commit_tras_sus_recortes
+  restaurado byte a byte: sí
+
+M7 · El lector no lee los hechos del gimnasio
+  fichero: app/Services/Marketing/Ultron/UltronTurnPolicyReader.php
+  pruebas: tests/Feature/Marketing/UltronCheckCommitParityTest.php tests/Feature/Marketing/UltronCheckEndpointTest.php
+  resultado: Tests: 102, Assertions: 689, Failures: 4. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations; Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal; Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_politica_solo_lee
+  restaurado byte a byte: sí
+
+M8 · El origen mira la política antes que fallback_mode
+  fichero: app/Services/Marketing/Ultron/UltronReplyOrigin.php
+  pruebas: tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php tests/Feature/Marketing/UltronOriginReportCommandTest.php
+  resultado: Tests: 28, Assertions: 251, Failures: 1, Skipped: 1. (código 1)
+  fallan: Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_la_precedencia_es_la_de_la_consulta
+  restaurado byte a byte: sí
+
+M9 · El informe mete en el reparto lo que no es reply/executed
+  fichero: app/Console/Commands/Marketing/UltronOriginReport.php
+  pruebas: tests/Feature/Marketing/UltronOriginReportCommandTest.php
+  resultado: Tests: 7, Assertions: 80, Failures: 3, Skipped: 1. (código 1)
+  fallan: Tests\Feature\Marketing\UltronOriginReportCommandTest::test_la_salida_de_texto; Tests\Feature\Marketing\UltronOriginReportCommandTest::test_los_agregados_y_el_json; Tests\Feature\Marketing\UltronOriginReportCommandTest::test_reproduce_el_reparto_de_la_linea_base
+  restaurado byte a byte: sí
+
+M10 · El percentil por debajo (floor en vez del rango más cercano)
+  fichero: app/Console/Commands/Marketing/UltronOriginReport.php
+  pruebas: tests/Feature/Marketing/UltronOriginReportCommandTest.php
+  resultado: Tests: 7, Assertions: 196, Failures: 1, Skipped: 1. (código 1)
+  fallan: Tests\Feature\Marketing\UltronOriginReportCommandTest::test_los_agregados_y_el_json
+  restaurado byte a byte: sí
+
+M11 · Una nota de política retocada (una tilde)
+  fichero: app/Services/Marketing/Ultron/UltronRegenerationNotes.php
+  pruebas: tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php tests/Feature/Marketing/UltronCheckEndpointTest.php
+  resultado: Tests: 68, Assertions: 588, Failures: 3. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal; Tests\Feature\Marketing\UltronCheckEndpointTest::test_primero_los_cuatro_y_despues_la_politica; Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_las_seis_de_la_politica_con_su_issue_y_su_nota_literal
+  restaurado byte a byte: sí
+
+M12 · La comprobación no marca la política (el commit sí)
+  fichero: app/Services/Marketing/Ultron/UltronDraftCheck.php
+  pruebas: tests/Feature/Marketing/UltronCheckCommitParityTest.php
+  resultado: Tests: 45, Assertions: 278, Failures: 11. (código 1)
+  fallan: Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e1_un_plan_que_deja_de_venderse_entre_la_comprobacion_y_el_commit; Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations; Tests\Feature\Marketing\UltronCheckCommitParityTest::test_leer_la_politica_no_cambia_la_memoria
+  restaurado byte a byte: sí

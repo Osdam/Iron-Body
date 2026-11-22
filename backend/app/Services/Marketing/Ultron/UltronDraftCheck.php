@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Ultron;
 
+use App\Models\MarketingConversation;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
@@ -21,10 +22,22 @@ use App\Services\Observability\ChannelLog;
  * ({@see UltronDraftDefects}, con las MISMAS funciones que el commit). Si lo
  * incumple y queda presupuesto, n8n pide otra redacción con la nota exacta.
  *
+ * Y LAS REGLAS DE POLÍTICA CORREGIBLES (ola 4b, decisión L-3 del lead): el
+ * saludo que vende, la visita a medias perdida, el primer plan equivocado, la
+ * información sin el dato, solo preguntas y la memoria que vende. La política
+ * del turno se calcula IGUAL que en el commit ({@see UltronTurnPolicyReader}:
+ * la memoria se LEE) y el texto que se mira es el del commit: el plan que
+ * impone la política pone `{{PLAN_NAME}}`/`{{PLAN_PRICE}}`, el modo memoria
+ * quita los enlaces de la app, y los recortes de la pregunta final los hace
+ * {@see UltronDraftDefects::ofPolicy()}. Van DETRÁS de los cuatro de §4.4, con
+ * el tope {@see UltronDraftDefects::MAX_DEFECTS}.
+ *
  * DE SOLO LECTURA, y es la mitad del diseño:
  *  - Ni cerrojo, ni escrituras, ni red, ni despachador. Lee el texto del
- *    mensaje (solo para saber si la persona pregunta un precio), el catálogo
- *    vendible y, si el borrador cotiza, el plan que pondría el precio.
+ *    mensaje (para saber si la persona pregunta un precio y para la política),
+ *    el catálogo vendible, la conversación y su memoria (sin escribirla), los
+ *    hechos del gimnasio si la política los exige y, si el borrador cotiza, el
+ *    plan que pondría el precio.
  *  - Del token usa {@see UltronDecideToken::peek()}: la firma, la caducidad y
  *    el par conversación/mensaje (sin token válido para ESE par no se mira
  *    nada ajeno). No recalcula la fase, las transiciones ni el conocimiento: si
@@ -85,6 +98,7 @@ final class UltronDraftCheck
         private readonly UltronDecideToken $tokens,
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly UltronDraftPlaceholders $placeholders,
+        private readonly UltronTurnPolicyReader $policyReader,
     ) {}
 
     /**
@@ -125,14 +139,30 @@ final class UltronDraftCheck
         $catalog = $this->knowledge->activePlans();
         $inbound = (string) MarketingMessage::query()->whereKey($messageId)->where('conversation_id', $conversationId)->value('body');
 
-        $defectos = UltronDraftDefects::of(
-            ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
-            $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno),
-            $sp,
-            $poDelTurno,
-            $catalog,
-            $inbound,
-        );
+        /*
+         * La política del turno, como la calcula el commit (ola 4b). El token
+         * ata el par, así que la conversación existe; si no (se borró en estos
+         * segundos), no hay política que mirar y el commit lo decidirá.
+         */
+        $conversation = MarketingConversation::query()->whereKey($conversationId)->first();
+        $turno = $conversation === null ? null : $this->policyReader->read($conversation, $inbound, $intent, $catalog);
+        $politica = $turno['policy'] ?? null;
+        // En modo memoria el commit retira los enlaces de la app (el marcador y la herramienta) antes de nada.
+        $modoMemoria = ($politica['memory_mode'] ?? false) === true;
+        $conEnlaces = ! $modoMemoria && in_array(SalesIntents::TOOL_APP_LINKS_SEND, $tools, true);
+
+        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $politica);
+        $defectos = array_slice([
+            ...UltronDraftDefects::of(
+                ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
+                $expandido,
+                $sp,
+                $poDelTurno,
+                $catalog,
+                $inbound,
+            ),
+            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
+        ], 0, UltronDraftDefects::MAX_DEFECTS);
 
         $elapsed = max(0, now()->getTimestamp() - (int) $token['issued_at']);
         $reason = match (true) {
@@ -163,17 +193,22 @@ final class UltronDraftCheck
      *    vendible AHORA ({@see UltronPlansOverview::item()}); el de un plan que
      *    ya no se vende queda literal (eso lo decide el commit).
      *  - `{{PLAN_PRICE}}`/`NAME`/`DURATION` → el plan propuesto si se vende; si
-     *    no, el mensual por defecto, la misma regla que Preparar Commit.
+     *    no, el mensual por defecto, la misma regla que Preparar Commit. Con la
+     *    política del turno (ola 4b), el plan que ella IMPONE (la prioridad
+     *    comercial o el que nombró la persona) si no es el propuesto: el
+     *    commit pisa el plan igual («LA POLÍTICA PISA EL PLAN DEL MODELO»).
      *  - `{{APP_LINKS}}` → los enlaces de la app; si se piden sin marcador, al
      *    final, como `conEnlaces()`. Aproximación declarada: el commit no los
-     *    vuelve a pegar si salieron hace menos de una hora (eso está en la
-     *    memoria, que aquí no se lee), y en un turno de cobro pega además la
-     *    línea del enlace de pago, que aquí no se acuña.
+     *    vuelve a pegar si salieron hace menos de una hora (para eso habría que
+     *    mirar cuándo salieron), y en un turno de cobro pega además la línea
+     *    del enlace de pago, que aquí no se acuña. En modo memoria (ola 4b),
+     *    ninguno: el commit quita el marcador y la herramienta.
      *
      * @param  list<string>  $tools
      * @param  list<int>  $po
+     * @param  array<string,mixed>|null  $politica  la política del turno, si se pudo leer
      */
-    private function expandido(string $raw, mixed $planId, array $tools, array $po): string
+    private function expandido(string $raw, mixed $planId, array $tools, array $po, ?array $politica = null): string
     {
         $texto = $raw;
 
@@ -189,9 +224,19 @@ final class UltronDraftCheck
         }
 
         if ($this->placeholders->needsPlan($texto)) {
+            // El plan que impone la política pisa el propuesto, con la misma condición que el commit.
+            $obligado = $politica['required_plan_id'] ?? null;
+            if ($obligado !== null && in_array($politica['required_plan_source'] ?? null, ['commercial_priority', 'named_by_person'], true)
+                && (! is_numeric($planId) || (int) $obligado !== (int) $planId)) {
+                $planId = (int) $obligado;
+            }
             // El id como lo lee el commit (`resolvePlan()`): un entero, o nada.
             $plan = is_numeric($planId) ? Plan::query()->sellable()->whereKey((int) $planId)->first() : null;
             $texto = $this->placeholders->resolve($texto, $plan ?? $this->knowledge->defaultMonthlyPlan());
+        }
+
+        if (($politica['memory_mode'] ?? false) === true) {
+            return $this->placeholders->resolveAppLinks($texto, '');
         }
 
         if ($this->placeholders->wantsAppLinks($texto)) {

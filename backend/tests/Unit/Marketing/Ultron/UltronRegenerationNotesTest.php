@@ -2,7 +2,9 @@
 
 namespace Tests\Unit\Marketing\Ultron;
 
+use App\Services\Marketing\Ultron\CommercialTurnPolicy;
 use App\Services\Marketing\Ultron\CriticContract;
+use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronPlansOverview;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes as N;
 use App\Services\Marketing\Ultron\UltronRegisterDetector;
@@ -23,6 +25,10 @@ use PHPUnit\Framework\TestCase;
  *     pueden formar un marcador ni un hueco de plantilla.
  *  4. La mezcla: en orden, por notas enteras y a 500 caracteres
  *     (`CriticContract::MAX_NOTES`).
+ *  5. Ola 4b (decisión L-3 del lead): las seis reglas de política que el
+ *     modelo puede corregir reescribiendo entran con su código (el de la
+ *     violación), su `issue` y su nota LITERAL del encargo de la ola 4b
+ *     (`encargo-be-r4.md`, copiadas a mano); las que no entran siguen fuera.
  */
 class UltronRegenerationNotesTest extends TestCase
 {
@@ -45,9 +51,26 @@ class UltronRegenerationNotesTest extends TestCase
 
     private const N_B = 'BENEFICIO DE OTRO PLAN: el borrador atribuye a PLAN_2 un beneficio que en active_plans es de otro plan ("Clases grupales"). A cada plan, solo los benefits de su plan_id.';
 
+    // Ola 4b: las seis de la política, copiadas a mano del encargo (`encargo-be-r4.md`).
+    private const POLITICA = [
+        'policy_greeting_sells' => ['customer_fit', 'SALUDO QUE VENDE: la persona solo saludo. Saluda, da la bienvenida y pregunta en que le puede ayudar. No nombres planes, precios ni pagos y no preguntes todavia su objetivo.'],
+        'policy_active_goal_lost' => ['phase_alignment', 'VISITA A MEDIAS: hay una visita de cortesia a medio concretar y la persona esta dando sus datos. Retoma la visita pidiendo solo el dato que falta (el dia o la hora). No nombres planes ni precios en este turno.'],
+        'policy_wrong_first_plan' => ['phase_alignment', 'PRIMER PLAN EQUIVOCADO: el primer plan que nombres tiene que ser el de commercial_turn_policy.required_plan_id, y no nombres ninguno de forbidden_plan_ids (la persona los rechazo). Los demas permitidos, solo despues y si aportan.'],
+        'policy_answer_without_fact' => ['relevance', 'FALTA EL DATO: la persona pidio informacion del gimnasio y el borrador no da ningun dato de knowledge_base. Responde primero con el dato pedido, copiado tal cual de knowledge_base (direccion, horario o servicios), y deja como mucho una pregunta al final.'],
+        'policy_general_info_only_discovery' => ['relevance', 'SOLO PREGUNTAS: la persona pidio informacion y el borrador solo pregunta. Responde primero con lo que pidio, con un dato concreto, y deja como mucho una pregunta al final.'],
+        'policy_memory_turn_sells' => ['customer_fit', 'PREGUNTA DE MEMORIA: la persona pregunto por algo ya acordado (su visita). Responde solo eso, con el dato del compromiso. No vendas ni preguntes su objetivo en este turno.'],
+    ];
+
     public function test_los_codigos_y_los_detalles_son_listas_cerradas(): void
     {
-        $this->assertSame(['register_tuteo', 'length_over_cap', 'plans_overview', 'benefit_misattributed'], N::CODES);
+        $this->assertSame([
+            'register_tuteo', 'length_over_cap', 'plans_overview', 'benefit_misattributed',
+            // Ola 4b: las seis de la política, después y en este orden.
+            'policy_greeting_sells', 'policy_active_goal_lost', 'policy_wrong_first_plan',
+            'policy_answer_without_fact', 'policy_general_info_only_discovery', 'policy_memory_turn_sells',
+        ], N::CODES);
+        $this->assertSame(array_keys(self::POLITICA), N::POLICY_CODES);
+        $this->assertSame(N::POLICY_CODES, array_slice(N::CODES, 4));
         $this->assertSame(['missing', 'mixed', 'name_written', 'unknown_marker', 'no_list', 'price_written'], N::DETAILS);
         $this->assertSame(UltronPlansOverview::DETAILS, N::DETAILS);
         $this->assertSame(CriticContract::MAX_NOTES, N::MAX_NOTES);
@@ -64,7 +87,7 @@ class UltronRegenerationNotesTest extends TestCase
         foreach (N::entries() as [$code, $detail]) {
             $this->assertContains(N::issue($code, $detail), CriticContract::DIMENSIONS, $code.'/'.$detail);
         }
-        $this->assertCount(4 - 1 + 6, N::entries(), 'tres códigos sin detalle y los seis detalles del panorama');
+        $this->assertCount(4 - 1 + 6 + 6, N::entries(), 'tres códigos sin detalle, los seis detalles del panorama y las seis de la política');
     }
 
     public function test_cada_nota_es_la_literal_del_plan(): void
@@ -78,6 +101,41 @@ class UltronRegenerationNotesTest extends TestCase
         $this->assertSame(self::N_P5, N::note(N::PLANS_OVERVIEW, UltronPlansOverview::NO_LIST));
         $this->assertSame(self::N_P6, N::note(N::PLANS_OVERVIEW, UltronPlansOverview::PRICE_WRITTEN));
         $this->assertSame(self::N_B, N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 'PLAN_2', 'BENEFICIO' => 'Clases grupales']));
+    }
+
+    /** Ola 4b: el código es el de la violación del commit; sin detalle ni parámetros; `issue` del vocabulario y la nota LITERAL. */
+    public function test_las_seis_de_la_politica_con_su_issue_y_su_nota_literal(): void
+    {
+        $this->assertSame([
+            CommercialTurnPolicy::VIOLACION_SALUDO_COMERCIAL, CommercialTurnPolicy::VIOLACION_OBJETIVO_PERDIDO,
+            CommercialTurnPolicy::VIOLACION_PLAN_EQUIVOCADO, CommercialTurnPolicy::VIOLACION_SIN_HECHO,
+            CommercialTurnPolicy::VIOLACION_SOLO_DESCUBRIMIENTO, CommercialTurnPolicy::VIOLACION_MEMORIA_VENDE,
+        ], N::POLICY_CODES, 'el código es el de la violación, tal cual');
+        foreach (self::POLITICA as $codigo => [$issue, $nota]) {
+            $this->assertSame($issue, N::issue($codigo), $codigo);
+            $this->assertContains($issue, CriticContract::DIMENSIONS, $codigo);
+            $this->assertSame($nota, N::note($codigo), $codigo);
+            $this->assertSame($nota, N::note($codigo, null, []), $codigo);
+            $this->assertMatchesRegularExpression('/^[\x20-\x7E]+$/', $nota, 'ASCII imprimible, sin tildes: cruza al modelo');
+        }
+    }
+
+    /** Ola 4b: lo que el commit arregla solo, lo que pone la fila del CRM y lo del Studio (ya con su código) no entran como código de política. */
+    public function test_las_violaciones_que_no_entran_siguen_fuera(): void
+    {
+        foreach ([
+            CommercialTurnPolicy::VIOLACION_SALUDO_REPETIDO, CommercialTurnPolicy::VIOLACION_PANORAMA,
+            UltronCommitService::VIOLACION_MEMORIA_DATO, UltronCommitService::VIOLACION_LONGITUD,
+            UltronCommitService::VIOLACION_REGISTRO, UltronCommitService::VIOLACION_BENEFICIO,
+        ] as $fuera) {
+            $this->assertNotContains($fuera, N::CODES, $fuera);
+            try {
+                N::issue($fuera);
+                $this->fail("{$fuera}: no lanzó");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     public function test_las_marcas_son_de_la_lista_cerrada_y_como_mucho_cinco(): void
@@ -116,7 +174,10 @@ class UltronRegenerationNotesTest extends TestCase
             'número negativo' => [N::PLANS_OVERVIEW, UltronPlansOverview::UNKNOWN_MARKER, ['K' => -1]],
             'texto vacío' => [N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => '  ', 'BENEFICIO' => 'Clases grupales']],
             'texto que no es texto' => [N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => 2, 'BENEFICIO' => 'Clases grupales']],
-            'código desconocido' => ['policy_greeting_sells', null, []],
+            // Ola 4b: `policy_greeting_sells` ya es un código; el saludo repetido (lo arregla el commit) no.
+            'código desconocido' => ['policy_greeting_repeated', null, []],
+            'política con detalle' => [N::POLICY_CODES[0], UltronPlansOverview::MISSING, []],
+            'política con parámetros' => [N::POLICY_CODES[2], null, ['PLAN' => 'Plan Mensual']],
             'panorama sin detalle' => [N::PLANS_OVERVIEW, null, []],
             'detalle desconocido' => [N::PLANS_OVERVIEW, 'otro', []],
             'detalle en otro código' => [N::LENGTH_OVER_CAP, UltronPlansOverview::MISSING, ['L' => 243, 'N' => 200, 'M' => 160]],
@@ -130,7 +191,7 @@ class UltronRegenerationNotesTest extends TestCase
             }
         }
         $this->expectException(InvalidArgumentException::class);
-        N::issue('policy_greeting_sells');
+        N::issue('policy_greeting_repeated');
     }
 
     /** Ninguna nota, con los parámetros más hostiles, lleva `{{` ni una llave suelta. */
@@ -145,7 +206,7 @@ class UltronRegenerationNotesTest extends TestCase
             $this->assertLessThanOrEqual(N::MAX_NOTES, mb_strlen($nota), 'cada nota cabe sola');
             $vistas++;
         }
-        $this->assertSame(9, $vistas);
+        $this->assertSame(15, $vistas);
     }
 
     public function test_la_mezcla_va_en_orden_por_notas_enteras_y_a_quinientos(): void

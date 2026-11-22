@@ -212,8 +212,10 @@ class UltronRegenerationCommitTest extends TestCase
             'reescrituras como objeto' => [self::enElBloque($con(['rewrites' => ['a' => ['by' => 'server']]])), 'regeneration.rewrites'],
             'reescritura de otro' => [self::enElBloque($con(['rewrites' => [['by' => 'model']]])), 'regeneration.rewrites.0.by'],
             'reescritura sin autor' => [self::enElBloque($con(['rewrites' => [['codes' => ['register_tuteo']]]])), 'regeneration.rewrites.0.by'],
-            'código inventado' => [self::enElBloque($con(['rewrites' => [['by' => 'server', 'codes' => ['policy_greeting_sells']]]])), 'regeneration.rewrites.0.codes.0'],
-            'cinco códigos' => [self::enElBloque($con(['rewrites' => [['by' => 'server', 'codes' => ['register_tuteo', 'length_over_cap', 'plans_overview', 'benefit_misattributed', 'register_tuteo']]]])), 'regeneration.rewrites.0.codes'],
+            // Ola 4b: `policy_greeting_sells` ya es un código corregible; el saludo repetido (lo arregla el commit) no lo es.
+            'código inventado' => [self::enElBloque($con(['rewrites' => [['by' => 'server', 'codes' => ['policy_greeting_repeated']]]])), 'regeneration.rewrites.0.codes.0'],
+            // Ola 4b: el tope sube de 4 a `UltronDraftDefects::MAX_DEFECTS` (8): nueve códigos válidos no caben.
+            'nueve códigos' => [self::enElBloque($con(['rewrites' => [['by' => 'server', 'codes' => ['register_tuteo', 'length_over_cap', 'plans_overview', 'benefit_misattributed', 'policy_greeting_sells', 'policy_active_goal_lost', 'policy_wrong_first_plan', 'policy_answer_without_fact', 'policy_general_info_only_discovery']]]])), 'regeneration.rewrites.0.codes'],
             'issue inventado' => [self::enElBloque($con(['rewrites' => [['by' => 'critic', 'issues' => ['vibes']]]])), 'regeneration.rewrites.0.issues.0'],
             'nueve issues' => [self::enElBloque($con(['rewrites' => [['by' => 'critic', 'issues' => ['relevance', 'empathy', 'naturalness', 'context_use', 'sales_judgment', 'pressure_control', 'next_step', 'question_discipline', 'repetition']]]])), 'regeneration.rewrites.0.issues'],
             'tokens negativos' => [self::enElBloque($con(['tokens' => ['input' => -1, 'output' => 3]])), 'regeneration.tokens.input'],

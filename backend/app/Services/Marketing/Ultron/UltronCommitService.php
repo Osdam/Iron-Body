@@ -4574,19 +4574,8 @@ class UltronCommitService
      */
     private function hechosDelGimnasio(): array
     {
-        $hechos = [];
-        foreach ($this->knowledge->activeItems() as $item) {
-            if (in_array($item->category, ['business_identity', 'gym_info', 'location', 'schedule'], true)) {
-                $hechos[] = trim((string) $item->content);
-            }
-        }
-        foreach ((array) ($this->gym->forPrompt()['classes'] ?? []) as $clase) {
-            if (is_array($clase) && ! empty($clase['name'])) {
-                $hechos[] = (string) $clase['name'];
-            }
-        }
-
-        return array_values(array_filter($hechos, fn ($h) => $h !== ''));
+        // La regla vive en la política: la comprobación (`ai/check`, ola 4b) lee los mismos hechos.
+        return CommercialTurnPolicy::knownFacts($this->knowledge->activeItems(), (array) ($this->gym->forPrompt()['classes'] ?? []));
     }
 
     /**

@@ -1,0 +1,54 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+.E.............................................................  63 / 390 ( 16%)
+............................................................... 126 / 390 ( 32%)
+............................................................... 189 / 390 ( 48%)
+............................................................... 252 / 390 ( 64%)
+............................................................... 315 / 390 ( 80%)
+............................................................... 378 / 390 ( 96%)
+............                                                    390 / 390 (100%)
+
+Time: 01:10.753, Memory: 130.50 MB
+
+There was 1 error:
+
+1) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_en_postgresql_la_consulta_de_la_linea_base_da_lo_mismo
+Illuminate\Database\QueryException: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "$1"
+LINE 3:     when metadata::jsonb $1 'fallback_mode' then '3 respaldo...
+                                 ^ (Connection: pgsql, Host: 127.0.0.1, Port: 55432, Database: ultron_studio_lead_ola5, SQL: select 'C · origen del texto', conversation_id,
+  case
+    when metadata::jsonb ? 'fallback_mode' then '3 respaldo del servidor (revisor falló o caído): ' || coalesce(metadata::jsonb->>'fallback_mode', '?')
+    when jsonb_array_length(coalesce(metadata::jsonb->'policy_violations', '[]'::jsonb)) > 0 and metadata::jsonb ? 'policy_discarded_draft' then '2 texto del servidor por la política del commit'
+    when metadata::jsonb->'length'->>'action' = 'trimmed' then '1b texto del modelo, sin su pregunta final (tope)'
+    else '1 texto del modelo, tal cual'
+  end as origen,
+  count(*)
+from marketing_ai_actions
+where conversation_id in (3, 4) and action_type = 'reply' and status = 'executed'
+group by 2, 3 order by 2, 3)
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:838
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:794
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:411
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:104
+
+Caused by
+PDOException: SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near "$1"
+LINE 3:     when metadata::jsonb $1 'fallback_mode' then '3 respaldo...
+                                 ^
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:425
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:827
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:794
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:411
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:104
+
+ERRORS!
+Tests: 390, Assertions: 4051, Errors: 1.

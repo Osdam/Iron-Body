@@ -1,0 +1,892 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+FF.E...EF............EEEEEEEEEEEEEEEEE.EEEE..F..FF.EEEEEEEE..EE  63 / 183 ( 34%)
+E...EEE.EEEEEEEEEEEEEEEEEEEEFEEE............................... 126 / 183 ( 68%)
+................FFFFFFF.FE........................ESEEEEE       183 / 183 (100%)
+
+Time: 00:12.673, Memory: 100.50 MB
+
+There was 1 PHPUnit error:
+
+1) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_cada_camino
+The data provider specified for Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_cada_camino is invalid
+Class "App\Services\Marketing\Ultron\UltronReplyOrigin" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:90
+
+--
+
+There were 67 errors:
+
+1) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_las_seis_de_la_politica_con_su_issue_y_su_nota_literal
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:113
+
+2) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_los_parametros_se_exigen_exactos
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:179
+
+3) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "saludo que vende" ('¡Hola! Bienvenido a Iron Body...edido.', [true], ['policy_greeting_sells'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+4) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "saludo que recibe" ('¡Hola! Bienvenido a Iron Body...yudar?', [true], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+5) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "visita a medias que vende" ('Perfecto. Mientras tanto, el ...pezar.', [true], ['policy_active_goal_lost'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+6) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "visita a medias que la retoma" ('Perfecto. ¿A qué hora le qued...venir?', [true], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+7) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "otro plan primero" ('El Plan Valera y el Plan Mens...n mes.', [4], ['policy_wrong_first_plan'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+8) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "el obligatorio primero" ('El Plan Mensual y el Plan Val...n mes.', [4], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+9) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "un plan rechazado" ('Con el Plan Valera puede veni...uiera.', [[3]], ['policy_wrong_first_plan'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+10) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "sin el dato" ('Con gusto le cuento: somos un...saber?', [true, ['gym_identity']], ['policy_answer_without_fact'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+11) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "con el dato" ('Abrimos de lunes a viernes de...venir?', [true, ['gym_identity']], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+12) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "solo pregunta" ('¿Para qué día le gustaría sab...rario?', [true], ['policy_general_info_only_discovery'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+13) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "pregunta con respuesta" ('Abrimos a las 5:00 a. m. ¿Le sirve?', [true], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+14) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "memoria que vende" ('No veo una visita registrada ...lanes.', [true, true], ['policy_memory_turn_sells'])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+15) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_regla_de_la_politica_con_su_issue_y_su_nota with data set "memoria que contesta" ('No veo una visita registrada ...venir?', [true, true], [])
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:244
+
+16) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_la_politica_sin_version_del_studio_ninguna
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:258
+
+17) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_orden_de_la_politica
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:267
+
+18) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_saludo_repetido_se_recorta_como_en_el_commit
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:281
+
+19) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_mira_el_texto_que_miraria_el_commit_tras_sus_recortes
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDraftDefects::ofPolicy()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:297
+
+20) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_la_precedencia_es_la_de_la_consulta
+Error: Class "App\Services\Marketing\Ultron\UltronReplyOrigin" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:106
+
+21) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_lo_que_no_es_del_vocabulario_no_sale
+Error: Class "App\Services\Marketing\Ultron\UltronReplyOrigin" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:125
+
+22) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_sin_traza_no_se_adivina_el_autor_de_un_tercer_borrador
+Error: Class "App\Services\Marketing\Ultron\UltronReplyOrigin" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:152
+
+23) Tests\Unit\Marketing\Ultron\UltronReplyOriginTest::test_las_llamadas_al_modelo
+Error: Class "App\Services\Marketing\Ultron\UltronReplyOrigin" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php:160
+
+24) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista de usted" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, [])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+25) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que tutea" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['register_tuteo'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+26) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que solo se pasa expandida" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['length_over_cap'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+27) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "lista que tutea y se pasa" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, {{...a más?', null, [], false, ['register_tuteo', 'length_over_cap'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+28) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "falta la lista" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}}, de...eresa?', null, [], false, ['plans_overview'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+29) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "mezcla con el precio" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y {...eresa?', 3, [], false, ['plans_overview'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+30) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "marcador repetido" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos {{PLAN_1}} y o...eresa?', null, [], false, ['plans_overview'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+31) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "nombre a mano" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. Tenemos el Plan Valera...eresa?', null, [], false, ['plans_overview'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+32) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_1}} incluye ent...eresa?', null, [], true, ['benefit_misattributed'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+33) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio en su plan" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_3}} incluye ent...eresa?', null, [], true, [])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+34) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan y tuteo" ('¿Qué planes tienen y cuánto c...lidad?', 'pricing_question', 'Claro. {{PLAN_1}} incluye ent...eresa?', null, [], true, ['register_tuteo', 'benefit_misattributed'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+35) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario de usted" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...ernos?', null, [], false, [])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+36) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario que tutea en la pregunta" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...lases?', null, [], false, ['register_tuteo'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+37) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "horario largo" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...emana?', null, [], false, ['length_over_cap'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+38) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "beneficio de otro plan sin lista" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...pezar?', null, [], true, ['benefit_misattributed'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+39) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "enlaces de la app que no caben" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...a app.', null, ['app_links_send'], false, ['length_over_cap'])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+40) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_comprobacion_marca_si_y_solo_si_el_commit_descarta_recorta_o_viola_por_esa_causa with data set "enlaces de la app que caben" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'El gimnasio abre de lunes a v...a app.', null, ['app_links_send'], false, [])
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:261
+
+41) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "saludo que pregunta si ha entrenado" ('Hola buenas tardes', 'greeting', 'Hola, buenas tardes. Bienveni...antes?', null, '', ['policy_greeting_sells'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+42) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "saludo puro con la intención de precio (el commit lo vuelve saludo)" ('Hola', 'pricing_question', 'Hola, bienvenido a Iron Body....yudar?', null, '', ['policy_greeting_sells'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+43) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "saludo que recibe" ('Hola buenas tardes', 'greeting', 'Hola, muy buenas tardes. Bien...r hoy?', null, '', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+44) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "saludo largo con el objetivo al final (el tope quita la pregunta)" ('Hola', 'greeting', 'Hola, muy buenas tardes. Bien...etivo?', null, '', ['length_over_cap'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+45) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "visita a medias que vende" ('en la mañana', 'unknown', 'Perfecto. Mientras tanto, el ...pezar.', 4, 'visita', ['policy_active_goal_lost'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+46) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "visita a medias que la retoma" ('en la mañana', 'unknown', 'Perfecto, en la mañana. ¿A qu...venir?', null, 'visita', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+47) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "el plan que nombró la persona no va primero" ('¿Cuánto cuesta el Plan Mensual?', 'pricing_question', 'El Plan Valera cuesta {{PLAN_...cluye?', 3, '', ['policy_wrong_first_plan'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+48) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "el marcador del nombre con el plan que impone la política" ('¿Cuánto cuesta el Plan Mensual?', 'pricing_question', 'El {{PLAN_NAME}} cuesta {{PLA...cluye?', 3, '', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+49) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "el que nombró va primero" ('¿Cuánto cuesta el Plan Mensual?', 'pricing_question', 'El Plan Mensual cuesta {{PLAN...cluye?', 4, '', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+50) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "nombra un plan que rechazó" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'Abrimos de lunes a viernes de...sirve?', null, 'rechazado', ['policy_wrong_first_plan'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+51) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "nombra otro plan" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', 'Abrimos de lunes a viernes de...sirve?', null, 'rechazado', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+52) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "información sin el dato" ('Quiero información del gimnasio', 'general_info', 'Con gusto le cuento: somos un...imero?', null, '', ['policy_answer_without_fact'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+53) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "información con el dato" ('Quiero información del gimnasio', 'general_info', 'Con gusto. Abrimos de lunes a...saber?', null, '', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+54) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "información que solo pregunta" ('Quiero información del gimnasio', 'general_info', '¿Qué le gustaría saber del gimnasio?', null, '', ['policy_answer_without_fact', 'policy_general_info_only_discovery'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+55) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "el horario que solo pregunta" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', '¿Para qué día de la semana le...rario?', null, '', ['policy_general_info_only_discovery'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+56) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "memoria que vende" ('¿A qué hora era mi visita?', 'unknown', 'No veo una visita registrada ...lanes.', null, '', ['policy_memory_turn_sells'])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+57) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_la_politica_la_marca_la_comprobacion_si_y_solo_si_el_commit_la_pone_en_policy_violations with data set "memoria que contesta" ('¿A qué hora era mi visita?', 'unknown', 'No veo una visita registrada ...venir?', null, '', [])
+Illuminate\Contracts\Container\BindingResolutionException: Target class [App\Services\Marketing\Ultron\UltronTurnPolicyReader] does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1124
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+Caused by
+ReflectionException: Class "App\Services\Marketing\Ultron\UltronTurnPolicyReader" does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:1122
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:933
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1078
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Container/Container.php:864
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1058
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php:138
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:319
+
+58) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e1_un_plan_que_deja_de_venderse_entre_la_comprobacion_y_el_commit
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:372
+
+59) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e2_el_commit_retira_una_frase_antes_de_medir
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:388
+
+60) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_e3_los_enlaces_que_ya_salieron_no_se_pegan
+Error: Undefined constant App\Services\Marketing\Ultron\UltronRegenerationNotes::POLICY_CODES
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:464
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:407
+
+61) Tests\Feature\Marketing\UltronCheckEndpointTest::test_el_lector_de_la_politica_no_nombra_nada_que_escriba
+ErrorException: file_get_contents(/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronTurnPolicyReader.php): Failed to open stream: No such file or directory
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:753
+
+62) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_reproduce_el_reparto_de_la_linea_base
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:62
+
+63) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_los_agregados_y_el_json
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:146
+
+64) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_sin_precios_no_hay_costo_y_sin_turnos_no_hay_porcentajes
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:178
+
+65) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_la_salida_de_texto
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:195
+
+66) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_sin_datos_personales_ni_textos_ni_ids
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:234
+
+67) Tests\Feature\Marketing\UltronOriginReportCommandTest::test_las_opciones_filtran_y_validan
+Symfony\Component\Console\Exception\CommandNotFoundException: The command "ultron:origin-report" does not exist.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Console/Application.php:162
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:349
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php:260
+
+--
+
+There were 15 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_los_codigos_y_los_detalles_son_listas_cerradas
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     1 => 'length_over_cap',
+     2 => 'plans_overview',
+     3 => 'benefit_misattributed',
+-    4 => 'policy_greeting_sells',
+-    5 => 'policy_active_goal_lost',
+-    6 => 'policy_wrong_first_plan',
+-    7 => 'policy_answer_without_fact',
+-    8 => 'policy_general_info_only_discovery',
+-    9 => 'policy_memory_turn_sells',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:66
+
+2) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_cada_codigo_da_un_issue_del_vocabulario_del_revisor
+tres códigos sin detalle, los seis detalles del panorama y las seis de la política
+Failed asserting that actual size 9 matches expected size 15.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:90
+
+3) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_ninguna_nota_contiene_llaves
+Failed asserting that 9 is identical to 15.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:209
+
+4) Tests\Unit\Marketing\Ultron\UltronRegenerationTraceTest::test_los_codigos_de_la_politica_pasan_a_la_traza
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+         'by' => 'server',
+         'codes' => Array &2 [
+             0 => 'register_tuteo',
+-            1 => 'policy_greeting_sells',
+-            2 => 'policy_memory_turn_sells',
+         ],
+         'issues' => Array &3 [
+             0 => 'naturalness',
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationTraceTest.php:73
+
+5) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_ninguna_expresion_nueva_lleva_propiedades_unicode
+Failed asserting that file "/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php" exists.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:77
+
+6) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_las_piezas_nuevas_son_puras
+Failed asserting that '' [ASCII](length: 0) contains "final class " [ASCII](length: 12).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:102
+
+7) Tests\Feature\Marketing\UltronCheckCommitParityTest::test_leer_la_politica_no_cambia_la_memoria
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'policy_active_goal_lost',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php:355
+
+8) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "saludo que vende" ('Hola buenas tardes', 'greeting', 'Hola, buenas tardes. Bienveni...antes?', null, '', 'policy_greeting_sells', 'customer_fit')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_greeting_sells',
+-        'detail' => null,
+-        'issue' => 'customer_fit',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+9) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "visita a medias que vende" ('en la mañana', 'unknown', 'Perfecto. Mientras tanto, el ...pezar.', 4, 'visita', 'policy_active_goal_lost', 'phase_alignment')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_active_goal_lost',
+-        'detail' => null,
+-        'issue' => 'phase_alignment',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+10) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "primer plan equivocado" ('¿Cuánto cuesta el Plan Mensual?', 'pricing_question', 'El Plan Valera cuesta {{PLAN_...cluye?', 3, '', 'policy_wrong_first_plan', 'phase_alignment')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_wrong_first_plan',
+-        'detail' => null,
+-        'issue' => 'phase_alignment',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+11) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "información sin el dato" ('Quiero información del gimnasio', 'general_info', 'Con gusto le cuento: somos un...imero?', null, '', 'policy_answer_without_fact', 'relevance')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_answer_without_fact',
+-        'detail' => null,
+-        'issue' => 'relevance',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+12) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "solo preguntas" ('¿Cuál es el horario de atenci...emana?', 'schedule_question', '¿Para qué día de la semana le...rario?', null, '', 'policy_general_info_only_discovery', 'relevance')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_general_info_only_discovery',
+-        'detail' => null,
+-        'issue' => 'relevance',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+13) Tests\Feature\Marketing\UltronCheckEndpointTest::test_cada_regla_de_la_politica_con_su_nota_literal with data set "memoria que vende" ('¿A qué hora era mi visita?', 'unknown', 'No veo una visita registrada ...lanes.', null, '', 'policy_memory_turn_sells', 'customer_fit')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => Array &1 [
+-        'code' => 'policy_memory_turn_sells',
+-        'detail' => null,
+-        'issue' => 'customer_fit',
+-    ],
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:680
+
+14) Tests\Feature\Marketing\UltronCheckEndpointTest::test_primero_los_cuatro_y_despues_la_politica
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+         'detail' => null,
+         'issue' => 'naturalness',
+     ],
+-    1 => Array &2 [
+-        'code' => 'policy_greeting_sells',
+-        'detail' => null,
+-        'issue' => 'customer_fit',
+-    ],
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:693
+
+15) Tests\Feature\Marketing\UltronCheckEndpointTest::test_la_politica_solo_lee
+leyó la política (y los hechos del gimnasio)
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'policy_answer_without_fact',
+-    1 => 'policy_general_info_only_discovery',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronCheckEndpointTest.php:731
+
+ERRORS!
+Tests: 183, Assertions: 993, Errors: 68, Failures: 15, Warnings: 1, Skipped: 1.

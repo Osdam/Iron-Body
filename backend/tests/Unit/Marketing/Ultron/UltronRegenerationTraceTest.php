@@ -63,6 +63,19 @@ class UltronRegenerationTraceTest extends TestCase
         ], T::forMetadata(['contract' => 'ultron-regen/1', 'drafts' => 1], ['attempt' => 1]));
     }
 
+    /** Ola 4b: los códigos de política corregibles pasan a la traza como los demás; los que no son corregibles, no. */
+    public function test_los_codigos_de_la_politica_pasan_a_la_traza(): void
+    {
+        $bloque = ['contract' => 'ultron-regen/1', 'drafts' => 2, 'rewrites' => [
+            ['by' => 'server', 'codes' => ['register_tuteo', 'policy_greeting_sells', 'policy_greeting_repeated', 'policy_memory_turn_sells'], 'issues' => ['naturalness', 'customer_fit']],
+        ]];
+
+        $this->assertSame(
+            [['by' => 'server', 'codes' => ['register_tuteo', 'policy_greeting_sells', 'policy_memory_turn_sells'], 'issues' => ['naturalness', 'customer_fit']]],
+            T::forMetadata($bloque, ['attempt' => 2])['rewrites'],
+        );
+    }
+
     /** `consistent = (drafts === critic.attempt)` si hay revisor; sin revisor que cuadrar, null. */
     public function test_consistent_solo_marca(): void
     {

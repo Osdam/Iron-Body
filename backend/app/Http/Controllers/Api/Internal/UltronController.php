@@ -21,6 +21,7 @@ use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronDecideService;
 use App\Services\Marketing\Ultron\UltronDraftCheck;
+use App\Services\Marketing\Ultron\UltronDraftDefects;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes;
 use App\Services\Marketing\Ultron\UltronSource;
 use Illuminate\Http\JsonResponse;
@@ -324,7 +325,8 @@ class UltronController extends Controller
             'regeneration.rewrites' => ['nullable', 'array', 'max:2', self::lista('rewrites')],
             'regeneration.rewrites.*' => ['array'],
             'regeneration.rewrites.*.by' => ['required', 'string', Rule::in(['server', 'critic'])],
-            'regeneration.rewrites.*.codes' => ['nullable', 'array', 'max:'.count(UltronRegenerationNotes::CODES), self::lista('codes')],
+            // Los códigos de UNA comprobación: como mucho los que caben en ella (ola 4b: 8, no los 10 del vocabulario).
+            'regeneration.rewrites.*.codes' => ['nullable', 'array', 'max:'.UltronDraftDefects::MAX_DEFECTS, self::lista('codes')],
             'regeneration.rewrites.*.codes.*' => ['string', Rule::in(UltronRegenerationNotes::CODES)],
             'regeneration.rewrites.*.issues' => ['nullable', 'array', 'max:'.CriticContract::MAX_ISSUES, self::lista('issues')],
             'regeneration.rewrites.*.issues.*' => ['string', Rule::in(CriticContract::DIMENSIONS)],
