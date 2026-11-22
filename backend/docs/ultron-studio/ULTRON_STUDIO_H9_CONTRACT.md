@@ -629,23 +629,40 @@ Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» 
   - No se escribe nada: el trabajo y la inscripción siguen hasta el resultado o el fin de la ventana.
   - `human_requested` no retira nada (L9-66).
   - El motivo queda en el registro de la aplicación (`outreach.assisted.claim_withheld`, nivel `warning`: trabajo, motivo y si había datos), sin datos personales.
-- **La bandeja retiene también por los frenos, por el plazo, por la persona y por la estrategia (enmiendas aditivas del 12-11-2026: I-1 a I-4 de `informe-security-bandeja.md`, L9-117; N-1, N-2 y m-1 a m-8 de `informe-security-bandeja-condiciones.md`, L9-118).** Cada trabajo tiene como mucho un motivo, por este orden:
-  1. `brake`: la PARADA GLOBAL, el freno del canal `assisted` (también `legal_hold`) o el de la estrategia del trabajo, con la lectura de N2 (`OutreachStop::openScopes()`).
-  2. `strategy_stopped` (L9-118): la (versión, parte) de su inscripción ya no está en marcha en la cadena: pausada, apagada, revertida, archivada o ilegible. Se lee una vez por petición con `OutreachPublishedStrategies::liveStrategies()`.
-  3. `opted_out` (L9-118): se SABE una señal de «no contactar» de N1/N2, con la entrada de la escalera (`CoreProjection::policyInput()`):
+- **La bandeja retiene también por los frenos, por el plazo, por la persona y por la estrategia (enmiendas aditivas del 12-11-2026: I-1 a I-4 de `informe-security-bandeja.md`, L9-117; N-1, N-2 y m-1 a m-8 de `informe-security-bandeja-condiciones.md`, L9-118; y la enmienda del 22-11-2026, abajo).** Cada trabajo tiene como mucho un motivo. Son once (`AssistedQueue::WITHHELD_REASONS`) y van por este orden:
+  1. `brake`: la PARADA GLOBAL, el freno del canal `assisted` (también `legal_hold`) o el de la estrategia del trabajo, con la lectura de N2 (`OutreachStop::openScopes()`). También la configuración que ya no deja salir un asistido (F-1): el modo fuera de `live` (N2 `mode_off`, también la sombra) o el canal asistido apagado (N4 `channel_disabled`). Se lee en cada petición, así que al volver a encender vuelve.
+  2. `strategy_stopped` (L9-118): la (versión, parte) de su inscripción ya no está en marcha en la cadena: pausada, apagada, revertida, archivada o ilegible. También si la referencia del Studio de su versión ya no vale (N3 `studio_reference_invalid`, m-2): la versión del Studio no se encuentra, su huella es distinta, la línea base es la de otro catálogo o la referencia no se puede leer. Se lee una vez por petición con `OutreachPublishedStrategies::liveStrategies()`.
+  3. `template_not_approved` (F-3): su plantilla ya no está aprobada con la huella del sello del trabajo (N4). No hay guion que dar.
+  4. `opted_out` (L9-118): se SABE una señal de «no contactar» de N1/N2, con la entrada de la escalera (`CoreProjection::policyInput()`):
      - `do_not_contact`, suyo o de un prospecto con su número;
      - el *opt-out* comercial, con finalidad comercial;
-     - el consentimiento del medio denegado (`lead.consent_denied`). **La revocación del consentimiento de voz todavía NO retiene (R3-1 de `informe-security-bandeja-ronda3.md`): pendiente antes del asistido en vivo;**
+     - el consentimiento del medio denegado (`lead.consent_denied`);
+     - por voz, la revocación del consentimiento que consta (`voice.consent_revoked`: el último evento válido de algún contacto de voz activo es `revoked`; R3-1);
      - la exclusión de voz, en un trabajo por voz;
      - la supresión del libro (`SubjectSuppressions`), también la palabra de baja POSIBLE sin resolver (SC-2).
-  4. `complaint_recent`: N6, una queja dentro de la ventana.
-  5. `policy_unknown` (L9-118): lo del punto 3 no se puede comprobar: persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido.
-  6. `complaint_unknown`: N6 sin datos de eventos.
-  7. `expired`: `expires_at <= ahora`, el borde del despachador. La política se evaluó para ese plazo: pasado, no se contacta con esa decisión.
+  5. `complaint_recent`: N6, una queja dentro de la ventana.
+  6. `subject_minor` (R3-3): N1, se sabe que es menor. Retiene en cualquier medio y finalidad. Si la edad no se sabe, no retiene, igual que la escalera (D9-15: la edad no se infiere).
+  7. `rne_check_missing` (R3-3): N1, solo por voz. Algún contacto de voz activo no tiene una consulta al RNE vigente.
+  8. `canary_scope_mismatch` (F-2): en la parte canario (N5) o en una versión que declara «solo canario» (N3 `canary_only_declared`), su número ya no es un canario activo del medio del trabajo: se desactivó o se revocó después de salir.
+  9. `policy_unknown` (L9-118): lo de los puntos 4, 6, 7 u 8 no se puede comprobar. Puede ser una persona sin resolver, la clave suprimida `x:<id>` o un valor desconocido. Por voz, también un consentimiento que ya no está concedido sin que conste una revocación, como un contacto retirado (R3-1).
+  10. `complaint_unknown`: N6 sin datos de eventos.
+  11. `expired`: `expires_at <= ahora`, el borde del despachador. La política se evaluó para ese plazo: pasado, no se contacta con esa decisión.
 
-  Si los frenos, la cadena, la foto o el libro no se pueden leer, la bandeja y la reclamación fallan cerrado. Los frenos ajenos al H9 no se miran aquí (D9-14; decisión D-3, pendiente del propietario), ni el RNE sin consulta vigente ni `subject_minor` (R3-3, ídem).
+  Si los frenos, la configuración, la cadena, la plantilla, la foto o el libro no se pueden leer, la bandeja y la reclamación fallan cerrado. Los frenos ajenos al H9 no se miran aquí (D9-14; decisión D-3, pendiente del propietario).
 
-  Un trabajo SIN reclamar con motivo no se ofrece y no se reclama: 409 `not_in_queue`. Uno YA reclamado se queda para que su reclamante registre el resultado (E13 no cambia), con `person` y `script` en null y `contactWithheld` = el motivo, que solo ve quien lo reclamó. La bandeja no escribe nada. Desde L9-118, la respuesta de una reclamación NUEVA también lleva `contactWithheld: 'brake'` si un freno se echó entre la comprobación y la escritura (se releen tras el `UPDATE`; solo los frenos: R3-2), y la REPETICIÓN de E12 con la inscripción cerrada responde 409 `enrollment_closed`.
+  Un trabajo SIN reclamar con motivo no se ofrece y no se reclama: 409 `not_in_queue`. Uno YA reclamado se queda para que su reclamante registre el resultado (E13 no cambia), con `person` y `script` en null y `contactWithheld` = el motivo, que solo ve quien lo reclamó. La bandeja no escribe nada. La REPETICIÓN de E12 con la inscripción cerrada responde 409 `enrollment_closed` (L9-118). Desde la enmienda del 22-11-2026, la reclamación NUEVA lo relee TODO tras el `UPDATE` (R3-2), así que cualquier motivo que llegue entre la comprobación y la escritura sale ya en el 201 como `contactWithheld`. Si lo que llega es el cierre de la inscripción, responde 409 `enrollment_closed`, como la repetición (m-1). La reclamación queda escrita: no se deshace nada.
+
+  **Enmienda del 22-11-2026, autorizada por el lead por la directiva definitiva del propietario (§8: seguridad R3).** Cierra lo que `informe-security-bandeja-ronda3.md` y `informe-security-bandeja-r3.md` encontraron. Solo retiene más, nunca menos, y no cambia ninguna decisión de la escalera ni nada de lo que se guarda:
+  - **R3-1:** la revocación del consentimiento de voz que consta retiene con `opted_out`. El consentimiento que deja de estar concedido sin una revocación que conste retiene con `policy_unknown`.
+  - **R3-2:** tras el `UPDATE`, la reclamación relee todo, no solo los frenos.
+  - **R3-3:** retienen `subject_minor` y `rne_check_missing` (directiva del propietario del 21-11-2026).
+  - **F-1:** el modo fuera de `live` o el canal asistido apagado retienen como un freno (`brake`).
+  - **F-2:** el canario desactivado o revocado después de salir retiene (`canary_scope_mismatch`).
+  - **F-3:** la plantilla que deja de estar aprobada retiene (`template_not_approved`).
+  - **m-1:** la inscripción que se cierra entre la comprobación y la escritura da 409 `enrollment_closed`.
+  - **m-2:** la referencia del Studio que deja de valer retiene (`strategy_stopped`).
+
+  Los cuatro códigos nuevos son `template_not_approved`, `subject_minor`, `rne_check_missing` y `canary_scope_mismatch`. Son aditivos: el CRM trata un motivo desconocido como «no contactes», y los textos que le faltan son C-1 de `informe-security-bandeja-r3.md`.
 
   La página se llena por detrás de lo retenido. Lo vencido, lo frenado y lo de una parte que no está en marcha, sin reclamar, se descarta en SQL. Lo de la persona va por tandas de 50, con una foto y una consulta de supresión por tanda, y un tope de 200 filas leídas. `meta.withheld` dice cuántos sin reclamar y no vencidos no se ofrecen, sin decir de quién: los frenados y los de estrategia parada, de forma exacta; lo de la persona, como cota inferior. `meta.scanCapped` (L9-118) dice si la lectura llegó al tope sin llenar la página. En `all` no sale lo reclamado por OTRA persona y ya vencido (L9-118).
 - La política aplicó horario, frecuencia y consentimiento **del medio** (WhatsApp o voz). La persona sigue siendo responsable del contacto real.
@@ -1068,8 +1085,8 @@ Un trabajo usa lo que tenía su versión al planificarse. Si la cadena cambia, s
 | E8 | `POST brakes` [M] | `commercial_automation.stop` | **PARADA GLOBAL** (`scope: global`), o por estrategia o canal; motivo obligatorio |
 | E9 | `POST brakes/{uuid}/release` [M] | `commercial_automation.release` + persona distinta de quien lo abrió | Nota obligatoria |
 | E10 | `GET people/{subjectRef}/timeline` [O] | `commercial_automation.timeline_view` | Queda en el libro |
-| E11 | `GET assisted/queue` [O] | `commercial_automation.assisted_work` | Sin teléfonos; con un enlace a la ficha; sin los trabajos sin reclamar retenidos (los siete motivos de D9-9.5; L9-116 a L9-118); `contactWithheld` en cada fila; `meta.withheld` y `meta.scanCapped` (aditivos); en `all`, sin lo reclamado por otra persona y ya vencido |
-| E12 | `POST assisted/{jobUuid}/claim` [O] | Ídem | Una vez; 409 `not_in_queue` con cualquier motivo de retención (D9-9.5); 409 `enrollment_closed` también en la repetición (L9-118); la respuesta lleva `contactWithheld` |
+| E11 | `GET assisted/queue` [O] | `commercial_automation.assisted_work` | Sin teléfonos; con un enlace a la ficha; sin los trabajos sin reclamar retenidos (los once motivos de D9-9.5, por este orden: `brake`, `strategy_stopped`, `template_not_approved`, `opted_out`, `complaint_recent`, `subject_minor`, `rne_check_missing`, `canary_scope_mismatch`, `policy_unknown`, `complaint_unknown` y `expired`; L9-116 a L9-118 y la enmienda del 22-11-2026); `contactWithheld` en cada fila, con uno de esos once; `meta.withheld` y `meta.scanCapped` (aditivos); en `all`, sin lo reclamado por otra persona y ya vencido |
+| E12 | `POST assisted/{jobUuid}/claim` [O] | Ídem | Una vez; 409 `not_in_queue` con cualquiera de los once motivos de retención (D9-9.5); 409 `enrollment_closed` también en la repetición (L9-118) y si la inscripción se cierra entre la comprobación y la escritura (m-1, enmienda del 22-11-2026); la respuesta lleva `contactWithheld`, también con el motivo que llegue entre la comprobación y la escritura (R3-2) |
 | E13 | `POST assisted/{jobUuid}/outcome` [O] | Ídem + quien reclamó | Resultado del conjunto cerrado; idempotente por `clientRequestId` |
 
 En total, **42 rutas**: 29 del Studio y 13 de ejecución. Con el compromiso mínimo (M), 36: 27 del Studio y 9 de ejecución. Ninguna es pública ni recibe webhooks el 15-11: los normalizadores de Meta y de voz (W9 y V9) leen tablas que ya existen.
