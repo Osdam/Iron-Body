@@ -78,6 +78,13 @@ final class OutboundPolicy
 
     public const REASON_DUPLICATE = 'duplicate_request';
 
+    /**
+     * El motivo de la guarda del número (D8-5; E4-4: el literal, SOLO en este
+     * fichero). N-1 (revisión de security del lote 3): el job lo repite antes
+     * de marcar con esta constante, la misma que da la política.
+     */
+    public const REASON_NUMBER_IS_MESSAGING = 'voice_number_is_whatsapp';
+
     /** Los motivos del destino y del calendario ({@see targetReasons()}): los que el job vuelve a mirar antes de marcar. */
     public const TARGET_REASONS = [
         'source_not_allowed', 'not_an_active_voice_canary', 'contact_not_authorized', 'no_voice_consent', 'excluded', 'rne_check_missing',
@@ -122,7 +129,7 @@ final class OutboundPolicy
             $motivos[] = 'outbound_disabled';
         }
         if ($f['voiceFromConfigured'] === true && $f['voiceNumberCollides'] === true) {
-            $motivos[] = 'voice_number_is_whatsapp';
+            $motivos[] = self::REASON_NUMBER_IS_MESSAGING;
         }
         // B8-g: ninguna saliente sin vigilar el número que de verdad llama (falla cerrado).
         if ($f['voiceFromConfigured'] === true && $f['numberCheck'] === self::NUMBER_UNVERIFIED) {

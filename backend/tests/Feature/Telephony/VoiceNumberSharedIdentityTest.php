@@ -10,9 +10,13 @@ use App\Models\Voice\VoiceCallEvent;
 use App\Services\Telephony\OutboundGate;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceContacts;
+use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoiceProviderState;
+use App\Services\Voice\Dto\OutboundCallRequest;
+use App\Services\Voice\Dto\OutboundCallResult;
 use App\Services\Voice\VoiceCallPolicy;
+use App\Services\Voice\VoiceCallStarter;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
@@ -24,6 +28,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
+use RuntimeException;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
 
@@ -219,8 +224,10 @@ class VoiceNumberSharedIdentityTest extends TestCase
     }
 
     /**
-     * El job sin cambio (TOCTOU): admitida en la puerta, si la siguiente conciliación ve otra cosa (un agente en el
-     * número), echa el freno y el job cancela con `voice_braked`; si la observación caduca, `number_unverified`.
+     * El job (TOCTOU): admitida en la puerta, si la siguiente conciliación ve otra cosa (un agente en el
+     * número), echa el freno y el job cancela; si la observación caduca, `number_unverified`. Desde N-1 (revisión de
+     * security del lote 3) el job repite la guarda del número ANTES que el freno, como el orden de la puerta: cancela con
+     * `voice_number_is_whatsapp` y el freno queda echado (antes, sin esa guarda, lo paraba solo el freno: `voice_braked`).
      */
     public function test_si_la_observacion_cambia_o_caduca_entre_la_puerta_y_el_marcado_el_job_no_marca(): void
     {
@@ -238,13 +245,82 @@ class VoiceNumberSharedIdentityTest extends TestCase
         $this->assertSame('number_unverified', $this->recheckDelJob($llamada));
         $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observation_unverified'], VoiceNumberGuard::sharedIdentity());
 
-        // Una conciliación nueva ve un agente en el número: freno, y el job cancela por él.
+        // Una conciliación nueva ve un agente en el número: freno, y el job cancela por la guarda del número, la primera.
         $this->provider(agente: self::SEALED_AGENT);
         $r = $this->reconcile();
         $this->assertSame([1, 'number_is_messaging', ['declared' => true, 'admitted' => false, 'reason' => 'observed_agent'], true],
             [$r['code'], $r['result'], $r['sharedWithMessaging'], $r['brakeOpened']]);
-        $this->assertSame('voice_braked', $this->recheckDelJob($llamada));
+        $this->assertTrue(VoiceBrake::isOpen());
         $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
+        $this->assertSame('voice_number_is_whatsapp', $this->recheckDelJob($llamada));
+        $puerta = $this->puerta($canario);
+        $this->assertContains('voice_number_is_whatsapp', $puerta);
+        $this->assertContains('voice_braked', $puerta);
+    }
+
+    /**
+     * N-1 (revisión de security del lote 3; su sonda S1, como prueba): admitida en la puerta y con la saliente
+     * `requested`, se retira la identidad SIN conciliar (la declaración, las entrantes o `INBOUND_CAPABLE`). La puerta
+     * dice `voice_number_is_whatsapp`; el job, que antes pasaba (null) y habría marcado, cancela con el MISMO motivo y
+     * como los demás de su recomprobación: `canceled` con su fin, sin evento, la reserva liberada y nada marcado.
+     */
+    public function test_si_se_retira_la_identidad_entre_la_puerta_y_el_marcado_el_job_cancela_con_voice_number_is_whatsapp(): void
+    {
+        $canario = $this->activeVoiceCanary();
+        $this->publishVoice();
+        VoiceProviderState::recordStudioVerification(true, now());
+        $this->provider();
+        $r = $this->reconcile();
+        $this->assertSame([0, 'outbound_only', false], [$r['code'], $r['result'], $r['brakeOpened']]);
+        // Desde aquí, nada sale a la red: la deriva está en su caché y el iniciador lanza si se le llama.
+        Http::swap(new Factory);
+        Http::fake();
+        $iniciador = new class implements VoiceCallStarter
+        {
+            public function startOutbound(OutboundCallRequest $request): OutboundCallResult
+            {
+                throw new RuntimeException('retirada la identidad, el job no tenía que marcar');
+            }
+        };
+        $cancelar = new ReflectionMethod(PlaceOutboundVoiceCall::class, 'cancel');
+        $pedida = function () use ($canario): VoiceCall {
+            Cache::put(OutboundGate::DRIFT_CACHE_PREFIX.self::SEALED_AGENT, false, OutboundGate::DRIFT_CACHE_SECONDS);
+
+            return $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $canario, 'remote' => self::CANARY_PHONE]);
+        };
+        $dia = VoiceCostGuard::budgetDay(now());
+
+        // Cada cambio de configuración: [retirada, en regla].
+        $cambios = ['voice.number.shared_with_messaging' => [false, true], 'voice.inbound.enabled' => [true, false], 'voice.number.inbound_capable' => [true, false]];
+        foreach ($cambios as $clave => [$retirada, $enRegla]) {
+            $llamada = $pedida();
+            $this->assertNull($this->recheckDelJob($llamada), "{$clave}: admitida y todo en regla, el job pasaría");
+            $this->assertSame((int) $llamada->reserved_micros, VoiceCostGuard::committedMicros($dia), "{$clave}: pedida, su reserva cuenta");
+
+            config([$clave => $retirada]);
+            $this->assertTrue(VoiceNumberGuard::collidesForPolicy(), $clave);
+            $this->assertContains('voice_number_is_whatsapp', $this->puerta($canario), "{$clave}: la puerta");
+            $this->assertSame('voice_number_is_whatsapp', $this->recheckDelJob($llamada), "{$clave}: el job, con el motivo de la puerta");
+            $this->assertSame('canceled', $cancelar->invoke(new PlaceOutboundVoiceCall((int) $llamada->id), VoiceCall::query()->findOrFail($llamada->id), 'voice_number_is_whatsapp'));
+
+            $fila = VoiceCall::query()->findOrFail($llamada->id);
+            $this->assertSame(['canceled', 'voice_number_is_whatsapp'], [$fila->status, $fila->policy_reason], $clave);
+            $this->assertNotNull($fila->ended_at, "{$clave}: la fila no queda a medias");
+            $this->assertSame(0, VoiceCallEvent::query()->where('call_id', $llamada->id)->count(), "{$clave}: sin evento (fixture §job: events = [])");
+            $this->assertSame(0, VoiceCostGuard::committedMicros($dia), "{$clave}: cancelada, la reserva liberada");
+
+            config([$clave => $enRegla]);
+            $this->assertFalse(VoiceNumberGuard::collidesForPolicy(), "{$clave}: deshecho el cambio, vuelve a estar admitida");
+        }
+
+        // El job DE VERDAD (`run()`), sin marcar nunca: cerrada, por la constante, que va primero; abierta, por la guarda del número.
+        $llamada = $pedida();
+        config(['voice.number.shared_with_messaging' => false]);
+        $this->assertSame('canceled', (new PlaceOutboundVoiceCall((int) $llamada->id))->run($iniciador));
+        $fila = VoiceCall::query()->findOrFail($llamada->id);
+        $this->assertSame(['canceled', VoiceCallPolicy::CALLS_ENABLED_IN_CODE ? 'voice_number_is_whatsapp' : 'calls_disabled_in_code'], [$fila->status, $fila->policy_reason]);
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia));
+        Http::assertNothingSent();
     }
 
     /**

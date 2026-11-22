@@ -51,7 +51,10 @@ use Throwable;
  *     `outbound_disabled`, `twilio_voice_disabled`), y el número que de verdad
  *     llama (B8-g: sin una conciliación del número de menos de 2 h que cuadre,
  *     `number_unverified`; si dice que no es `TWILIO_VOICE_FROM`,
- *     `number_mismatch`; una lectura de caché, como en la puerta);
+ *     `number_mismatch`; una lectura de caché, como en la puerta), y la
+ *     guarda del número (N-1, revisión de security del lote 3: si choca con
+ *     la mensajería y la identidad compartida ya no está admitida,
+ *     `voice_number_is_whatsapp`, como la puerta);
  *  2. el freno (`voice_braked`);
  *  3. la entrada vigente de su parte de la cadena: si su `seq` no es la
  *     sellada, `publication_moved` (D8-9: conservador a propósito);
@@ -238,6 +241,11 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         $numero = VoiceNumberGuard::policyCheck();
         if ($numero !== OutboundPolicy::NUMBER_VERIFIED) {
             return $numero === OutboundPolicy::NUMBER_MISMATCH ? 'number_mismatch' : 'number_unverified';
+        }
+        // N-1 (revisión de security del lote 3): la guarda del número, con la MISMA lectura que la puerta. Entre la puerta y
+        // el job pudo retirarse la identidad compartida (la declaración, las entrantes, `INBOUND_CAPABLE`) sin conciliar.
+        if (VoiceNumberGuard::collidesForPolicy()) {
+            return OutboundPolicy::REASON_NUMBER_IS_MESSAGING;
         }
         if (VoiceBrake::isOpen()) {
             return 'voice_braked';
