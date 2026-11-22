@@ -25,7 +25,7 @@
 | Qué | Rama y commit | Batería completa | Revisiones |
 |---|---|---|---|
 | Lote 3 · voz y telefonía | `integracion/voz` `b1f66c32` | 19 328 pruebas, 0 regresiones | Seguridad del código y de los mandos: apto con condiciones. Revisión final: aprobado, 0 bloqueantes |
-| Lote 4 · autorizaciones de contacto y quejas | `integracion/consent` `ba4b143e` | Sobre `323a6118`: 19 391, solo los fallos esperados. Con la corrección del identificador del socio: ver PT-18 | Seguridad de API (dos pases) y revisión final (dos pases): 0 bloqueantes |
+| Lote 4 · autorizaciones de contacto y quejas | `integracion/consent` `ba4b143e` | 19 400 pruebas y 511 069 aserciones, solo los dos fallos esperados (la prueba de pagos que corrige PT-16 y la puerta de diff) | Seguridad de API (dos pases) y revisión final (dos pases): 0 bloqueantes |
 | Lote 5 · laboratorio frente al motor | `cierre/lab` `bdb93199` | 19 412 pruebas, 0 regresiones | Seguridad, base de datos y revisión final: 0 bloqueantes abiertos |
 | Turno de planes · compilador 5 (PT-17) | `cierre/planes-c5` `e5a673c1` | 19 259 pruebas, solo los fallos esperados | Seguridad: apto con condiciones. Revisión final: aprobado, 0 bloqueantes |
 | Cobro manual con IVA adicional (PT-16) | `cierre/pagos-guarda-iva` `e1c2af3c` | Dentro de la integración definitiva | Revisión final: aprobado, 0 bloqueantes |
@@ -105,7 +105,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 |---|---|---|---|
 | Libro de autorizaciones de contacto, lector y rutas | **EN INTEGRACIÓN** (lote 4) | Batería; seguridad de API y revisión final; carreras con dos conexiones en PostgreSQL | Autorizar su despliegue |
 | Quejas del personal y descarte de una queja mal detectada | **EN INTEGRACIÓN** (lote 4) | Lo mismo | Lo mismo |
-| El identificador del socio en esas rutas (PT-18) | Ver §3 | Ver §3 | Ver §3 |
+| El identificador del socio en esas rutas (PT-18) | **EN INTEGRACIÓN** (lote 4) | En las dos rutas un socio es su `users.id`; 9 pruebas nuevas que caen con el código de antes; seguridad de API (16 de 16 respuestas 404 idénticas, sin oráculo) y revisión final, 0 bloqueantes; batería completa | Autorizar el despliegue del lote 4 |
 | Pantallas del CRM: autorizaciones y quejas | **EN INTEGRACIÓN** | 814 pruebas; revisión final | Autorizar su publicación |
 | Texto legal de la autorización | **BLOQUEADO** | — | El propietario y su asesoría (sin él, pedir y confirmar responden que no hay texto) |
 | Cuatro ojos por regla | **IMPLEMENTADO PERO DESHABILITADO** | Producción: desplegado el 22-11 (lote 2), apagado | Su prueba real |
@@ -167,7 +167,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | PT-15 | Condiciones previas a ampliar WhatsApp | Ver `MATRIZ_CIERRE_V2.md` §11 | — |
 | PT-16 | Cobro manual con IVA adicional | CERRADO | `informe-reviewer-pt17-pt16.md`, parte B |
 | PT-17 | Instrucciones del turno de planes (compilador 5) | CERRADO en lo técnico; la aceptación exige la medición y la quinta prueba | `informe-security-pt17.md`, `informe-reviewer-pt17-pt16.md` |
-| PT-18 | El identificador del socio en autorizaciones y quejas | Ver `MATRIZ_CIERRE_V2.md` §11 | `informe-apisec-ids.md`, `informe-reviewer-ids.md` |
+| PT-18 | El identificador del socio en autorizaciones y quejas | CERRADO | `informe-apisec-ids.md`, `informe-reviewer-ids.md`; batería completa del lote 4 |
 
 ## 4. Lo que solo demuestra una prueba real
 

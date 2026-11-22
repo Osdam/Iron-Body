@@ -85,10 +85,10 @@ APARTADOS = {
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
     ]),
     10: (0.35, [
-        ("Libro de autorizaciones, lector y rutas", 30, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de sus rutas (PT-18, en corrección)", "c"),
+        ("Libro de autorizaciones, lector y rutas", 30, 0.50, "integrado el 22-11 (lote 4, ba4b143e): vuelve a 0,50 al cerrarse PT-18 (el identificador del socio), con seguridad de API y revisión final sin bloqueantes y su batería completa; falta desplegarlo (HUMAN GATE)", "c"),
         ("CRM: pantalla de autorizaciones de contacto", 10, 0.40, "implementada, probada y con su revisión final aprobada tras cerrar el bloqueante del identificador del socio (PT-07, PT-10 y PT-18, 22-11); falta publicarla (HUMAN GATE)", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
-        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.40, "implementado y revisado; BAJA de 0,50 a 0,40 el 22-11: la revisión del CRM encontró un bloqueante en el identificador del socio de su ruta (PT-18, en corrección)", "c"),
+        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.50, "integrado el 22-11 (lote 4, ba4b143e): vuelve a 0,50 al cerrarse PT-18 (el identificador del socio), con seguridad de API y revisión final sin bloqueantes y su batería completa; falta desplegarlo (HUMAN GATE)", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Dos personas reales vinculadas", 15, 0.00, "acción del propietario", "o"),
     ]),
@@ -115,7 +115,7 @@ APARTADOS = {
         ("Batería completa sobre la integración final", 15, 1.00, "hecha el 22-11 sobre integracion/final c4323242: 19 643 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
         ("Recorridos de extremo a extremo simulados sobre la integración", 25, 1.00, "hechos el 22-11 (PT-12): WhatsApp, automatización, gobierno y seguridad demostrados en simulado; voz parcial (el audio y el corte por duración solo los demuestra una llamada real)", "t"),
         ("Pruebas canarias reales de los cinco recorridos", 45, 0.00, "", "o"),
-        ("Matriz final de aceptación", 15, 0.00, "", "o"),
+        ("Matriz final de aceptación", 15, 0.00, "es la aceptación con las pruebas reales; el documento técnico (PT-13, MATRIZ_ACEPTACION_TECNICA.md) existe desde el 22-11 y no mueve este valor", "o"),
     ]),
 }
 
