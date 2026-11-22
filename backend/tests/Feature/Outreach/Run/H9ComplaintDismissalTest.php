@@ -149,9 +149,46 @@ class H9ComplaintDismissalTest extends TestCase
             $this->assertSame(OutreachReplay::SAME, (new OutreachReplay)->replay((string) $decision->uuid)['result']);
         }
 
-        // Repetir la resolución no descarta nada más (lo ya resuelto no se toca).
-        $this->resolver($c, ['complaint_category' => 'not_a_complaint'])->assertOk()->assertJsonPath('complaint.dismissed', 0);
+        // Repetir la resolución no descarta nada más (lo ya resuelto no se toca): sin revisión pendiente, 409 (NB1).
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint'])->assertStatus(409)->assertJsonPath('code', 'staff_review_not_pending');
         $this->assertSame(1, DB::table('commercial_events')->where('event', 'complaint_dismissed')->count());
+    }
+
+    /**
+     * NB1 (`informe-apisec-quejas.md`, sonda C): con la revisión ya resuelta (motivo `complaint`, sin pendiente), una
+     * queja que la IA registró DESPUÉS no la ha visto nadie. «No era una queja» no la descarta: 409
+     * `staff_review_not_pending`, nada escrito, la resolución anterior intacta y la queja frenando. Antes: 200
+     * `dismissed: 1`.
+     */
+    public function test_sin_revision_pendiente_no_se_descarta_nada_409(): void
+    {
+        $socio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234567');
+        $c = $this->conversacionDe($socio['lead']);
+        $this->reloj('2026-11-16 15:00:00');
+        $this->quejaDeLaIa($socio['lead'], $c);
+        $this->resolver($c, ['complaint_category' => 'complaint_confirmed'])->assertOk();
+        $resuelta = DB::table('marketing_conversations')->where('id', $c)->first(['staff_review_pending', 'staff_review_reason', 'staff_review_resolved_at', 'staff_review_resolved_by']);
+        $this->assertSame([false, 'complaint'], [(bool) $resuelta->staff_review_pending, $resuelta->staff_review_reason]);
+
+        // Hoy la IA registra otra queja en la misma conversación, pero la revisión no se reabre.
+        $this->reloj(self::NOW);
+        MarketingAiAction::create([
+            'lead_id' => $socio['lead'], 'conversation_id' => $c,
+            'action_type' => 'staff_review', 'reason' => 'complaint', 'status' => 'created',
+            'metadata' => ['needs_staff_review' => true, 'staff_review_reason' => 'complaint', 'intent' => 'complaint'],
+        ]);
+        $this->assertCount(2, self::claves(), 'la de ayer (confirmada) y la de hoy');
+
+        $this->resolver($c, ['complaint_category' => 'not_a_complaint', 'note' => 'no lo era'])
+            ->assertStatus(409)->assertExactJson(['ok' => false, 'code' => 'staff_review_not_pending', 'message' => 'Esta revisión ya está resuelta: no hay ninguna queja pendiente que descartar.']);
+        $this->assertSame(0, DB::table('commercial_events')->where('event', 'complaint_dismissed')->count());
+        $this->assertEquals($resuelta, DB::table('marketing_conversations')->where('id', $c)->first(['staff_review_pending', 'staff_review_reason', 'staff_review_resolved_at', 'staff_review_resolved_by']), 'la resolución de ayer, intacta');
+        $this->assertSame(0, DB::table('marketing_conversation_notes')->count(), 'ni la nota');
+        $this->assertTrue($this->frena($socio['key']), 'la queja de hoy sigue frenando');
+
+        // Confirmar o «otra» sin pendiente siguen como antes (vuelven a resolver; no tocan quejas).
+        $this->resolver($c, ['complaint_category' => 'complaint_confirmed'])->assertOk()->assertJsonPath('complaint.dismissed', 0);
+        $this->assertTrue($this->frena($socio['key']));
     }
 
     public function test_complaint_confirmed_y_other_siguen_frenando(): void

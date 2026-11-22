@@ -44,7 +44,8 @@ class MarketingStaffReviewService
      *    desde la resolución anterior de su revisión (lo ya resuelto no se
      *    toca) dejan de frenar: `complaint_dismissed` por cada una, con quién lo
      *    decidió. No borra nada. Las quejas posteriores, las del personal y las
-     *    de otra conversación siguen frenando.
+     *    de otra conversación siguen frenando. Solo con la revisión PENDIENTE
+     *    (si no, 409 `staff_review_not_pending`, NB1).
      *  - `complaint_confirmed` y `other`: siguen frenando; se resuelve como hoy.
      *
      * Todo o nada, con la fila de la conversación bloqueada: si un descarte no
@@ -75,6 +76,11 @@ class MarketingStaffReviewService
             }
             $n = 0;
             if ($category === ComplaintCommercialEmitter::NOT_A_COMPLAINT) {
+                // NB1 (revisión de API de Q1-8): solo se descarta lo que alguien está revisando. Con la revisión ya
+                // resuelta no hay nada pendiente: un descarte alcanzaría a una queja posterior que nadie ha visto.
+                if (! (bool) $c->staff_review_pending) {
+                    throw new StaffReviewComplaintException('staff_review_not_pending', 409, 'Esta revisión ya está resuelta: no hay ninguna queja pendiente que descartar.');
+                }
                 if (! ComplaintCommercialEmitter::enabled()) {
                     throw new StaffReviewComplaintException('commercial_events_disabled', 409, 'El registro de hechos comerciales está apagado en el servidor: la queja no se puede descartar ahora. La revisión sigue pendiente.');
                 }
