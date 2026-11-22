@@ -24,7 +24,8 @@ use Tests\TestCase;
  *     Legacy en `decide` con `compiler_changed`; lo firmado con el 2 se ofrecía
  *     y, desde el compilador 3 (Enmienda A4-1), cae igual; lo firmado con el 3
  *     se ofrecía y, desde el compilador 4 (Enmienda A4-2), cae igual; lo
- *     firmado con el 4 se ofrece.
+ *     firmado con el 4 se ofrecía y, desde el compilador 5 (Enmienda A4-5,
+ *     PT-17, N3), cae igual; lo firmado con el 5 se ofrece.
  *  4. Caída segura: unas frases con la forma bien pero el contenido mal (que el
  *     Studio nunca firmaría) dan Legacy (`error`), nunca una excepción.
  */
@@ -107,6 +108,42 @@ class UltronPublishedConfigPhrasesTest extends TestCase
 
         $o = $this->oferta()['response'];
         $this->assertSame(['legacy', 'compiler_changed', null, null], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['roles']]);
+    }
+
+    /**
+     * N3 (PT-17, `diseno-arq-pt17-planes.md` §5 (a); Enmienda A4-5): lo que deja
+     * en la cadena la v3 publicada en canario («profesional + 200» firmado con
+     * el 4 y su huella, `26d57565…1075`) sigue `applied` en el sello y cae a
+     * Legacy en `decide` con `compiler_changed`; el mismo contenido firmado con
+     * el 5 (la v4 que hay que publicar) se ofrece, con `o`, `n` y `t` en la
+     * firma. Es el orden de despliegue del compilador 5.
+     */
+    public function test_n3_lo_firmado_con_el_compilador_4_cae_a_compiler_changed_y_lo_mismo_con_el_5_se_ofrece(): void
+    {
+        $v3 = ['persona.tone' => 'profesional', 'persona.maxChars' => 200];
+        $fila = $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, $v3, ['compiler' => 4, 'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075']), null);
+
+        $sello = (new Lector)->forConversation($this->canario);
+        $this->assertSame([Lector::APPLIED, self::VERSION_B, null, $fila['uuid']], [$sello['state'], $sello['version'], $sello['reason'], $sello['entry']], 'el sello del commit no cambia: la parte se declara');
+        $parte = (new Lector)->partFor($this->canario);
+        $this->assertSame([Lector::APPLIED, 4], [$parte['state'], $parte['prompts']['compiler']]);
+
+        $o = $this->oferta();
+        $this->assertSame(['legacy', 'compiler_changed', null, null], [$o['response']['mode'], $o['response']['reason'], $o['response']['bundle_hash'], $o['response']['roles']]);
+        $this->assertSame(['m' => 'legacy', 'r' => 'compiler_changed'], array_intersect_key($o['sp'], ['m' => 1, 'r' => 1]));
+        $this->assertSame([], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1]), 'Legacy: sin n, sin t y sin o');
+
+        // La v4: el mismo contenido, firmado con el compilador 5.
+        $v4 = self::parteV2(self::VERSION_A, $v3, ['compiler' => 5]);
+        $this->assertNotSame('26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075', $v4['prompts']['bundleHash'], 'el 5 cambia la huella');
+        $fila4 = $this->publicaEntrada(Lector::CONTRACT_V2, $v4, null);
+
+        $sello = (new Lector)->forConversation($this->canario);
+        $this->assertSame([Lector::APPLIED, self::VERSION_A, $fila4['uuid']], [$sello['state'], $sello['version'], $sello['entry']]);
+        $o = $this->oferta();
+        $this->assertSame(['studio', null, $v4['prompts']['bundleHash'], 5], [$o['response']['mode'], $o['response']['reason'], $o['response']['bundle_hash'], $o['response']['compiler']]);
+        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1]));
+        $this->assertStringContainsString('LISTA DE PLANES DEL BACKEND:', $o['response']['roles']['strategist'], 'el estratega también lleva la lista');
     }
 
     public function test_lo_firmado_con_el_compilador_1_sigue_aplicado_en_el_sello_y_cae_a_compiler_changed(): void
