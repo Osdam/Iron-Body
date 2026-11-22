@@ -58,9 +58,12 @@ use Illuminate\Support\Facades\Schema;
  * devuelve `?bool`, que convertiría «revoked» en true.
  *
  * SIN LA TABLA (código desplegado antes que la migración C9-1): no hay ningún
- * evento que leer, así que todo es false y la decisión es la de antes. Se
- * detecta una vez por proceso. Un fallo al LEER la tabla no se traga: la foto
- * falla entera (falla cerrado).
+ * evento que leer, así que todo es false y la decisión es la de antes. El «sí
+ * existe» se recuerda por proceso (ninguna consulta al catálogo por tanda); el
+ * «no», nunca (C-5 de la revisión de API): un trabajador de cola arrancado
+ * antes de la migración ve el libro, y sus retiradas, en la primera tanda de
+ * después. Un fallo al LEER la tabla no se traga: la foto falla entera (falla
+ * cerrado).
  */
 final class OutreachConsentFacts
 {
@@ -82,7 +85,7 @@ final class OutreachConsentFacts
     /** Claves (dos parámetros cada una) por sentencia: un lote normal (≤ 500 personas) cabe en una. */
     public const MAX_KEYS_PER_QUERY = 1000;
 
-    /** @var array<string, bool> por conexión */
+    /** @var array<string, true> las conexiones en las que ya se vio el libro */
     private static array $ledger = [];
 
     /**
@@ -296,10 +299,23 @@ final class OutreachConsentFacts
             ->distinct()->pluck('lead_id')->map(static fn ($id): int => (int) $id)->all(), true);
     }
 
-    /** ¿Existe el libro en esta conexión? Una vez por proceso. */
+    /**
+     * ¿Existe el libro en esta conexión? Solo se recuerda el SÍ: mientras no
+     * exista se pregunta en cada tanda (código desplegado antes que la
+     * migración), y en cuanto existe se lee sin reiniciar el proceso.
+     */
     public function hasLedger(): bool
     {
-        return self::$ledger[DB::connection()->getName()] ??= Schema::hasTable(self::TABLE);
+        $conexion = DB::connection()->getName();
+        if (isset(self::$ledger[$conexion])) {
+            return true;
+        }
+        if (! Schema::hasTable(self::TABLE)) {
+            return false;
+        }
+        self::$ledger[$conexion] = true;
+
+        return true;
     }
 
     /** Olvida la detección (pruebas que crean o quitan la tabla dentro del mismo proceso). */

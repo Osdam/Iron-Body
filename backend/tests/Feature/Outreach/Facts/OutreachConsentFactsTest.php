@@ -303,6 +303,26 @@ class OutreachConsentFactsTest extends TestCase
         $this->assertContains('do_not_contact', $this->decide($p['key']));
     }
 
+    /**
+     * C-5 · Un trabajador de cola arrancado ANTES de la migración C9-1 (vio el
+     * libro ausente) lo lee en cuanto existe, sin reiniciarse: el «no» no se
+     * recuerda. El «sí», sí: después, ninguna consulta al catálogo por tanda.
+     */
+    public function test_un_proceso_que_vio_el_libro_ausente_lo_lee_en_cuanto_existe(): void
+    {
+        $p = $this->socioConWhatsapp(['consent_status' => 'granted']);
+        Schema::drop('outreach_consents');
+        OutreachConsentFacts::forgetLedger();
+        $this->assertFalse((new OutreachConsentFacts)->hasLedger());
+        $this->assertSame('granted', $this->consent($p['key']), 'sin el libro, la decisión de antes');
+
+        // Llega la migración; el mismo proceso, sin olvidar nada.
+        $this->consentMigration()->up();
+        $this->revokeConsent(['member_id' => $p['member']]);
+        $this->assertSame('denied', $this->consent($p['key']), 'la retirada cuenta sin reiniciar el proceso');
+        $this->assertSame([], $this->capture(fn () => $this->assertTrue((new OutreachConsentFacts)->hasLedger())), 'el «sí» se recuerda');
+    }
+
     // ── C-2: la retirada vale para el NÚMERO (la regla de los hermanos) ──────
 
     /**
