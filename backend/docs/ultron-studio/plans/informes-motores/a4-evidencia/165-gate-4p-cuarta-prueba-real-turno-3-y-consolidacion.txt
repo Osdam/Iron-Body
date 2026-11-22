@@ -1,0 +1,152 @@
+GATE 4-P · CUARTA PRUEBA REAL · TURNO 3 Y CONSOLIDACIÓN · 22-11-2026, 17:06–17:10 UTC (12:06–12:10 en Bogotá)
+lead · solo lectura · conversación canaria #931 · producción API f1fe6cac · versión 3 del Studio en canario (huella 26d57565…, compilador 4)
+Los turnos 1 y 2, con los tres borradores del turno de planes: evidencia 164.
+
+RESULTADO DE LA CUARTA PRUEBA REAL: NO SUPERADA. Falla A4 (el turno 2 no lo escribió el modelo: texto fijo de respaldo, SAFE_CURATED_REPLY, critic_failed).
+  A1 SE CUMPLE: los tres turnos applied, flowRev S2, huella 26d57565… de la versión 39cfae9f… (filas 8423, 8425 y 8432).
+  A2 SE CUMPLE: los siete contadores mecánicos del acta, en cero («CANARIO SIN HALLAZGOS MECANICOS»).
+  A3 SE CUMPLE: 104, 199 y 183 caracteres (tope 200); sin tuteo en lo que salió (register.found = [] en los turnos 1 y 3; el respaldo no lleva trato y no hay fallback_mismatch).
+  A4 NO SE CUMPLE: turno 2 con el texto de respaldo; plans_overview ausente de la fila.
+  A5 SE CUMPLE: regeneration presente y coherente en los tres (1, 3 y 1 borradores; critic.attempt = drafts; check_errors 0).
+  A6 SE CUMPLE: 14, 15 y 14 s del entrante al saliente; 0 reintentos del trabajo.
+  A7 SE CUMPLE: el respaldo, con su causa y sin «sin dato»: «el revisor rechazó el último borrador: 1 (el servidor tampoco lo habría aceptado: length_over_cap, plans_overview/missing)».
+  A8 (propietario, 22-11, 12:10 en Bogotá, literal): «Mantén el turno 2 como NO APROBADO.» No dio valoración de los turnos 1 y 3 en ese mensaje.
+Escrito por la IA: 2 de 3 turnos (66,7 %), los dos al primer intento. Respaldos: 1 de 3.
+
+LOS TRES TEXTOS, EXACTOS:
+  1 (16:48:11 UTC, 14 s, modelo, 1 borrador, revisor 0,95): «Buenos días, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?» (104)
+    Defecto de redacción: falta la tilde de «qué gusto». «Buenos días» es correcto por la hora (11:48 a. m. en Bogotá), aunque la persona escribió «buenas tardes».
+  2 (16:49:28 UTC, 15 s, RESPALDO del servidor tras 3 borradores): «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por
+    día, por semana y de varios meses. ¿Sobre cuál amplío la información?» (199). Precios iguales a los del catálogo (65000, 80000 y 180000; 30 días; activos y vendibles).
+  3 (17:06:51 UTC, 14 s, modelo, 1 borrador, revisor 0,95): «Le entiendo, quiere saber nuestro horario entre semana. Atendemos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le cuento más
+    sobre nuestras clases o cómo conocer las instalaciones?» (183). Coincide, carácter a carácter, con lo que transcribió el propietario.
+    Horario contra la fuente oficial: ficha 20 de la base de conocimiento (schedule, aprobada y activa): «Lunes a viernes de 5:00 a. m. a 10:00 p. m. …». Coincide.
+    La memoria apunta el hecho entregado (kb:schedule:20). Observación de estilo, no un error: la primera frase repite la pregunta.
+
+ORDEN DEL PROPIETARIO TRAS LA PRUEBA (literal): «Continúa con PT-17 para corregir el conflicto de instrucciones sobre los planes. No inicies otra prueba real hasta validarlo primero en el laboratorio. Mantén el control de los pendientes técnicos y no despliegues modificaciones sin autorización.»
+
+DESPUÉS DE LA PRUEBA: producción sigue en f1fe6cac; ultron-studio:publication-check, salida 0; 0 trabajos fallidos, 0 salientes a conversaciones no canarias y 0 incidentes desde las 16:13 UTC;
+production.ERROR con fecha de hoy: 1 (el mismo de las 14:23 UTC, del lead; ninguno nuevo). La conversación anterior (#882) sigue cerrada e intacta (21 mensajes, 21 acciones, misma huella de memoria).
+
+── 1. LA LECTURA DE LOS TRES TURNOS (cierre/cuarta-prueba/turnos.sql) ──
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8618 | 16:47:57 | inbound | lead |  | 19 | Hola, buenas tardes
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8619 | 16:48:11 | outbound | ai | read | 104 | Buenos días, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8620 | 16:49:13 | inbound | lead |  | 50 | ¿Qué planes tienen y cuánto cuesta la mensualidad?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8621 | 16:49:28 | outbound | ai | read | 199 | Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8627 | 17:06:37 | inbound | lead |  | 45 | ¿Cuál es el horario de atención entre semana?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8628 | 17:06:51 | outbound | ai | read | 183 | Le entiendo, quiere saber nuestro horario entre semana. Atendemos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le cuento más sobre nuestras clases o cómo conocer las instalaciones?
+T2 · acciones desde la conversación nueva | 8422 | 16:47:58 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la conversación nueva | 8423 | 16:48:11 | reply | executed | greeting | inbound_message
+T2 · acciones desde la conversación nueva | 8424 | 16:49:14 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la conversación nueva | 8425 | 16:49:28 | reply | executed | critic_failed | inbound_message
+T2 · acciones desde la conversación nueva | 8431 | 17:06:38 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la conversación nueva | 8432 | 17:06:51 | reply | executed | schedule_question | inbound_message
+T3 · A1 prompts del Studio | 8423 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078453", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T3 · A1 prompts del Studio | 8425 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078454", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T3 · A1 prompts del Studio | 8432 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078501", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T4 · A3 longitud y registro | 8423 | length={"to": 104, "cap": 200, "from": 104, "action": "fit", "dropped": 0} | register={"found": [], "action": "ok", "expected": "usted"} | respaldo=- | fallback_mismatch=-
+T4 · A3 longitud y registro | 8425 | length={"to": 199, "cap": 200, "from": 199, "action": "fit", "dropped": 0} | register=- | respaldo=SAFE_CURATED_REPLY | fallback_mismatch=-
+T4 · A3 longitud y registro | 8432 | length={"to": 183, "cap": 200, "from": 183, "action": "fit", "dropped": 0} | register={"found": [], "action": "ok", "expected": "usted"} | respaldo=- | fallback_mismatch=-
+T5 · A5 regeneración y crítico | 8423 | regeneration={"checks": 1, "drafts": 1, "tokens": null, "critics": 1, "rewrites": [], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje es adecuado para un saludo inicial, con bienvenida cálida y una pregunta abierta para continuar la conversación. Se recomienda mantener el trato formal y evitar mezclar tuteo y usted en futuros mensajes.", "score": 0.95, "issues": [], "attempt": 1, "verdict": "pass", "hard_fail": null}
+T5 · A5 regeneración y crítico | 8425 | regeneration={"checks": 2, "drafts": 3, "tokens": null, "critics": 1, "rewrites": [{"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}, {"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje mezcla trato de usted con 'Para orientarle mejor, ¿qué experiencia tiene entrenando?', que es una pregunta directa que ya se sabe (cliente es principiante) y no corresponde aún; además, no debe preguntar experiencia en este momento sin antes informar bien. Se recomienda pasar todo el mensaje a usted, evitar preguntar experiencia ahora y dar información más completa del gimnasio y planes para que el cliente se oriente mejor.", "score": 0.4, "issues": ["naturalness", "sales_judgment", "question_discipline", "progressive_disclosure"], "attempt": 3, "verdict": "fail", "hard_fail": null}
+T5 · A5 regeneración y crítico | 8432 | regeneration={"checks": 1, "drafts": 1, "tokens": null, "critics": 1, "rewrites": [], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje responde claramente la pregunta del horario, usa un tono profesional y natural, y ofrece un paso siguiente concreto y fácil. No hay mezcla de tuteo y usted, ni contradicciones con la información conocida. Se podría mejorar añadiendo un beneficio fresco del plan Élite para aportar novedad, pero no es obligatorio para aprobar.", "score": 0.95, "issues": [], "attempt": 1, "verdict": "pass", "hard_fail": null}
+T6 · A4 panorama de planes y política | 8423 | plans_overview=- | politica=- | origen="ultron" | intent=greeting
+T6 · A4 panorama de planes y política | 8425 | plans_overview=- | politica=- | origen="ultron" | intent=pricing_question
+T6 · A4 panorama de planes y política | 8432 | plans_overview=- | politica=- | origen="ultron" | intent=schedule_question
+T7 · claves de la metadata | 8423 | critic,customer_lifecycle,intent,knowledge_version,lead_temperature,length,message_id,needs_staff_review,next_best_action,next_phase,origin,outbound,plans_mentioned,previous_phase,price_enriched,reference_resolution,regeneration,register,risk_flags,source,strategy,strategy_goal,strategy_hints,studio,studio_prompts,tools_requested
+T7 · claves de la metadata | 8425 | critic,discarded_draft,discarded_draft_check,fallback_mode,intent,knowledge_version,length,message_id,needs_staff_review,next_best_action,next_phase,origin,outbound,previous_phase,regeneration,risk_flags,strategy_goal,studio,studio_prompts,tools_requested
+T7 · claves de la metadata | 8432 | critic,customer_lifecycle,intent,knowledge_version,lead_temperature,length,message_id,needs_staff_review,next_best_action,next_phase,novelty_max_similarity,origin,outbound,plans_mentioned,previous_phase,price_enriched,reference_resolution,regeneration,register,risk_flags,source,strategy,strategy_goal,strategy_hints,studio,studio_prompts,tools_requested
+T8 · trabajos fallidos, salientes a no canarias e incidentes desde las 16:13 | 0 | 0 | 0
+T9 · hora del servidor (UTC y Bogotá) | 17:08:17 | 12:08:17
+T10 · A5/PT-01 comprobación determinista del borrador descartado | 8423 | - | descartado=-
+T10 · A5/PT-01 comprobación determinista del borrador descartado | 8425 | {"pass": false, "codes": ["plans_overview/missing", "length_over_cap"], "length": 211} | descartado="Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas y asesoría semi personalizada, todo por una mensualidad de {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?"
+T10 · A5/PT-01 comprobación determinista del borrador descartado | 8432 | - | descartado=-
+T11 · memoria de la conversación nueva | NEW_LEAD | [{"at": "2026-11-22T16:49:29+00:00", "plan_id": 3, "message_id": 8621}, {"at": "2026-11-22T16:49:29+00:00", "plan_id": 4, "message_id": 8621}, {"at": "2026-11-22T16:49:29+00:00", "plan_id": 8, "message_id": 8621}] | [3, 4, 8]
+
+── 2. EL TURNO 3 Y EL HORARIO OFICIAL (cierre/cuarta-prueba/turno3-horario.sql) ──
+H0 · texto enviado, exacto | 8628 | 183 | [Le entiendo, quiere saber nuestro horario entre semana. Atendemos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le cuento más sobre nuestras clases o cómo conocer las instalaciones?]
+H1 · fichas de horario | 19 | schedule | Horarios de atención | Horario real confirmado de Iron Body Neiva. | f | rejected | - | - | 10
+H1 · fichas de horario | 20 | schedule | Horario general de atencion | Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. | t | approved | - | - | 10
+H2 · estrategia y siguiente acción del turno 3 | 8432 | next_best_action="check_in" | strategy_goal=understand | fases=NEW_LEAD → NEW_LEAD | plans_mentioned=0 | novelty=0 | knowledge_version="25:1790052024"
+H3 · tiempos de los tres turnos | 8618 | 8619 | 16:47:57 | 16:48:11 | 14
+H3 · tiempos de los tres turnos | 8620 | 8621 | 16:49:13 | 16:49:28 | 15
+H3 · tiempos de los tres turnos | 8627 | 8628 | 17:06:37 | 17:06:51 | 14
+H4 · la conversación #931 al terminar | open | NEW_LEAD | 6 | 6 | [{"at": "2026-11-22T17:06:51+00:00", "key": "kb:schedule:20", "message_id": 8628}]
+H5 · la conversación anterior (#882) sigue intacta | closed | 21 | 21 | 1298228c9f9a922120e17a11f4b463ae
+H6 · publicación vigente | 5 | 5
+
+── 3. ultron:origin-report --conversation=931 --since="2026-11-22 16:13:00" ──
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde 2026-11-22T16:13:00+00:00 · hasta ahora · conversaciones: 1
+  Respuestas enviadas: 3 (con traza de regeneración: 3)
+  Escrito por la IA: 2 de 3 (66,7 %) · objetivo 90 %: NO
+    al primer intento: 2 (66,7 %) · regeneradas: 0 (0,0 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 0
+    Texto del servidor en el camino del modelo (no cuenta como IA): 0
+    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 2 de 3 (66,7 %)
+  Reescrituras: 2 (servidor: 2)
+    por código: length_over_cap: 2, plans_overview: 2
+  Respaldos: 1 de 3 (33,3 %)
+    el revisor rechazó el último borrador: 1 (el servidor tampoco lo habría aceptado: 1 (length_over_cap: 1, plans_overview/missing: 1))
+  Latencia del entrante al saliente: p50 14 s · p95 15 s · máx 15 s (n = 3)
+  Llamadas al modelo por turno: media 3,7 · máx 5 (n = 3) · comprobaciones del servidor por turno: media 1,3 · máx 2 (n = 3)
+  Tokens: sin dato (n8n no los entrega todavía)
+  Reintentos del job: 0 de 3 turnos con evento (máx. intentos 1)
+  Fuera del reparto: nada
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 3.
+
+── 4. ultron:canary-report 931 --since="2026-11-22 16:13:00" ──
+ACTA DEL CANARIO — conversación 931 · 3 turnos · desde 2026-11-22 16:13:00
+
+── TURNO 1 ── 2026-11-22T16:47:57+00:00 ── latencia 14s
+  entra    : Hola, buenas tardes
+  decide   : intent=greeting · objetivo=collect_data · siguiente=check_in
+  contexto : referente=none · temp=COLD · ciclo=PROSPECT · fase=NEW_LEAD → NEW_LEAD
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje es adecuado para un saludo inicial, con bienvenida cálida y una pregunta abierta para continuar la conversación. Se recomienda mantener el trato formal y evitar mezclar tuteo y usted en futuros mensajes.","score":0.95,"issues":[],"attempt":1,"verdict":"pass","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=[]
+  presencia: leido=sí escribiendo=sí en 782.27 ms · respuesta en 14000 ms
+  sale     : [reply] Buenos días, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?
+
+── TURNO 2 ── 2026-11-22T16:49:13+00:00 ── latencia 15s
+  entra    : ¿Qué planes tienen y cuánto cuesta la mensualidad?
+  decide   : intent=pricing_question · objetivo=understand · siguiente=recommend_plan
+  contexto : referente=- · temp=- · ciclo=- · fase=NEW_LEAD → NEW_LEAD
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje mezcla trato de usted con 'Para orientarle mejor, ¿qué experiencia tiene entrenando?', que es una pregunta directa que ya se sabe (cliente es principiante) y no corresponde aún; además, no debe preguntar experiencia en este momento sin antes informar bien. Se recomienda pasar todo el mensaje a usted, evitar preguntar experiencia ahora y dar información más completa del gimnasio y planes para que el cliente se oriente mejor.","score":0.4,"issues":["naturalness","sales_judgment","question_discipline","progressive_disclosure"],"attempt":3,"verdict":"fail","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=["critic_failed"]
+  presencia: leido=sí escribiendo=sí en 461.79 ms · respuesta en 15000 ms
+  sale     : [reply] Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios...
+
+── TURNO 3 ── 2026-11-22T17:06:37+00:00 ── latencia 14s
+  entra    : ¿Cuál es el horario de atención entre semana?
+  decide   : intent=schedule_question · objetivo=understand · siguiente=check_in
+  contexto : referente=none · temp=WARM · ciclo=INTERESTED · fase=NEW_LEAD → NEW_LEAD
+  tools    : pedidas=[] ejecutadas=[]
+  critic   : {"notes":"El mensaje responde claramente la pregunta del horario, usa un tono profesional y natural, y ofrece un paso siguiente concreto y fácil. No hay mezcla de tuteo y usted, ni contradicciones con la información conocida. Se podría mejorar añadiendo un beneficio fresco del plan Élite para aportar novedad, pero no es obligatorio para aprobar.","score":0.95,"issues":[],"attempt":1,"verdict":"pass","hard_fail":null}
+  commit   : estado=executed outcome=- bloqueo=- riesgos=[]
+  presencia: leido=sí escribiendo=sí en 684.46 ms · respuesta en 14000 ms
+  sale     : [reply] Le entiendo, quiere saber nuestro horario entre semana. Atendemos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le cuento más sobre nuestras clases o cómo ...
+
+LO QUE SE CUENTA (tiene que ser CERO)
+  traspasos_no_autorizados           0
+  horarios_aplazados_en_una_persona  0
+  planes_no_vendibles                0
+  precios_que_no_son_del_catalogo    0
+  enlaces_no_oficiales               0
+  datos_personales                   0
+  negaciones_de_un_cobro_disponible  0
+  (no se vigilan por ambiguos, su nombre está dentro de uno vendible: mensual)
+
+LO QUE JUZGA UNA PERSONA (evidencia, no nota)
+  veredictos_del_critic            : 3 turnos con veredicto
+     turno 1: {"notes":"El mensaje es adecuado para un saludo inicial, con bienvenida cálida y una pregunta abierta para continuar la conversación. Se recomienda mantener el trato formal y evitar mezclar tuteo y usted en futuros mensajes.","score":0.95,"issues":[],"attempt":1,"verdict":"pass","hard_fail":null}
+     turno 2: {"notes":"El mensaje mezcla trato de usted con 'Para orientarle mejor, ¿qué experiencia tiene entrenando?', que es una pregunta directa que ya se sabe (cliente es principiante) y no corresponde aún; además, no debe preguntar experiencia en este momento sin antes informar bien. Se recomienda pasar todo el mensaje a usted, evitar preguntar experiencia ahora y dar información más completa del gimnasio y planes para que el cliente se oriente mejor.","score":0.4,"issues":["naturalness","sales_judgment","question_discipline","progressive_disclosure"],"attempt":3,"verdict":"fail","hard_fail":null}
+     turno 3: {"notes":"El mensaje responde claramente la pregunta del horario, usa un tono profesional y natural, y ofrece un paso siguiente concreto y fácil. No hay mezcla de tuteo y usted, ni contradicciones con la información conocida. Se podría mejorar añadiendo un beneficio fresco del plan Élite para aportar novedad, pero no es obligatorio para aprobar.","score":0.95,"issues":[],"attempt":1,"verdict":"pass","hard_fail":null}
+  referentes_resueltos             : 1=none, 2=-, 3=none
+  similitud_con_respuestas_previas : 3=0
+  turnos_con_revision_humana       : ninguno
+  traspasos_autorizados            : ninguno (los pidió la persona)
+  turnos_bloqueados                : ninguno
+
+CANARIO SIN HALLAZGOS MECANICOS. Falta la lectura humana de los 3 turnos.
