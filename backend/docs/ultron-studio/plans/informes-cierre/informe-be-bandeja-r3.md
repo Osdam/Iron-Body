@@ -2,7 +2,8 @@
 
 **22-11-2026 · `backend`.** Rama `cierre/bandeja` (sale de `0c57d7c4` = `main`), árbol `_worktrees/cierre-bandeja`. Sin push, sin producción, sin red.
 Commits, ronda 1: `26685ce9` (código y pruebas) · `60e691b7` (carrera PG) · `3755aeb5` (banco de carga) · `7ec75388` (informe).
-Commits, ronda 2 (§9): `866e856e` · `4828f48a` · `df195258` · `62d44d98` · `2484057a` · este informe.
+Commits, ronda 2 (§9): `866e856e` · `4828f48a` · `df195258` · `62d44d98` · `2484057a` · `cd735ff7` (informe).
+Commits, ronda 3 (§10, tras security): `a33b92e3` (m-1) · `8bbf00e4` (m-2) · `b1d28983` (m-4) · `a6a8e934` (contrato) · `9f7ac8ea` (Pint) · este informe.
 Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto. Lo de la ronda 1 que la ronda 2 dejó viejo está marcado con «→ §9».
 
 ## Veredicto
@@ -14,6 +15,7 @@ Marcas: **[C]** comprobado ejecutando · **[L]** leído · **[S]** supuesto. Lo 
 | **R3-3** menor y RNE caducado | **CERRADO** [C] (directiva del 21-11) |
 | **m-1** consultas por fila | **CERRADO** [C]: 44 consultas por página con 50, 500 y 5 000 trabajos (→ §9) |
 | **F-1, F-2, F-3** | **CERRADOS** en la ronda 2 [C] (§9) |
+| **m-1, m-2 y m-4** de `informe-security-bandeja-r3.md` · el contrato (C-1, lo del backend) | **CERRADOS** en la ronda 3 [C] (§10). C-1 sigue abierto en el CRM; m-3 es del CRM y C-2, del propietario |
 
 ## 1 · Qué cambió (`backend/app/Services/Outreach/Run/AssistedQueue.php`)
 
@@ -225,3 +227,97 @@ Los 409 siguen siendo `not_in_queue`, `enrollment_closed` y `already_claimed`. E
 - **La retirada de una plantilla:** no hay ningún servicio que la haga; es la transición `APPROVED → RETIRED` de la base.
 - **Una versión que no declare «solo canario»:** debería dejar de restringir en la parte `rest`. No lo he probado, porque exige una referencia de Studio de tipo `version` [L].
 - **El CRM:** no lo he leído. No he encontrado el espejo local para comprobar que no lleva las claves crudas de la foto.
+
+## 10 · Ronda 3 (tras security, 22-11-2026): m-1, m-2 y m-4 de `informe-security-bandeja-r3.md` y el contrato
+
+Solo lo que el revisor dejó descrito; el diseño no se reabre. Fuera de alcance, sin tocar: m-3 (el texto de `subject_minor`, del CRM), C-2 (del propietario), la tabla L9 (la anota el lead), `Run/Classifier/**`, `Run/OutreachConfig.php`, `Run/OutreachMonitor.php`, `Run/WhatsappTemplateOutcomes.php`, `Facts/WhatsappSignals.php` y `Support/RunWorld.php`.
+
+### 10.1 · Qué cambió
+
+| Commit | Qué | Dónde |
+|---|---|---|
+| `a33b92e3` | **m-1.** Tras el `UPDATE`, y antes de recalcular los motivos, la relectura comprueba lo MISMO que respondería la repetición. Primero, que el trabajo siga `started`; si no, 409 `not_in_queue`. Es defensivo: no cuesta ninguna consulta (la fila ya está releída) y no se puede disparar (§10.3). Después, que la inscripción siga abierta (`requireOpenEnrollment()`); si no, 409 `enrollment_closed`, con +1 consulta. La reclamación queda escrita: no se deshace nada | `Run/AssistedQueue.php:305-312`; comentarios en `:78-81` y `:263-265` |
+| `8bbf00e4` | **m-2.** `runningParts()` exige `$l->studio['referenceValid'] === true`, la misma entrada de N3 `studio_reference_invalid` (`PolicyLadder.php:329-330`). Si no vale, la parte no está en marcha y retiene con `strategy_stopped`: SQL, `withheld`, 409 `not_in_queue` y el reclamante sin contacto. Sin consultas nuevas: `studio` ya viene en la parte leída | `Run/AssistedQueue.php:670`; comentarios en `:46-50` y `:652-660` |
+| `b1d28983` | **m-4.** `assertWithheldEverywhere(…, string ...$phones)` busca cada teléfono, al menos uno. Las tres pruebas de voz (siembra `callableMember()` → `canaryMember()`) buscan también el número de la ficha de cada socio. Solo cambia la prueba | `tests/Feature/Outreach/Run/H9AssistedEligibilityTest.php:228-261`, `:290`, `:329`, `:381` |
+| `a6a8e934` | **Contrato.** D9-9.5 pasa a los once motivos, en orden, con lo que añaden F-1, F-2, F-3, R3-1, R3-3 y m-2, y con la relectura completa (R3-2) y m-1 en E12. Lleva la nota «Enmienda del 22-11-2026, autorizada por el lead por la directiva definitiva del propietario (§8: seguridad R3)». E11 nombra los once en su orden; E12, los dos 409 y la relectura. La tabla L9 no se toca | `ULTRON_STUDIO_H9_CONTRACT.md:632-665` (lista `:633-649`, nota `:655-665`), `:1088`, `:1089` |
+| `9f7ac8ea` | Pint: la alineación de un `@return` mío de m-2 | `H9AssistedEligibilityTest.php:765` |
+
+**Contrato HTTP:** ningún código nuevo. E12 ya devolvía 409 `enrollment_closed` en la repetición; ahora lo devuelve también la reclamación nueva cuya inscripción se cierra en el hueco (m-1). `strategy_stopped` ya existía. La lista de motivos sigue siendo la de §9.4.
+
+### 10.2 · Pruebas nuevas
+
+- **m-1, una conexión (SQLite y PG):** `H9AssistedEligibilityTest::test_m1_r3_…` (`:525`, casos en `:508`).
+  - El cierre llega por `OutreachStore::closeEnrollment()`, inyectado justo después de la última lectura de la comprobación (`"detail_code"`, el libro) y antes del `UPDATE`.
+  - Tres casos: `expired`/`enrollment_window_over` (el despachador), `completed`/`success_reached` y `exited`/`opted_out` (el registro de resultados).
+  - La reclamación y la repetición dan 409 `enrollment_closed`, sin teléfono en el error. El trabajo queda reclamado por Beto, la inscripción queda en su estado y `mine` sale vacío.
+- **m-1, dos procesos (solo PG):** `H9AssistedClaimRaceTest::test_m1_…` (`:149`).
+  - El trabajador espera en la barrera. La conexión de apoyo CONFIRMA el cierre, con las columnas de `closeEnrollment()` en el fin de la ventana.
+  - El trabajador escribe la reclamación y responde 409, sin 201.
+  - La coreografía pasa a `claimAcrossTheBarrier()` (`:177`), que comparte con la carrera de R3-2; esta comprueba lo mismo que antes. Si la señal falla, la barrera se suelta igual (`finally`).
+  - El trabajador recoge un `OutreachException` como `conflict` (`Support/assisted-claim-worker.php:60`): es la respuesta, no un fallo.
+- **m-2:** `test_m2_la_referencia_del_studio_que_no_vale_…` (`:804`, casos en `:788`).
+  - Tres causas: `version_not_found`, `content_hash_mismatch` y `baseline_mismatch`. Cada una se siembra en el contenido y en las columnas `studio_*` de la versión, y la prueba comprueba que es la que lee el puente (`studioOf()`).
+  - Pasa `assertWithheldEverywhere()` con `strategy_stopped`. Lo de otra estrategia sigue ofreciéndose.
+- **m-2, ilegible:** `test_m2_la_referencia_del_studio_ilegible_…` (`:827`).
+  - Empieza íntegra, con `kind: version`, y sirve de control de esa siembra: se ofrece y el 201 lleva el enlace y el guion.
+  - Luego la lectura de `ultron_studio_versions` falla (`DB::beforeExecuting`, `:841`; `QueryException` antes de ejecutar). Retiene en todos los caminos, el puente anota `outreach.studio_reference_unreadable` y, al volver a leerse, vuelve todo.
+  - Ayudantes de la siembra: `studioVersion()` (`:716`), `liveWithStudioReference()` (`:737`, como `RunWorld::liveStrategy()` con la referencia de la fila elegida) y `mineAndFreeIn()` (`:767`).
+
+**Una trampa de la prueba, no del código** [C]. `assertWithheldEverywhere()` comprueba el registro con `Log::shouldHaveReceived('warning')->once()->with(…)`. En un espía de Mockery, ese `once()` antes de `with()` exige un único `warning` EN TOTAL, más de lo que dice su comentario. Con la referencia ilegible, el puente anota con razón más avisos y la prueba caía (`called 5 times`).
+- No he relajado el ayudante: la prueba ilegible hace sus mismas comprobaciones a mano y exige `claim_withheld` exactamente una vez con sus argumentos (`->with(…)->once()`).
+- Lo dejo anotado por si se quiere fijar así en el ayudante.
+
+### 10.3 · Lo que no he podido sembrar
+
+- **m-1, el trabajo que deja de estar `started`:** no se puede. `started` es final (`JOB_FINAL_STATUSES`), y el disparador de «definitivo» congela `status` (`JOB_CLOSED_COLUMNS`, `create_outreach_tables.php:220-247`). La comprobación se queda como defensa, sin prueba que la dispare.
+- **m-2, «después de salir» en tres de las cuatro causas:** las columnas `studio_*` de una versión de estrategia son inmutables (`VERSION_IMMUTABLE_COLUMNS`), y una versión del Studio no se borra ni cambia de huella (`usv_forbid_immutable_update`, `usv_forbid_delete`).
+  - Por eso `version_not_found`, `content_hash_mismatch` y `baseline_mismatch` se siembran rotas desde la creación, con el trabajo ya salido y el reclamado a mano. Es lo que ve la bandeja tras un despliegue que cambie `StudioCatalog::hash()`.
+  - Solo `unreadable` empieza íntegra y se rompe a mitad.
+- **`baseline_mismatch` por una `catalogVersion` distinta:** no la he sembrado, solo la huella distinta. Es la misma rama de `StudioStrategyValidator::studioReference()` (`:148`).
+- **`unreadable` en una referencia de línea base:** esa rama no lee la base; solo fallaría el `StudioCatalog` del código desplegado. He sembrado la `unreadable` de una referencia `version`.
+- **`malformed`** (no está en la lista del revisor): la base rechaza `kind: version` sin uuid (`ussv_studio_ref_chk`), y el contenido también.
+- **Por qué la lectura «ilegible» es simulada:** en PG, una consulta que falla de verdad dentro de la transacción de `RefreshDatabase` aborta la transacción, y las lecturas siguientes de la prueba también fallarían. Una petición real no tiene esa transacción envolvente. Por eso la consulta se corta antes de ejecutarse, con la misma excepción que da Laravel.
+
+### 10.4 · Lo que cae con el código de antes [C]
+
+Los ficheros restaurados se compararon con `cmp`.
+- **m-1:** con el `AssistedQueue.php` de `620b2d40`, caen las 3 de SQLite («la reclamación entregó la fila de una inscripción cerrada: [{"kind":"member",…},true,null]»). En PG, la carrera da `Failures: 1` de 4: cae la de m-1 (`Failed asserting that an array does not have the key 'claim'`) y pasan las tres de R3-2.
+- **m-2:** con el de `a33b92e3`, sin la condición, caen las 4 («strategy_stopped: no se ofrece» / «ilegible: no se ofrece»).
+- **m-4:** probé una mutación que añade `members.phone` a cada fila de `dtos()`. Con la prueba de `8bbf00e4`, las 3 de voz pasan: es el hueco. Con la nueva, caen las 3 («no sale ningún teléfono (3100000001)»).
+
+### 10.5 · Pruebas (línea final)
+
+**SQLite:**
+- `tests/Unit/Outreach`: `OK (1042 tests, 53256 assertions)`.
+- `tests/Feature/Outreach`: `OK, but some tests were skipped! Tests: 726, Assertions: 41850, Skipped: 168`. Son los 167 saltos de diseño más la carrera nueva, que solo corre en PG.
+- Guardas (16 ficheros): `OK (141 tests, 182977 assertions)`.
+- Pint (`--test`) sobre los cuatro ficheros PHP de la ronda: `passed`.
+
+**PG 14** (`ultron_studio_cierre_bandeja`):
+- `H9AssistedEligibilityTest`: `OK (27 tests, 406 assertions)`.
+- `H9AssistedConditionsTest`: `OK (11, 185)`.
+- `H9AssistedOptOutStrategyTest`: `OK (27, 309)`.
+- `H9AssistedComplaintTest`: `OK (4, 39)`.
+- `H9AssistedClaimRaceTest`: `OK (4, 114)`.
+- `AssistedQueueOptedOutTest`: `OK (48, 49)`.
+- Banco: `OK (3, 95)`.
+- Las cinco primeras dan los mismos números en SQLite. La carrera, 4 saltadas.
+
+### 10.6 · Banco (PG 14 local, por HTTP, mediana de 5; consultas · ms de pared)
+
+| N | `unclaimed` (50) | `mine` (50) | `all` (20) | `claim` 201 | `unclaimed` + 20 000 DNC ajenos | Peor caso (cabeza retenida + 20 000 DNC) |
+|---|---|---|---|---|---|---|
+| 50 | 44·25.0 | 44·22.6 | 44·22.2 | **59**·16.9 | 44·34.7 | 42·35.1 |
+| 500 | 44·23.1 | 44·23.0 | 44·26.8 | **59**·29.6 | 44·96.5 | 102·134.6 |
+| 5 000 | 44·47.5 | 44·27.9 | 44·43.7 | **59**·29.8 | 44·64.2 | 102·194.4 |
+
+- **El reclamo pasa de 58 a 59 consultas** con 50, 500 y 5 000 trabajos: es la +1 de `requireOpenEnrollment()` tras el `UPDATE` (m-1).
+- **La página no cambia:** 44 consultas, y 102 en el peor caso. m-2 no añade ninguna.
+- **Los tiempos son ruidosos:** la máquina la comparten otros cinco agentes. La celda de 500 con DNC (96.5 ms de pared, 39.4 ms de base) no sigue a la de 5 000. La medida estable es el número de consultas.
+
+### 10.7 · Pendiente y para el lead
+
+- **C-1, en el CRM:** el tipo y los textos de los cuatro motivos nuevos (§9.4). El contrato ya los nombra.
+- **m-3** es del CRM; **C-2**, del propietario.
+- **`liveWithStudioReference()`** repite `RunWorld::liveStrategy()` con la referencia del Studio de la fila elegida. No he tocado `RunWorld` para no chocar con la otra rama. Al integrar puede pasar allí como un parámetro aditivo.
+- **No he podido verificar** nada en producción (sin ssh), ni el CRM.
