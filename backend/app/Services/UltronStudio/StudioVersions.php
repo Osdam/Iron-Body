@@ -6,6 +6,7 @@ use App\Exceptions\UltronStudioException;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVersionReview;
+use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -462,7 +463,7 @@ final class StudioVersions
      * Qué puede hacer quien mira con esta versión, y si no, por qué (el CRM
      * pinta los botones con esto; el servidor lo vuelve a comprobar al actuar).
      *
-     * @return array<string, array{allowed:bool,code?:string,message?:string}>
+     * @return array<string, array{allowed:bool,code?:string,message?:string,detail?:string}>
      */
     private function actions(StudioAccess $access, StudioVersion $v): array
     {
@@ -484,33 +485,83 @@ final class StudioVersions
             default => ['allowed' => true],
         };
 
+        // B-2: quien escribió frases que la versión copia no la aprueba (en el
+        // orden de approve(): después de los cuatro ojos de la versión y antes
+        // del estado), pero sí la rechaza. Se lee el libro una vez, y solo si
+        // hace falta y la versión lleva frases de reglas.
+        $autoria = $this->phraseAuthorsFor($access, $v);
+        $aprobar = $revisar;
+        if ($revisar['allowed'] || ($revisar['code'] ?? null) === 'invalid_transition') {
+            $suyas = $autoria();
+            if ($suyas !== []) {
+                $aprobar = $no('four_eyes', StudioRulePhraseAuthors::message($suyas, 'approve')) + ['detail' => StudioRulePhraseAuthors::DETAIL];
+            }
+        }
+
         // Hito 5: publicar, promover y revertir, con sus puertas que se saben
-        // sin leer nada más (contrato H5 §A7).
+        // sin leer nada más (contrato H5 §A7), y la autoría de las frases.
         return [
             'submit' => $enviar,
-            'approve' => $revisar,
+            'approve' => $aprobar,
             'reject' => $revisar,
-        ] + StudioPublishing::actions($access, $v);
+        ] + StudioPublishing::actions($access, $v, $autoria);
+    }
+
+    /**
+     * Las reglas con frases que `$access` escribió en `$v`
+     * ({@see StudioRulePhraseAuthors::of()}; `[]` si ninguna), calculadas a la
+     * primera llamada y nunca dos veces.
+     *
+     * @return Closure(): list<array{code:string,revision:int|null,authored:list<int>,unverified:bool}>
+     */
+    private function phraseAuthorsFor(StudioAccess $access, StudioVersion $v): Closure
+    {
+        $calculada = null;
+
+        return static function () use ($access, $v, &$calculada): array {
+            return $calculada ??= StudioRulePhraseAuthors::of(is_array($v->content) ? $v->content : [], $access->id()) ?? [];
+        };
     }
 
     /**
      * Cuatro ojos por IDENTIDAD. El intento queda auditado aparte y se
      * rechaza.
+     *
+     * B-2 (Enmienda del 22-11-2026 al H5): al APROBAR, tampoco quien escribió
+     * una revisión copiada de una regla que aporta frases a la versión
+     * ({@see StudioRulePhraseAuthors}), con el mismo código y el mismo evento
+     * (`detail: rule_phrase_author`). Al RECHAZAR, no: va en la dirección
+     * segura (D15).
      */
     private function assertFourEyes(StudioAccess $access, Request $request, StudioVersion $version, string $action): void
     {
-        if (! $access->isCreator($version)) {
+        if ($access->isCreator($version)) {
+            $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
+                ($action === 'reject' ? 'Intentó rechazar' : 'Intentó aprobar')." su propia versión «{$version->label}»", [
+                    'fromStatus' => $version->status,
+                    'contentHash' => $version->content_hash,
+                    'diff' => ['action' => $action],
+                ]);
+
+            throw UltronStudioException::fourEyesRequired();
+        }
+        if ($action === 'reject') {
+            return;
+        }
+
+        $suyas = StudioRulePhraseAuthors::of(is_array($version->content) ? $version->content : [], $access->id()) ?? [];
+        if ($suyas === []) {
             return;
         }
 
         $this->audit->recordDenied($request, $access->actor, 'version.four_eyes_denied', StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
-            ($action === 'reject' ? 'Intentó rechazar' : 'Intentó aprobar')." su propia versión «{$version->label}»", [
+            "Intentó aprobar «{$version->label}», que copia frases de reglas que escribió", [
                 'fromStatus' => $version->status,
                 'contentHash' => $version->content_hash,
-                'diff' => ['action' => $action],
+                'diff' => ['action' => $action] + StudioRulePhraseAuthors::auditDiff($suyas),
             ]);
 
-        throw UltronStudioException::fourEyesRequired();
+        throw StudioRulePhraseAuthors::refusal($suyas, 'approve');
     }
 
     /** @param  list<StudioVersionStatus>  $allowed */

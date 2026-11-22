@@ -1074,19 +1074,33 @@ final class StudioVoicePublishing
      * Cuatro ojos al publicar y al promover, por IDENTIDAD: nadie publica ni
      * promueve lo que creó, sea la versión o el perfil (D8-19). El intento
      * queda en el libro.
+     *
+     * B-2 (como en WhatsApp, {@see StudioRulePhraseAuthors}): tampoco quien
+     * escribió una revisión copiada de una regla que aporta frases a la
+     * versión, que la voz compila igual ({@see StudioVoiceCompiler}). Mismo
+     * 403 con `detail: rule_phrase_author` y el mismo evento, con
+     * `diff.rulePhraseAuthor`.
      */
     private function assertFourEyes(StudioAccess $access, Request $request, ?StudioVersion $version, ?StudioVoiceProfile $perfil, string $action): void
     {
         $mia = $version !== null && $access->isCreator($version);
         $miPerfil = $perfil !== null && (int) $perfil->created_by_admin_id === $access->id();
-        if (! $mia && ! $miPerfil) {
+        $verbo = $action === StudioVoicePublication::ACTION_PROMOTE ? 'promover' : 'publicar';
+        if ($mia || $miPerfil) {
+            $this->audit->recordDenied($request, $access->actor, 'voice_publication.four_eyes_denied', StudioAuditEvent::SUBJECT_INTEGRATION, $perfil?->uuid,
+                "Intentó {$verbo} una voz que creó", ['diff' => ['action' => $action, 'version' => $mia, 'profile' => $miPerfil]]);
+
+            throw UltronStudioException::publicationFourEyesRequired($action);
+        }
+
+        $suyas = $version !== null ? (StudioRulePhraseAuthors::of(is_array($version->content) ? $version->content : [], $access->id()) ?? []) : [];
+        if ($suyas === []) {
             return;
         }
-        $verbo = $action === StudioVoicePublication::ACTION_PROMOTE ? 'promover' : 'publicar';
         $this->audit->recordDenied($request, $access->actor, 'voice_publication.four_eyes_denied', StudioAuditEvent::SUBJECT_INTEGRATION, $perfil?->uuid,
-            "Intentó {$verbo} una voz que creó", ['diff' => ['action' => $action, 'version' => $mia, 'profile' => $miPerfil]]);
+            "Intentó {$verbo} una voz con frases de reglas que escribió", ['diff' => ['action' => $action, 'version' => false, 'profile' => false] + StudioRulePhraseAuthors::auditDiff($suyas)]);
 
-        throw UltronStudioException::publicationFourEyesRequired($action);
+        throw StudioRulePhraseAuthors::refusal($suyas, $action);
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
