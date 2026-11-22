@@ -1,0 +1,3 @@
+# Lote 5 · --sin-filas: condición C-A2 de database-specialist (migrar sin ejecuciones del laboratorio en curso). Los
+# estados vivos son StudioLabRun::LIVE_STATUSES. El paso 0 lo mira y el guion lo repite justo antes de migrar.
+ultron_studio_lab_runs status queued,running
