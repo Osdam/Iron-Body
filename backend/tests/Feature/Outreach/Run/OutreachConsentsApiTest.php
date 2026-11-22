@@ -155,9 +155,15 @@ class OutreachConsentsApiTest extends TestCase
         }
         // Con las dos: la que no existe, 404.
         $this->getJson($lista.'999999', $this->cuenta('Ana', self::ALL))->assertStatus(404)->assertJsonPath('code', 'person_not_found');
-        // Un prospecto de un socio es el socio: ver prospectos no basta.
-        $this->getJson(self::BASE.'consents?personType=lead&personId='.$p['lead'], $this->cuenta('Mercadeo', [OutreachAccess::CONSENTS_RECORD, 'marketing.view']))
-            ->assertStatus(403)->assertJsonPath('required_permission', 'members.view');
+        // Un prospecto de un socio es el socio: ver prospectos no basta. Y sin ver socios es 404, como uno que no existe: un 403
+        // diría que está enlazado a un socio (M-1). Un prospecto suelto, 200.
+        $mercadeo = $this->cuenta('Mercadeo', [OutreachAccess::CONSENTS_RECORD, 'marketing.view']);
+        $enlazado = $this->getJson(self::BASE.'consents?personType=lead&personId='.$p['lead'], $mercadeo)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $noExiste = $this->getJson(self::BASE.'consents?personType=lead&personId=999999', $mercadeo)->assertStatus(404);
+        $this->assertSame($noExiste->getContent(), $enlazado->getContent(), 'la misma respuesta: no es un oráculo del vínculo');
+        $this->getJson(self::BASE.'consents?personType=lead&personId='.$this->lead(['phone' => '3001119999']), $mercadeo)->assertOk();
+        $this->postJson(self::BASE.'consents/revoke', ['personType' => 'lead', 'personId' => $p['lead']] + $this->retirada($p), $mercadeo)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->assertSame(0, DB::table('outreach_consents')->count());
         // Pedir exige registrar; confirmar y rechazar, confirmar.
         $this->postJson(self::BASE.'consents', $this->peticion($p), $this->cuenta('SoloConfirma', [OutreachAccess::CONSENTS_CONFIRM, 'members.view']))->assertStatus(403);
         $pet = $this->postJson(self::BASE.'consents', $this->peticion($p), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');

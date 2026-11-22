@@ -28,9 +28,11 @@ use Illuminate\Support\Str;
  *
  * LAS CERRADURAS (además de la puerta de `AuthorizationMap` y la persona de
  * {@see OutreachAccess}): ver a la persona. Un socio exige `members.view` y un
- * prospecto `marketing.view` (y, si el prospecto es de un socio, también la
- * de socios), comprobadas ANTES de leer nada de ella: sin la llave, 403 sin
- * decir si existe. Por `uuid`, una autorización de una persona que no se
+ * prospecto `marketing.view`, comprobadas ANTES de leer nada de ella: sin la
+ * llave, 403 sin decir si existe. Un prospecto de un socio exige también la de
+ * socios; sin ella es 404, como uno que no existe (M-1 de la revisión de API:
+ * un 403 diría que está enlazado a un socio, y Mercadeo no le enseña ese
+ * vínculo). Por `uuid`, una autorización de una persona que no se
  * puede ver es 404, igual que una que no existe. Y el ALCANCE DEL ENTRENADOR
  * ({@see TrainerMemberScope}, C-3 de la revisión de API): una cuenta de
  * entrenador solo alcanza a los socios que tiene asignados; un socio ajeno
@@ -450,7 +452,9 @@ final class OutreachConsents
 
     /**
      * La persona, si quien llama puede verla: la llave de su tipo ANTES de leer
-     * nada (sin ella, 403 sin decir si existe); después, 404 si no es nadie.
+     * nada (sin ella, 403 sin decir si existe); después, 404 si no es nadie,
+     * si es un prospecto de un socio y no puede ver socios, o si es un socio
+     * fuera del alcance del entrenador.
      *
      * @return array{subject: Subject, key: string, memberId: ?int, leadId: ?int, type: string, id: int, recordsAs: array{type: string, id: int}}
      *
@@ -464,10 +468,13 @@ final class OutreachConsents
         if ($s === null || ! $s->resolved() || $s->key === null) {
             throw OutreachException::notFound('person');
         }
-        // El socio manda: un prospecto de un socio se registra como el socio, y verlo exige también ver socios.
+        // El socio manda: un prospecto de un socio se registra como el socio, y verlo exige también ver socios. Sin esa llave,
+        // 404 y no 403: que el prospecto es de un socio es justo lo que no puede saber (M-1).
         $canonica = SubjectKey::parse($s->key);
         $tipo = $canonica['kind'] === SubjectKey::MEMBER ? self::PERSON_MEMBER : self::PERSON_LEAD;
-        self::assertMayView($access, $tipo);
+        if (! $access->can(self::PERSON_VIEW[$tipo])) {
+            throw OutreachException::notFound('person');
+        }
         if ($tipo === self::PERSON_MEMBER && ! self::inTrainerScope($access, (int) $canonica['id'])) {
             throw OutreachException::notFound('person');
         }
