@@ -94,6 +94,26 @@ final class StudioPublishing
     }
 
     /** `required` o `waived` (§A13): cualquier otra cosa es `required`. */
+    /**
+     * DE QUÉ LABORATORIO CUENTA EL VEREDICTO PARA LA PUERTA (apartado 5 del
+     * cierre, B8; `ULTRON_STUDIO_PUBLISH_LAB_SOURCE`): `simulation` (el de
+     * siempre y el de por defecto: la puerta se comporta EXACTAMENTE como
+     * antes) o `engine` (el del recorrido del motor). La cambia el propietario.
+     * Cualquier otro valor, `simulation`.
+     */
+    public static function labSource(): string
+    {
+        return config('ultron_studio.publishing.lab_source') === StudioLabRuns::FIDELITY_MODE_ENGINE
+            ? StudioLabRuns::FIDELITY_MODE_ENGINE
+            : StudioLabRuns::FIDELITY_SIMULATION;
+    }
+
+    /** La versión de prompts cuyo veredicto cuenta para la puerta, según {@see labSource()}. */
+    public static function labGatePromptVersion(): string
+    {
+        return self::labSource() === StudioLabRuns::FIDELITY_MODE_ENGINE ? StudioLabEngineFlow::promptVersion() : StudioLabPrompts::PROMPT_VERSION;
+    }
+
     public static function labGateMode(): string
     {
         return config('ultron_studio.publishing.lab_gate') === StudioPublicationDeclaration::LAB_WAIVED

@@ -10,9 +10,11 @@ use App\Models\UltronStudio\StudioLabVerdict;
 use App\Models\UltronStudio\StudioPublication;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
+use App\Services\UltronStudio\StudioLabEngineFlow;
 use App\Services\UltronStudio\StudioLabPrompts;
 use App\Services\UltronStudio\StudioLabRuns;
 use App\Services\UltronStudio\StudioLabVerdicts;
+use App\Services\UltronStudio\StudioPublishing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Queue;
@@ -132,6 +134,52 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
         $ultimo = StudioLabVerdicts::latestFor($v, StudioLabPrompts::PROMPT_VERSION);
         $this->assertSame(['latest' => 'approved', 'runUuid' => $aprobado->run->uuid, 'verdictId' => $aprobado->id, 'promptVersion' => StudioLabPrompts::PROMPT_VERSION], $ultimo);
         $this->assertSame(['mode' => 'required', 'ok' => true, 'latest' => 'approved'], array_intersect_key($this->previewOf($root, $v->uuid)['requirements']['labGate'], array_flip(['mode', 'ok', 'latest'])));
+    }
+
+    public function test_un_veredicto_solo_del_motor_no_es_stale_prompts_para_la_simulacion(): void
+    {
+        $this->importBaseline();
+        $this->openKeys(['ultron_studio.publishing.lab_gate' => 'required']);
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $v = $this->approvedVersion($ana, $root);
+        $this->labVerdict($v, StudioLabVerdict::DECISION_APPROVED, StudioLabEngineFlow::promptVersion());
+
+        // Ignorado del todo: ni la cuenta ni la da por «prompts viejos».
+        $this->assertNull(StudioLabVerdicts::latestFor($v, StudioLabPrompts::PROMPT_VERSION)['latest']);
+        $this->assertSame(['mode' => 'required', 'ok' => false, 'latest' => null, 'message' => 'Sin veredicto del laboratorio sobre esta huella.'], $this->previewOf($root, $v->uuid)['requirements']['labGate']);
+        // Uno de la simulación con prompts viejos sigue siendo `stale_prompts`, como siempre.
+        $this->labVerdict($v, StudioLabVerdict::DECISION_APPROVED, '2000-01-01.1');
+        $this->assertSame('stale_prompts', StudioLabVerdicts::latestFor($v, StudioLabPrompts::PROMPT_VERSION)['latest']);
+    }
+
+    /**
+     * B8 (apartado 5): la llave `ULTRON_STUDIO_PUBLISH_LAB_SOURCE`. Nace en
+     * `simulation` y la puerta es la de siempre; con `engine`, cuenta el
+     * veredicto del recorrido del motor (y uno de la simulación no basta ni es
+     * «prompts viejos» del motor). La forma de `labGate` no cambia.
+     */
+    public function test_la_llave_de_la_puerta_nace_en_simulacion_y_con_engine_cuenta_el_motor(): void
+    {
+        $this->assertSame([StudioLabRuns::FIDELITY_SIMULATION, StudioLabPrompts::PROMPT_VERSION], [StudioPublishing::labSource(), StudioPublishing::labGatePromptVersion()]);
+        $this->importBaseline();
+        $this->openKeys(['ultron_studio.publishing.lab_gate' => 'required']);
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $v = $this->approvedVersion($ana, $root);
+        $this->labVerdict($v, StudioLabVerdict::DECISION_APPROVED);
+
+        config(['ultron_studio.publishing.lab_source' => 'engine']);
+        $this->assertSame([StudioLabRuns::FIDELITY_MODE_ENGINE, StudioLabEngineFlow::promptVersion()], [StudioPublishing::labSource(), StudioPublishing::labGatePromptVersion()]);
+        $this->assertSame(['mode' => 'required', 'ok' => false, 'latest' => null, 'message' => 'Sin veredicto del laboratorio sobre esta huella.'], $this->previewOf($root, $v->uuid)['requirements']['labGate'], 'la simulación no basta');
+        $this->publishAs($root, $v->uuid)->assertStatus(409)->assertJsonPath('code', 'lab_verdict_required');
+
+        $delMotor = $this->labVerdict($v, StudioLabVerdict::DECISION_APPROVED, StudioLabEngineFlow::promptVersion());
+        $gate = $this->previewOf($root, $v->uuid)['requirements']['labGate'];
+        $this->assertSame(['mode' => 'required', 'ok' => true, 'latest' => 'approved'], $gate);
+        $this->publishAs($root, $v->uuid)->assertCreated()->assertJsonPath('data.labGate', ['mode' => 'required']);
+        $this->assertSame(['mode' => 'required', 'runUuid' => $delMotor->run->uuid, 'verdictId' => $delMotor->id, 'promptVersion' => StudioLabEngineFlow::promptVersion()],
+            StudioPublication::query()->sole()->lab_gate);
     }
 
     /**

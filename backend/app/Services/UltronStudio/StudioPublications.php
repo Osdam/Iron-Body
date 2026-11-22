@@ -1349,7 +1349,8 @@ final class StudioPublications
     private function labGate(StudioVersion $version): array
     {
         $modo = StudioPublishing::labGateMode();
-        $ultimo = StudioLabVerdicts::latestFor($version, StudioLabPrompts::PROMPT_VERSION);
+        // Apartado 5 del cierre (B8): con la llave en `simulation` (por defecto), la versión de prompts de siempre.
+        $ultimo = StudioLabVerdicts::latestFor($version, StudioPublishing::labGatePromptVersion());
 
         return [
             'mode' => $modo,

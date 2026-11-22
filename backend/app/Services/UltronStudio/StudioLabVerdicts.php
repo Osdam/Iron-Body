@@ -130,6 +130,12 @@ final class StudioLabVerdicts
             ->where('ultron_studio_lab_verdicts.version_id', $version->id)
             ->where('ultron_studio_lab_verdicts.version_content_hash', $version->content_hash);
 
+        // Apartado 5 del cierre: cada familia de ejecuciones (la simulación o el recorrido del motor, `motor-…`)
+        // solo ve las suyas, también para `stale_prompts`: un veredicto del motor no cuenta para la simulación.
+        $deSuFamilia = static fn ($q) => StudioLabEngineFlow::isEnginePromptVersion($promptVersion)
+            ? $q->where('lab_run.prompt_version', 'like', 'motor-%')
+            : $q->where('lab_run.prompt_version', 'not like', 'motor-%');
+
         $ultimo = $sobreEstaHuella()
             ->where('lab_run.prompt_version', $promptVersion)
             ->orderByDesc('ultron_studio_lab_verdicts.id')
@@ -144,7 +150,7 @@ final class StudioLabVerdicts
         }
 
         return [
-            'latest' => $sobreEstaHuella()->exists() ? 'stale_prompts' : null,
+            'latest' => $deSuFamilia($sobreEstaHuella())->exists() ? 'stale_prompts' : null,
             'runUuid' => null,
             'verdictId' => null,
             'promptVersion' => null,
