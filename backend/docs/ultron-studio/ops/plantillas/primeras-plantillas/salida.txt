@@ -1,0 +1,121 @@
+== Entorno: APP_ENV=testing · DB=sqlite · url_hosts=[] · phone_button=false · legal.brand="Iron Body"
+== Catálogo: outreach-catalog/2026-11-11.2 · W9 resuelve: days_to_expiry, first_name, gym_name, membership_end_date_text, plan_name
+
+────────────────────────────────────────────────────────────
+[A_seguimiento_prospecto] key=seguimiento-prospecto · channel=whatsapp · purpose=commercial · disparador=lead.followup_due
+  disparador: class=periodic subject=lead triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=273467ab18e2d3a51f8d6646a11fd41b09ab41a4829ed864e50b40d104d4ac42 · bytes=474/8192
+     cuerpo: 258/1024 caracteres · variables=["first_name","gym_name"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 461 bytes · request_hash=ff929dc9151cb709f767a820b3c88dbcfa0dbb4afb2398fc9b34ffcf628096f3
+     POST /{WABA}/message_templates {"name":"seguimiento_prospecto_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. Le escribimos de {{2}} para retomar la conversación que tuvimos por WhatsApp. ¿Le sigue interesando entrenar con nosotros? Si tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Iron Body"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. Le escribimos de Iron Body para retomar la conversación que tuvimos por WhatsApp. ¿Le sigue interesando entrenar con nosotros? Si tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[B_membresia_por_vencer] key=membresia-por-vencer · channel=whatsapp · purpose=commercial · disparador=membership.expiring_window
+  disparador: class=periodic subject=member triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=50d6db766233783f2b1b8da0a6c1c17024f547394d1fed0cca23a500c265bc0e · bytes=503/8192
+     cuerpo: 209/1024 caracteres · variables=["first_name","gym_name","membership_end_date_text"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 436 bytes · request_hash=f089526dccd1e9f6f4974cd4e7f8c379508e20e55c738591d35bedd63796fbb6
+     POST /{WABA}/message_templates {"name":"membresia_por_vencer_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. Le recordamos que su membresía en {{2}} vence el {{3}}. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Iron Body","15 de diciembre de 2026"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body","15 de diciembre de 2026"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. Le recordamos que su membresía en Iron Body vence el 15 de diciembre de 2026. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Iron Body","5 de enero de 2027"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[C_membresia_vencida] key=membresia-vencida · channel=whatsapp · purpose=commercial · disparador=membership.expired_window
+  disparador: class=periodic subject=member triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=f029a551fbca5910c81e2919da00f1228820d5c759db3c10e7bafd57d9fbc704 · bytes=485/8192
+     cuerpo: 192/1024 caracteres · variables=["first_name","gym_name","membership_end_date_text"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 418 bytes · request_hash=4f9b3c5f630519403f7720232e7c8fe50a49f4c1628df146b950a3b5050061f4
+     POST /{WABA}/message_templates {"name":"membresia_vencida_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. Su membresía en {{2}} terminó el {{3}}. Si desea retomar sus entrenamientos, responda este mensaje y le indicamos cómo renovarla.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Iron Body","15 de noviembre de 2026"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body","15 de diciembre de 2026"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. Su membresía en Iron Body terminó el 15 de diciembre de 2026. Si desea retomar sus entrenamientos, responda este mensaje y le indicamos cómo renovarla.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Iron Body","5 de enero de 2027"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[D_socio_inactivo] key=socio-inactivo · channel=whatsapp · purpose=commercial · disparador=member.inactive
+  disparador: class=periodic subject=member triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=4c47eb4579c55fde2df6cb389c64ef3d74c365db2b3d828b9bdfbdd4a95039b9 · bytes=460/8192
+     cuerpo: 251/1024 caracteres · variables=["first_name","gym_name"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 447 bytes · request_hash=f930a6dfa22a6441414878fa55d1cae8c86a22a3207eeccee00e1b159103afcf
+     POST /{WABA}/message_templates {"name":"socio_inactivo_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. En {{2}} hace un tiempo no le vemos por el gimnasio y queremos saber cómo está. Si desea retomar su rutina o necesita ayuda para organizarse, responda este mensaje y con gusto le ayudamos.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Iron Body"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. En Iron Body hace un tiempo no le vemos por el gimnasio y queremos saber cómo está. Si desea retomar su rutina o necesita ayuda para organizarse, responda este mensaje y con gusto le ayudamos.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[E_valoracion_pendiente] key=valoracion-pendiente · channel=whatsapp · purpose=commercial · disparador=valuation.outdated
+  disparador: class=periodic subject=member triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=73292a29f3ec050cec1720c29e6571f314a3b4a1e7036f64373b072d0d9b29b1 · bytes=455/8192
+     cuerpo: 238/1024 caracteres · variables=["first_name","gym_name"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 442 bytes · request_hash=4b695fa92483c7e2c0ff522e3bbecc4018ce2eda81298bf22e6dedef433ce463
+     POST /{WABA}/message_templates {"name":"valoracion_pendiente_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. En {{2}} vemos que ya pasó un tiempo desde su última valoración física. Si desea agendar una nueva para revisar su progreso, responda este mensaje y le ayudamos a programarla.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Iron Body"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. En Iron Body vemos que ya pasó un tiempo desde su última valoración física. Si desea agendar una nueva para revisar su progreso, responda este mensaje y le ayudamos a programarla.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Iron Body"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[ANTES_B_con_dias_y_plan] key=membresia-por-vencer · channel=whatsapp · purpose=commercial · disparador=membership.expiring_window
+  disparador: class=periodic subject=member triggerable=true available=true purposes=["commercial"] prefiltro=true
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=3d690cb96931838f5b09241f79aeb9b7dfab21f79e6e7a0d9c6c6e244c1dc7a3 · bytes=461/8192
+     cuerpo: 201/1024 caracteres · variables=["first_name","plan_name","days_to_expiry"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): sí («BAJA» es frase segura de WhatsappSignals)
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 412 bytes · request_hash=8c0224e76bbc7044363cd8842af236888e1fc2c56acc1d68c786cc6da69055fe
+     POST /{WABA}/message_templates {"name":"membresia_por_vencer_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. Le recordamos que su {{2}} vence en {{3}} días. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.\n\nSi no desea recibir más mensajes, responda BAJA.","example":{"body_text":[["Laura","Plan Trimestral","5"]]}}]}
+  5.1) W9 compone con ["Laura","MENSUALIDAD","0"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. Le recordamos que su MENSUALIDAD vence en 0 días. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+  5.2) W9 compone con ["José","Promo 2x1","1"] → R-xx=["R-02"] · OutreachTemplateMessage=ok
+      «Hola, José. Le recordamos que su Promo 2x1 vence en 1 días. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.⏎⏎Si no desea recibir más mensajes, responda BAJA.»
+────────────────────────────────────────────────────────────
+[MALA_1_con_precio] key=mala-precio · channel=whatsapp · purpose=commercial · disparador=—
+  1) petición (reglas del controlador): ok
+  2) content(): RECHAZADA · findings=[{"key":"content.bodyPreview","code":"restriction_violated"}]
+     → HTTP 422 template_invalid · errors={"content.bodyPreview":["El texto incumple una restricción del código (importes, descuentos, URL o promesas)."]}
+     restrictionViolations(cuerpo)=["R-01"]
+────────────────────────────────────────────────────────────
+[MALA_2a_sin_baja_y_sin_optOutLine] key=mala-sin-baja · channel=whatsapp · purpose=commercial · disparador=—
+  1) petición (reglas del controlador): ok
+  2) content(): RECHAZADA · findings=[{"key":"content.optOutLine","code":"missing_key"}]
+     → HTTP 422 template_invalid · errors={"content.optOutLine":["Falta este campo."]}
+     restrictionViolations(cuerpo)=[]
+────────────────────────────────────────────────────────────
+[MALA_2b_sin_baja_optOutLine_false] key=mala-sin-baja · channel=whatsapp · purpose=commercial · disparador=—
+  1) petición (reglas del controlador): ok
+  2) content(): RECHAZADA · findings=[{"key":"content.optOutLine","code":"opt_out_required"}]
+     → HTTP 422 template_invalid · errors={"content.optOutLine":["La plantilla tiene que decir cómo dejar de recibir mensajes (optOutLine: true)."]}
+     restrictionViolations(cuerpo)=[]
+────────────────────────────────────────────────────────────
+[MALA_2c_sin_baja_PERO_optOutLine_true] key=mala-sin-baja · channel=whatsapp · purpose=commercial · disparador=—
+  1) petición (reglas del controlador): ok
+  2) content(): VÁLIDA · contentHash=a0dd5401ab30d181875e9eebc59aff79b243cd7091824b6d6418c292fe275c16 · bytes=443/8192
+     cuerpo: 159/1024 caracteres · variables=["first_name","gym_name","membership_end_date_text"] · restricciones=[]
+     línea de baja en el TEXTO (comprobación de este guion, no del validador): NO
+  3) metaWarnings=[] · missingMetaExamples=false · hasComponents=false
+  4) TemplateRequestGuard::payload(): ok · 376 bytes · request_hash=72cffc483c5a13a93e6bdccc64273dedc527c1360eaa96a4b21d34260123f447
+     POST /{WABA}/message_templates {"name":"mala_sin_baja_v1","language":"es_CO","category":"MARKETING","parameter_format":"POSITIONAL","components":[{"type":"BODY","text":"Hola, {{1}}. Le recordamos que su membresía en {{2}} vence el {{3}}. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.","example":{"body_text":[["Laura","Iron Body","15 de diciembre de 2026"]]}}]}
+  5.1) W9 compone con ["Laura","Iron Body","15 de diciembre de 2026"] → R-xx=[] · OutreachTemplateMessage=ok
+      «Hola, Laura. Le recordamos que su membresía en Iron Body vence el 15 de diciembre de 2026. Si desea renovarla o tiene alguna pregunta, responda este mensaje y con gusto le ayudamos.»
+  5.2) W9 compone con ["José","Iron Body","5 de enero de 2027"] → R-xx=[] · OutreachTemplateMessage=ok
+────────────────────────────────────────────────────────────
+[MALA_3_comercial_como_utility] key=mala-categoria · channel=whatsapp · purpose=commercial · disparador=—
+  1) petición (reglas del controlador): ok
+  2) content(): RECHAZADA · findings=[{"key":"content.category","code":"category_purpose_mismatch"}]
+     → HTTP 422 template_invalid · errors={"content.category":["La categoría no corresponde a la finalidad (comercial: marketing; cobranza y servicio: utility)."]}
+     restrictionViolations(cuerpo)=[]
+────────────────────────────────────────────────────────────
+dateText(2026-12-15)="15 de diciembre de 2026" · dateText(2027-01-05)="5 de enero de 2027" · firstName("MARÍA JOSÉ PÉREZ")="María" · firstName("💪 Juan")=null
+isOptOutText("BAJA")=true · isOptOutText("Baja, gracias")=true · isOptOutText("No me interesa")=false · isPossibleOptOutText("quiero la baja")=true

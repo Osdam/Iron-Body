@@ -1,0 +1,23 @@
+CIERRE DEFINITIVO · SEGURIDAD · COPIAS HISTÓRICAS DEL FICHERO DE ENTORNO · producción, SOLO LECTURA · 22-11-2026, 06:40 UTC
+lead · directiva definitiva §11 («Revisa las copias históricas del entorno que contienen secretos»). Solo nombres, fechas y permisos: nunca el contenido. Nada se ha borrado ni cambiado.
+
+── 1. Dónde hay copias y cuántas ──
+/root (drwx------ root:root)                    26 copias sueltas · todas 600 (root o www-data) · del 13-09-2026 al 11-11-2026
+   (2 copias «pre» de septiembre, 3 «env-backup» del 22-09 y 21 «env-pre» de noviembre: las que dejan los mandos de la voz, del H6, del H7 y del H9)
+/root/env-backups (drwx------ root:root)        81 copias · todas 600 · del 24-06-2026 al 21-09-2026
+/root/iron-body-backups (drwx------ root:root)  11 copias · 6 en 600 y 5 en 644 · del 29-06-2026 al 03-09-2026
+/var/backups/ironbody/<lote>/env.backup          15 copias · todas 600 · 5 de octubre y 10 de noviembre (la última, del 11-11)
+TOTAL: 133 copias del fichero de entorno, cada una con todos los secretos vigentes en su fecha.
+Además: el fichero de credenciales del rol dueño de las migraciones, en /root (600 root). Está EN USO: no es una copia.
+
+── 2. Exposición ──
+· /root y sus dos carpetas son 700 de root: ningún otro usuario del servidor puede llegar a esos ficheros, tampoco a los 5 que tienen 644.
+· Fuera de /root no hay ningún fichero de entorno legible por otros (buscado en /var/www, /home, /opt, /srv y /tmp).
+· El fichero en uso, el del backend en /var/www/api/backend: 600 www-data:www-data.
+· Riesgo real: no es de acceso hoy, es de permanencia. 133 ficheros guardan secretos que en su mayoría siguen vigentes (los de Meta, OpenAI, Twilio, Wompi, ElevenLabs y la clave de la aplicación; la contraseña de la base se rotó el 14-11). Si alguna vez se copia /root o /var/backups a otro sitio, viajan todos.
+
+── 3. Propuesta (no ejecutada; borrar es irreversible y necesita la autorización del propietario) ──
+a) Sin riesgo: poner en 600 los 5 ficheros que están en 644 dentro de /root/iron-body-backups.
+b) Destruir de forma segura las copias anteriores al 01-11-2026 (junio a octubre: las 81, las 11, 5 de las sueltas de /root y las 5 de octubre de /var/backups). Ninguna sirve ya para volver atrás: restaurarlas dejaría el servidor con claves y banderas de hace meses.
+c) Conservar las de noviembre mientras duren los despliegues del cierre (son las «vueltas atrás exactas» que imprimen los mandos) y destruirlas al certificar.
+d) Hacerlo DESPUÉS de rotar la clave de ElevenLabs que pasó por el chat: así ninguna copia conserva una clave vigente de ese proveedor.

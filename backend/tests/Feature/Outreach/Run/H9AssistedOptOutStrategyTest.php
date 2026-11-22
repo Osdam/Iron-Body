@@ -126,7 +126,8 @@ class H9AssistedOptOutStrategyTest extends TestCase
         for ($i = 0; $i < $n; $i++) {
             $fila = $persona;
             if ($resolvable) {
-                $socio = $this->socio();
+                // F-2: con su número canario del medio (lo que la parte canario y la línea base «solo canario» exigen para salir).
+                $socio = $this->canaryMember($medium);
                 $fila = ['subject_key' => 'm:'.$socio['member'], 'member_id' => $socio['member']] + $fila;
             }
             $e = $this->insertEnrollment($live ?? $this->vivo, ['mode' => 'live'] + $fila);
@@ -279,16 +280,22 @@ class H9AssistedOptOutStrategyTest extends TestCase
     {
         $gente = $this->threePeople();
         $this->startedFor(['3001234567']);
-        $socio = $this->socio();
+        // F-2: canario de los dos medios (tiene un asistido por voz y otro por WhatsApp).
+        $socio = $this->canaryMember('voice', 'whatsapp');
         $persona = ['subject_key' => 'm:'.$socio['member'], 'member_id' => $socio['member']];
         $contacto = $this->voiceContact('member', $socio['member'], '+573005550101');
+        // Lo que tenía al salir (N1): el consentimiento de voz concedido y confirmado por OTRA persona, y una consulta al RNE vigente.
+        $this->voiceConsent($contacto['id'], 'granted', 2, '2026-11-01 12:00:00', 1);
+        config(['voice.contacts.rne_validity_days' => 7]);
+        $this->rneCheck($contacto['hash'], '2026-11-15 12:00:00');
         [$voz] = $this->seedStarted(1, '2026-11-18 09:00:00', $persona, 'voice');
         // El de WhatsApp, de OTRA estrategia viva (una persona tiene una inscripción por estrategia).
         $otra = $this->liveStrategy($this->validContent($this->assistedTemplate(), ['exclusions' => null]));
         [$whatsapp] = $this->seedStarted(1, '2026-11-18 10:00:00', $persona, 'whatsapp', live: $otra);
         $cola = new AssistedQueue;
         $libres = static fn () => array_column($cola->queue($gente['beto'], 'unclaimed', 50), 'uuid');
-        $this->assertContains($this->uuidOf($voz), $libres(), 'sin exclusión, el de voz se ofrece (la voz no pide aquí su consentimiento, solo que no esté denegado)');
+        // R3-1 y R3-3: la bandeja pide, por voz, el consentimiento CONCEDIDO y el RNE vigente, como N1 (hasta R3-1 bastaba con que no estuviera denegado).
+        $this->assertContains($this->uuidOf($voz), $libres(), 'sin exclusión, con el consentimiento y el RNE vigentes, el de voz se ofrece');
 
         // «No volver a llamar»: la exclusión de voz de su número (N1 `voice_excluded`).
         $this->voiceExclusion($contacto['hash']);
@@ -494,7 +501,8 @@ class H9AssistedOptOutStrategyTest extends TestCase
         $this->signedPublication($this->vivo['strategy'], null, 'resume', ['canary' => $parte, 'rest' => null, 'status' => 'active']);
         $this->assertSame('policy_unknown', self::contact(self::row($cola->queue($gente['ana'], 'mine', 50), $this->uuidOf($sinResolver)))[2], 'sin freno ni pausa: policy_unknown > complaint_unknown > expired');
 
-        $this->assertSame(['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+        // R3-3 añade `subject_minor` y `rne_check_missing`, y F-2 `canary_scope_mismatch`, entre la queja y lo desconocido; F-3, `template_not_approved` tras la estrategia (su orden lo fija H9AssistedEligibilityTest).
+        $this->assertSame(['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
     }
 
     // ── m-1 · La repetición con la inscripción cerrada ──────────────────────
