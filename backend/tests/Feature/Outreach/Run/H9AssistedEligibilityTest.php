@@ -882,8 +882,10 @@ class H9AssistedEligibilityTest extends TestCase
         if (! $this->escuchando) {
             $this->escuchando = true;
             DB::listen(function ($q): void {
-                // `in (?, ?, …)` crece con el lote, no es una consulta más.
-                $this->consultas[] = (string) preg_replace('/\(\?(, \?)*\)/', '(?…)', (string) $q->sql);
+                // `in (?, ?, …)` crece con el lote, no es una consulta más. Tampoco la lista `VALUES (?, ?), (?, ?), …`
+                // de la tanda del libro de autorizaciones (C9, `OutreachConsentFacts`): una sentencia por tramo de claves.
+                $sql = (string) preg_replace('/\(\?(, \?)*\)/', '(?…)', (string) $q->sql);
+                $this->consultas[] = (string) preg_replace('/VALUES \(\?…\)(?:, \(\?…\))*/', 'VALUES (?…)…', $sql);
             });
         }
         $antes = count($this->consultas);
