@@ -264,6 +264,63 @@ final class StudioPromptBundle
     }
 
     /**
+     * LOS CINCO PROMPTS COMPILADOS DE UNA VERSIÓN Y SU `sp`, PARA EL RECORRIDO
+     * DEL MOTOR EN EL LABORATORIO (apartado 5 del cierre; diseño
+     * `plans/informes-cierre/diseno-arq-lab.md` §3.1, B1).
+     *
+     *  - `roles`: los cinco textos que `decide` ofrecería a n8n con esta
+     *    versión publicada (`studio_prompts.roles`), por rol.
+     *  - `bundleHash`: la huella que {@see compile()} firmaría al publicar.
+     *  - `sp`: lo que viajaría firmado en el token (`x.sp`), con la MISMA
+     *    regla que `UltronPromptOffer::offer()` (pasos 8 y siguientes): modo
+     *    `studio`, sin motivo, la huella, la versión y su huella de contenido;
+     *    `n` y `t` solo si no son los de la línea base, y `o = 1` si el paquete
+     *    lleva el parche del motor de la lista de planes. `e` y `s` (la
+     *    entrada y el `seq` de la cadena) van null: lo que se prueba aún no
+     *    está publicado.
+     *
+     * NUNCA EN UN DTO: el Studio enseña los parches, no los prompts enteros
+     * (ver la cabecera). Solo los lee el laboratorio para llamar al modelo.
+     *
+     * @param  array<string,mixed>  $governed  {@see governedFrom()}
+     * @return array{roles:array<string,string>,bundleHash:string,sp:array<string,mixed>}
+     *
+     * @throws InvalidArgumentException si no compila (el motivo del compilador va en el mensaje)
+     */
+    public static function rolesFor(array $governed, ?string $versionUuid = null, ?string $contentHash = null): array
+    {
+        try {
+            $c = UltronPromptCompiler::compile($governed);
+        } catch (UltronPromptException $e) {
+            throw new InvalidArgumentException("El paquete de prompts no compila ({$e->reason}).", 0, $e);
+        }
+
+        $sp = [
+            'm' => self::MODE_STUDIO,
+            'r' => null,
+            'h' => $c['bundleHash'],
+            'v' => $versionUuid,
+            'c' => $contentHash,
+            'e' => null,
+            's' => null,
+        ];
+        // Como la oferta: el valor firmado tal cual llega, y solo si se aparta de la línea base.
+        $tope = $governed[UltronPromptCompiler::MAX_CHARS] ?? null;
+        if (is_int($tope) && $tope !== UltronPromptCompiler::BASELINE[UltronPromptCompiler::MAX_CHARS]) {
+            $sp['n'] = $tope;
+        }
+        $tono = $governed[UltronPromptCompiler::TONE] ?? null;
+        if (is_string($tono) && $tono !== UltronPromptCompiler::BASELINE[UltronPromptCompiler::TONE]) {
+            $sp['t'] = $tono;
+        }
+        if (in_array(UltronPromptCompiler::ENGINE, array_column($c['patches'], 'parameter'), true)) {
+            $sp['o'] = 1;
+        }
+
+        return ['roles' => $c['roles'], 'bundleHash' => $c['bundleHash'], 'sp' => $sp];
+    }
+
+    /**
      * El motivo cerrado del compilador detrás de una excepción de
      * {@see compile()}, o `error` si no lo hay. Para el log: nunca un texto.
      */
