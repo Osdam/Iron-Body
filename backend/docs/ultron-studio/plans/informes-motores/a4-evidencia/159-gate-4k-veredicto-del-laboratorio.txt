@@ -1,0 +1,19 @@
+GATE 4-K · EL VEREDICTO DEL LABORATORIO DE LA VERSIÓN 3, LEÍDO EN PRODUCCIÓN (solo lectura) · 22-11-2026, 03:59 UTC (21-11, 22:59 en Bogotá)
+lead · el propietario lo registró en el CRM con la cuenta «Desarrolladores» a las 10:57 p. m. y pidió verificar en el servidor el veredicto, el responsable y el reconocimiento de C-02
+
+V1 · veredicto de la ejecución 11 | 3 | 11 | approved | 27 | Desarrolladores | Super Admin | 22-11-2026 03:57:53 | 21-11-2026 10:57:53 pm | ["C-02"] | 35731a73 | 24b29173 | (sin nota)
+V2 · la ejecución y la versión a las que corresponde | 11 | b0e8f3b9 | completed | 11 | review | 35731a73 | 4 | 39cfae9f | APPROVED | 24b29173 | t | t | t | t
+V3 · casos de la ejecución 11 por resultado | pass | 10 | C-01 C-03 C-04 C-05 C-06 C-07 C-08 C-09 C-10 C-12
+V3 · casos de la ejecución 11 por resultado | review | 1 | C-02
+V4 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 22-11-2026 03:52:45
+V4 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | CANARY | 18-11-2026 22:40:35
+V4 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36
+V5 · última entrada de la cadena de publicaciones | 3 | publish | 2e243853 | 18-11-2026 22:40:35
+
+Lectura:
+· Veredicto 3 sobre la ejecución 11: approved («Aprobada»), el 22-11-2026 a las 03:57:53 UTC (21-11, 10:57:53 p. m. en Bogotá).
+· Responsable: cuenta 27, «Desarrolladores» (Super Admin), distinta de la autora de la versión.
+· Casos reconocidos: C-02, el único que no pasó (10 pasan: C-01, C-03 a C-10 y C-12; 0 fallan).
+· El veredicto es de ESTOS resultados (huella 35731a73, la de la ejecución) y de ESTA versión (huella 24b29173, versión 39cfae9f).
+· No se revirtió ni se publicó nada: la versión 3 sigue en APPROVED, la 2 en CANARY y la cadena de publicaciones en la entrada 3.
+· La reversión que viene: POST versions/{uuid}/rollback va «sin llaves, sin cuatro ojos y sin ventana: siempre» (StudioPublications.php:394), con un motivo de 5 a 500 caracteres.
