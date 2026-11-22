@@ -8,8 +8,10 @@
 # Uso (servidor, root; la lista y las declaraciones las sube el lead desde el Mac: DEPLOY_CIERRE_LOTES.md §2):
 #   bash /root/deploy-cierre-lote.sh <commit que sirve producción> <commit nuevo = origin/main> <lista>
 #        [--migraciones=<fichero> --orden=migracion-primero|codigo-primero] [--config=<fichero>] [--rutas=<fichero>]
-#        [--programador=<fichero>] [--sin-filas=<fichero>] [--solo-comprobar]
-#   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo>
+#        [--programador=<fichero>] [--sin-filas=<fichero>] [--solo-comprobar] [--sin-tmux]
+#   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo> [--sin-tmux]
+# El despliegue y la vuelta atrás se niegan a correr fuera de tmux o screen (C2: un corte de ssh deja el guion a medias y
+# sin la línea PARAR); --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige.
 # Las declaraciones (una línea por entrada; «#» al principio de línea es comentario):
 #   --migraciones  «nombre tipo tabla objeto marca privilegios vuelta», en el orden de aplicación (el de los nombres):
 #                  tipo check      → objeto = el CHECK; marca = un literal que su definición tiene DESPUÉS y no ANTES
@@ -134,20 +136,23 @@ RE_PROG='^([+-].+|(ausente|presente) .+)$'
 RE_SIN_FILAS='^[a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,30}(,[a-z_][a-z0-9_]{0,30})*$'
 
 uso() {
-  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--solo-comprobar]"
-  echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo>"
+  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--solo-comprobar] [--sin-tmux]"
+  echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo> [--sin-tmux]"
+  echo "     Despliegue y vuelta atrás, solo dentro de tmux o screen (un corte de ssh los dejaría a medias sin aviso);"
+  echo "     --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige."
 }
 
 # ── Argumentos ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [ "$#" -ge 3 ] || { uso; echo "no se ha tocado nada"; exit 2; }
 PREVIO=$1; NUEVO=$2; LISTA=$3; shift 3
-MODO=despliegue; BK=""; ORDEN=""
+MODO=despliegue; BK=""; ORDEN=""; SIN_TMUX=0
 F_migraciones=""; F_config=""; F_rutas=""; F_programador=""; F_sin_filas=""
 for a in "$@"; do
   case "$a" in
     --solo-comprobar) [ "$MODO" = despliegue ] || { uso; echo "--solo-comprobar y --vuelta-atras no van juntos; no se ha tocado nada"; exit 2; }; MODO=comprobar ;;
     --vuelta-atras=?*) [ "$MODO" = despliegue ] || { uso; echo "--vuelta-atras va sola; no se ha tocado nada"; exit 2; }; MODO=vuelta; BK=${a#--vuelta-atras=} ;;
     --orden=migracion-primero|--orden=codigo-primero) [ -z "$ORDEN" ] || { echo "--orden repetido; no se ha tocado nada"; exit 2; }; ORDEN=${a#--orden=} ;;
+    --sin-tmux) SIN_TMUX=1 ;;
     --migraciones=?*|--config=?*|--rutas=?*|--programador=?*|--sin-filas=?*)
       k=${a%%=*}; k=${k#--}; k=${k//-/_}; v=${a#*=}
       eval "[ -z \"\$F_$k\" ]" || { echo "--$k repetido; no se ha tocado nada"; exit 2; }
@@ -164,6 +169,26 @@ if [ "$MODO" = vuelta ]; then
 else
   if [ -n "$F_migraciones" ]; then [ -n "$ORDEN" ] || { echo "--migraciones exige --orden=migracion-primero|codigo-primero (la ficha del lote lo dice); no se ha tocado nada"; exit 2; }
   else [ -z "$ORDEN" ] || { echo "--orden solo va con --migraciones; no se ha tocado nada"; exit 2; }; fi
+fi
+# C2 (rev-guion): un corte de ssh (SIGHUP) mata el tee del registro y la trampa ya no puede decir PARAR: el guion queda a
+# medias sin aviso (si cae dentro de ironbody-migrate, sin caché de configuración). El guion no puede protegerse solo de
+# eso, pero sí negarse a desplegar o a volver atrás fuera de tmux o screen. Se mira el entorno (TMUX, STY) y, porque sudo
+# los borra, también los procesos padres. --sin-tmux lo salta a sabiendas; --solo-comprobar no toca nada y no lo exige.
+en_multiplexor() {
+  local p=$$ c i
+  { [ -n "${TMUX:-}" ] || [ -n "${STY:-}" ]; } && return 0
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    c=$(ps -o comm= -p "$p" 2>/dev/null) || return 1
+    c=${c##*/}
+    case "$c" in tmux*|screen*|SCREEN*) return 0 ;; esac
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ') || return 1
+    [ -n "$p" ] && [ "$p" -gt 1 ] || return 1
+  done
+  return 1
+}
+if [ "$MODO" != comprobar ] && [ "$SIN_TMUX" = 0 ] && ! en_multiplexor; then
+  echo "este guion despliega y vuelve atrás SOLO dentro de tmux o screen (un corte de ssh lo dejaría a medias sin aviso: DEPLOY_CIERRE_LOTES.md §6): tmux new -s lote, y lanzarlo ahí; --sin-tmux lo salta a sabiendas; no se ha tocado nada"
+  exit 2
 fi
 cd /
 
@@ -736,6 +761,7 @@ if [ "$MODO" = vuelta ]; then
   ( umask 077; : > "$LOG" ) || { echo "no se pudo crear $LOG; no se ha tocado nada"; exit 2; }
   exec > >(tee -a "$LOG") 2>&1
   echo "== deploy-cierre-lote.sh · VUELTA ATRÁS · $(date -u +%Y-%m-%dT%H:%M:%SZ) · de $(corto "$N") a $(corto "$P") · orden del lote: $(cat "$BK/orden.txt") · $NM migración(es) declarada(s) · respaldo $BK · registro $LOG"
+  [ "$SIN_TMUX" = 0 ] || echo "   AVISO: --sin-tmux: fuera de tmux o screen, a sabiendas; si se corta la sesión, DEPLOY_CIERRE_LOTES.md §6"
   RUN0=$(workers_esperados)
   ETAPA=vuelta
   if vuelta_atras_ejecuta; then
@@ -747,6 +773,7 @@ fi
 # ── 0. Comprobaciones previas ─────────────────────────────────────────────────────────────────────────────────────────────
 [ "$(id -un)" = "$ROOT_U" ] || aborta "se ejecuta como $ROOT_U en el servidor"
 say "== deploy-cierre-lote.sh · $(date -u +%Y-%m-%dT%H:%M:%SZ) · modo $MODO · PREVIO=$PREVIO · NUEVO=$NUEVO · lista $LISTA"
+[ "$SIN_TMUX" = 0 ] || [ "$MODO" = comprobar ] || say "   AVISO: --sin-tmux: fuera de tmux o screen, a sabiendas; si se corta la sesión, DEPLOY_CIERRE_LOTES.md §6"
 say "   declaraciones: migraciones ${F_migraciones:-—}${ORDEN:+ (orden $ORDEN)} · config ${F_config:-—} · rutas ${F_rutas:-—} · programador ${F_programador:-—}"
 [ -r "$LISTA" ] && [ -f "$LISTA" ] || aborta "no se puede leer la lista $LISTA"
 if [ -n "$F_migraciones" ]; then m=$(lee_migraciones "$F_migraciones") || aborta "--migraciones: $m"; lee_migraciones "$F_migraciones" > /dev/null; fi
