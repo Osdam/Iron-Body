@@ -1,0 +1,9 @@
+E2E H8 · backend 22d2026b (22d2026b96814f6282924514ec0be99212dac5ff) · 2026-11-22T06:10:13Z · 193 s
+pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): 5c1939e5fb77c6ee
+simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, DEL COMMIT 22d2026b; los del árbol de trabajo: 19c771a750fbe33d): 19c771a750fbe33d
+copias: la fuente trae la constante CERRADA · cerrada: el commit tal cual · abierta y salientes: lo mismo + el giro de UNA línea (false → true)
+cerrada: pruebas 6 (6 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 113 (113 OK, 0 FALLO) · 25 s
+abierta: pruebas 9 (9 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 301 (301 OK, 0 FALLO) · 80 s
+salientes: pruebas 11 (11 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 247 (247 OK, 0 FALLO) · 55 s
+comprobaciones que fallaron: 0
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 832085b4ae85cf34c6423f6d8bd70ce3dfba4a47b99e397651994d37af1f887b
