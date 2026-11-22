@@ -68,10 +68,12 @@
 #    definición del respaldo (si alguna fila no la cumple, la base se niega y el CHECK ancho se queda), un disparador
 #    vuelve a la definición del respaldo, una tabla nueva se borra solo vacía y sin dependencias (con sus funciones
 #    propias); y en la misma transacción se quita su fila de migrations. Nunca migrate:rollback. Después queue:restart,
-#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo y 401.
+#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo y 401. En la vuelta MANUAL, si el
+#    fichero de entorno es posterior al respaldo (solo su fecha, por stat), la caché de configuración no se repone: se
+#    regenera con config:cache como www-data (umask 077) con el código previo, y se dice (C3).
 #    NO deshace: los datos que escribió el código nuevo; una migración «conservar», o cuya vuelta la base rechaza (queda
 #    el esquema ancho, que el código previo admite: las de este cierre son de ampliar); el fichero de entorno (este guion
-#    no lo lee ni lo escribe); n8n, el CRM, nginx, FPM, supervisor ni el crontab. HEAD queda suelto en <previo> y la rama
+#    no lo lee ni lo escribe: solo mira su fecha); n8n, el CRM, nginx, FPM, supervisor ni el crontab. HEAD queda suelto en <previo> y la rama
 #    main del servidor en <nuevo> (como hotfix-backend.sh). Las copias de las migraciones en /var/lib/ironbody-deploy se
 #    quedan (son la evidencia de lo que se ejecutó).
 # No imprime secretos, ni teléfonos, ni valores de configuración salvo las formas de --config; no lee ficheros de entorno.
@@ -566,11 +568,31 @@ sql_deshacer() { # <i> <directorio del respaldo>
 # Usa P, N, BK, RUN0 y las declaraciones LEÍDAS DEL RESPALDO. 0 si producción queda en P con todo lo de antes (salvo el
 # esquema que se conserva, que se dice). Se ejecuta en un `if`: `set -e` no corta aquí dentro, cada paso se comprueba.
 VA_CONSERVADO=""
+# C3 (rev-guion): en la vuelta atrás MANUAL (horas después, quizá), si el fichero de entorno es posterior al respaldo (una
+# contraseña rotada, una bandera movida), la caché de configuración del respaldo llevaría valores viejos: no se repone,
+# se REGENERA con config:cache con el código previo. Solo se mira su fecha (stat), nunca su contenido. La automática,
+# segundos después del respaldo, la repone byte a byte como siempre.
+VA_REGENERA=0
+entorno_posterior() { # 0 si el fichero de entorno es más nuevo que el respaldo; deja ENT_SEG (segundos de diferencia)
+  local e r
+  [ -e "$APP/backend/.env" ] || return 1
+  e=$(stat -c %Y "$APP/backend/.env") && r=$(stat -c %Y "$BK/SHA256SUMS") || return 1
+  ENT_SEG=$((e - r))
+  [ "$ENT_SEG" -gt 0 ]
+}
 va_codigo() {
   local h ok=1
   h=$(g rev-parse HEAD) || return 1
-  if pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS" && pon_cache "$BK/bootstrap-cache/config.php" "$CACHE_CONFIG"; then
-    echo "   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por $WWW; root no escribe en bootstrap/cache)"
+  VA_REGENERA=0
+  if [ "$MODO" = vuelta ] && entorno_posterior; then
+    VA_REGENERA=1
+    if pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS"; then
+      echo "   · caché de rutas: la del respaldo, byte a byte. La de configuración NO: el fichero de entorno es $ENT_SEG s posterior al respaldo (solo stat); se regenera con config:cache tras el código"
+    else
+      echo "   ✗ la caché de rutas del respaldo no se pudo poner: se regeneran las dos después del código"; ok=2
+    fi
+  elif pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS" && pon_cache "$BK/bootstrap-cache/config.php" "$CACHE_CONFIG"; then
+    echo "   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por $WWW; root no escribe en bootstrap/cache)$([ "$MODO" = vuelta ] && echo "; el fichero de entorno no es posterior al respaldo (solo stat)")"
   else
     echo "   ✗ las cachés del respaldo no se pudieron poner: se regeneran después del código"; ok=2
   fi
@@ -583,6 +605,10 @@ va_codigo() {
   if [ "$ok" = 2 ]; then
     ( cd "$APP/backend" && sudo -u "$WWW" sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' ) || { echo "   ✗ config:cache o route:cache falló"; return 1; }
     echo "   · cachés regeneradas con el código de $(corto "$P") (como $WWW, umask 077)"
+    VA_REGENERA=2
+  elif [ "$VA_REGENERA" = 1 ]; then
+    ( cd "$APP/backend" && sudo -u "$WWW" sh -c 'umask 077; php artisan config:cache -q' ) || { echo "   ✗ config:cache falló"; return 1; }
+    echo "   · caché de configuración regenerada con el código de $(corto "$P") y el fichero de entorno de hoy (config:cache como $WWW, umask 077)"
   fi
   cache_ok "$CACHE_RUTAS" && cache_ok "$CACHE_CONFIG"
 }
@@ -658,8 +684,13 @@ vuelta_atras_ejecuta() {
       [ "$c" = 404 ] || ok=0
     done < <(gets_nuevas "$BK/decl/rutas")
   fi
-  cmp -s "$BK/bootstrap-cache/config.php" "$APP/backend/$CACHE_CONFIG" && cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" \
-    || { echo "   ✗ las cachés no son las del respaldo"; ok=0; }
+  if [ "$VA_REGENERA" = 1 ]; then
+    cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" || { echo "   ✗ la caché de rutas no es la del respaldo"; ok=0; }
+    echo "   e. caché de rutas = la del respaldo · caché de configuración REGENERADA (el fichero de entorno es posterior al respaldo), de $WWW en 600"
+  else
+    cmp -s "$BK/bootstrap-cache/config.php" "$APP/backend/$CACHE_CONFIG" && cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" \
+      || { echo "   ✗ las cachés no son las del respaldo"; ok=0; }
+  fi
   [ "$ok" = 1 ]
 }
 # Los `grep -c … || true` de este guion: grep -c imprime 0 y sale con 1 cuando no casa nada; con pipefail cortaría. El
@@ -708,7 +739,7 @@ if [ "$MODO" = vuelta ]; then
   RUN0=$(workers_esperados)
   ETAPA=vuelta
   if vuelta_atras_ejecuta; then
-    ETAPA=fin; echo "VUELTA ATRÁS HECHA: producción en $(corto "$P"), con las cachés, las rutas y el programador de antes${VA_CONSERVADO:+; SE CONSERVA el esquema de:$VA_CONSERVADO}"; exit 0
+    ETAPA=fin; echo "VUELTA ATRÁS HECHA: producción en $(corto "$P"), con $([ "$VA_REGENERA" = 1 ] && echo "la caché de rutas de antes, la de configuración REGENERADA (entorno posterior al respaldo)" || echo "las cachés de antes"), las rutas y el programador de antes${VA_CONSERVADO:+; SE CONSERVA el esquema de:$VA_CONSERVADO}"; exit 0
   fi
   ETAPA=fin; echo "VUELTA ATRÁS CON DESVÍOS: PARAR y revisar a mano (DEPLOY_CIERRE_LOTES.md §6)"; exit 5
 fi
@@ -1020,6 +1051,9 @@ if [ -n "$F_sin_filas" ]; then
   SF=$(filas_vivas "$F_sin_filas") || { ETAPA=fin; echo "ABORTA (no se ha tocado nada; el respaldo $BK queda): --sin-filas, justo antes del primer cambio: [$(printf '%s\n' "$SF" | paste -sd '|' -)]: esperar y repetir"; exit 1; }
   echo "   sin filas vivas, justo antes del primer cambio: $(printf '%s\n' "$SF" | paste -sd '|' -)"
 fi
+# C1: los errores que cuentan para volver atrás son los de DESDE AQUÍ (el primer cambio: la primera migración o el
+# merge, lo que vaya antes); los del paso 0 y el respaldo solo se cuentan para que se vean.
+LOG_CAMBIO=$(lineas_log)
 echo "2. $PLAN:"
 if [ "$NM" -gt 0 ] && [ "$ORDEN" = migracion-primero ]; then paso_migraciones; paso_codigo
 elif [ "$NM" -gt 0 ]; then paso_codigo; paso_migraciones
@@ -1051,9 +1085,6 @@ if [ "$REIN" -lt "$RUN0" ]; then
     echo "   ya con pid nuevo $REIN de $RUN0; pasado el margen: [$W1] y [$W2]"
     { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers tras el reinicio tardío: [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
   else
-# C1: los errores que cuentan para volver atrás son los de DESDE AQUÍ (el primer cambio: la primera migración o el
-# merge, lo que vaya antes); los del paso 0 y el respaldo solo se cuentan para que se vean.
-LOG_CAMBIO=$(lineas_log)
     aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 + 300 s: esos siguen con el código anterior; mirar supervisorctl status hasta ver los $RUN0 con pid nuevo y en RUNNING (DEPLOY_CIERRE_LOTES.md §7)"
   fi
 fi
@@ -1154,9 +1185,9 @@ echo "   producción sirve $(corto HEAD) · respaldo $BK · registro $LOG"
 echo "   VIGILANCIA (15 min, solo lectura): supervisorctl status (los $RUN0 en RUNNING) · $NIVEL_ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)"
 orden_vuelta
 ETAPA=fin
-echo "LOTE DESPLEGADO SIN DESVÍOS$([ "$AVISOS" = 0 ] || echo " (con $AVISOS aviso(s) arriba)")"
-exit 0
 if [ -n "$DESVIO" ]; then
   echo "LOTE DESPLEGADO CON DESVÍO: $DESVIO (arriba: la clase y el fichero:línea de cada una). NO se ha vuelto atrás: mirarlas en laravel.log y decidir; si son del despliegue, la vuelta atrás es la de arriba (DEPLOY_CIERRE_LOTES.md §6)"
   exit 3
 fi
+echo "LOTE DESPLEGADO SIN DESVÍOS$([ "$AVISOS" = 0 ] || echo " (con $AVISOS aviso(s) arriba)")"
+exit 0
