@@ -26,6 +26,23 @@ Después, las baterías y el comprobador del fixture que lista el runbook. La pr
 
 **Antes de usarlos** hay que repetir la medición con solo la línea abierta sobre la punta real de `main`: los parches se prepararon sobre `1ef1d72e` (11-11-2026). Una prueba nueva que dependa de la constante no la detecta el parche; la detecta la batería.
 
+## Medición repetida sobre `0c57d7c4` (22-11-2026, backend de voz)
+
+Árbol desechable `_worktrees/cierre-voz-abierta/Iron-Body`, rama local `tmp/voz-abierta-medicion`, que no se integra nunca: `0c57d7c4` + `cbf94374`, la apertura simulada (solo `VoiceCallPolicy.php:23`). `vendor/` clonado y SQLite en memoria. Una sola batería cada vez.
+
+| Paso | Qué | Resultado |
+|---|---|---|
+| 1 | Solo la línea abierta: `tests/Unit/{Voice,Telephony}` y `tests/Feature/{Voice,Telephony}` | `Tests: 892, Failures: 26, Skipped: 163` |
+| 2 | Solo la línea abierta: 89 ficheros. Son V9, B9Cierre, `Facts`, `Guards`, W9, `Unit/Outreach/Core`, `Unit/Twilio`, los de voz e integraciones del Studio y **todas las pruebas nuevas o cambiadas desde `1ef1d72e`** en `Outreach` y `UltronStudio` | `Tests: 2613, Failures: 43, Skipped: 148` |
+| 3 | Los 26 + 43 casos frente a la lista del 11-11 (`evidencia-h9/2026-11-11/telefonia-prep/04-…` y `05-…`) | **Los mismos 69 casos, 35 métodos y 21 ficheros** (`diff` vacío). Ninguna prueba nueva depende de la constante. `app/Services/{Voice,Telephony}` no cambió desde `1ef1d72e` |
+| 4 | `git am` de los tres parches sobre la apertura simulada | Limpio. `git range-diff 3287769b^..33ba6299 HEAD~3..HEAD`: «=» en los tres. 30 ficheros, nada fuera de `backend/tests/` |
+| 5 | Abierta y con los parches: `bateria-rapida.txt` | `OK (624 tests, 24944 assertions)` |
+| 6 | Abierta y con los parches: las carpetas del paso 1 y los 89 ficheros del paso 2 | `OK (901)` y `OK (2614)`. `integrations-cases-check.py`: `RESULTADO: OK` |
+| 6b | Abierta y con los parches, PostgreSQL 14 (`UNIT_DB=ultron_studio_cierre_voz pgunit.sh … tests/Feature/Telephony tests/Feature/Voice`) | `Tests: 528, Skipped: 27`, sin fallos: la cifra del 11-11 |
+| 7 | **No tautológicos:** los parches con la constante CERRADA, `bateria-rapida.txt` | `Tests: 624, Errors: 10, Failures: 69`: caen 79 casos, la cifra del 11-11. Todo lo que cae está en los ficheros de los parches o lee su fixture (`StudioIntegrationsParityTest` lee `integrations-cases.json`) |
+
+**Conclusión:** los parches no hay que rehacerlos y sus huellas no cambian (`9f51b30a…`, `5e5c61de…`, `361c9ff2…`, comprobadas el 22-11). `bateria-rapida.txt` sigue igual: 24 ficheros. Si `main` avanza antes de la apertura, hay que repetir los pasos 1 a 3. Otros dos frentes trabajan en `app/Services/Outreach` y sus pruebas.
+
 **No aplicar nunca** con la constante cerrada: las pruebas caerían (es la comprobación de que no son tautológicas).
 
 Informes: `../../plans/informes-motores/informe-tester-voz-abierta.md` (el autor y la nota del lead) e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes).
