@@ -38,9 +38,16 @@ final class OutreachAccess
     /** Q1-8: registrar una queja presencial, por teléfono u otra (frena el contacto automático). Solo Super Admin por defecto. */
     public const COMPLAINTS_RECORD = 'commercial_automation.complaints_record';
 
+    /**
+     * Q1-8 (B1 de la revisión de API): descartar una queja que marcó la IA («No era una queja» al resolver su
+     * revisión en el Inbox). SUELTA un freno: solo Super Admin por defecto, como `release`. La exige la ruta de
+     * resolver del Inbox con `complaint_category = not_a_complaint`, además de su capacidad de siempre.
+     */
+    public const COMPLAINTS_DISMISS = 'commercial_automation.complaints_dismiss';
+
     public const PERMISSIONS = [self::VIEW, self::SIMULATE_REAL, self::TIMELINE_VIEW, self::ASSISTED_WORK, self::STOP, self::RELEASE,
         self::CONSENTS_RECORD, self::CONSENTS_CONFIRM,
-        self::COMPLAINTS_RECORD];
+        self::COMPLAINTS_RECORD, self::COMPLAINTS_DISMISS];
 
     /** El dominio que el token compartido nunca obtiene (D9-13). */
     public const DOMAIN = 'commercial_automation';

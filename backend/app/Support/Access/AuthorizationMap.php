@@ -1058,6 +1058,11 @@ final class AuthorizationMap
         // (`POST strategies/versions/{uuid}/simulations`, `ultron.strategies_edit`);
         // el controlador exige además esta llave cuando `sample` es `real`.
         'commercial_automation.simulate_real',
+        // Q1-8 (B1 de la revisión de API): descartar una queja de la IA viaja por la misma ruta que resolver
+        // cualquier revisión del Inbox (`POST marketing/inbox/conversations/{id}/staff-review/resolve`,
+        // `marketing.manage`); el controlador exige además esta llave cuando `complaint_category` es
+        // `not_a_complaint`, porque suelta un freno.
+        'commercial_automation.complaints_dismiss',
     ];
 
     /**

@@ -339,6 +339,9 @@ final class CrmPermission
             // personal («esta persona se quejó») y calla el contacto automático 30 días: solo Super
             // Admin por defecto, como las llaves vecinas; se reparte a mano a quien atiende en recepción.
             'commercial_automation.complaints_record',
+            // Q1-8 (B1 de la revisión de API): descartar una queja de la IA SUELTA su freno (vuelven los
+            // mensajes comerciales y de cobranza): solo Super Admin por defecto, como `release`.
+            'commercial_automation.complaints_dismiss',
             // Plantillas de WhatsApp de Meta desde el CRM (L9-96, PLANTILLAS_META_PLAN
             // §5.10): enviar crea plantillas reales en la cuenta de WhatsApp del gimnasio
             // (irreversible) y da fe de lo que Meta responde. Solo Super Admin por defecto.
