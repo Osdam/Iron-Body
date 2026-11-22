@@ -1,0 +1,160 @@
+GATE 4-O (PT-01) · LA CORRECCIÓN DEL TURNO DE PLANES, DESPLEGADA, Y LA CONVERSACIÓN CANARIA NUEVA · 22-11-2026, 16:08–16:15 UTC (11:08–11:15 en Bogotá)
+lead · autorización del propietario (literal): «Autorizo exclusivamente el HUMAN GATE PT-01: desplegar la corrección de planes de WhatsApp y preparar una conversación canaria nueva para la cuarta prueba.»
+
+ALCANCE: producción fddd3450 → f1fe6cac. 8 ficheros de producto (el motor de WhatsApp y su informe de origen), sin migraciones, rutas ni configuración.
+Batería completa sobre f1fe6cac: Tests: 19253, Assertions: 505944, Failures: 2 (la línea base de pagos y la puerta de diff, que cae hasta subir).
+Seguridad: piezas 1 a 3 aptas, 0 bloqueantes. Revisión final: aprobadas, 0 bloqueantes.
+
+── LAS DOS PRUEBAS QUE FALLABAN EN LA BATERÍA, TRAS SUBIR EL LOTE (f1fe6cac) ──
+1. La puerta de diff del H9 (caía porque el lote aún no estaba en origin/main):
+
+OK (1 test, 15 assertions)
+   ¿la prueba se ha editado en el lote? ficheros de guardas cambiados frente a producción: 0
+2. La de la línea base (cobro manual con IVA adicional, PT-16), ajena al motor de WhatsApp:
+   está en la lista de fallos tolerados desde antes: 1 entrada(s) · el lote toca ficheros de facturación o de pagos: 0
+   falló igual en las baterías de los lotes 1 y 2 (ya desplegados): 2 y 2 menciones
+3. Paquete de guardas estáticas sobre el lote, ya subido:
+
+OK (149 tests, 186273 assertions)
+
+── ANTES (producción fddd3450) · 16:11:39 UTC ──
+código: fddd3450 · el commit previo existe para volver atrás: sí
+Llave del motor: canary · estado: applied
+Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+informe de origen (rótulo de hoy):
+  Reescrituras: 3 (servidor: 2, revisor: 1)
+  Respaldos: 1 de 3 (33,3 %)
+    el revisor rechazó todos los intentos: 1
+procesos RUNNING: 14 · production.ERROR hoy: 0 · trabajos fallidos: 2
+
+── SALIDA DEL GUION (ops/hotfix-backend.sh) ──
+despliegue de la corrección del turno de planes (PT-01) · inicio 16:11:42 UTC
+0. producción fddd345 limpia · origin/main f1fe6ca · 16 commit(s) · ficheros: backend/app/Console/Commands/Marketing/UltronOriginReport.php backend/app/Services/Marketing/Ultron/UltronCommitService.php backend/app/Services/Marketing/Ultron/UltronDecideService.php backend/app/Services/Marketing/Ultron/UltronDraftCheck.php backend/app/Services/Marketing/Ultron/UltronDraftDefects.php backend/app/Services/Marketing/Ultron/UltronPlansOverview.php backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php backend/docs/ultron-studio/MATRIZ_CIERRE_V2.md backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/05-lote-2-despliegue.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/06-crm-despliegue.txt backend/docs/ultron-studio/ops/herramientas-lead/avance.py backend/docs/ultron-studio/plans/informes-cierre/informe-reviewer-crm.md backend/docs/ultron-studio/plans/informes-cierre/informe-reviewer-guion.md backend/docs/ultron-studio/plans/informes-cierre/informe-security-lote3.md backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/162-gate-4n-tercera-prueba-real.txt backend/docs/ultron-studio/plans/informes-motores/a4-textos-regenerar.md backend/docs/ultron-studio/plans/informes-motores/informe-backend-a4-notas-beneficios.md backend/docs/ultron-studio/plans/informes-motores/informe-backend-a4-notas.md backend/docs/ultron-studio/plans/informes-motores/informe-debugger-a4-turno2.md backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php backend/tests/Feature/Marketing/UltronA4NotasDelServidorTest.php backend/tests/Feature/Marketing/UltronCheckEndpointTest.php backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php backend/tests/Unit/Marketing/Ultron/UltronRegenerarTextosFijosTest.php backend/tests/Unit/Marketing/Ultron/UltronRegenerationBudgetNotesTest.php backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=f1fe6ca
+   root 644 backend/app/Console/Commands/Marketing/UltronOriginReport.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronCommitService.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDecideService.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDraftCheck.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronDraftDefects.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronPlansOverview.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php
+   root 644 backend/app/Services/Marketing/Ultron/UltronReplyOrigin.php
+   root 644 backend/docs/ultron-studio/MATRIZ_CIERRE_V2.md
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/05-lote-2-despliegue.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-22/06-crm-despliegue.txt
+   root 644 backend/docs/ultron-studio/ops/herramientas-lead/avance.py
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-reviewer-crm.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-reviewer-guion.md
+   root 644 backend/docs/ultron-studio/plans/informes-cierre/informe-security-lote3.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-evidencia/162-gate-4n-tercera-prueba-real.txt
+   root 644 backend/docs/ultron-studio/plans/informes-motores/a4-textos-regenerar.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-backend-a4-notas-beneficios.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-backend-a4-notas.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-debugger-a4-turno2.md
+   root 644 backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php
+   root 644 backend/tests/Feature/Marketing/UltronA4NotasDelServidorTest.php
+   root 644 backend/tests/Feature/Marketing/UltronCheckEndpointTest.php
+   root 644 backend/tests/Feature/Marketing/UltronOriginReportCommandTest.php
+   root 644 backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php
+   root 644 backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php
+   root 644 backend/tests/Unit/Marketing/Ultron/UltronRegenerarTextosFijosTest.php
+   root 644 backend/tests/Unit/Marketing/Ultron/UltronRegenerationBudgetNotesTest.php
+   root 644 backend/tests/Unit/Marketing/Ultron/UltronReplyOriginTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3266 → 3266
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach fddd345 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS
+código de salida del guion: 0 · fin 16:11:57 UTC
+
+── DESPUÉS (producción f1fe6cac) · 16:12:32 UTC ──
+código: f1fe6cac · árbol limpio: 0
+código nuevo en disco: inspect() sí · listBudget() sí · veredicto del servidor en el origen sí · UltronPlansOverview carga
+A LA CANARIA → modo=studio · motivo=null · versión=39cfae9f · huella=26d57565 · entrada=5 · compilador=4
+A OTRAS (20 de 20 conversaciones recientes no canarias) → modo=legacy · motivo=out_of_scope · versión=null · huella=null · entrada=null · compilador=4
+Llave del motor: canary · estado: applied
+Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+informe de origen (rótulo nuevo):
+  Respaldos: 1 de 3 (33,3 %)
+    el revisor rechazó el último borrador: 1 (sin dato: 1)
+  Latencia del entrante al saliente: p50 15 s · p95 16 s · máx 16 s (n = 3)
+  Llamadas al modelo por turno: media 4,3 · máx 5 (n = 3) · comprobaciones del servidor por turno: media 1,7 · máx 2 (n = 3)
+avisos nuevos del motor en el registro de hoy: discarded_draft_check_failed=0
+0 · note_unavailable=0
+0
+procesos RUNNING: 14 · otros: 0 · production.ERROR hoy: 0 · trabajos fallidos: 2
+production.ERROR por fichero (los 3 más recientes): laravel.log=3251 laravel_antes_factus_20260625_015058.log=15 
+respuestas 5xx desde las 16:11 UTC: 0
+
+Nota: el único production.ERROR con fecha de hoy en laravel.log (14:23:40 UTC, «Not enough arguments (missing: "conversation")») lo causó el lead al lanzar ultron:canary-report sin su argumento durante la tercera prueba; no es un fallo de la aplicación. Las lecturas anteriores de «production.ERROR hoy» miraban un fichero con fecha que no existe (la aplicación escribe en laravel.log); los guiones de despliegue comparan el total antes y después, y esa comparación sí es válida.
+
+── LA CONVERSACIÓN CANARIA (ops/canaria-limpia.sh aplicar 882) ──
+── FOTO ANTES (solo lectura) · 16:13:22 UTC ──
+F1 · conversación #882 | open | - | DISCOVERY | 13-11-2026 16:51 | 1298228c9f9a922120e17a11f4b463ae | 2184
+F2 · mensajes de la #882 | 21 | 8191 | 8612 | a488c6e3ef5608e7114bcc502c022f71
+F3 · acciones de la IA de la #882 | 21 | 8001 | 8416 | 0022ec978ed3fd96f70ca8d7a0e90886
+F4 · auditoría del Studio y cadena de publicaciones | 58 | 58 | 5 | 5
+F5 · conversaciones del mismo prospecto en WhatsApp | 11 | 1 | 882
+F6 · la conversación más nueva del prospecto | 882 | open | DISCOVERY | 13-11-2026 16:51:07 | 21 | 21 | 2184 | [{"at": "2026-11-18T22:46:24+00:00", "plan_id": 3, "message_id": 8313}, {"at": "2026-11-22T14:11:33+00:00", "plan_id": 4, "message_id": 8610}, {"at": "2026-11-22T14:11:33+00:00", "plan_id": 8, "message_id": 8610}] | [{"at": "2026-11-18T22:46:24+00:00", "benefit": "Acceso ilimitado al gimnasio", "plan_id": 3}, {"at": "2026-11-18T22:46:24+00:00", "benefit": "Asesoría semi personalizada con entrenador de planta", "plan_id": 3}] | [{"at": "2026-11-18T22:47:23+00:00", "key": "kb:schedule:20", "message_id": 8315}] | {"at": "2026-11-18T22:44:23+00:00", "message_id": 8311}
+
+respaldo del .env y del id anterior: /root/respaldos/canaria-20261122-161325
+creada la conversación #931 (en blanco, NEW_LEAD) y cerrada la #882
+NUEVA=931
+workers tras el reinicio: 14 y, diez segundos después, 14 RUNNING (antes: 14 de 14)
+=== DESPUÉS ===
+variables: MARKETING_ULTRON_CANARY_CONVERSATION_ID=931 (1 línea) · MARKETING_ULTRON_PAYMENT_CANARY_CONVERSATION_ID=931 (1 línea)
+ficheros: www-data:www-data 600 /var/www/api/backend/.env www-data:www-data 600 bootstrap/cache/config.php 
+workers:      14 RUNNING 
+opcache de FPM (validate_timestamps): (sin línea = 1, el valor por defecto)
+configuración en caché: canario=931 · canario de pago=931 · ULTRON encendido
+canaria #931: open · whatsapp · IA sí · relevo humano no · fase NEW_LEAD · 0 mensajes · último - UTC
+conversaciones del mismo prospecto y canal: #2 closed, #19 closed, #223 closed, #225 closed, #236 closed, #237 closed, #252 closed, #254 closed, #261 closed, #273 closed, #882 closed, #931 open
+abiertas: 1
+  Llave del motor: canary · estado: applied
+  Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+  Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+CANARIO MOVIDO A LA CONVERSACIÓN #931. Vuelta atrás: bash -s -- revertir 931 882   (respaldo: /root/respaldos/canaria-20261122-161325)
+
+── FOTO DESPUÉS (solo lectura) · 16:14:03 UTC ──
+F1 · conversación #882 | closed | 22-11-2026 16:13:25 | DISCOVERY | 13-11-2026 16:51 | 1298228c9f9a922120e17a11f4b463ae | 2184
+F2 · mensajes de la #882 | 21 | 8191 | 8612 | a488c6e3ef5608e7114bcc502c022f71
+F3 · acciones de la IA de la #882 | 21 | 8001 | 8416 | 0022ec978ed3fd96f70ca8d7a0e90886
+F4 · auditoría del Studio y cadena de publicaciones | 58 | 58 | 5 | 5
+F5 · conversaciones del mismo prospecto en WhatsApp | 12 | 1 | 931
+F6 · la conversación más nueva del prospecto | 931 | open | NEW_LEAD | 22-11-2026 16:13:25 | 0 | 0 | 586 | [] | [] | [] | null
+
+Comparación de la #882 antes y después: mismos 21 mensajes (ids 8191 a 8612) con la misma huella de textos, mismas 21 acciones con la misma huella de metadata, misma huella de la memoria;
+solo cambian status (open → closed) y closed_at. 58 eventos de auditoría y 5 entradas de la cadena de publicaciones, sin cambios. Nada se borró.
+La #931 nace en blanco: 0 mensajes, 0 acciones, fase NEW_LEAD, sin precios, beneficios ni hechos entregados y sin saludo previo.
+
+── A QUIÉN APLICA EL MOTOR LA VERSIÓN, CON LA CANARIA NUEVA ──
+código nuevo en disco: inspect() sí · listBudget() sí · veredicto del servidor en el origen sí · UltronPlansOverview carga
+A LA CANARIA → modo=studio · motivo=null · versión=39cfae9f · huella=26d57565 · entrada=5 · compilador=4
+A OTRAS (20 de 20 conversaciones recientes no canarias) → modo=legacy · motivo=out_of_scope · versión=null · huella=null · entrada=null · compilador=4
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+procesos RUNNING: 14 · errores con fecha de hoy en laravel.log: 1
+
+VUELTAS ATRÁS (no han hecho falta):
+· código: ( cd /var/www/api && umask 022 && git checkout -q --detach fddd345 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+· conversación: bash -s -- revertir 931 882 < ops/canaria-limpia.sh (respaldo del entorno en /root/respaldos/canaria-20261122-161325)

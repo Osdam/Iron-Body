@@ -26,6 +26,9 @@ use ReflectionClassConstant;
  *  2. todas las notas de reescritura, cada una con su plantilla y un ejemplo ya
  *     rellena (el trato, la longitud, las seis de la lista, la del beneficio y
  *     las seis de la política);
+ *  2 bis. las tres variantes con el presupuesto de la lista (22-11-2026: la
+ *     falta de la lista, la mezclada o repetida y la longitud, con la lista y
+ *     el tope), con los números del turno 2 de la prueba real;
  *  3. el formato de la expansión de la lista, con tres ejemplos del catálogo de
  *     prueba («Nombre ($65.000 COP)», uno con duración y «1 día»).
  *
@@ -61,6 +64,23 @@ class UltronRegenerarTextosFijosTest extends TestCase
             'policy_answer_without_fact' => ['La política: la información sin el dato', 'Cuando la persona pidió información del gimnasio y el borrador no copia ningún dato de knowledge_base (la dirección, el horario o los servicios).', []],
             'policy_general_info_only_discovery' => ['La política: solo preguntas', 'Cuando la persona pidió información (también el horario o el precio) y el borrador solo pregunta.', []],
             'policy_memory_turn_sells' => ['La política: la memoria que vende', 'Cuando la persona preguntó por algo ya acordado (su visita) y el borrador vende o pregunta su objetivo.', []],
+        ];
+    }
+
+    /**
+     * Las variantes con el presupuesto de la lista, en el orden de
+     * `UltronRegenerationNotes::budgetEntries()`, con los números del turno 2
+     * de la prueba real del 22-11 (X = 25 + 26 + 20 = 71; M = 160; R = 89; el
+     * borrador 3 expandido medía 251).
+     *
+     * @return array<string, array{string, string, array<string,mixed>}>
+     */
+    private static function notasConPresupuesto(): array
+    {
+        return [
+            'length_over_cap' => ['La longitud, con la lista', 'Con la lista y el tope, en lugar de la de la longitud de arriba: cuando el borrador expandido pasa del tope.', ['L' => 251, 'N' => 200, 'M' => 160, 'X' => 71, 'R' => 89]],
+            'plans_overview/missing' => ['La lista: falta la lista, con el presupuesto', 'Con la lista y el tope, en lugar de «falta la lista» de arriba.', ['K' => 3, 'X' => 71, 'R' => 89, 'M' => 160]],
+            'plans_overview/mixed' => ['La lista: marcador repetido o mezclado, con el presupuesto', 'Con la lista y el tope, en lugar de «marcadores mezclados» de arriba: el borrador repite un marcador de la lista o lo mezcla con PLAN_NAME, PLAN_PRICE o PLAN_DURATION.', ['K' => 3, 'X' => 71, 'R' => 89, 'M' => 160]],
         ];
     }
 
@@ -128,6 +148,29 @@ class UltronRegenerarTextosFijosTest extends TestCase
             if ($plantillas[$clave] !== $ejemplo) {
                 $md .= "- **Plantilla:** «{$plantillas[$clave]}»\n";
             }
+            $md .= "- **Texto** ({$this->medida($ejemplo)}): «{$ejemplo}»\n\n";
+        }
+
+        // 2 bis. Las variantes con el presupuesto de la lista (22-11-2026, corrección (1) del turno 2 de la tercera prueba real).
+        $conPresupuesto = self::notasConPresupuesto();
+        $claves = array_map(fn (array $e): string => $e[1] === null ? $e[0] : $e[0].'/'.$e[1], N::budgetEntries());
+        $this->assertSame($claves, array_keys($conPresupuesto), 'cada variante con el presupuesto, en su orden');
+        $md .= "## 2 bis. Con la lista y el tope: el esqueleto y el presupuesto\n\n";
+        $md .= 'Cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. ';
+        $md .= 'K es cuántos planes tiene la lista; X, lo que miden juntos sus marcadores ya expandidos (el servidor lo calcula con el catálogo de ese momento; el modelo nunca ve un precio); M, lo que se le pide al redactor; R = M − X, lo que le queda para todo lo demás. ';
+        $md .= "Sin tope, o sin lista, salen las de arriba tal cual. El código y el `issue` son los de la nota de arriba. El ejemplo es el turno 2 de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200).\n\n";
+        $plantillas = [];
+        foreach (N::budgetEntries() as [$code, $detail, , $plantilla]) {
+            $plantillas[$detail === null ? $code : $code.'/'.$detail] = $plantilla;
+        }
+        $i = 0;
+        foreach ($conPresupuesto as $clave => [$titulo, $cuando, $params]) {
+            [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
+            $ejemplo = N::budgetNote($code, $detail, $params);
+            $this->assertDoesNotMatchRegularExpression('/[{}]/', $ejemplo, $clave);
+            $md .= '### 2 bis.'.(++$i).' '.$titulo.' (`'.$clave.'`, `'.N::issue($code, $detail)."`)\n\n";
+            $md .= '**Cuándo sale:** '.mb_strtolower(mb_substr($cuando, 0, 1)).mb_substr($cuando, 1)."\n\n";
+            $md .= "- **Plantilla:** «{$plantillas[$clave]}»\n";
             $md .= "- **Texto** ({$this->medida($ejemplo)}): «{$ejemplo}»\n\n";
         }
 
