@@ -196,6 +196,9 @@ class VoiceTranscriptGuardSpanishTest extends TestCase
             $this->assertSame($codigos, VoiceTranscriptGuard::spokenCodes($frase), "el filtro de los beneficios: {$id}");
             $this->assertSame($codigos, self::codigos($frase, [], false), "la guarda posterior: {$id}");
         }
+        // El léxico COMPLETA al motor, no lo repite: «gratis» tal cual y el «$» delante de una cifra ya son suyos.
+        $this->assertSame(['voice_money_not_from_tool'], self::codigos('Te queda en $ 79.000 y la primera semana es gratis.'));
+        $this->assertSame(['machine_reply_invented_discount'], self::codigos('El primer mes es gratis.'));
     }
 
     /** C-1 (i): las frases corrientes no se marcan, ni en el filtro ni en la guarda posterior. */

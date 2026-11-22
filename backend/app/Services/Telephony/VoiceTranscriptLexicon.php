@@ -139,10 +139,13 @@ final class VoiceTranscriptLexicon
             // «N por ciento» en palabras o en cifras (el motor ya caza «N %»); «cien por ciento personalizado» no es una rebaja.
             .'(?!(?:cien|100)\b)(?:\d{1,3}|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci[a-z]+|veinte|veinti[a-z]+|'
             .'treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)(?:\s+y\s+(?:uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve))?\s*por\s*ciento)\b'
-            .'|\bgr[a4@]t[i1l!|][s5$z](?![a-z0-9])/u',
-        // C-1: y los símbolos de moneda que no son el «$» de un precio del catálogo (ya tapado): «£10», «10 US$», «¥500».
+            // «gratis» escrito con cifras o signos («grat1s», «gr4tis»); «gratis» tal cual ya lo caza el motor.
+            .'|\b(?!gratis\b)gr[a4@]t[i1l!|][s5$z](?![a-z0-9])/u',
+        // C-1: y los símbolos de moneda que el motor no ve: «£10», «¥500», «10 US$». El «$» delante de una cifra ya es
+        // dinero para el motor (y el del catálogo está tapado): el léxico solo completa, no repite.
         self::CODE_MONEY_SLANG => '/\b(\d{1,4}|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento)\s+'
-            .'(lucas?|luquitas?|barras?(?!\s+(olimpicas?|de\s+(pesas|dominadas|discos)|paralelas)\b))\b|\b(un|medio|dos|tres)\s+palos?\b|\bmillon(es)?\b|\busd\b|\bdolar(es)?\b|\beuros?\b|\x{20AC}|\p{Sc}/u',
+            .'(lucas?|luquitas?|barras?(?!\s+(olimpicas?|de\s+(pesas|dominadas|discos)|paralelas)\b))\b|\b(un|medio|dos|tres)\s+palos?\b|\bmillon(es)?\b|\busd\b|\bdolar(es)?\b|\beuros?\b|\x{20AC}'
+            .'|(?!\$)\p{Sc}|\$(?!\s?\d)/u',
         self::CODE_MEMBER_OR_PAYMENT_CLAIM => '/\b((esta|estas|sigue|sigues)\s+(inscrit[oa]|afiliad[oa])|(su|tu)\s+(membresia|afiliacion|plan)\s+(esta|sigue|vence|vencio|quedo)|'
             .'(registrado|recibido|confirmado|aprobado|quedo)\s+(tu|su|el)\s+pago|pago\s+(recibido|registrado|confirmado|aprobado|quedo)|'
             .'(?<!\bsi\s)(?<!\bcuando\s)(?<!\bmientras\s)(esta|estas|sigue|sigues|va|vas)\s+al\s+dia\s+(con|en)\s+(sus|tus|su|tu|los)\s+pagos?|(es|esta|sigue)\s+(socio|socia|afiliad[oa]|miembro)\s+activ[oa])\b/u',
