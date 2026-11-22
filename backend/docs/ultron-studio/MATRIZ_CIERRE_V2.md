@@ -157,3 +157,16 @@ Línea base medida el 19-11 (`ops/evidencia-h9/2026-11-18/canario-a4/07-origen-d
 > Al finalizar, entrega evidencia del despliegue, reversión, aislamiento y pruebas correspondientes.
 
 Antes de autorizar pidió cuatro confirmaciones y su cierre en SÍ o NO (registro de gates, fila 4-H; `plans/informes-motores/a4-evidencia/146`). Lo que quedó dicho antes de su autorización: la reversión del servidor no se había ejecutado nunca en el servidor real, y por eso el ensayo va primero.
+
+## 7. Pendientes registrados por indicación del propietario, fuera del apartado en curso (21-11-2026, 11:30 p. m. en Bogotá)
+
+No abren el apartado 10 ni tocan el gate del apartado 4. Evidencia de partida: `ops/evidencia-h9/2026-11-21/cuatro-ojos/01-cuentas-roles-y-vinculos.txt`.
+
+| Id | Pendiente | Lo que dijo el propietario | Estado |
+|---|---|---|---|
+| P10-1 | Los dos primeros vínculos cuenta → persona (cuatro ojos por persona de estrategias y plantillas). Hoy hay 0 vínculos en producción y nadie puede aprobar ni publicar una estrategia | «Las vinculaciones de dos personas reales con sus cuentas individuales quedan pendientes de coordinar con sus titulares. No elimines los controles de cuatro ojos para desbloquearlas.» «No autorices vínculos ficticios ni aprobaciones comerciales simuladas.» | PENDIENTE DEL PROPIETARIO: dos personas reales, cada una con su cuenta propia y su perfil en Personal, y su autorización escrita para el arranque por consola (`ultron-studio:person-bindings --bootstrap`). Los controles no se tocan |
+| P10-2 | Las cuentas «QA ULTRON Editor» y «QA ULTRON Revisor» | «Confirmo que las cuentas QA existentes se conservarán para las pruebas técnicas.» | Se conservan. Sirven para probar el cuatro ojos por cuenta (aprobar lo ajeno); no se vinculan a ninguna persona y una aprobación suya no cuenta como aprobación comercial independiente |
+| SEG-1 | Revisión de los permisos del rol «Administrativo» (lleva los 20 permisos de ULTRON, incluidos publicar, revertir, publicar estrategias, vínculos y plantillas de Meta; concedidos por «Desarrolladores» el 17-11-2026) y de las cuatro cuentas Super Admin activas (una no ha entrado nunca) | «Registra como pendiente de seguridad la revisión de los permisos del rol Administrativo y de los Super Admin activos. No modifiques sus permisos todavía.» | PENDIENTE DE SEGURIDAD. Sin modificar nada |
+
+**El requisito de dos personas no bloquea el apartado 4.** Publicar una versión de WhatsApp y dar el veredicto del laboratorio usan el cuatro ojos por cuenta (quien publica no es quien la creó: `StudioPublications.php:1322`, `! $access->isCreator($version)`); `StudioPublications`, `StudioVersions` y los servicios del laboratorio no nombran los vínculos de persona. Los vínculos solo los exigen las estrategias comerciales, las plantillas de mensajes y el envío de plantillas a Meta (`StudioStrategyPublishing`, `StudioStrategyVersions`, `StudioMessageTemplates`, `StudioMetaTemplates`). Las versiones 1 y 2 se publicaron el 12-11 y el 18-11 con la tabla de vínculos vacía.
+
