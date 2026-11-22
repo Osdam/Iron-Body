@@ -42,7 +42,7 @@ BLOQUES_4 = [
     ("A · Primeros bloqueantes", 22, 22.0),
     ("B · Trato de usted, textos de respaldo y lista fija", 14, 14.0),
     ("C · Regenerar antes de sustituir", 40, 40.0),
-    ("D · Despliegue, n8n S2, versión 3, publicación y tercera prueba real", 12, 8.75),
+    ("D · Despliegue, n8n S2, versión 3, publicación y tercera prueba real", 12, 9.0),
     ("E · Frases prohibidas en real, ampliación por etapas, pendientes H4-11 y H4-13", 12, 0.0),
 ]
 
