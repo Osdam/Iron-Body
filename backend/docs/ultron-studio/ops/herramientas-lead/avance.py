@@ -97,7 +97,7 @@ APARTADOS = {
     11: (0.45, [
         ("Permisos de Meta verificados en producción", 10, 1.00, "sonda ok el 22-11", "o"),
         ("Primeras plantillas redactadas y validadas", 15, 0.40, "cinco, contra el validador real", "t"),
-        ("El validador exige la línea de baja en el texto", 5, 0.50, "integrado el 22-11 (lote 4, 323a6118): seguridad de API y revisión final sin bloqueantes y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
+        ("El validador exige la línea de baja en el texto", 5, 0.50, "integrado el 22-11 (lote 4, ba4b143e): seguridad de API y revisión final sin bloqueantes y batería completa con solo los dos fallos esperados; falta desplegarlo (HUMAN GATE)", "c"),
         ("Primera plantilla enviada y aprobada por Meta", 35, 0.00, "exige dos personas vinculadas", "o"),
         ("Canario real con una plantilla aprobada", 35, 0.00, "", "o"),
     ]),
@@ -114,7 +114,7 @@ APARTADOS = {
         ("Reimportar el número en ElevenLabs con clave restringida y rotar el token maestro", 20, 0.00, "", "o"),
     ]),
     14: (0.00, [
-        ("Batería completa sobre la integración final", 15, 1.00, "hecha el 22-11 sobre integracion/final c4323242: 19 643 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
+        ("Batería completa sobre la integración final", 15, 1.00, "hecha el 22-11 sobre integracion/final con todo dentro (2ed62f81; la punta 269736bd solo añade una prueba ajustada y documentos): 19 730 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
         ("Recorridos de extremo a extremo simulados sobre la integración", 25, 1.00, "hechos el 22-11 (PT-12): WhatsApp, automatización, gobierno y seguridad demostrados en simulado; voz parcial (el audio y el corte por duración solo los demuestra una llamada real)", "t"),
         ("Pruebas canarias reales de los cinco recorridos", 45, 0.00, "", "o"),
         ("Matriz final de aceptación", 15, 0.00, "es la aceptación con las pruebas reales; el documento técnico (PT-13, MATRIZ_ACEPTACION_TECNICA.md) existe desde el 22-11 y no mueve este valor", "o"),
