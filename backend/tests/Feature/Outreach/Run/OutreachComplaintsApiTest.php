@@ -55,6 +55,9 @@ class OutreachComplaintsApiTest extends TestCase
 
     private const URL = '/api/admin/commercial-automation/complaints';
 
+    /** PT-18 · Los `users.id` de los socios de esta prueba, lejos de los `members.id` (`FactsWorld::usuariosDesde()`). */
+    private const USERS_FROM = 870001;
+
     /** @var array<string, array{0: Admin, 1: array<string, string>}> */
     private array $sesiones = [];
 
@@ -64,6 +67,7 @@ class OutreachComplaintsApiTest extends TestCase
         Http::preventStrayRequests();
         Carbon::setTestNow(Carbon::parse(self::NOW, 'UTC'));
         config(['commercial.events_enabled' => true, 'commercial.enabled' => false]);
+        $this->usuariosDesde(self::USERS_FROM);
     }
 
     protected function tearDown(): void
@@ -376,6 +380,55 @@ class OutreachComplaintsApiTest extends TestCase
         Log::shouldHaveReceived('info')->with('commercial.complaint.staff_recorded', [
             'channel' => 'phone', 'category' => 'attention', 'result' => 'recorded', 'by' => $admin, 'subject_type' => 'member', 'subject_id' => $s['member'],
         ])->once();
+    }
+
+    // ── PT-18 · Un socio del CRM es su `users.id` ───────────────────────────
+
+    /**
+     * PT-18 (B-1 de la revisión final del CRM) · El CRM nombra a un socio por su
+     * `users.id`. Con los ids cruzados (el `users.id` de Ana es el `members.id`
+     * de Luis; `users.id ≠ members.id` para los dos), la queja de Ana cae sobre
+     * la ficha de Ana y el freno es suyo; Luis no recibe nada hasta que se
+     * registra la suya. La respuesta nombra a la persona con el id que mandó el
+     * CRM, también en `recordsAs`. Repetirla es la misma (200 `replayed`).
+     */
+    public function test_pt18_la_queja_de_un_socio_cae_sobre_ese_socio(): void
+    {
+        $ana = $this->socio();
+        $luis = $this->socio([], ['id' => $ana['user']]);
+        $this->assertSame($ana['user'], $luis['member'], 'el users.id de Ana es el members.id de Luis');
+        $this->assertNotSame($ana['user'], $ana['member']);
+        $this->assertNotSame($luis['user'], $luis['member']);
+
+        $peticion = self::queja('member', $ana['user']);
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertCreated()
+            ->assertJsonPath('data.personType', 'member')->assertJsonPath('data.personId', $ana['user'])
+            ->assertJsonPath('data.recordsAs', ['type' => 'member', 'id' => $ana['user']]);
+        $this->assertSame([[$ana['member'], 'complaint_created:member:'.$ana['member'].':complaint:staff:20261117']],
+            array_map(static fn (object $q): array => [(int) $q->member_id, (string) $q->dedupe_key], self::quejas()), 'la queja es de Ana, no de Luis');
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true)->assertJsonPath('data.personId', $ana['user']);
+        $this->assertCount(1, self::quejas());
+
+        $this->postJson(self::URL, self::queja('member', $luis['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.recordsAs.id', $luis['user']);
+        $this->assertSame([$ana['member'], $luis['member']], array_map(static fn (object $q): int => (int) $q->member_id, self::quejas()));
+    }
+
+    /**
+     * PT-18 · Un número que es el `members.id` de alguien pero no el `users.id`
+     * de nadie no es nadie: 404 `person_not_found` con el MISMO cuerpo que un id
+     * que no existe y que un usuario sin ficha de socio. 0 quejas escritas.
+     */
+    public function test_pt18_un_members_id_que_no_es_un_users_id_es_404_y_no_escribe(): void
+    {
+        $ana = $this->socio();
+        $this->assertSame(0, DB::table('users')->where('id', $ana['member'])->count(), 'el members.id de Ana no es el users.id de nadie');
+        $sinFicha = (int) DB::table('users')->insertGetId(['id' => self::USERS_FROM - 1, 'name' => 'Sin ficha', 'email' => 'sin-ficha-'.Str::random(6).'@facts.test',
+            'password' => 'x', 'created_at' => self::utc('2026-01-01 12:00'), 'updated_at' => self::utc('2026-01-01 12:00')]);
+        $nadie = $this->postJson(self::URL, self::queja('member', 999999), $this->recepcion())->assertStatus(404)->assertJsonPath('code', 'person_not_found')->getContent();
+        foreach (['el members.id de Ana' => $ana['member'], 'un usuario sin ficha de socio' => $sinFicha] as $que => $id) {
+            $this->assertSame($nadie, $this->postJson(self::URL, self::queja('member', $id), $this->recepcion())->assertStatus(404)->getContent(), $que);
+        }
+        $this->assertSame(0, DB::table('commercial_events')->count());
     }
 
     // ── De extremo a extremo: la escalera ──────────────────────────────────

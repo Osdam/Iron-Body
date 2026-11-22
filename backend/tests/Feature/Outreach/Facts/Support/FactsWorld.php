@@ -25,6 +25,21 @@ trait FactsWorld
 {
     private int $semilla = 0;
 
+    /** PT-18 · Si no es null, el `users.id` del próximo socio ({@see usuariosDesde()}). */
+    private ?int $siguienteUsuario = null;
+
+    /**
+     * PT-18 · Desde aquí, cada socio nuevo recibe un `users.id` propio a partir
+     * de `$desde`, no el de la secuencia: lejos de los `members.id`. En una base
+     * vacía las dos secuencias empiezan en 1 y avanzan juntas, y una ruta que lea
+     * un id por el otro pasaría por casualidad (en producción solo 1 de 4 144
+     * socios tiene los dos iguales). Un `id` explícito en `$user` manda.
+     */
+    protected function usuariosDesde(int $desde): void
+    {
+        $this->siguienteUsuario = $desde;
+    }
+
     /** Un instante UTC escrito como lo guarda la base. */
     protected static function utc(string $wall): string
     {
@@ -49,6 +64,9 @@ trait FactsWorld
         $n = ++$this->semilla;
         $userId = null;
         if ($user !== ['__none__' => true]) {
+            if ($this->siguienteUsuario !== null && ! array_key_exists('id', $user)) {
+                $user['id'] = $this->siguienteUsuario++;
+            }
             $userId = (int) DB::table('users')->insertGetId(array_merge([
                 'name' => "Socio {$n}", 'email' => "socio{$n}-".Str::random(6).'@facts.test', 'password' => 'x',
                 'plan' => 'Mensual', 'membership_end_date' => '2026-12-31', 'created_at' => self::utc('2026-01-01 12:00'), 'updated_at' => self::utc('2026-01-01 12:00'),

@@ -68,6 +68,9 @@ class OutreachConsentsApiTest extends TestCase
 
     private const ALL = [OutreachAccess::CONSENTS_RECORD, OutreachAccess::CONSENTS_CONFIRM, 'members.view', 'marketing.view'];
 
+    /** PT-18 · Los `users.id` de los socios de esta prueba, lejos de los `members.id` ({@see FactsWorld::usuariosDesde()}). */
+    private const USERS_FROM = 870001;
+
     /** @var array<string, array{0: Admin, 1: array<string, string>}> */
     private array $cuentas = [];
 
@@ -79,6 +82,7 @@ class OutreachConsentsApiTest extends TestCase
         Http::preventStrayRequests();
         Carbon::setTestNow(Carbon::parse(self::NOW, 'UTC'));
         config(['outreach_consents.legal.commercial' => ['version' => self::LEGAL_VERSION, 'text' => self::LEGAL_TEXT]]);
+        $this->usuariosDesde(self::USERS_FROM);
     }
 
     protected function tearDown(): void
@@ -567,6 +571,126 @@ class OutreachConsentsApiTest extends TestCase
         }
     }
 
+    // ── PT-18 · Un socio del CRM es su `users.id` ───────────────────────────
+
+    /**
+     * PT-18 (B-1 de la revisión final del CRM) · LEER. El CRM nombra a un socio
+     * por su `users.id` (su ficha y `GET /api/users`): la ruta lo resuelve por
+     * `members.user_id`, nunca como un `members.id`. Con los ids cruzados, la
+     * lista de Ana es la de Ana (sin la retirada de Luis) y la de Luis, la de
+     * Luis; las dos nombran a la persona con el id que mandó el CRM, también en
+     * `recordsAs`, y por el prospecto de Luis `recordsAs` es el `users.id` de Luis.
+     */
+    public function test_pt18_leer_un_socio_por_su_users_id_es_leer_a_esa_persona(): void
+    {
+        ['ana' => $ana, 'luis' => $luis] = $this->anaYLuis();
+        $this->revokeConsent(['member_id' => $luis['member']]);
+        $sesion = $this->cuenta('Ana', self::ALL);
+
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ana['user'], $sesion)->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'none')->assertJsonPath('data.events', [])
+            ->assertJsonPath('data.person', ['type' => 'member', 'id' => $ana['user'], 'recordsAs' => ['type' => 'member', 'id' => $ana['user']]]);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$luis['user'], $sesion)->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'revoked')->assertJsonCount(1, 'data.events')
+            ->assertJsonPath('data.person', ['type' => 'member', 'id' => $luis['user'], 'recordsAs' => ['type' => 'member', 'id' => $luis['user']]]);
+        $this->getJson(self::BASE.'consents?personType=lead&personId='.$luis['lead'], $sesion)->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'revoked')
+            ->assertJsonPath('data.person', ['type' => 'lead', 'id' => $luis['lead'], 'recordsAs' => ['type' => 'member', 'id' => $luis['user']]]);
+    }
+
+    /** PT-18 · PEDIR para Ana (su `users.id`) se guarda en la ficha de Ana, con el número de Ana; la de Luis no recibe nada. */
+    public function test_pt18_pedir_para_un_socio_se_guarda_en_su_ficha(): void
+    {
+        ['ana' => $ana] = $this->anaYLuis();
+        $uuid = $this->postJson(self::BASE.'consents', ['personId' => $ana['user']] + $this->peticion($ana), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $fila = DB::table('outreach_consents')->where('uuid', $uuid)->first();
+        $this->assertSame([$ana['key'], $ana['member'], $ana['ref']], [(string) $fila->subject_key, (int) $fila->member_id, trim((string) $fila->phone_ref)]);
+        $this->assertSame([$ana['member'] => 1], self::filasPorFicha(), 'nada en la ficha de Luis');
+    }
+
+    /** PT-18 · CONFIRMAR (por uuid) la petición de Ana le concede a Ana; Luis sigue sin nada. */
+    public function test_pt18_confirmar_la_peticion_de_un_socio_le_concede_a_el(): void
+    {
+        ['ana' => $ana, 'luis' => $luis] = $this->anaYLuis();
+        $pet = $this->postJson(self::BASE.'consents', ['personId' => $ana['user']] + $this->peticion($ana), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $this->postJson(self::BASE."consents/{$pet}/confirm", ['clientRequestId' => (string) Str::uuid()], $this->cuenta('Beto', self::ALL))->assertCreated()
+            ->assertJsonPath('data.kind', 'granted')->assertJsonPath('data.numberCurrent', true);
+        $this->assertSame(['granted', 'missing'], [$this->motor($ana['key']), $this->motor($luis['key'])]);
+        $this->assertSame([$ana['member'] => 2], self::filasPorFicha());
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ana['user'], $this->cuenta('Beto', self::ALL))->assertOk()
+            ->assertJsonPath('data.purposes.commercial.state', 'granted')->assertJsonPath('data.purposes.commercial.effective', true);
+    }
+
+    /** PT-18 · RECHAZAR (por uuid) la petición de Ana la resuelve en la ficha de Ana; la de Luis no recibe nada. */
+    public function test_pt18_rechazar_la_peticion_de_un_socio_queda_en_su_ficha(): void
+    {
+        ['ana' => $ana] = $this->anaYLuis();
+        $pet = $this->postJson(self::BASE.'consents', ['personId' => $ana['user']] + $this->peticion($ana), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $this->postJson(self::BASE."consents/{$pet}/reject", ['clientRequestId' => (string) Str::uuid(), 'evidence' => 'La firma no coincide con la del contrato'], $this->cuenta('Beto', self::ALL))
+            ->assertCreated()->assertJsonPath('data.kind', 'rejected');
+        $this->assertSame([$ana['member'] => 2], self::filasPorFicha());
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ana['user'], $this->cuenta('Beto', self::ALL))->assertOk()
+            ->assertJsonPath('data.purposes.commercial.pending', [])->assertJsonPath('data.events.0.kind', 'rejected');
+    }
+
+    /** PT-18 · RETIRAR para Ana calla a Ana y guarda el número de Ana; Luis sigue como estaba. */
+    public function test_pt18_retirar_para_un_socio_calla_a_ese_socio(): void
+    {
+        ['ana' => $ana, 'luis' => $luis] = $this->anaYLuis();
+        $uuid = $this->postJson(self::BASE.'consents/revoke', ['personId' => $ana['user']] + $this->retirada($ana), $this->cuenta('Ana', self::ALL))->assertCreated()->json('data.uuid');
+        $fila = DB::table('outreach_consents')->where('uuid', $uuid)->first();
+        $this->assertSame([$ana['key'], $ana['member'], $ana['ref']], [(string) $fila->subject_key, (int) $fila->member_id, trim((string) $fila->phone_ref)]);
+        $this->assertSame(['denied', 'missing'], [$this->motor($ana['key']), $this->motor($luis['key'])]);
+    }
+
+    /**
+     * PT-18 · El alcance del entrenador sigue a la persona: asignado a Luis
+     * (`member_trainer_assignments` va por `members.id`), alcanza a Luis por su
+     * `users.id` y NO a Ana por el suyo, que es el `members.id` de Luis.
+     */
+    public function test_pt18_el_entrenador_de_luis_alcanza_a_luis_y_no_a_ana(): void
+    {
+        ['ana' => $ana, 'luis' => $luis] = $this->anaYLuis();
+        $entrenador = $this->trainer();
+        MemberTrainerAssignment::create(['member_id' => $luis['member'], 'trainer_id' => $entrenador, 'status' => MemberTrainerAssignment::STATUS_ACTIVE, 'assigned_at' => now()]);
+        foreach (self::ALL as $llave) {
+            RolePermission::query()->updateOrCreate(['role' => CrmPermission::ROLE_ENTRENADOR, 'permission' => $llave], ['granted' => true]);
+        }
+        Cache::forget('crm.role_permissions.v1');
+        app(RolePermissionPolicy::class)->flush();
+        $h = $this->actingAsAdmin(Admin::create(['name' => 'Coach', 'email' => 'coach-'.uniqid().'@c9.test', 'password' => 'secret-password',
+            'role' => CrmPermission::ROLE_ENTRENADOR, 'trainer_id' => $entrenador, 'status' => 'active']));
+
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$luis['user'], $h)->assertOk()->assertJsonPath('data.person.id', $luis['user']);
+        $this->getJson(self::BASE.'consents?personType=member&personId='.$ana['user'], $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->postJson(self::BASE.'consents/revoke', ['personId' => $ana['user']] + $this->retirada($ana), $h)->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->assertSame(0, DB::table('outreach_consents')->count());
+    }
+
+    /**
+     * PT-18 · Un número que es el `members.id` de alguien pero no el `users.id`
+     * de nadie no es nadie: 404 `person_not_found`, con el MISMO cuerpo que un id
+     * que no existe y que un usuario sin ficha de socio (no dice cuál de los
+     * casos es), en la lectura y en las dos escrituras que nombran a la persona.
+     * 0 filas escritas.
+     */
+    public function test_pt18_un_members_id_que_no_es_un_users_id_es_404_y_no_escribe(): void
+    {
+        $ana = $this->socioConWhatsapp();
+        $this->assertSame(0, DB::table('users')->where('id', $ana['member'])->count(), 'el members.id de Ana no es el users.id de nadie');
+        $sinFicha = (int) DB::table('users')->insertGetId(['id' => self::USERS_FROM - 1, 'name' => 'Sin ficha', 'email' => 'sin-ficha-'.Str::random(6).'@facts.test',
+            'password' => 'x', 'created_at' => self::utc('2026-01-01 12:00'), 'updated_at' => self::utc('2026-01-01 12:00')]);
+        $sesion = $this->cuenta('Ana', self::ALL);
+        $nadie = $this->getJson(self::BASE.'consents?personType=member&personId=999999', $sesion)->assertStatus(404)->assertJsonPath('code', 'person_not_found')->getContent();
+
+        foreach (['el members.id de Ana' => $ana['member'], 'un usuario sin ficha de socio' => $sinFicha] as $que => $id) {
+            $this->assertSame($nadie, $this->getJson(self::BASE.'consents?personType=member&personId='.$id, $sesion)->assertStatus(404)->getContent(), $que);
+            $this->assertSame($nadie, $this->postJson(self::BASE.'consents', ['personId' => $id] + $this->peticion($ana), $sesion)->assertStatus(404)->getContent(), $que);
+            $this->assertSame($nadie, $this->postJson(self::BASE.'consents/revoke', ['personId' => $id] + $this->retirada($ana), $sesion)->assertStatus(404)->getContent(), $que);
+        }
+        $this->assertSame(0, DB::table('outreach_consents')->count());
+    }
+
     // ── PostgreSQL: el rol de la aplicación y las carreras ──────────────────
 
     public function test_solo_en_postgres_el_ciclo_entero_por_http_como_el_rol_de_la_aplicacion_sin_update_ni_delete(): void
@@ -779,14 +903,49 @@ class OutreachConsentsApiTest extends TestCase
 
     // ── Piezas ──────────────────────────────────────────────────────────────
 
-    /** @return array{member: int, lead: int, key: string, ref: string} */
-    private function socioConWhatsapp(array $lead = [], string $phone = self::PHONE): array
+    /**
+     * Un socio con su prospecto de WhatsApp. `user` es su `users.id` (como lo nombra el CRM) y `member` su `members.id`.
+     *
+     * @param  array<string, mixed>  $member
+     * @return array{user: int, member: int, lead: int, key: string, ref: string}
+     */
+    private function socioConWhatsapp(array $lead = [], string $phone = self::PHONE, array $member = []): array
     {
-        $s = $this->socio();
+        $s = $this->socio([], $member);
         $l = $this->lead(array_merge(['member_id' => $s['member'], 'phone' => $phone, 'consent_status' => 'unknown'], $lead));
         $this->conversation($l, ['last_inbound_at' => self::utc('2026-11-01 15:00:00')]);
 
-        return ['member' => $s['member'], 'lead' => $l, 'key' => SubjectKey::member($s['member']), 'ref' => (string) PhoneRef::fromRaw($phone)];
+        return ['user' => $s['user'], 'member' => $s['member'], 'lead' => $l, 'key' => SubjectKey::member($s['member']), 'ref' => (string) PhoneRef::fromRaw($phone)];
+    }
+
+    /**
+     * PT-18 · EL MUNDO DE LOS IDS CRUZADOS: Ana y Luis, socios con su prospecto de WhatsApp (números distintos);
+     * `users.id ≠ members.id` para los dos, y el `users.id` de Ana es el `members.id` de Luis (en producción, 4 124
+     * de 4 144 `users.id` son el `members.id` de OTRA persona). Luis se crea el último: después de su ficha con id
+     * explícito, SQLite seguiría numerando desde ahí.
+     *
+     * @return array{ana: array{user: int, member: int, lead: int, key: string, ref: string}, luis: array{user: int, member: int, lead: int, key: string, ref: string}}
+     */
+    private function anaYLuis(): array
+    {
+        $ana = $this->socioConWhatsapp();
+        $luis = $this->socioConWhatsapp([], '3001110002', ['id' => $ana['user']]);
+        $this->assertSame($ana['user'], $luis['member'], 'el users.id de Ana es el members.id de Luis');
+        $this->assertNotSame($ana['user'], $ana['member']);
+        $this->assertNotSame($luis['user'], $luis['member']);
+
+        return ['ana' => $ana, 'luis' => $luis];
+    }
+
+    /** @return array<int, int> filas del libro por `member_id` (la ficha canónica) */
+    private static function filasPorFicha(): array
+    {
+        $n = [];
+        foreach (DB::table('outreach_consents')->orderBy('id')->pluck('member_id') as $m) {
+            $n[(int) $m] = ($n[(int) $m] ?? 0) + 1;
+        }
+
+        return $n;
     }
 
     /**
