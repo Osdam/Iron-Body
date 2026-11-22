@@ -1,0 +1,4 @@
+23c23
+<     public const CALLS_ENABLED_IN_CODE = false;
+---
+>     public const CALLS_ENABLED_IN_CODE = true;
