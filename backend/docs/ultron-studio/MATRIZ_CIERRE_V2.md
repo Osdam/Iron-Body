@@ -181,18 +181,24 @@ No abren el apartado 10 ni tocan el gate del apartado 4. Evidencia de partida: `
 
 **Etiquetas de estado (las de la directiva, §16):** IMPLEMENTADO · PROBADO LOCALMENTE · INTEGRADO · DESPLEGADO · VERIFICADO EN PRODUCCIÓN · ACEPTADO FUNCIONALMENTE · EN OBSERVACIÓN · BLOQUEADO EXTERNAMENTE · INCOMPLETO.
 
-### 8.1 Frentes, agentes y árboles (22-11-2026, 05:00 UTC)
+### 8.1 Frentes, agentes y árboles (actualizado el 22-11-2026 a las 05:40 UTC)
 
-Todas las ramas salen de `0c57d7c4` (= `main`). El Mac tiene 8 GB: como mucho tres agentes a la vez. Cada agente confirma en su rama, sin subir; el lead integra por *merge*, corre la batería completa y prepara el lote de despliegue.
+Las ramas `cierre/*` salen de `main` (`0c57d7c4`) o de la integración local. El Mac tiene 8 GB: como mucho cinco agentes a la vez, vigilando la carga. Cada agente confirma en su rama, sin subir; el lead verifica, integra por *merge*, corre la batería completa y prepara el lote de despliegue.
 
 | Frente | Agente | Árbol · rama | Qué deja cerrado | Estado |
 |---|---|---|---|---|
-| A · Sofía, ElevenLabs y Twilio Voice (apartados 6 y 7) | `be-voz` | `_worktrees/cierre-voz/Iron-Body` · `cierre/voz` | La apertura de las llamadas lista sobre la punta actual (parches de pruebas rehechos), el recorrido de la llamada real con evidencia punto por punto, los huecos corregidos y el runbook al día. La constante sigue cerrada | EN CURSO |
-| B · Automatización (apartado 8) | `be-clasificador` | `_worktrees/cierre-motores/Iron-Body` · `cierre/motores` | El clasificador de respuestas AI9 (hoy no existe), integrado con las respuestas de W9, apagado por defecto | EN CURSO |
-| B y C · Bandeja asistida (apartado 9) | `be-bandeja-r3` | `_worktrees/cierre-bandeja/Iron-Body` · `cierre/bandeja` | R3-1, R3-2 y R3-3 con pruebas negativas, la carrera probada en PostgreSQL y el coste de la página medido | EN CURSO |
-| C · Gobierno, consentimiento y cuatro ojos (apartado 10) | siguiente tanda | — | `outreach_consents` (C9), cuatro ojos por regla (B2), quejas presenciales y telefónicas, y la comprobación de qué capas del Studio llegan a cada motor | EN COLA |
-| D · Meta, plantillas y campañas (apartado 11) | lead | — | Lectura de partida hecha (§8.2). Crear, aprobar y enviar la primera plantilla exige dos personas vinculadas (P10-1) | BLOQUEADO EXTERNAMENTE en producción; preparación en cola |
-| E · E2E, regresiones y certificación (apartado 14) | después de integrar | — | Los recorridos de la directiva (§12), cada prueba con su clase: unitaria, integración, simulada, canaria real o verificación en producción | EN COLA |
+| A · Voz (apartados 6 y 7) | `be-voz` | `cierre-voz` · `cierre/voz` | Apertura de las llamadas medida sobre la punta (los mismos 69 casos; los tres parches valen), recorrido de la llamada real con evidencia, E2E en los dos estados de la constante (hash `832085b4…`), runbook al día. Solo documentos | **ENTREGADO, VERIFICADO E INTEGRADO en local** (`dfcee951`). Cerrado |
+| A · Voz | `be-voz2` | `cierre-voz` · `cierre/voz` | H-3: `consultar_planes` da los beneficios (enmienda de D8-10, por la directiva); H-2: el plazo del job no deja una llamada a medias; H-1: una `ambiguous` que no salió tiene salida (conciliación y orden de consola) | EN CURSO |
+| B · Automatización (apartado 8) | `be-clasificador` | `cierre-motores` · `cierre/motores` | El clasificador de respuestas AI9, integrado con las respuestas de W9, apagado por defecto | EN CURSO |
+| B y C · Bandeja asistida (apartado 9) | `be-bandeja-r3` | `cierre-bandeja` · `cierre/bandeja` | Ronda 1: R3-1, R3-2, R3-3 y la página sin consultas por fila (**PROBADO LOCALMENTE**; el lead repitió 97 pruebas en SQLite y 14 en PostgreSQL). Ronda 2: el motivo `opted_out` de la revocación de voz y F-1 a F-3 (canal asistido apagado, canario desactivado y plantilla que dejó de estar aprobada retienen) | EN CURSO (ronda 2) |
+| C · Consentimiento por canal (apartado 10) | `db-consent` | `cierre-consent` · `cierre/consent` | El libro `outreach_consents` (C9-1): solo inserción, cuatro ojos por cuenta, texto legal obligatorio, supresión 1581. Inerte sin filas. Después: lector de hechos y rutas (backend) y pantalla (CRM) | EN CURSO |
+| C · Cuatro ojos por regla (apartado 10) | `be-cuatro-ojos` | `cierre-gobierno` · `cierre/gobierno` | B-2: quien escribió las frases de una S-NNN no aprueba ni publica la versión que las copia (opción A del plan; rechazar sí puede) | EN CURSO |
+| C · Las diez capas frente a los motores | `arq-capas` | solo lectura | Tabla capa × parámetro × motor, conexiones pendientes dentro de los contratos, textos del CRM que no dicen la verdad y prueba mínima por motor: `plans/informes-cierre/informe-arq-capas.md` | **ENTREGADO**. Cerrado |
+| C · CRM | por lanzar | — | Los textos del CRM que señala `arq-capas` (§3, a–f), los motivos nuevos de la bandeja y el estado del clasificador | EN COLA (espera las listas de backend) |
+| D · Meta, plantillas y campañas (apartado 11) | lead | — | Lectura de partida hecha (§8.2). Crear, aprobar y enviar la primera plantilla exige dos personas vinculadas (P10-1) | BLOQUEADO EXTERNAMENTE en producción |
+| E · E2E, regresiones y certificación (apartado 14) | después de integrar | — | Los recorridos de la directiva (§12), cada prueba con su clase | EN COLA |
+
+**Decisiones del lead tomadas con la directiva en la mano (se anotarán en los contratos al integrar):** el clasificador AI9 y sus ficheros nuevos dentro del H9; la enmienda de D8-10 (beneficios en `consultar_planes`); la salida de una `ambiguous` que no llegó a iniciarse; F-1 a F-3 de la bandeja (retener es el lado seguro); la opción A de los cuatro ojos por regla. **Siguen siendo del propietario:** D-3 (si los frenos ajenos al H9 retienen la bandeja), la forma y el texto legal de la autorización de los socios (D7 a D12), y `payment_link` en W9 (el contrato dice que W9 lo resuelve y el código falla cerrado: no se conecta sin su decisión y revisión de security).
 
 ### 8.2 Lecturas de partida en producción (solo lectura, 22-11 04:50–05:10 UTC)
 
