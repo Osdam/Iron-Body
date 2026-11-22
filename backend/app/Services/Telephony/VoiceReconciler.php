@@ -15,6 +15,7 @@ use App\Services\Voice\VoiceNumberObserver;
 use Closure;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -55,7 +56,9 @@ use Illuminate\Support\Facades\Log;
  * ids del proveedor y más vieja que el plazo de gracia pasa a
  * `failed_to_start`, con su `reconciled` (`ambiguous_resolved`, la pasada y la
  * ventana como evidencia). Si no, se queda `ambiguous` y el resumen dice por
- * qué (`ambiguous.held`). Hasta la migración E19-3, `schema_pending`.
+ * qué (`ambiguous.held`). Hasta la migración E19-3, `schema_pending`; y si
+ * el esquema niega la transición que el código cree admitida (un despliegue
+ * en mal orden), también `schema_pending`, y la pasada sigue (C-0).
  *
  * Una saliente CORTADA mientras el job esperaba al proveedor y que el
  * proveedor inició igual (E10-5, SEC8-b M-3): su SID está en su evento
@@ -512,7 +515,22 @@ final class VoiceReconciler
                     'graceMinutes' => VoiceAmbiguousResolution::GRACE_MINUTES, 'skewMinutes' => VoiceAmbiguousResolution::CLOCK_SKEW_MINUTES],
                 'before' => VoiceCall::STATUS_AMBIGUOUS, 'after' => VoiceAmbiguousResolution::FINAL,
             ];
-            $cerrada = $this->dryRun ? $this->resolveUnstarted($fila, $evidencia) : DB::transaction(fn (): bool => $this->resolveUnstarted($fila, $evidencia));
+            try {
+                $cerrada = $this->dryRun ? $this->resolveUnstarted($fila, $evidencia) : DB::transaction(fn (): bool => $this->resolveUnstarted($fila, $evidencia));
+            } catch (QueryException $e) {
+                // C-0 (revisión de security del 22-11-2026): el código cree admitida la transición (lee el grafo del
+                // modelo) y el esquema la niega (sin la migración E19-3, o con su down() aplicado antes que el código).
+                // La transacción ya se deshizo: la fila sigue `ambiguous` y viva (falla cerrado). Se cuenta como
+                // `schema_pending` y la pasada SIGUE, para que la deriva y el techo de gasto corran igual. Cualquier otro
+                // fallo de la base no es esto y sube, como antes.
+                if (! self::schemaRefused($e)) {
+                    throw $e;
+                }
+                $out['held'][VoiceAmbiguousResolution::HELD_SCHEMA] = ($out['held'][VoiceAmbiguousResolution::HELD_SCHEMA] ?? 0) + 1;
+                Log::channel('voice')->warning('voice.reconcile.ambiguous_schema_pending', ['call_uuid' => $fila->uuid, 'sqlstate' => self::sqlState($e)]);
+
+                continue;
+            }
             if ($cerrada) {
                 $out['resolved']++;
                 if (! $this->dryRun) {
@@ -548,6 +566,24 @@ final class VoiceReconciler
         ]);
 
         return true;
+    }
+
+    /**
+     * C-0: ¿la negó una guarda del esquema de la voz? Son las de DB8: un
+     * disparador `voice_forbid()` (PostgreSQL, SQLSTATE `P0001`; SQLite,
+     * `RAISE(ABORT, …)`, `23000`) o un CHECK (PostgreSQL, `23514`).
+     */
+    private static function schemaRefused(QueryException $e): bool
+    {
+        return in_array(self::sqlState($e), ['P0001', '23514', '23000'], true);
+    }
+
+    /** El SQLSTATE de un fallo de la base (un código de cinco caracteres, nunca su mensaje: lleva el SQL). */
+    private static function sqlState(QueryException $e): string
+    {
+        $estado = (string) ($e->errorInfo[0] ?? $e->getCode());
+
+        return preg_match('/^[0-9A-Z]{5}$/D', $estado) === 1 ? $estado : 'unknown';
     }
 
     /** Un instante en UTC, ISO 8601 (la evidencia de E19-3). */

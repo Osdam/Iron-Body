@@ -18,9 +18,13 @@ use App\Services\Telephony\VoiceReconciler;
 use App\Services\Voice\Dto\CarrierCall;
 use App\Services\Voice\Dto\CarrierCallsPage;
 use App\Services\Voice\Dto\CarrierResult;
+use App\Services\Voice\Dto\VoiceAgentObservation;
+use App\Services\Voice\Dto\VoiceAgentPayload;
+use App\Services\Voice\Dto\VoiceDeployResult;
 use App\Services\Voice\NullTelephonyCarrier;
 use App\Services\Voice\NullVoiceAgentDeployer;
 use App\Services\Voice\TelephonyCarrier;
+use App\Services\Voice\VoiceAgentDeployer;
 use DateTimeInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -181,6 +185,63 @@ class VoiceAmbiguousResolutionTest extends TestCase
         $this->assertContains('calls_disabled_in_code', $alOtro, 'la constante sigue cerrada');
         $this->assertSame([(int) $a->id, (int) $b->id, (int) $rechazada->id], VoiceCall::query()->orderBy('id')->pluck('id')->map(static fn ($id): int => (int) $id)->all(),
             'la puerta (cerrada) no crea filas');
+    }
+
+    /**
+     * C-0 (revisión de security del 22-11-2026): el código nuevo con el esquema de DB8 (la migración E19-3 sin aplicar,
+     * o su down() aplicado antes que el código). Antes, la QueryException de la transición tumbaba la pasada antes de la
+     * deriva y del techo de gasto, en cada pasada mientras la fila siguiera ahí. Ahora esa fila cuenta como
+     * `schema_pending`, se queda `ambiguous` y viva, y la pasada sigue: la deriva lee el agente y echa su freno, y el
+     * techo de gasto echa el suyo.
+     */
+    public function test_c0_si_el_esquema_niega_la_transicion_la_fila_es_schema_pending_y_la_pasada_sigue_con_la_deriva_y_el_techo(): void
+    {
+        config(['voice.limits.daily_budget_usd' => '0.5']);   // 500 000 micros, por debajo de la reserva de la fila
+        $this->publishVoice();
+        $fila = $this->ambiguousCall('+573000000095');
+        $dia = (string) $fila->budget_day;
+        $this->travel(VoiceAmbiguousResolution::GRACE_MINUTES + 1)->minutes();
+
+        // El esquema de DB8: el down() de E19-3 devuelve su disparador (dentro de la transacción de la prueba).
+        (require database_path('migrations/2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start.php'))->down();
+        $this->assertTrue(VoiceAmbiguousResolution::schemaAllows(), 'el código cree admitida la transición: lee el grafo del modelo');
+
+        $deriva = new class implements VoiceAgentDeployer
+        {
+            public int $lecturas = 0;
+
+            public function createAgent(VoiceAgentPayload $payload): VoiceDeployResult
+            {
+                throw new LogicException('la conciliación solo lee');
+            }
+
+            public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
+            {
+                $this->lecturas++;
+
+                return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_OBSERVED, $agentId, null, null, ['prompt' => 'otro agente'], 200, null);
+            }
+
+            public function assignNumber(string $providerNumberId, ?string $agentId): VoiceDeployResult
+            {
+                throw new LogicException('la conciliación solo lee');
+            }
+        };
+
+        foreach ([1, 2] as $pasada) {
+            $resumen = app(VoiceReconciler::class)->run($this->carrier([[]]), $deriva, now()->subHours(48));
+            $this->assertSame(['resolved' => 0, 'held' => [VoiceAmbiguousResolution::HELD_SCHEMA => 1]], $resumen['ambiguous'], "pasada {$pasada}: schema_pending");
+            $this->assertSame(['canary' => 'drift'], array_filter($resumen['drift'], static fn (string $r): bool => $r === 'drift'), "pasada {$pasada}: la deriva corrió");
+            $this->assertTrue($resumen['costCap'], "pasada {$pasada}: el techo de gasto corrió");
+            $this->travel(10)->minutes();
+        }
+        $this->assertSame(2, $deriva->lecturas, 'una lectura del agente por pasada');
+        $this->assertSame(VoiceCall::STATUS_AMBIGUOUS, VoiceCall::query()->findOrFail($fila->id)->status, 'la fila no cambia');
+        $this->assertSame(0, VoiceCallEvent::query()->where('call_id', $fila->id)->where('kind', 'reconciled')->count(), 'ni deja evento de salida');
+        $this->assertSame(1, VoiceCallFacts::liveCount(), 'y sigue viva: falla cerrado');
+        $this->assertGreaterThan(0, VoiceCostGuard::committedMicros($dia), 'con su reserva');
+        $this->assertEqualsCanonicalizing(['agent_drift', 'cost_cap'], VoiceBrakeEntry::query()->where('kind', 'open')->pluck('reason')->unique()->values()->all(),
+            'los dos frenos de las vigilancias que antes no llegaban a correr');
     }
 
     public function test_cada_duda_la_deja_ambiguous_con_su_motivo(): void
