@@ -1,0 +1,23 @@
+GATE 4-J · LA APROBACIÓN DE LA VERSIÓN 3, LEÍDA EN PRODUCCIÓN (solo lectura) · 22-11-2026, 03:53 UTC (21-11, 22:53 en Bogotá)
+lead · el propietario la aprobó en el CRM con la cuenta «Desarrolladores» a las 10:52 p. m. y pidió verificar en el servidor la aprobación y la identidad del aprobador
+
+A1 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 22-11-2026 03:52:45 | 24b29173 | 32 | Studio smoke (temporal)
+A1 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | CANARY | 18-11-2026 22:40:35 | 24b29173 | 32 | Studio smoke (temporal)
+A1 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36 | 24b29173 | 32 | Studio smoke (temporal)
+A1 · versiones | 1 | ad1f1562 | ULTRON Studio - Canario V1 - Pruebas | APPROVED | 09-11-2026 18:55:33 | d2361ab5 | 27 | Desarrolladores
+A2 · revisión de la versión 3 | 4 | approved | 27 | Desarrolladores | Super Admin | 22-11-2026 03:52:45 | 21-11-2026 10:52:45 pm | ["opcional-E14","opcional-E16"] | 24b29173 | (sin nota) | t | t
+A3 · cadena de publicaciones (las últimas) | 3 | publish | 2e243853 | Desarrolladores | 18-11-2026 22:40:35
+A3 · cadena de publicaciones (las últimas) | 2 | rollback | 4017639c | Desarrolladores | 12-11-2026 22:55:36
+A3 · cadena de publicaciones (las últimas) | 1 | publish | 4017639c | Desarrolladores | 12-11-2026 21:45:13
+A4 · auditoría desde las 03:30 UTC | 03:35:15 | version.created | 32 | Studio smoke (temporal) | Super Admin | - → DRAFT | 39cfae9f
+A4 · auditoría desde las 03:30 UTC | 03:35:33 | version.submitted | 32 | Studio smoke (temporal) | Super Admin | DRAFT → REVIEW_REQUIRED | 39cfae9f
+A4 · auditoría desde las 03:30 UTC | 03:52:45 | version.approved | 27 | Desarrolladores | Super Admin | REVIEW_REQUIRED → APPROVED | 39cfae9f
+A5 · veredictos del laboratorio sobre la ejecución 11 | 0
+
+Lectura:
+· La versión 39cfae9f («Prueba de aceptación 3 · profesional 200») está en APPROVED desde el 22-11-2026 a las 03:52:45 UTC (21-11, 10:52:45 p. m. en Bogotá).
+· La aprobó la cuenta 27, «Desarrolladores» (Super Admin), que no es la autora (la 32, «Studio smoke (temporal)»): cuatro ojos.
+· Reconoció los dos avisos, opcional-E14 y opcional-E16; la huella de lo aprobado es la de la versión (24b29173).
+· No se publicó nada: la cadena de publicaciones sigue en la entrada 3 (publicar la versión 2, 18-11); la versión 2 sigue en CANARY.
+· La auditoría del Studio lleva las tres entradas: creada y enviada por la cuenta técnica, aprobada por «Desarrolladores».
+· La ejecución 11 del laboratorio todavía no tiene veredicto.
