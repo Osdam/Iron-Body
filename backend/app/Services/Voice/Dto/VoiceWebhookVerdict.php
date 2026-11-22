@@ -61,6 +61,9 @@ final class VoiceWebhookVerdict
     /** `call_initiation_failure` (documentación oficial del 03-11-2026). */
     public const FAILURE_REASONS = ['busy', 'no-answer', 'unknown'];
 
+    /** M-1: como mucho estos tamaños de `result_value` de `consultar_planes` (el cupo de herramientas de una llamada, `VoiceCall::MAX_TOOL_CALLS`). */
+    public const MAX_PLAN_RESULT_SIZES = 20;
+
     /** @var SensitiveParameterValue<list<string>> */
     private readonly SensitiveParameterValue $agentTurns;
 
@@ -77,6 +80,9 @@ final class VoiceWebhookVerdict
      * @param  list<array{index:int, text:string, tools:list<string>, transfers:list<string>, planResults:list<string>}>  $guardTurns
      *                                                                                                                                 cada turno del AGENTE con su índice en `data.transcript` (DF-E11), las herramientas que llamó, los números
      *                                                                                                                                 que pidió a `transfer_to_number` y lo que devolvió `consultar_planes` en ese turno (P-3). Solo en memoria.
+     * @param  list<int>  $planResultBytes  M-1 (revisión de security del 22-11-2026): el TAMAÑO en bytes de cada `result_value` de
+     *                                      `consultar_planes` de la transcripción, en orden y también los que pasan del tope que lee la
+     *                                      guarda (solo números, nunca el texto; como mucho {@see MAX_PLAN_RESULT_SIZES})
      *
      * @throws InvalidArgumentException
      */
@@ -99,6 +105,7 @@ final class VoiceWebhookVerdict
         #[\SensitiveParameter] array $agentTurns = [],
         #[\SensitiveParameter] array $transferTargets = [],
         #[\SensitiveParameter] array $guardTurns = [],
+        public readonly array $planResultBytes = [],
     ) {
         if (! in_array($outcome, self::OUTCOMES, true)) {
             throw new InvalidArgumentException('Resultado de webhook desconocido.');
@@ -163,7 +170,11 @@ final class VoiceWebhookVerdict
                 }
             }
         }
-        if ($kind !== self::KIND_POST_CALL_TRANSCRIPTION && ($agentTurns !== [] || $transferTargets !== [] || $toolCalls !== [] || $guardTurns !== [])) {
+        if (! array_is_list($planResultBytes) || count($planResultBytes) > self::MAX_PLAN_RESULT_SIZES
+            || array_filter($planResultBytes, static fn ($n): bool => ! is_int($n) || $n < 0) !== []) {
+            throw new InvalidArgumentException('Los tamaños de consultar_planes son una lista corta de enteros no negativos.');
+        }
+        if ($kind !== self::KIND_POST_CALL_TRANSCRIPTION && ($agentTurns !== [] || $transferTargets !== [] || $toolCalls !== [] || $guardTurns !== [] || $planResultBytes !== [])) {
             throw new InvalidArgumentException('Solo una transcripción lleva turnos, herramientas o destinos.');
         }
 

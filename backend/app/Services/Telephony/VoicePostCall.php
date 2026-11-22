@@ -70,7 +70,9 @@ final class VoicePostCall
     /**
      * Y como mucho estos bytes de JSON, por si el motor trae códigos más largos
      * que los de hoy (≤ 31 caracteres: 50 entradas son ~3 KB): holgura bajo los
-     * 4 096 de `vce_codes_chk` para `{"violations":[…],"truncated":N}`.
+     * 4 096 de `vce_codes_chk` para `{"violations":[…],"truncated":N}`. M-1:
+     * los tamaños de `consultar_planes` (`planResultBytes`, como mucho 20
+     * enteros de un cuerpo de 1 MB: menos de 200 bytes) caben en la holgura.
      */
     public const MAX_GUARD_CODES_BYTES = 3584;
 
@@ -166,11 +168,14 @@ final class VoicePostCall
             VoiceCall::bind($id, ['duration_seconds' => $duracion], ['duration_seconds']);
         }
 
-        // 3. La guarda posterior: en memoria; se guardan códigos y números de turno, acotados (E10-4).
+        // 3. La guarda posterior: en memoria; se guardan códigos y números de turno, acotados (E10-4). M-1 (revisión de
+        // security del 22-11-2026): y el TAMAÑO de cada resultado de `consultar_planes` (solo números, como mucho 20), para
+        // ver en la primera llamada si el proveedor lo guarda por encima de los 8 192 bytes que lee la guarda: si pasa,
+        // un precio bien dicho es `voice_money_not_from_tool` (un freno falso, que falla cerrado).
         $violaciones = VoiceTranscriptGuard::inspect($v->guardTurns(), VoiceTransferDirectory::approvedHashesFor($llamada));
         $veredicto = VoiceEvents::record('guard_verdict', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, $clave, [
             'outcome' => $violaciones === [] ? 'clean' : 'violation',
-            'codes' => self::verdictCodes($violaciones),
+            'codes' => self::verdictCodes($violaciones) + ($v->planResultBytes === [] ? [] : ['planResultBytes' => $v->planResultBytes]),
         ]);
         if ($violaciones !== []) {
             // Los códigos DISTINTOS (un conjunto cerrado del motor y de la voz): su tamaño no crece con los turnos.

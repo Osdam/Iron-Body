@@ -65,6 +65,11 @@ class VoiceDtoTest extends TestCase
         yield 'veredicto: rechazado con ok' => [static fn () => new VoiceWebhookVerdict('rejected', 'ok', null, null, null, null, null, null, null, null, null, null, null, null, [])];
         yield 'veredicto: turnos en un audio' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_audio', null, null, null, null, null, null, null, null, null, null, null, [], ['hola'])];
         yield 'veredicto: motivo de fallo fuera de su tipo' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_transcription', null, null, null, null, null, null, null, null, null, 'busy', null, [])];
+        // M-1 (revisión de security del 22-11-2026): los tamaños de consultar_planes, solo en una transcripción, enteros no negativos y como mucho 20.
+        yield 'veredicto: tamaños en un audio' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_audio', null, null, null, null, null, null, null, null, null, null, null, [], planResultBytes: [10])];
+        yield 'veredicto: un tamaño negativo' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_transcription', null, null, null, null, null, null, null, null, null, null, null, [], planResultBytes: [-1])];
+        yield 'veredicto: un tamaño que es texto' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_transcription', null, null, null, null, null, null, null, null, null, null, null, [], planResultBytes: ['{"planes":[]}'])];
+        yield 'veredicto: más de 20 tamaños' => [static fn () => new VoiceWebhookVerdict('accepted', 'ok', 'post_call_transcription', null, null, null, null, null, null, null, null, null, null, null, [], planResultBytes: array_fill(0, 21, 1))];
         yield 'sesión: emitida sin URL' => [static fn () => new VoiceLabSession('issued', null, 'agent_1', 200)];
         yield 'operador: estado desconocido' => [static fn () => new CarrierResult('requested', $sid, 'answered', 200, null)];
         yield 'llamada: SID sin forma' => [static fn () => new CarrierCall('CA123', null, null, null, null, null, null, null, null, null, null)];

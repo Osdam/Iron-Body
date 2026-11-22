@@ -149,7 +149,8 @@ class VoiceToolsBenefitsTest extends TestCase
         }
         $this->assertSame(16, $leidos, 'los 16 beneficios del catálogo de prueba se entregan');
         $this->postCall('conv_h8fx_0031', $turnos)->assertOk()->assertJson(['violations' => 0]);
-        $this->assertSame(['violations' => []], VoiceCallEvent::query()->where('kind', 'guard_verdict')->sole()->codes);
+        // M-1: el veredicto lleva además el tamaño del resultado de consultar_planes (solo el número).
+        $this->assertSame(['violations' => [], 'planResultBytes' => [strlen($resultado)]], VoiceCallEvent::query()->where('kind', 'guard_verdict')->sole()->codes);
         $this->assertSame(0, VoiceBrakeEntry::query()->count(), 'ningún freno falso');
     }
 
@@ -274,6 +275,36 @@ class VoiceToolsBenefitsTest extends TestCase
         $this->assertSame(self::VALERA, $cuerpo['planes'][1]['beneficios'], 'y el resto, igual');
         $this->assertSame(['benefitsWithheld' => 1, 'benefitsOmitted' => 0], VoiceCallEvent::query()->where('kind', 'tool_call')->sole()->codes);
         $this->assertSame([['plan_id' => (int) $roto->id, 'error_class' => \ErrorException::class]], $lineas, 'qué plan arreglar, sin texto');
+    }
+
+    /**
+     * M-1 (revisión de security del 22-11-2026): al procesar la post-llamada se guarda, en el veredicto de la guarda,
+     * el TAMAÑO de cada resultado de `consultar_planes` de la transcripción, también el que pasa de los 8 192 bytes que
+     * lee la guarda (así se ve en la primera llamada si el proveedor lo infla y por qué un precio bien dicho echó el
+     * freno). Solo números: ni el texto ni lo que lleva. Sin resultados de la herramienta, la forma de siempre.
+     */
+    public function test_m1_el_veredicto_guarda_el_tamano_de_cada_resultado_de_consultar_planes_y_nada_mas(): void
+    {
+        $this->plan('Plan Valera', 65000, 1, json_encode(self::VALERA));
+        $resultado = (string) json_encode(['ok' => true, 'verdict' => 'ok'] + $this->consultarPlanes());
+        $inflado = $resultado.str_repeat(' ', 8193 - strlen($resultado) + 64);   // lo que añadiera el proveedor al guardarlo
+        $this->assertGreaterThan(8192, strlen($inflado));
+        $consulta = static fn (string $valor): array => ['role' => 'agent', 'message' => 'Déjame consultarlo.', 'tool_calls' => [['tool_name' => 'consultar_planes']],
+            'tool_results' => [['tool_name' => 'consultar_planes', 'result_value' => $valor, 'is_error' => false]]];
+
+        $this->postCall('conv_h8fx_0031', [['role' => 'agent', 'message' => self::NOTICE], $consulta($resultado), $consulta($inflado),
+            ['role' => 'agent', 'message' => 'El Plan Valera vale $ 65.000.']])->assertOk()->assertJson(['violations' => 0]);
+        $codigos = VoiceCallEvent::query()->where('kind', 'guard_verdict')->sole()->codes;
+        $this->assertSame(['violations' => [], 'planResultBytes' => [strlen($resultado), strlen($inflado)]], $codigos, 'los dos tamaños, en orden; el grande también');
+        $this->assertSame('{"violations":[],"planResultBytes":['.strlen($resultado).','.strlen($inflado).']}', json_encode($codigos), 'solo números');
+        foreach (VoiceCallEvent::query()->get() as $e) {
+            $this->assertStringNotContainsString('Valera', (string) json_encode($e->codes), 'ningún texto del resultado en los eventos');
+        }
+
+        // Una llamada sin consultar_planes: la forma de siempre.
+        $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0032', 'provider_call_sid' => 'CA000000000000000000000000a800002f', 'remote' => '+573000000096']);
+        $this->postCall('conv_h8fx_0032', [['role' => 'agent', 'message' => self::NOTICE]])->assertOk();
+        $this->assertSame(['violations' => []], VoiceCallEvent::query()->where('kind', 'guard_verdict')->orderByDesc('id')->first()?->codes);
     }
 
     public function test_spoken_codes_es_la_misma_guarda_que_la_de_la_post_llamada(): void
