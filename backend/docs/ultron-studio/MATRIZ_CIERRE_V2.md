@@ -9,7 +9,8 @@
 
 | Campo | Valor |
 |---|---|
-| Actualizado | 22-11-2026, 04:10 UTC (21-11, 23:10 en Bogotá) |
+| Actualizado | 22-11-2026, 05:00 UTC (22-11, 00:00 en Bogotá) |
+| Directiva vigente | **«MASTER CLOSURE EXECUTION — DIRECTIVA DEFINITIVA»** (propietario, 21-11-2026, 11:40 p. m. en Bogotá). Sustituye a los loops de ejecución acelerada; este cierre V2 sigue siendo la fuente del alcance, la trazabilidad y los checkpoints, pero su orden deja de ser estrictamente secuencial: los frentes independientes avanzan en paralelo (§8) |
 | Apartado actual | **4 · Control completo de Studio sobre WhatsApp** (el apartado 3 está CERRADO con el resultado «aceptación funcional NO superada») |
 | Estado del apartado | **ESPERANDO INTERVENCIÓN HUMANA: la publicación de la versión 3, que solo se puede hacer dentro de la ventana (07:00–19:00, hora de Bogotá).** Hecho el 22-11 UTC con la autorización del gate 4-H y verificado paso a paso: API `66b14467` (con el ensayo de reversión en el servidor real); flujo S2 de n8n publicado; primer turno real por S2 sin errores (4-I); versión 3 (`39cfae9f…`) aprobada por el propietario (4-J) y con veredicto «Aprobada» de su laboratorio (4-K); versión 2 revertida por él (4-L): **el canario está libre y la declaración vigente es Legacy**. NO se ha publicado nada |
 | Gate pendiente | **4-M · Publicar la versión 3 en canario** (todavía NO pedido: el propietario indicó el 21-11 a las 11:02 p. m. que se le pida «cuando corresponda», dentro de la ventana de 7:00 a. m. a 7:00 p. m.). UNA acción, a partir de las 7:00 a. m. del 22-11: publicar en el Studio «Prueba de aceptación 3 · profesional 200». **Después:** la tercera prueba real. Decisión suya sin plazo: el plan de «la mensualidad» (H4-8) |
@@ -19,10 +20,10 @@
 | Commits | Backend: `main` = la rama `feat/ultron-studio-h9`, subida el 22-11 con la autorización del propietario (`bc5167cb` → `66b14467`, avance rápido). Primera parte (última red): `8e710104`, `adb25f6d`, `6c2f12d0`, `3eca6206`, `a6e2005b`. «Regenerar antes de sustituir»: `97b59195` (plan), `2d3d02ba` (olas 1 y 2), `ee8e0df0` (ola 3), `d63fbd50` (ola 4), `ab64134a` (olas 4b y 6), `05f7109c` (guion de despliegue), `cd431e20` (ola 5, flujo S2), `0400b267` (correcciones tras las revisiones) y los de documentos, hasta `66b14467` (el desplegado). CRM sin cambios: `eeb4b79` |
 | Producción | API **`66b14467`** (compilador 4, con la puerta `ai/check`), desplegada el 22-11-2026 a las 03:19 UTC con `ops/deploy-a4-regenerar-backend.sh`; respaldo para volver atrás: `/var/backups/ironbody/ultron-studio-a4-regenerar-20261122-031841` (antes servía `e861e2c8`). CRM `eeb4b79`, sin cambios. n8n: **copia S2 `4CIwgGbPRneqUjLF` publicada el 22-11-2026 a las 03:33 UTC** (versión `a68cf2bc…`); la copia S1 `QSklqHlsDIxucRfk`, despublicada e intacta como reserva (vuelta atrás: despublicar S2 y publicar S1). Llamadas y envíos cerrados en el código (lo comprueba el guion); automatización en sombra |
 | Pruebas | Sobre `0400b267`: motor, puerta, informe y flujo, 1 935; los dos comprobadores del flujo, OK (121 y 226 comprobaciones); Marketing entero, 6 844; PostgreSQL 14, 411; **batería completa en el árbol limpio: 18 985 pruebas y 491 451 aserciones, con dos rojas, las dos esperadas (la de la línea base, `PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote`, y la puerta de diff del H9 hasta subir; `a4-evidencia/142`)**; las 213 expresiones regulares del motor compilan con el PCRE 10.39 de producción y dan la misma huella que en local (`a4-evidencia/140` y `141`); la red que impide que salga un marcador, pasada también por el PCRE del servidor: para las 13 formas de marcador y deja salir las 7 que no lo son, igual que en local (`a4-evidencia/143` y `144`); la regla de beneficios contra el catálogo real, 0 falsos positivos (`a4-evidencia/132b`). Dos revisiones independientes, sin bloqueantes |
-| Agentes | Apartado 4, cerrados todos (los de la primera parte, `arq-a4c`, `be-r1` a `be-r6`, `ops-r1`, `sec-r1` y `rev-r1`). Ninguno en marcha mientras el gate esté abierto |
+| Agentes | Apartado 4, cerrados todos (los de la primera parte, `arq-a4c`, `be-r1` a `be-r6`, `ops-r1`, `sec-r1` y `rev-r1`). Desde el 22-11 a las 04:50 UTC, por la directiva definitiva, trabajan fuera del apartado 4 `be-bandeja-r3`, `be-clasificador` y `be-voz`, cada uno en su árbol y su rama (§8) |
 | Próximo paso exacto | (1) Dentro de la ventana (desde las 7:00 a. m. del 22-11, hora de Bogotá): verificar el estado en solo lectura y pedir al propietario, como UNA acción, publicar la versión 3 en canario. (2) Verificar la publicación. (3) Gate: la tercera prueba real (los mismos tres mensajes del 18-11), medida con `ultron:origin-report` (criterios A1–A8 del plan). Sin abrir llamadas ni envíos automáticos ni nada más pendiente de autorización |
 
-**Mientras este gate esté abierto no se trabaja en ningún apartado posterior, no se abren agentes y no se despliega nada.**
+**Desde el 22-11 (directiva definitiva, §8) el gate 4-M solo detiene el apartado 4.** Los frentes técnicamente independientes avanzan en paralelo. El checkpoint del apartado 4 no se toca, nada se despliega en producción sin una autorización específica y, al abrirse la ventana, el gate 4-M vuelve a ser la prioridad.
 
 ---
 
@@ -170,3 +171,56 @@ No abren el apartado 10 ni tocan el gate del apartado 4. Evidencia de partida: `
 
 **El requisito de dos personas no bloquea el apartado 4.** Publicar una versión de WhatsApp y dar el veredicto del laboratorio usan el cuatro ojos por cuenta (quien publica no es quien la creó: `StudioPublications.php:1322`, `! $access->isCreator($version)`); `StudioPublications`, `StudioVersions` y los servicios del laboratorio no nombran los vínculos de persona. Los vínculos solo los exigen las estrategias comerciales, las plantillas de mensajes y el envío de plantillas a Meta (`StudioStrategyPublishing`, `StudioStrategyVersions`, `StudioMessageTemplates`, `StudioMetaTemplates`). Las versiones 1 y 2 se publicaron el 12-11 y el 18-11 con la tabla de vínculos vacía.
 
+---
+
+## 8. Directiva definitiva del propietario (21-11-2026): ejecución en paralelo y punto de control de los frentes
+
+**Qué cambia.** La «MASTER CLOSURE EXECUTION — DIRECTIVA DEFINITIVA» sustituye a los loops de ejecución acelerada. Este cierre V2 sigue mandando en el alcance, los criterios de aceptación y los checkpoints; lo que cambia es el orden: los frentes técnicamente independientes avanzan a la vez. Orden general: implementar → integrar → probar → desplegar con autorización → verificar en condiciones reales → cerrar.
+
+**Lo que sigue exigiendo una autorización específica del propietario:** desplegar en producción, comprar o contratar, cambiar permisos o credenciales activas, migrar o modificar datos reales, enviar fuera del canario autorizado, llamar fuera del alcance de pruebas autorizado, activar campañas reales, cualquier acción irreversible y toda aprobación que exija a otra persona. Una cuenta de QA no cuenta como una segunda persona.
+
+**Etiquetas de estado (las de la directiva, §16):** IMPLEMENTADO · PROBADO LOCALMENTE · INTEGRADO · DESPLEGADO · VERIFICADO EN PRODUCCIÓN · ACEPTADO FUNCIONALMENTE · EN OBSERVACIÓN · BLOQUEADO EXTERNAMENTE · INCOMPLETO.
+
+### 8.1 Frentes, agentes y árboles (22-11-2026, 05:00 UTC)
+
+Todas las ramas salen de `0c57d7c4` (= `main`). El Mac tiene 8 GB: como mucho tres agentes a la vez. Cada agente confirma en su rama, sin subir; el lead integra por *merge*, corre la batería completa y prepara el lote de despliegue.
+
+| Frente | Agente | Árbol · rama | Qué deja cerrado | Estado |
+|---|---|---|---|---|
+| A · Sofía, ElevenLabs y Twilio Voice (apartados 6 y 7) | `be-voz` | `_worktrees/cierre-voz/Iron-Body` · `cierre/voz` | La apertura de las llamadas lista sobre la punta actual (parches de pruebas rehechos), el recorrido de la llamada real con evidencia punto por punto, los huecos corregidos y el runbook al día. La constante sigue cerrada | EN CURSO |
+| B · Automatización (apartado 8) | `be-clasificador` | `_worktrees/cierre-motores/Iron-Body` · `cierre/motores` | El clasificador de respuestas AI9 (hoy no existe), integrado con las respuestas de W9, apagado por defecto | EN CURSO |
+| B y C · Bandeja asistida (apartado 9) | `be-bandeja-r3` | `_worktrees/cierre-bandeja/Iron-Body` · `cierre/bandeja` | R3-1, R3-2 y R3-3 con pruebas negativas, la carrera probada en PostgreSQL y el coste de la página medido | EN CURSO |
+| C · Gobierno, consentimiento y cuatro ojos (apartado 10) | siguiente tanda | — | `outreach_consents` (C9), cuatro ojos por regla (B2), quejas presenciales y telefónicas, y la comprobación de qué capas del Studio llegan a cada motor | EN COLA |
+| D · Meta, plantillas y campañas (apartado 11) | lead | — | Lectura de partida hecha (§8.2). Crear, aprobar y enviar la primera plantilla exige dos personas vinculadas (P10-1) | BLOQUEADO EXTERNAMENTE en producción; preparación en cola |
+| E · E2E, regresiones y certificación (apartado 14) | después de integrar | — | Los recorridos de la directiva (§12), cada prueba con su clase: unitaria, integración, simulada, canaria real o verificación en producción | EN COLA |
+
+### 8.2 Lecturas de partida en producción (solo lectura, 22-11 04:50–05:10 UTC)
+
+Evidencia: `ops/evidencia-h9/2026-11-22/01-voz-y-meta-lectura-de-partida.txt`.
+
+- **Voz.** Código `66b1446`, constante cerrada, salientes y entrantes apagadas, cupo y presupuesto en 0. Faltan las cuatro piezas de Twilio de la voz (cuenta, número de origen, id importado en ElevenLabs y key restringida). 0 llamadas, 0 publicaciones de voz, 0 canarios de voz registrados, ningún freno. El perfil «Sofia Medellin» revisión 3 (tres herramientas) sigue enviado a revisión desde el 11-11; las cuatro sesiones del laboratorio hablado no tienen veredicto.
+- **El horario legal cierra los domingos** (`Telephony/OutboundSchedule.php`: lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00). El 22-11 es domingo: la primera llamada no puede ser antes del lunes 23-11 a las 07:00.
+- **Meta.** La integración puede gestionar plantillas: permiso `whatsapp_business_management` concedido y la cuenta de WhatsApp legible. **En la cuenta de WhatsApp hay 0 plantillas**: no hay ninguna aprobada que reutilizar. No hace falta volver a tramitar permisos.
+- **Hallazgo aparte, sin tocar:** el id de la cuenta de WhatsApp del fichero de entorno (…8956) no es el que rige (…7733, el de la conexión guardada desde el CRM).
+- **Precios de Twilio leídos en su web el 22-11:** número local de Colombia, US$ 17,50 al mes, recibir US$ 0,0945 por minuto; llamar a un celular colombiano, US$ 0,0377 por minuto, y a un fijo, US$ 0,0700; número local de Estados Unidos, US$ 1,15 al mes.
+
+### 8.3 Decisiones que la directiva ya trae (no se vuelven a preguntar)
+
+- **R3-3:** «Un contacto que pierde elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal restringido» (menores, exclusiones y comprobaciones vencidas). La bandeja retiene también por `subject_minor` y `rne_check_missing`.
+- **Sombra:** los siete días se cuentan desde una estrategia válida publicada, no desde el 11-11 (la sombra corrió sin estrategias). El cierre técnico y la observación operativa se informan por separado.
+- **Cuatro ojos:** las cuentas de QA sirven para demostrar las reglas técnicas; no sustituyen dos decisiones independientes cuando la regla exige dos personas.
+
+### 8.4 Gates humanos de la directiva (uno cada vez; un gate detiene solo su frente)
+
+| Gate | Frente | Qué se pide | Estado |
+|---|---|---|---|
+| V-1 | A · Voz | En Twilio: crear la subcuenta «Voz» y verificar en ella, como identificador de llamada, un número que no sea el de WhatsApp del gimnasio (…5483) ni el teléfono que recibirá la llamada. Gratis. Si no hay una segunda línea, se le presenta la compra con su costo | **PEDIDO el 22-11 a las 05:00 UTC** |
+| 4-M | 4 · WhatsApp | Publicar la versión 3 en canario | Se pide al abrirse la ventana (07:00 de Bogotá) |
+
+Después de V-1, en este orden: V-2 (permisos geográficos y key restringida de voz, instalada en el servidor sin pasar por el chat), V-3 (importar el número en ElevenLabs como solo saliente), las autorizaciones A0 a A3 del runbook, la aprobación de la revisión 3 del perfil, el veredicto del laboratorio hablado, la publicación de la voz en canario, el canario de voz y la llamada (`ops/RUNBOOK_PRIMERA_LLAMADA.md`).
+
+### 8.5 Próxima acción exacta
+
+1. Cuando termine cada agente: leer su informe, repetir sus pruebas clave, pasar el cambio por security y por reviewer, integrar en `feat/ultron-studio-h9` por *merge*, batería completa en el árbol `ultron-suite` y preparar el lote de despliegue con su reversión para pedir la autorización. Cerrar el agente.
+2. A las 07:00 de Bogotá: verificar en solo lectura y pedir el gate 4-M; después, la tercera prueba real.
+3. Siguiente tanda de agentes, según quede memoria libre: C9 (`database-specialist` y `backend`), cuatro ojos por regla (B2), el CRM de los motivos y estados nuevos, y las pruebas de extremo a extremo.
