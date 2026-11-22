@@ -2,6 +2,8 @@
 
 **Fecha:** 11-11-2026. **Autor:** devops. Este runbook no se ha ejecutado en producción. Todo lo que dice de los mandos está ensayado en el banco (`ops/banco-h9/telefonia-prep.sh`; informe `plans/informes-motores/informe-devops-telefonia-prep.md`).
 
+*(22-11, backend de voz: revisado sobre `0c57d7c4`. Solo se corrige lo que la punta dejó viejo; cada cambio va marcado «(22-11)». Recorrido y medición: `plans/informes-cierre/informe-be-voz.md`.)*
+
 **Base:** auditoría C (`plans/cierre/auditoria-c-voz-telefonia.md`), §3, §4.1, §4.4, §4.6 y §4.9.
 
 **Qué sustituye:** para esta llamada, sustituye a los pasos 0.6, 2.3–2.5 y 3.1 de `ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`. El paso 0.6 de ese documento escribe `TWILIO_VOICE_FROM=+57…5483`, que es el número de WhatsApp: **no se ejecuta**.
@@ -40,7 +42,8 @@ Hacen falta **tres**. Cada una se pide y se guarda **antes** del paso que la usa
 > - **Origen:** el número …____ (identificador de llamada verificado en la cuenta de voz de Twilio), importado en ElevenLabs como solo saliente (`phnum_…`). **No** es el número de WhatsApp …5483.
 > - **Destino:** mi teléfono registrado como **canario de voz** (…____), activado por otra persona. Ningún otro número.
 > - **Agente:** el publicado en canario («Iron Body · voz · publication · <12 primeros caracteres de la huella>»), compilado con la versión «____» y el perfil «Sofia Medellin» rev. __, con el veredicto «aprobado» del laboratorio que dio ____.
-> - **Cuándo:** el __-11-2026 entre las __:__ y las __:__. Horario legal: de lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00. **Ni el 15-11, que es domingo, ni el 16-11, que es festivo.**
+> - **Cuándo:** el __-__-2026 entre las __:__ y las __:__. Horario legal: de lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00, **también para el canario**. *(22-11: aquí decía «ni el 15-11 ni el 16-11», ya pasados.)* **Ningún domingo ni festivo: los próximos festivos son el martes 08-12, el viernes 25-12 y el viernes 01-01-2027** (`OutboundSchedule.php:29`, `ColombianHolidays`).
+> - **Si no contesto** (no contesta, ocupado, buzón o un fallo del proveedor), **ese día ya no se puede repetir** *(22-11)*: la frecuencia de la Ley 2300 (una al día y dos en 7 días por número) vale también para el canario y cuenta esos intentos (`VoiceFrequency.php:26, 36`).
 > - **Duración máxima:** 300 s, con corte automático del agente. 30 s de timbre. Si contesta un buzón, cuelga. Sin grabación ni audio guardado.
 > - **Cupo:** 1 llamada al día. **Presupuesto del día:** US$ 2,00.
 > - **Reserva previa del sistema:** US$ 0,9605 si el destino es un móvil colombiano (+573…) y US$ 1,1220 en cualquier otro caso. Son 5 minutos con un tramo de transferencia a fijo, que se reserva siempre.
@@ -80,12 +83,14 @@ Leyenda del «Tipo»: **O** = obligatorio (sin él no hay llamada); **R** = reco
 
 ### Paso 0 · L · Mandos actualizados y lecturas (con A0) — O
 
-Desde el Mac, en la raíz `Iron-Body/`. `C` es el commit que confirme estos ficheros.
+Desde el Mac, en la raíz `Iron-Body/`. `C` es el commit que confirme estos ficheros. *(22-11: es `9502884a`; los tres no han cambiado desde entonces hasta `0c57d7c4`.)*
 
 ```bash
 O=backend/docs/ultron-studio/ops
 ssh ironbody-vps 'sha256sum /root/h8-voice-scope.sh /root/el-verificar.sh /root/h7-monitor-scope.sh'
 #   esperado hoy: d8a18960… (L9-110), 7cc6100f… (el de HEAD; si no casa, PARAR y comparar) y c70537b7… (L9-110)
+#   (22-11) «el de HEAD» era el HEAD del 11-11 (b8d00f7f): desde 9502884a el repo trae ya las huellas nuevas de abajo.
+#   Si /root ya enseña 231e4a8a…, cd7a5a7a… y be6c3c47…, los mandos ya están instalados: no se copian otra vez.
 ssh ironbody-vps 'T=$(date -u +%Y%m%d-%H%M%S); for n in h8-voice-scope.sh el-verificar.sh h7-monitor-scope.sh; do cp -p /root/$n /root/$n.pre-telefonia-$T; done; ls -l /root/*.pre-telefonia-*'
 for n in h8-voice-scope.sh el-verificar.sh h7-monitor-scope.sh; do
   git show "$C:$O/$n" | ssh ironbody-vps "umask 077; cat > /root/$n && chmod 700 /root/$n && sha256sum /root/$n"
@@ -180,6 +185,8 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
 
 **Antes, sin tocar `main` (las pruebas de la apertura ya están preparadas y revisadas):** son TRES commits de la rama local `prep/voice-calls-open-tests` (worktree `_worktrees/ultron-voz-abierta/Iron-Body`; no está en el remoto; copia como parches en `ops/apertura-llamadas/`): **`3287769b`** (`T`), **`216b0f1b`** (`T2`, la condición I-1 de la revisión) y **`33ba6299`** (`T3`, sus menores M-2, M-3 y M-5: comentarios y un recorrido más estricto). Solo tocan `backend/tests/`. Informes: `plans/informes-motores/informe-tester-voz-abierta.md` e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes). No usar `803cd016` ni las ramas `…-v1` y `tmp/solo-t*`: son versiones anteriores.
 
+*(22-11)* Medición repetida sobre `0c57d7c4` con una apertura simulada: caen los MISMOS 69 casos (35 métodos, 21 ficheros; ninguna prueba nueva depende de la constante), los tres parches aplican limpios con `git am` (`range-diff`: «=» en los tres) y dejan todo en verde; con la constante cerrada siguen cayendo (79 casos). Las huellas de los parches no cambian. Detalle en `ops/apertura-llamadas/README.md`.
+
 **Precondiciones del tramo (revisión, I-4), la víspera:**
 - Producción tiene que estar en la punta de `origin/main` salvo documentación: el modo 4a exige que entre lo desplegado y `origin/main` solo haya documentación y el commit de la apertura (`deploy-h8-backend-fase1.sh:400-409`), y cada commit de documentación sin desplegar viaja solo si se acepta uno a uno con `--acepta-main` (`:491-492`). Si `main` lleva pruebas o código sin desplegar, se despliega antes con `ops/hotfix-backend.sh`, **antes de subir la apertura**:
   - El 12-11 producción sirve `9a6e3b1` y `origin/main` = `4277f128` trae **dos** pruebas sin desplegar: `tests/Feature/Commercial/CommercialSuppression1581Test.php` (la añade `8c1f092e`, que es un commit `docs/ops` pero no solo documentación) y `tests/Feature/Commercial/ScanCommercialFactsCeilingTest.php` (`d1d6e2b3`). Lo demás es documentación. *(Corregido por devops el 12-11: aquí decía que solo `d1d6e2b3` tocaba `tests/`.)*
@@ -193,7 +200,8 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
   - **Tiene que imprimir:** «constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)» y «CORRECCIÓN DESPLEGADA SIN DESVÍOS». **Vuelta atrás:** la línea «vuelta atrás» que imprime.
   - Desde ahí hasta la 4a, en `main` solo entra documentación (si entra otra cosa, se repite). El respaldo `BK` se hace DESPUÉS (la 4a toma como base su `api-commit.txt` y exige que producción esté en él: `:419-427`).
   - **Si no se hace:** la 4a aborta sin tocar nada en `:402` («entre … y el commit de la 4a hay cambios fuera de la documentación (backend/tests/Feature/Commercial/…)»), con la apertura ya en `main` (en rojo). La corrección puntual ya no puede llevar esas pruebas: el diff trae la apertura y `hotfix-backend.sh` se niega. Salida: revertir la apertura en el repo (un push) y seguir E.3 y E.4. Ensayado en local: informe `informe-devops-apertura-arneses.md`, §3 (C1, C2, C4).
-- Repetir la medición con solo la línea abierta sobre la punta real de `main` (el 11-11: 69 casos, 35 métodos, 21 ficheros). Una prueba NUEVA que dependa de la constante no la detecta el `cherry-pick`: la detecta la batería.
+  - *(22-11)* El ejemplo de arriba (9a6e3b1 → 4277f128) es del 12-11 y ya no vale. El último despliegue con evidencia en el repo es `cd5dce0` (13-11, `ops/evidencia-h9/2026-11-13/despliegues/`). Entre `cd5dce0` y `0c57d7c4` (65 commits), `main` trae **10 migraciones** (`2026_11_17_*` a `2026_11_19_*`), `routes/api.php`, `routes/marketing.php` y `config/iron_ai.php`, además de código y pruebas. Lo que producción no tenga de eso **no cabe en `hotfix-backend.sh`**, que se niega a llevar migraciones, rutas o configuración (`hotfix-backend.sh:77`). Hace falta antes un desplegador de ola, con la constante todavía cerrada (lo deciden el lead y devops). La víspera: `git diff --name-only <lo que sirve producción> origin/main | grep -vE '^backend/docs/|^docs/|^[^/]+\.md$'` tiene que salir vacío.
+- Repetir la medición con solo la línea abierta sobre la punta real de `main` (el 11-11: 69 casos, 35 métodos, 21 ficheros; *(22-11)* sobre `0c57d7c4`, los mismos 69). Una prueba NUEVA que dependa de la constante no la detecta el `cherry-pick`: la detecta la batería.
 - Las enmiendas de contrato del H6 y del H8 que propone el informe del tester (§4.3), aprobadas; la del H8 habla de seis clases copiadas, no de tres.
 - Después de aplicar las pruebas, el modo 4a no se puede repetir tal cual: con producción de vuelta en el commit del respaldo, el tramo lleva dos `voice(calls-open):` (`:384-385`) y pruebas (`:403-406`). El camino de la vuelta atrás y la reapertura está en la sección **E. Después de la apertura** (ensayado en local).
 
@@ -294,15 +302,19 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 **Tiene que verse:**
 - 202 en el CRM;
 - la fila pasa por `requested → dialing → active → completed`;
+  - *(22-11)* `active` solo aparece si Sofía usa una herramienta: la primera herramienta pasa la llamada de `dialing` a `active` (E1-1, `VoiceTools.php:122-123`). Ni Twilio ni la conciliación la pasan a `active` (`VoiceReconciler.php:29-31`). Con un perfil sin `consultar_planes` ni `consultar_horarios` (la rev. 2), lo normal es `requested → dialing → completed`, y es correcto (caso del fixture «saliente contestada sin herramientas», `VoicePostCallWebhookTest`).
 - la post-llamada, procesada y sin violaciones, con su coste;
+  - *(22-11)* el coste que se ve es la **reserva** (960 500 µUS$ a un móvil): lo de ElevenLabs llega crudo, en unidades por confirmar, y no se convierte (evento `post_call_transcription`, `codes.costRaw`). El precio de Twilio (`carrier_cost_micros`) lo pone la conciliación de los minutos :10…:50 cuando Twilio la tarifica.
 - `sudo -u www-data php artisan voice:reconcile --dry-run --json`: `unknown` 0 y `wouldOpenBrake` false;
 - una segunda petición ese día da `daily_cap_reached`.
+  - *(22-11)* Al mismo canario da exactamente `[frequency_exceeded, daily_cap_reached]`, y lo mismo si la primera quedó `no_answer`, `busy`, `failed` o `ambiguous`. Solo `canceled` y `failed_to_start` no gastan el día (`VoiceFrequency.php:36`, `VoiceCallFacts.php:35-39`). **Si nadie contesta, la llamada de ese día está gastada.**
 
 **Vuelta atrás:**
 1. Colgar en el CRM, o `sudo -u www-data php artisan voice:hangup --all --confirm`.
 2. `bash /root/h8-voice-scope.sh salientes off`.
 
 **Al terminar:** `salientes off` (R), salvo que P autorice por escrito seguir hacia las 3 llamadas de la evidencia del canario. Después, B reconoce la configuración.
+- *(22-11)* Las 3 llamadas (`ULTRON_STUDIO_VOICE_CANARY_MIN_CALLS=3`) no caben en una semana con UN solo teléfono canario. La frecuencia por número es una al día y como mucho dos en 7 días móviles (`VOICE_FREQUENCY_PER_WEEK` ≤ 2; `VoiceFrequency.php:74-79`), y no se puede subir. Con un solo canario, la tercera va al octavo día de la primera. Si no, hace falta un segundo canario o el modo `calendar` de la semana (decisión P-11).
 
 ---
 
@@ -317,6 +329,7 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 | `voice_braked` | Freno echado (§4.6) | Leer la causa en el CRM. Lo suelta una persona con `ultron.voice_publish` y una nota |
 | `voice_number_not_assigned` (al publicar) | Falta `VOICE_NUMBER_INBOUND_CAPABLE=false` (C-5) | Con A0: `salientes off` → `fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false` → `salientes on …` → reconocer → publicar |
 | La llamada se queda en `requested` | Worker `ironbody-voice` parado | `supervisorctl status`. La fila pasa a `ambiguous` a los 15 min (la conciliación) |
+| *(22-11)* La fila queda `ambiguous` | El job murió (plazo de 30 s, worker caído) o el proveedor no dio una respuesta legible | **No repetir.** `voice:reconcile --dry-run --json`. Si la llamada salió, se resuelve sola: la post-llamada la encuentra por su `call_ref`, o la conciliación por el SID que dejó el job en su evento. Si no salió, nada la resuelve. Mientras siga `ambiguous`, cuenta como viva: todas las salientes siguientes dan `concurrency_exceeded`. Cerrarla a mano es una escritura en la base de producción: hace falta autorización (informe `plans/informes-cierre/informe-be-voz.md`, H-1) |
 | Cualquier mando: «otro mando que escribe el fichero de entorno está en curso» | Otro mando en marcha | Esperar a que termine. No se ha tocado nada |
 
 ---

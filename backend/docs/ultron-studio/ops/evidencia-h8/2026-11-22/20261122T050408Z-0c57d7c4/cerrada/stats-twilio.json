@@ -1,0 +1,1 @@
+{"sim":"twilio","requests":0,"violations":0,"violationsByCode":{},"authRejected":0,"byRoute":{},"byStatus":{},"faultsServed":0,"controlCalls":11,"emitted":{},"emitStatus":{},"emitLatencyMs":{},"state":{"calls":1,"byStatus":{"in-progress":1},"numberUpdates":0}}
