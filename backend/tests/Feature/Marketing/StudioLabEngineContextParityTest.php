@@ -11,8 +11,10 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\UltronDecideToken;
 use App\Services\UltronStudio\StudioLabEngineContext;
 use App\Services\UltronStudio\StudioPromptBundle;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -190,6 +192,31 @@ class StudioLabEngineContextParityTest extends TestCase
             'is_active' => true, 'origin' => MarketingKnowledgeItem::ORIGIN_HUMAN_PANEL, 'review_status' => MarketingKnowledgeItem::REVIEW_APPROVED]);
         $d = app(StudioLabEngineContext::class)->build(['turns' => [['role' => 'prospect', 'text' => '¿Dónde quedan?']], 'facts' => ['paymentState' => 'none', 'handoffRequested' => false]], $sp)['decide'];
         $this->assertStringContainsString('3209876543', json_encode($d['context']['knowledge_base'], JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Revisión de seguridad automática sobre `8a084f8c`: con un prospecto sin
+     * id, `where('lead_id', null)` es `IS NULL` y traería filas de otros. El
+     * contexto no pide nada por el prospecto ni por la conversación sintéticos:
+     * ninguna sentencia compara una clave con NULL.
+     */
+    public function test_t5_ninguna_lectura_por_la_clave_nula_de_la_persona_sintetica(): void
+    {
+        $sp = StudioPromptBundle::rolesFor(array_replace(UltronPromptCompiler::BASELINE, self::GOBERNADO))['sp'];
+        $sql = [];
+        DB::listen(function (QueryExecuted $q) use (&$sql): void {
+            $sql[] = strtolower($q->sql);
+        });
+        foreach (self::escenarios() as [$turnos, $hechos]) {
+            app(StudioLabEngineContext::class)->build(['turns' => $turnos, 'facts' => $hechos], $sp);
+        }
+        $this->assertNotEmpty($sql, 'la prueba ve las consultas');
+        foreach ($sql as $s) {
+            // La guarda de las relaciones de Laravel (`x is null and x is not null`) no devuelve ninguna fila: no cuenta.
+            $s = (string) preg_replace('/(\S+) is null and \1 is not null/', 'imposible', $s);
+            $this->assertDoesNotMatchRegularExpression('/(lead_id|conversation_id|member_id|user_id)["`]?\s+is\s+null/', $s, $s);
+            $this->assertMatchesRegularExpression('/^\s*(select|pragma)\b/', $s, "solo lee: {$s}");
+        }
     }
 
     // ── Andamio ─────────────────────────────────────────────────────────────

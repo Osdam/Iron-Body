@@ -137,7 +137,9 @@ final class StudioLabEngineContext
         $lead->setRawAttributes(['channel' => 'whatsapp', 'source' => 'inbound', 'status' => MarketingLead::STATUS_NEW, 'do_not_contact' => false]);
         $conversacion = new MarketingConversation;
         $conversacion->setRawAttributes(['channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false, 'commercial_phase' => null]);
-        $conversacion->setRelation('lead', $lead);
+        // Sin prospecto en la conversación, a propósito: las lecturas por su id (`where lead_id = null` es
+        // `IS NULL` y traería filas de otros) no se hacen; el motor tiene su rama para «no hay prospecto».
+        $conversacion->setRelation('lead', null);
         $mensaje = new MarketingMessage;
         $mensaje->setRawAttributes(['direction' => MarketingMessage::DIRECTION_INBOUND, 'sender_type' => MarketingMessage::SENDER_LEAD, 'body' => $inbound, 'created_at' => now()]);
 
@@ -166,7 +168,7 @@ final class StudioLabEngineContext
         $customer['conversation_momentum'] = self::momentum($turnos, $intentTurno, $resolved);
         // El pago: la forma del motor sin prospecto (sin base ni pasarela), con el estado del escenario.
         $payment = ['state' => (string) ($hechos['paymentState'] ?? 'none')] + $this->payments->forLead(null, $inbound);
-        $membershipFacts = $this->membership->forPrompt($lead);
+        $membershipFacts = $this->membership->forPrompt(null);
         $memoriaPura = ! $saludoPuro && CommercialTurnPolicy::esTurnoDeMemoria($intentTurno, $inbound, $this->knowledge->activePlans(), $resolved);
         $strategyHints = StrategyContract::hints($customer, $resolved, $puedeEnlace, $intentTurno, $payment, $membershipFacts, $saludoPuro, $memoriaPura);
         $objetivoVivo = $memory->activeGoal();
