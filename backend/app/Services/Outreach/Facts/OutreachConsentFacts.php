@@ -47,9 +47,11 @@ use Illuminate\Support\Facades\Schema;
  * (`phone_ref`, anulable). Calla a toda OTRA clave cuya persona tenga ese
  * número entre los suyos ({@see FactPass::phonesOf()}: sus prospectos y sus
  * fichas de socio) mientras siga VIVA: mientras su clave no tenga una
- * confirmación posterior de la misma finalidad (contada en el lugar de su
- * petición, la regla de la tanda). Una retirada sin número no calla a nadie
- * más. Va en LA MISMA sentencia que la tanda: ninguna consulta de más por lote.
+ * confirmación posterior de la misma finalidad PARA ESE MISMO NÚMERO (contada
+ * en el lugar de su petición, la regla de la tanda). Autorizar otro número no
+ * levanta la retirada del primero: gana la negativa. Una retirada sin número
+ * no calla a nadie más. Va en LA MISMA sentencia que la tanda: ninguna
+ * consulta de más por lote.
  *
  * Dos booleanos y no un enumerado: la política de la foto es `array<string,
  * bool>` (`BatchSnapshot::fromArray()` lo exige) y `SubjectFacts::policy()`
@@ -360,8 +362,9 @@ final class OutreachConsentFacts
     /**
      * LA REGLA DE LOS HERMANOS, unida a la tanda: las retiradas de WhatsApp
      * cuyo número (`phone_ref`) es uno de los de la persona y que siguen VIVAS
-     * (ninguna confirmación posterior en su clave y finalidad, contada en el
-     * lugar de su petición). `{numbers}` = `(?, ?), …`: persona, seudónimo.
+     * (ninguna confirmación posterior en su clave y finalidad para ese mismo
+     * número, contada en el lugar de su petición). `{numbers}` = `(?, ?), …`:
+     * persona, seudónimo.
      * Devuelve la clave de la retirada para descartar las de la propia persona.
      * El CAST a CHAR(64) compara `bpchar` con `bpchar` en PG (un índice por
      * `phone_ref` serviría); en SQLite no cambia nada.
@@ -376,7 +379,7 @@ final class OutreachConsentFacts
                   FROM outreach_consents g
                   JOIN outreach_consents r ON r.uuid = g.request_uuid
                  WHERE g.subject_key = v.subject_key AND g.purpose = v.purpose AND g.channel = v.channel
-                   AND g.kind = 'granted' AND r.id > v.id
+                   AND g.kind = 'granted' AND g.phone_ref = v.phone_ref AND r.id > v.id
            )
         SQL;
 }

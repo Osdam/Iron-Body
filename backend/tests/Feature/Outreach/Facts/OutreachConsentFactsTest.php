@@ -333,7 +333,13 @@ class OutreachConsentFactsTest extends TestCase
         $this->assertSame(['denied', 'denied'], [CoreProjection::policyInput($lote->subject($p['key']), 'commercial', null)['consent']['whatsapp'],
             CoreProjection::policyInput($lote->subject($clave), 'commercial', null)['consent']['whatsapp']]);
 
-        // La persona de la retirada vuelve a autorizar: la retirada ya no está viva y el suelto vuelve a su propia concesión.
+        // La persona de la retirada autoriza OTRO número (el suyo cambió): para ella vale, pero el número retirado sigue callado.
+        $this->resolveConsent($this->requestConsent(['member_id' => $p['member'], 'phone_ref' => PhoneRef::fromRaw('3001110008')]));
+        DB::table('marketing_leads')->where('id', $p['lead'])->update(['phone' => '3001110008']);
+        $this->assertSame('granted', $this->consent($p['key']));
+        $this->assertSame('denied', $this->consent($clave), 'autorizar otro número no levanta la retirada de este');
+        // Vuelve a autorizar ESE número: la retirada ya no está viva y el suelto vuelve a su propia concesión.
+        DB::table('marketing_leads')->where('id', $p['lead'])->update(['phone' => self::PHONE]);
         $this->resolveConsent($this->requestConsent(['member_id' => $p['member'], 'phone_ref' => $p['ref']]));
         $this->assertSame('granted', $this->consent($p['key']));
         $this->assertSame('granted', $this->consent($clave));
