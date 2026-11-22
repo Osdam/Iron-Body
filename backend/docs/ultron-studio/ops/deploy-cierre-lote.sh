@@ -53,10 +53,13 @@
 #    con umask 077, cuando el lote las declara. Si algo falla: VUELTA ATRÁS AUTOMÁTICA (código 4).
 # 3. queue:restart; cada worker con pid nuevo (≤ 90 s) y, pasado un margen, dos lecturas: todos en RUNNING.
 # 4. Comprobaciones posteriores (si una falla: VUELTA ATRÁS AUTOMÁTICA, código 4): HEAD = nuevo y árbol limpio; www-data
-#    lee lo nuevo; los mismos workers en RUNNING; admin/voice/status sin token → 401; ninguna línea production.ERROR nueva
-#    (salvo las de un 55P03 reintentado); migrate:status sin pendientes; el esquema de después de cada migración;
-#    schedule:list y route:list con exactamente la diferencia declarada (ninguna si no se declara); las banderas
-#    declaradas con su valor en la caché de configuración; las cachés, de www-data en 600.
+#    lee lo nuevo; los mismos workers en RUNNING (si alguno tarda en coger pid nuevo, hasta 300 s más y otras dos
+#    lecturas); admin/voice/status sin token → 401; migrate:status sin pendientes; el esquema de después de cada
+#    migración (una tabla nueva, con los privilegios de la aplicación uno a uno); schedule:list y route:list con
+#    exactamente la diferencia declarada (ninguna si no se declara); las banderas declaradas con su valor en la caché de
+#    configuración; las cachés, de www-data en 600. Y las entradas production.ERROR nuevas DESDE EL PRIMER CAMBIO (sin
+#    las de un 55P03 reintentado), cada una con su clase y su fichero:línea de la aplicación (nunca el mensaje): si
+#    alguna nombra un fichero del diff, vuelta atrás; si ninguna, DESVÍO (código 3) sin vuelta atrás automática.
 # VUELTA ATRÁS (--vuelta-atras=<respaldo>, o la automática). Lee del respaldo el orden y las declaraciones. Solo si
 #    producción está en el nuevo o en el previo y con el árbol limpio. Si el lote migró PRIMERO, vuelve primero el código
 #    (las cachés del respaldo byte a byte, escritas por www-data, y después git checkout --detach <previo>) y después el
@@ -72,8 +75,9 @@
 #    main del servidor en <nuevo> (como hotfix-backend.sh). Las copias de las migraciones en /var/lib/ironbody-deploy se
 #    quedan (son la evidencia de lo que se ejecutó).
 # No imprime secretos, ni teléfonos, ni valores de configuración salvo las formas de --config; no lee ficheros de entorno.
-# Códigos: 0 bien · 1 aborta sin tocar nada · 2 uso (sin tocar nada) · 4 vuelta atrás automática hecha (producción en el
-# previo) · 5 PARAR: vuelta atrás incompleta o salida inesperada a medias (DEPLOY_CIERRE_LOTES.md §6).
+# Códigos: 0 bien · 1 aborta sin tocar nada · 2 uso (sin tocar nada) · 3 desplegado CON DESVÍO (errores nuevos ajenos al
+# diff: producción en el nuevo, decide el lead) · 4 vuelta atrás automática hecha (producción en el previo) · 5 PARAR:
+# vuelta atrás incompleta o salida inesperada a medias (DEPLOY_CIERRE_LOTES.md §6).
 set -euo pipefail
 export LC_ALL=C
 # m5 (rev-guion): el umask fijo, como deploy-h9-backend-cierre.sh. git (fetch, merge, checkout) corre como root y deja los
@@ -277,16 +281,72 @@ http() { # <ruta bajo /api> → código HTTP de un GET sin credenciales (000 si 
 }
 http_espera() { local i c=000; for i in 1 2 3; do c=$(http "$2"); [ "$c" = "$1" ] && break; [ "$i" = 3 ] || sleep 3; done; echo "$c"; }
 lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$f $(wc -l < "$f" | tr -d ' ')"; done; return 0; }
-errores_nuevos() { # <lineas_log de antes> <patrón que se descuenta, o vacío> → líneas de NIVEL_ERROR nuevas
-  local f n e total=0
+# C1 (rev-guion): las entradas $NIVEL_ERROR nuevas, una línea «tipo<TAB>quién<TAB>dónde<TAB>del diff» por entrada: tipo
+# excepcion (quién = su clase) o registro (un Log::error sin excepción; quién = la clave del mensaje); dónde = el primer
+# fichero:línea de la APLICACIÓN de su traza (la «at …» de la cabecera o el primer «#n …» fuera de vendor/); del diff =
+# el primer fichero de su traza que está en la lista del lote, o «-». NUNCA el mensaje: puede llevar datos personales.
+# Lo que se imprime se valida otra vez al leerlo (RE_CLASE, RE_CLAVE, RE_DONDE). Con un patrón, se descuentan las
+# entradas cuya cabecera lo tiene (las del 55P03 que el guion reintentó).
+errores_detalle() { # <lineas_log de antes> <patrón que se descuenta, o vacío>
+  local f n
   for f in "$LOGS"/laravel*.log; do
     [ -f "$f" ] || continue
     n=$(printf '%s\n' "$1" | awk -v f="$f" '$1 == f {print $2}')
-    if [ -n "$2" ]; then e=$(tail -n +"$(( ${n:-0} + 1 ))" "$f" | grep "$NIVEL_ERROR" | grep -vc "$2" || true)
-    else e=$(tail -n +"$(( ${n:-0} + 1 ))" "$f" | grep -c "$NIVEL_ERROR" || true); fi
-    total=$((total + e))
-  done
-  echo "$total"
+    tail -n +"$(( ${n:-0} + 1 ))" "$f"
+  done | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="$2" '
+    function rel(p) { return index(p, pre) == 1 ? substr(p, length(pre) + 1) : "" }
+    function mira(r, l) {
+      if (r == "" || r !~ /^backend\// || r ~ /^backend\/vendor\//) return
+      if (donde == "") donde = r ":" l
+      if (endiff == "" && (r in lote)) endiff = r
+    }
+    function cierra() { if (abierta && !descontar) print tipo "\t" quien "\t" (donde == "" ? "-" : donde) "\t" (endiff == "" ? "-" : endiff); abierta = 0 }
+    NR == FNR { if ($0 != "") lote[$0] = 1; next }
+    /^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T]/ {
+      cierra()
+      k = index($0, "] " nivel ": ")
+      if (k == 0) next
+      abierta = 1; donde = ""; endiff = ""; descontar = (desc != "" && index($0, desc) > 0)
+      i = index($0, "[object] (")
+      if (i > 0) {
+        tipo = "excepcion"; s = substr($0, i + 10); j = index(s, "(code:"); quien = (j > 1) ? substr(s, 1, j - 1) : "?"
+        base = 0; ult = 0
+        while ((m = index(substr($0, base + 1), " at " pre)) > 0) { ult = base + m; base = ult }
+        if (ult > 0) { s = substr($0, ult + 4); j = index(s, ")"); if (j > 0) s = substr(s, 1, j - 1); c = s; sub(/:[0-9]+$/, "", c); mira(rel(c), substr(s, length(c) + 2)) }
+      } else {
+        tipo = "registro"; s = substr($0, k + length(nivel) + 4); j = index(s, " "); quien = (j > 0) ? substr(s, 1, j - 1) : s
+      }
+      next
+    }
+    abierta && /^#[0-9]+ \// {
+      s = substr($0, index($0, " ") + 1); j = index(s, "(")
+      if (j > 0) { c = substr(s, 1, j - 1); l = substr(s, j + 1); j = index(l, ")"); if (j > 0) l = substr(l, 1, j - 1); mira(rel(c), l) }
+    }
+    END { cierra() }' <(tr -d '\r' < "$BK/lista.txt") - | tr -s '\\'
+}
+RE_CLASE='^[A-Za-z_][A-Za-z0-9_\]{0,159}$'
+RE_CLAVE='^[a-z][a-z0-9_.:-]{0,79}$'
+RE_DONDE='^backend/[A-Za-z0-9_./-]+:[0-9]+$'
+# Decide sobre las entradas de errores_detalle: imprime cada una (como mucho 12) y deja NERR y NDIFF. Un Log::error sin
+# traza cuenta como del diff si su clave está escrita en el código del diff (app, config, routes, database, bootstrap).
+clasifica_errores() { # <salida de errores_detalle>
+  local tipo quien donde endiff v x
+  local -a arch=()
+  NERR=0; NDIFF=0
+  while IFS= read -r x; do case "$x" in backend/app/*|backend/config/*|backend/routes/*|backend/database/*|backend/bootstrap/*) arch+=("$x") ;; esac; done < <(tr -d '\r' < "$BK/lista.txt")
+  while IFS=$'\t' read -r tipo quien donde endiff; do
+    [ -n "$tipo" ] || continue
+    NERR=$((NERR + 1))
+    if [ "$tipo" = excepcion ]; then [[ "$quien" =~ $RE_CLASE ]] || quien="?"; else [[ "$quien" =~ $RE_CLAVE ]] || quien="?"; fi
+    [[ "$donde" =~ $RE_DONDE ]] || donde="-"
+    if [ "$endiff" = - ] && [ "$tipo" = registro ] && [ "$quien" != "?" ] && [ "${#arch[@]}" -gt 0 ]; then
+      x=$(g grep -lF -e "$quien" "$N" -- "${arch[@]}" 2>/dev/null) || x=""
+      x=${x%%$'\n'*}; [ -z "$x" ] || endiff="${x#"$N":} (escribe esa clave)"
+    fi
+    if [ "$endiff" = - ]; then v="ajena al diff"; else v="DEL DIFF: $endiff"; NDIFF=$((NDIFF + 1)); fi
+    [ "$NERR" -gt 12 ] || echo "      · $tipo ${quien} · ${donde} → $v"
+  done <<< "$1"
+  [ "$NERR" -le 12 ] || echo "      … y $((NERR - 12)) más (en laravel.log)"
 }
 # m8 (rev-guion): los ficheros del diff que HEAD tiene, cada uno presente y legible por $WWW. Un lote de ficheros todos
 # NUEVOS, al volver al previo, no deja ninguno: eso es correcto (antes «0 revisados» se leía como fallo y la vuelta
@@ -991,6 +1051,9 @@ if [ "$REIN" -lt "$RUN0" ]; then
     echo "   ya con pid nuevo $REIN de $RUN0; pasado el margen: [$W1] y [$W2]"
     { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers tras el reinicio tardío: [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
   else
+# C1: los errores que cuentan para volver atrás son los de DESDE AQUÍ (el primer cambio: la primera migración o el
+# merge, lo que vaya antes); los del paso 0 y el respaldo solo se cuentan para que se vean.
+LOG_CAMBIO=$(lineas_log)
     aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 + 300 s: esos siguen con el código anterior; mirar supervisorctl status hasta ver los $RUN0 con pid nuevo y en RUNNING (DEPLOY_CIERRE_LOTES.md §7)"
   fi
 fi
@@ -1069,9 +1132,23 @@ elif [ "$NM" = 0 ]; then
   cmp -s "$APP/backend/$CACHE_CONFIG" "$BK/bootstrap-cache/config.php" || aviso "la caché de configuración cambió durante el despliegue y este lote no la toca: ¿otra sesión?"
 fi
 DESCUENTO=""; [ "$REINTENTOS" = 0 ] || DESCUENTO="55P03"
-ERR=$(errores_nuevos "$LOG_ANTES" "$DESCUENTO")
-echo "   $NIVEL_ERROR nuevos en laravel*.log desde el inicio: $ERR$([ "$REINTENTOS" = 0 ] || echo " (sin contar los del 55P03 reintentado, $REINTENTOS)")"
-[ "$ERR" = 0 ] || falla "$ERR líneas $NIVEL_ERROR nuevas en el log desde el inicio del despliegue"
+# C1 (rev-guion): un error AJENO (un webhook cualquiera) ya no vuelve atrás solo. Se cuentan los de desde el primer
+# cambio; de cada uno, solo su clase y su fichero:línea; si alguno nombra un fichero del diff, es del despliegue y se
+# vuelve atrás como siempre; si ninguno, DESVÍO (código 3) con aviso y sin vuelta atrás: decide el lead, que lo ve aquí.
+ERR0=$(cuenta_lineas "$(errores_detalle "$LOG_ANTES" "$DESCUENTO")")
+ERRS=$(errores_detalle "$LOG_CAMBIO" "$DESCUENTO")
+echo "   $NIVEL_ERROR nuevos en laravel*.log: $ERR0 desde el paso 0 · $(cuenta_lineas "$ERRS") desde el primer cambio (los que cuentan)$([ "$REINTENTOS" = 0 ] || echo "; sin los del 55P03 reintentado, $REINTENTOS")"
+DESVIO=""
+if [ -n "$ERRS" ]; then
+  clasifica_errores "$ERRS"
+  if [ "$NDIFF" -gt 0 ]; then
+    echo "   decisión: $NDIFF de $NERR nombran un fichero del diff → son del despliegue: VUELTA ATRÁS"
+    falla "$NDIFF de $NERR entradas $NIVEL_ERROR nuevas nombran un fichero del diff"
+  else
+    echo "   decisión: ninguna de las $NERR nombra un fichero del diff → DESVÍO con aviso, SIN vuelta atrás automática"
+    DESVIO="$NERR entrada(s) $NIVEL_ERROR nuevas desde el primer cambio y ninguna con un fichero del diff en su traza"
+  fi
+fi
 if [ -n "$FALLOS" ]; then revertir_auto "comprobaciones posteriores${FALLOS}"; fi
 echo "   producción sirve $(corto HEAD) · respaldo $BK · registro $LOG"
 echo "   VIGILANCIA (15 min, solo lectura): supervisorctl status (los $RUN0 en RUNNING) · $NIVEL_ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)"
@@ -1079,3 +1156,7 @@ orden_vuelta
 ETAPA=fin
 echo "LOTE DESPLEGADO SIN DESVÍOS$([ "$AVISOS" = 0 ] || echo " (con $AVISOS aviso(s) arriba)")"
 exit 0
+if [ -n "$DESVIO" ]; then
+  echo "LOTE DESPLEGADO CON DESVÍO: $DESVIO (arriba: la clase y el fichero:línea de cada una). NO se ha vuelto atrás: mirarlas en laravel.log y decidir; si son del despliegue, la vuelta atrás es la de arriba (DEPLOY_CIERRE_LOTES.md §6)"
+  exit 3
+fi
