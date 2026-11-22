@@ -1883,3 +1883,24 @@ Rama `cierre/quejas`. Pieza Q1-8 de `plans/cierre/plan-quejas-consentimiento-cua
 - **NB8 · Volver a resolver pisa `staff_review_resolved_by/at`**, como `resolve()`. La constancia del descarte (`dismissed_by`) no se pierde.
 - **NB9 · Logs tras la supresión 1581.** `commercial.complaint.dismissed` conserva `conversation_id` y `by`, y `staff_recorded` lleva ahora `subject_type` y `subject_id`. La retención de los logs es de operación.
 - **NB2, la ventana que queda:** una queja de la IA que se confirma entre la comprobación y el commit del descarte (milisegundos), y los ids de secuencia, que en PostgreSQL pueden confirmarse fuera de orden. El observador vuelve a mirar el descarte tras un duplicado; lo demás lo cubre el campo.
+
+## Enmienda PT-18 (22-11-2026), decisión de contrato del lead: qué id es `member` en las autorizaciones y en las quejas
+
+Bloqueante B-1 de la revisión final del CRM (`informe-reviewer-crm-cierre.md`). Informe: `plans/informes-cierre/informe-be-ids-socio.md`. Corrige C9-3 (§3 y §5 de la Enmienda C9) y Q1-8 (§1 y «Las rutas, para el CRM»).
+
+**1. La regla.** En `GET consents`, `POST consents`, `POST consents/revoke` y `POST complaints`, **`personType: "member"` es un socio del CRM y `personId` es su `users.id`**: el id de su ficha y de `GET /api/users`, que es lo único que el CRM conoce y ya envía. `personType: "lead"` sigue siendo `marketing_leads.id`. `confirm` y `reject` van por el uuid de la petición: no nombran a nadie.
+
+**2. Por qué.** `members` tiene su propio autoincremental y una columna `user_id` aparte. Las rutas leían `personId` como `members.id`, y la operación caía sobre otra persona con un mensaje de éxito. En producción (solo lectura, recuentos): hay 4 144 socios y en 4 143 los dos ids son distintos; 4 124 `users.id` son el `members.id` de OTRA persona y 19 no son el de nadie (un 404 para un socio que sí existe).
+
+**3. Cómo se resuelve.** Un solo sitio, `OutreachConsents::requestedSubject()`, que llama a `SubjectResolver::forUserIds()`: por `members.user_id`, que es único, y por identidad. Lo usan las dos rutas. El sujeto es el canónico de siempre (`m:<members.id>`). Lo guardado no cambia de forma: `outreach_consents.subject_key`/`member_id`/`lead_id`, la fila de `commercial_events` de la queja, su clave `member:<members.id>:complaint:staff:<Ymd>`, la idempotencia y el registro `commercial.complaint.staff_recorded` (`subject_id`). Tampoco cambian el alcance del entrenador (`TrainerMemberScope`, con el `members.id` canónico) ni las llaves de ver a la persona.
+
+**4. 404.** Un `users.id` que no existe, un usuario sin ficha de socio y un número que solo es el `members.id` de alguien reciben el MISMO 404 `person_not_found`, con el mismo cuerpo. No se distingue el caso.
+
+**5. Las respuestas.** `person.id` (autorizaciones) y `personId` (queja) son el id que envió el CRM. **`recordsAs` nombra a la persona como la nombra el CRM; nunca lleva un `members.id`:**
+- un socio pedido es él mismo: `{type: member, id: <su users.id>}`;
+- un prospecto de un socio es `{type: member, id: <users.id de la ficha canónica>}` o, si esa ficha no tiene usuario, el menor de los usuarios de la persona;
+- si ninguna ficha de la persona tiene usuario, es el propio prospecto (lo guardado sigue en el socio).
+
+Las filas del libro (`Consent`) no llevan ids de persona.
+
+**6. Para el CRM.** No cambia nada de lo que envía. Lo que lee cambia de valor, no de forma: con un socio, `recordsAs` coincide ahora con `person`, así que el aviso «Este prospecto es de un socio…» ya no sale para un socio; con un prospecto de un socio, el aviso nombra «Socio #<users.id>». La queja no lee `recordsAs`.

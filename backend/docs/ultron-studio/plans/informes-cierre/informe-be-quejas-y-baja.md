@@ -36,6 +36,8 @@ Pruebas tocadas: `OutreachCatalogTest` (huella `.22.1`, 42/28 eventos), `Outreac
 
 **`POST /api/admin/commercial-automation/complaints`** `{clientRequestId: uuid, personType: member|lead, personId: int, channel: in_person|phone|other, category: attention|billing|classes|facilities|other}` → **201** `{ok, data: {personType, personId, recordsAs: {type, id}, channel, category, source: "staff", day: "YYYY-MM-DD", brake: {days, purposes}}, meta: {replayed: false}}`; **200** igual con `replayed: true`. Errores: 403 `person_required` / `forbidden` (+`required_permission`), 404 `person_not_found`, 422 `validation_failed` (`errors.<campo> = ["invalid"]`, sin valores), 409 `client_request_reused`, 409 `commercial_events_disabled`, 503 `complaint_not_recorded`. Campos de más se ignoran (no se guardan).
 
+> **Nota del 22-11-2026 (PT-18; Enmienda PT-18 del contrato e `informe-be-ids-socio.md`).** Aquí no se decía qué id era `personId` de un socio, y el servidor lo leía como `members.id`. Con `personType: member`, `personId` es el **`users.id`** del socio, y `recordsAs.id` de un socio también lo es. La clave y la fila de la queja siguen con el `members.id` canónico.
+
 **`POST /api/admin/marketing/inbox/conversations/{id}/staff-review/resolve`** `{note?, complaint_category?: complaint_confirmed|not_a_complaint|other}`. Sin categoría: `{ok, staff_review_pending: false}` como hoy. Con categoría: `+ complaint: {category, dismissed: n}`. Errores nuevos: 422 `complaint_category_not_applicable` (la revisión no es de queja), 422 de validación, 409 `commercial_events_disabled`, 503 `complaint_dismissal_failed` (la revisión sigue pendiente).
 
 ## A · Casos y pruebas (SQLite y PostgreSQL 14, clases reales)
