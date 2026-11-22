@@ -758,6 +758,13 @@ final class StudioLabRuns
      * `engine_model`. Lo que no compila no se prueba (409
      * `prompts_compile_failed`). En simulación, nada cambia.
      *
+     * B1 de la revisión de seguridad: lo gobernado pasa el filtro de datos
+     * personales ANTES de compilar. La simulación lleva como mucho 20 S-NNN
+     * (y {@see resolveTarget()} solo filtra esas); el motor compila las frases
+     * de TODAS las vivas. Si algo no pasa, el mismo 409
+     * `target_contains_personal_data` que el objetivo, con `rules.<código>`:
+     * no se congela nada, no se escribe nada y no se sale a la red.
+     *
      * @param  array<string,mixed>  $objetivo
      * @return array<string,mixed>
      */
@@ -770,8 +777,17 @@ final class StudioLabRuns
         if ($strict && self::engineModelMismatch($cfg)) {
             throw UltronStudioException::labNotConfigured(['engine_model'], $cfg->mode());
         }
+        $contenido = is_array($objetivo['content'] ?? null) ? $objetivo['content'] : [];
         try {
-            $gobernado = StudioPromptBundle::governedFrom(is_array($objetivo['content'] ?? null) ? $objetivo['content'] : []);
+            $gobernado = StudioPromptBundle::governedFrom($contenido);
+        } catch (\InvalidArgumentException) {
+            throw UltronStudioException::promptsCompileFailed();
+        }
+        $campos = self::governedPersonalData($gobernado, StudioRulePhrases::byRule($contenido));
+        if ($campos !== []) {
+            throw UltronStudioException::targetContainsPersonalData($campos);
+        }
+        try {
             $paquete = StudioPromptBundle::rolesFor($gobernado, $objetivo['version']?->uuid, $objetivo['contentHash']);
         } catch (\InvalidArgumentException) {
             throw UltronStudioException::promptsCompileFailed();
@@ -1236,6 +1252,46 @@ final class StudioLabRuns
             ], array_values(array_filter(is_array($snapshot['rules'] ?? null) ? $snapshot['rules'] : [], 'is_array'))),
             'contentHash' => $snapshot['contentHash'] ?? null,
         ];
+    }
+
+    /**
+     * B1 de la revisión de seguridad del apartado 5: lo GOBERNADO que el modo
+     * motor compila y envía ({@see StudioPromptBundle::governedFrom()}: los
+     * cuatro valores y las frases de TODAS las S-NNN vivas) y no pasa el
+     * filtro de datos personales, en el lenguaje del Studio:
+     * `configs.<capa>.<clave>` o `rules.<código>` (cada regla que aporta una
+     * frase que no pasa, en el orden del contenido, según `$byRule`). Una frase
+     * que no se puede atribuir a ninguna regla (la defensa del runner solo
+     * tiene lo congelado) sale como `rules.forbiddenPhrases`. Vacío = se puede
+     * compilar y enviar.
+     *
+     * @param  array<string,mixed>  $governed
+     * @param  list<array{code:string,phrases:list<string>}>  $byRule  {@see StudioRulePhrases::byRule()}
+     * @return list<string>
+     */
+    public static function governedPersonalData(array $governed, array $byRule = []): array
+    {
+        $out = [];
+        foreach ($governed as $id => $valor) {
+            if ($id !== StudioPublicationDeclaration::GOVERNED_PHRASES && StudioLabPersonalData::scan($valor) !== []) {
+                $out[] = "configs.{$id}";
+            }
+        }
+        $frases = $governed[StudioPublicationDeclaration::GOVERNED_PHRASES] ?? [];
+        $malas = array_values(array_filter(is_array($frases) ? $frases : [$frases], static fn (mixed $f): bool => StudioLabPersonalData::scan($f) !== []));
+        $atribuidas = [];
+        foreach ($byRule as $regla) {
+            $suyas = array_values(array_filter($regla['phrases'], static fn (string $f): bool => in_array($f, $malas, true)));
+            if ($suyas !== []) {
+                $out[] = 'rules.'.$regla['code'];
+                array_push($atribuidas, ...$suyas);
+            }
+        }
+        if (array_filter($malas, static fn (mixed $f): bool => ! in_array($f, $atribuidas, true)) !== []) {
+            $out[] = StudioPublicationDeclaration::GOVERNED_PHRASES;
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**

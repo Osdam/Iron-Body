@@ -510,8 +510,9 @@ final class StudioLabRunner
     /**
      * UN CASO DEL RECORRIDO DEL MOTOR (apartado 5 del cierre; B5): los cinco
      * prompts compilados de la versión que se congeló al crear la ejecución
-     * (`target_snapshot.engine`; si su huella ya no es la congelada, no sale
-     * nada: `internal_error`), el tramo S2 ({@see StudioLabEngineCase}), las
+     * (`target_snapshot.engine`; si lo gobernado congelado no pasa el filtro
+     * de datos personales, no sale nada: `blocked_input`, B1; si su huella ya
+     * no es la congelada, tampoco: `internal_error`), el tramo S2 ({@see StudioLabEngineCase}), las
      * pruebas deterministas de siempre más los hallazgos del motor sobre el
      * texto final, el juez del laboratorio y la agregación. Cada llamada se
      * cobra como hoy (por su `usage`, o su tope si no se sabe), con su papel.
@@ -526,6 +527,13 @@ final class StudioLabRunner
         $maxJuez = (int) ($run->prices['judgeMaxOutputTokens'] ?? StudioLabConfig::DEFAULT_JUDGE_MAX_OUTPUT_TOKENS);
         $reserva = (int) $caso->reserved_micros;
 
+        if (StudioLabRuns::governedPersonalData((array) ($motor['governed'] ?? [])) !== []) {
+            // B1 (defensa, como la del escenario): lo congelado no pasa el filtro de
+            // datos personales de hoy. No se compila ni se envía nada.
+            $this->settle($run, $caso, self::errorValues(self::CLASS_BLOCKED_INPUT, [], 0, $reserva));
+
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
         try {
             $paquete = StudioPromptBundle::rolesFor((array) ($motor['governed'] ?? []), $motor['version'] ?? null, $motor['contentHash'] ?? null);
         } catch (InvalidArgumentException) {
