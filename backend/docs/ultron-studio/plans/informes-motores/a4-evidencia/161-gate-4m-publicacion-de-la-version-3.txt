@@ -1,0 +1,79 @@
+GATE 4-M · LA PUBLICACIÓN DE LA VERSIÓN 3 EN CANARIO, LEÍDA EN PRODUCCIÓN (solo lectura) · 22-11-2026, 14:00 UTC (09:00 en Bogotá)
+lead · el propietario la publicó en el CRM con la cuenta «Desarrolladores» a las 8:58 a. m. y pidió verificar en el servidor la publicación y que el motor la aplica exclusivamente a su conversación canaria
+
+── ANTES DE PEDÍRSELO (recordatorio programado, 13:53 UTC) ──
+P1 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | APPROVED | 22-11-2026 03:52:45 | 24b29173
+P1 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | ROLLED_BACK | 22-11-2026 04:02:55 | 24b29173
+P1 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36 | 24b29173
+P2 · en canario o publicadas | 0 | 0
+P3 · veredicto de la ejecución 11 | approved | Desarrolladores | ["C-02"] | t | t | 0
+P4 · última entrada de la cadena | 4 | rollback | 2e243853 | 22-11-2026 04:02:55
+P5 · conversación canaria desde las 04:06 UTC del 22-11 | 0 | 0
+P6 · salientes a conversaciones no canarias desde el despliegue | 0
+P7 · trabajos fallidos desde el despliegue | 0
+P8 · hora del servidor en Bogotá | 22-11-2026 08:53:39
+── el servidor ──
+código: 45b53023 · árbol limpio: 0
+Llave del motor: canary · estado: legacy
+Cabeza: entrada 4 (rollback, 2026-11-22T04:02:55+00:00) · verifica
+Canario: Legacy
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo part_legacy
+procesos RUNNING: 14 · otros: 0
+production.ERROR hoy: 0
+respuestas 5xx de la API en la última hora: 0
+n8n (lectura por MCP, 13:55 UTC): la copia S2 4CIwgGbPRneqUjLF, active=true; la S1 QSklqHlsDIxucRfk y la original, active=false.
+
+── DESPUÉS DE SU AVISO ──
+M0 · columnas de la cadena | id, uuid, seq, client_request_id, action, version_id, restores_publication_id, previous_publication_id, engine_contract, effective_json, effective_hash, signature, catalog_version, lab_gate, acknowledged, evidence, reason, actor_admin_id, actor_name, actor_role, created_at
+M1 · cadena de publicaciones | 5 | publish | 39cfae9f | 27 | Desarrolladores | Super Admin | 22-11-2026 13:58:15 | 22-11-2026 08:58:15 am | t | c43ce2e9 | 0 | 4 | 
+M1 · cadena de publicaciones | 4 | rollback | 2e243853 | 27 | Desarrolladores | Super Admin | 22-11-2026 04:02:55 | 21-11-2026 11:02:55 pm | t | a5d7b13f | 205 | 3 | 
+M1 · cadena de publicaciones | 3 | publish | 2e243853 | 27 | Desarrolladores | Super Admin | 18-11-2026 22:40:35 | 18-11-2026 05:40:35 pm | t | 8dee2eb4 | 0 | 2 | 
+M2 · versiones | 4 | 39cfae9f | Prueba de aceptación 3 · profesional 200 | CANARY | 22-11-2026 13:58:15 | 24b29173
+M2 · versiones | 3 | 2e243853 | Prueba de aceptación 2 · profesional 200 | ROLLED_BACK | 22-11-2026 04:02:55 | 24b29173
+M2 · versiones | 2 | 4017639c | Prueba de aceptación · profesional 200 | ROLLED_BACK | 12-11-2026 22:55:36 | 24b29173
+M3 · versiones que ocupan el canario o están publicadas | 1 | 0
+M4 · auditoría del Studio desde las 13:30 UTC | 13:58:15 | version.published | 27 | Desarrolladores | APPROVED → CANARY | 39cfae9f
+M5 · mensajes y acciones en la conversación canaria desde las 04:06 UTC | 0 | 0
+M6 · salientes a conversaciones no canarias desde las 13:30 UTC | 0
+M7 · trabajos fallidos desde las 13:30 UTC | 0
+M8 · hora del servidor en Bogotá | 22-11-2026 09:00:14
+── La cadena, comprobada por el propio servidor, y lo que el motor ofrece ──
+código: 45b53023
+Llave del motor: canary · estado: applied
+Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+Resto: Legacy
+La publicación vigente cuadra con el motor.
+salida de publication-check: 0
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 4 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075
+
+procesos RUNNING: 14 · otros: 0
+production.ERROR hoy: 0
+
+M9 · entrada 5: contrato del motor, catálogo y puerta del laboratorio | ultron-engine-config/2 | 2026-10-19.1 | {"mode":"required","runUuid":"b0e8f3b9-c1cf-42e4-8b2a-31d1649c9bf0","verdictId":3,"promptVersion":"2026-11-12.6"}
+M10 · entrada 5: elementos reconocidos al publicar | {"noEffect":[],"previewHash":"b9182a8f195cead444fc41ad3475f3935890d0972463dbed9672a2ade8a5468f"}
+M11 · entrada 5: tamaño de lo que rige y claves de primer nivel | 737 | canary, contract, entry, issuedAt, rest, seq
+── Lo que decide ofrece ahora, por conversación (sonda de solo lectura) ──
+canaria configurada: sí
+A LA CANARIA → modo=studio · motivo=null · versión=39cfae9f · huella=26d57565 · entrada de la cadena=5 · compilador=4 · ¿lleva textos del Studio? sí (5 papeles)
+A OTRAS (20 de 20 conversaciones recientes no canarias) → modo=legacy · motivo=out_of_scope · versión=null · huella=null · entrada de la cadena=null · compilador=4 · ¿lleva textos del Studio? no
+A UNA CONVERSACIÓN INEXISTENTE (id 0) → modo=legacy · motivo=out_of_scope · versión=null · huella=null · entrada de la cadena=null · compilador=4 · ¿lleva textos del Studio? no
+sonda borrada: sí
+
+Lectura:
+· Entrada 5 de la cadena: publish de la versión 3 (39cfae9f), firmada, de la cuenta 27 «Desarrolladores» (Super Admin), el 22-11-2026 a las 13:58:15 UTC
+  (08:58:15 a. m. en Bogotá), sobre la entrada 4. Lleva la puerta del laboratorio en «required» con el veredicto 3 (la ejecución b0e8f3b9, prompts 2026-11-12.6)
+  y ningún elemento «sin efecto» que reconocer. El servidor la verifica: «Cabeza: entrada 5 (publish) · verifica», salida 0, «cuadra con el motor».
+· La versión 3 está en CANARY; es la única en canario y no hay ninguna publicada para el resto. Declaración vigente: Canario = versión 3, Resto = Legacy.
+· EXCLUSIVIDAD: decide ofrece a la conversación canaria «studio · 39cfae9f · huella 26d57565…» con los cinco papeles (la huella que el propietario vio en el CRM);
+  a 20 de 20 conversaciones recientes que no son la canaria, y a una inexistente, «legacy · out_of_scope», sin textos del Studio.
+· Nada salió durante la publicación: 0 mensajes en la canaria, 0 salientes a no canarias, 0 trabajos fallidos, 14 procesos en marcha, 0 errores.
+· El servidor sirve 45b53023 (lote 1 del cierre, desplegado a las 13:34 UTC; no toca el motor de WhatsApp ni la publicación).
+· La conversación canaria solo tiene el turno de comprobación del gate 4-I («Hola», 22-11 03:44 UTC, en Legacy). La tercera prueba empieza ahora.
