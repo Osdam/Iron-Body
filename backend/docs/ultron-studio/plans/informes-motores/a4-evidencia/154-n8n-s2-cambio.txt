@@ -1,0 +1,32 @@
+n8n · EL CAMBIO DE S1 A S2 (LEEME, paso 5) · 03:33 UTC
+lead · n8n de producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6); después del servidor y con su ensayo de reversión en verde
+
+── Antes ──
+hora (UTC): 03:32:46
+QSklqHlsDIxucRfk | Iron Body - ULTRON - Commercial Advisor (Studio S1) | PUBLICADO | versión 01fecf7a | activa 01fecf7a | 25 nodos | md5 e85b5b17b3 | fijados: ninguno | 11-11 11:46:38
+YspRwsXnqt33NouP | Iron Body - ULTRON - Commercial Advisor | inactivo | versión 29de5119 | activa (ninguna) | 24 nodos | md5 0a6ae07d48 | fijados: ninguno | 30-09 02:28:21
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | inactivo | versión a68cf2bc | activa (ninguna) | 39 nodos | md5 9233a5218d | fijados: ninguno | 22-11 03:24:32
+webhook: POST iron-body-ultron → QSklqHlsDIxucRfk
+ejecuciones de la copia S2: 9 (manual/success)
+ejecuciones de la copia S1 en la última hora: 0
+webhook sin credencial: 403 (un flujo publicado escucha; no arranca ninguna ejecución)
+mensajes en la conversación canaria en los últimos 10 minutos: 0
+
+── El cambio (MCP de n8n) ──
+unpublish_workflow(QSklqHlsDIxucRfk) → {"success":true}
+publish_workflow(4CIwgGbPRneqUjLF)   → {"success":true,"activeVersionId":"a68cf2bc-4646-4aea-a673-48e688a1a84c"} (la versión importada)
+
+── Después, leído en la base de n8n (no se da por bueno lo que dice el MCP) ──
+hora (UTC): 03:33:35
+QSklqHlsDIxucRfk | Iron Body - ULTRON - Commercial Advisor (Studio S1) | inactivo | versión 01fecf7a | activa (ninguna) | 25 nodos | md5 e85b5b17b3 | fijados: ninguno | 11-11 11:46:38
+YspRwsXnqt33NouP | Iron Body - ULTRON - Commercial Advisor | inactivo | versión 29de5119 | activa (ninguna) | 24 nodos | md5 0a6ae07d48 | fijados: ninguno | 30-09 02:28:21
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | PUBLICADO | versión a68cf2bc | activa a68cf2bc | 39 nodos | md5 9233a5218d | fijados: ninguno | 22-11 03:24:32
+webhook: POST iron-body-ultron → 4CIwgGbPRneqUjLF
+ejecuciones de la copia S2: 9 (manual/success)
+ejecuciones de la copia S1 en la última hora: 0
+{"webhook_sin_credencial":403,"hora_utc":"03:33:40"}
+n8n: n8n-n8n-1 Up 5 weeks;n8n-postgres-1 Up 5 weeks;
+
+Vuelta atrás: unpublish_workflow(4CIwgGbPRneqUjLF) → publish_workflow(QSklqHlsDIxucRfk). La copia S1 queda intacta como reserva (mismo md5 de nodos que antes).
+Respaldo de las filas de antes: /var/backups/ironbody/n8n-ultron-pre-s2-20261122-032421.
+Pendiente de ver con un turno real de la canaria: flowRev S2 en ultron:prompt-trace.

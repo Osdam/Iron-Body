@@ -1,0 +1,46 @@
+n8n · COPIA «STUDIO S2» · ENSAYO DENTRO DE n8n CON DATOS FIJADOS, ANTES DE ACTIVARLA (LEEME, paso 4) · 03:28 a 03:32 UTC
+lead · n8n de producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6); después del servidor y con su ensayo de reversión en verde
+
+Herramienta: test_workflow del MCP de n8n sobre la copia INACTIVA 4CIwgGbPRneqUjLF. Los datos fijados de cada recorrido
+los genera ops/motores/n8n-copia-s2/pins-s2.cjs con las mismas formas que el comprobador. La respuesta de «decide» en modo
+Studio es la del repositorio con los cinco prompts sustituidos por textos cortos y su huella recalculada (los nodos de
+OpenAI van fijados y no leen el prompt); comprobado antes con el código REAL del selector: compacto → studio, entero →
+studio, legacy → legacy/offered_prompts_off.
+
+Siempre fijados: «Entrada ULTRON», «Pedir Contexto al CRM», «Ejecutar en el CRM» y las dos comprobaciones. De OpenAI, solo
+los nodos que el recorrido ejecuta.
+
+ #  Recorrido                                   Ejecución  «Preparar Commit» (critic.attempt · regeneration: drafts, critics, checks, check_errors, rewrites)
+ 0  Trampa: «Studio, pasa» con «Composer        1078390    attempt 2 y el texto del segundo borrador, que NO corrió: la trampa de los datos fijados EXISTE
+    Reintento» fijado de más                               (n8n entrega los datos fijados de un nodo que no se ejecutó). Solo afecta a los ensayos manuales:
+                                                           en producción no hay datos fijados. Regla confirmada: fijar solo los nodos de OpenAI que corren.
+ 1  Legacy, pasa                                1078391    attempt 1 · SIN regeneration · prompts legacy 3f6a5674…c902 · flow_rev S2
+                                                           «¿Comprobar 1?» sale por «no»: ninguna comprobación corre (como S1)
+ 2  Legacy, el revisor falla                    1078392    attempt 2 · SIN regeneration · «Decidir Intento 3» corre y dice false (sin tercer borrador)
+ 3  Studio, pasa                                1078393    attempt 1 · {1, 1, 1, 0, []}
+ 4  Studio, el servidor pide 1                  1078394    attempt 2 · {2, 1, 2, 0, [server: register_tuteo, length_over_cap]}
+                                                           «Nota del Servidor 1» entrega al redactor la nota del servidor; «Critic Comercial» no corre
+ 5  Studio, el revisor pide 1                   1078395    attempt 2 · {2, 2, 2, 0, [critic: naturalness, relevance]}
+ 6  Studio, dos reescrituras (peor caso)        1078396    attempt 3 y «Tercer borrador.» · {3, 3, 2, 0, [critic, critic]} · «Decidir Intento 3» dice true
+ 7  Studio, el servidor caído                   1078397    attempt 2, veredicto fail, sin tercer borrador · {2, 2, 2, 2, [critic]}
+                                                           «Leer Comprobación 2»: error true, sin reescritura · «Decidir Intento 3» dice false
+
+Los ocho, «success» y de 0,15 a 0,6 s cada uno; todos llegan a «Responder al CRM». Coinciden con la tabla del LEEME.
+Cero llamadas al servidor durante los ocho (access.log, abajo: ninguna petición a decide, commit ni check entre 03:28 y 03:31).
+
+ 8  INTEGRACIÓN REAL (una llamada de verdad): «Studio, pasa» SIN fijar «Comprobar Borrador 1»    ejecución 1078398
+    El nodo de n8n llamó a POST ai/check de producción con su credencial y un token sintético:
+      statusCode 422 (número) · body {"ok": false, "code": "invalid_token"} · 245 ms · x-ratelimit-limit 120, remaining 119
+    La credencial vale (un 401 diría lo contrario), el cuerpo tiene la forma que espera el servidor y el tiempo queda muy
+    por debajo de los 3 s. «Leer Comprobación 1»: error true, sin reescritura. «Preparar Commit»: attempt 1 · {1, 1, 1, 1, []}.
+    La puerta es de solo lectura y con un token inválido no lee nada de ninguna conversación.
+
+Lo que el ensayo NO puede ver (LEEME, «Lo que no está comprobado»): la forma real de un tiempo agotado y si el nodo de
+OpenAI entrega «usage» (los tokens salen null con datos fijados). Se ve en el primer turno canario de verdad.
+
+── Peticiones a las puertas internas del servidor (access.log; minuto UTC, ruta, respuesta; sin IP) ──
+      1 03:15 ai/check 404 · 1 03:15 ai/decide 401            (comprobaciones previas del guion, sin credencial)
+      … 03:16 a 03:19: las del guion de despliegue y de la vuelta atrás, sin credencial (401 y 404)
+      2 03:21 ai/check 401 · 1 03:21 ai/check 422             (humo del lead: sin credencial, con otra, y con la buena y un token inválido)
+      1 03:32 ai/check 422                                    (la llamada real de n8n, ejecución 1078398)
+   Entre las 03:28 y las 03:31 (los ocho ensayos con datos fijados): ninguna.

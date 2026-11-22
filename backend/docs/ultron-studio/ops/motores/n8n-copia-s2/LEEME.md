@@ -1,6 +1,10 @@
 # n8n · la copia «Studio S2» del flujo de ULTRON («regenerar antes de sustituir», ola 5)
 
-> **ESCRITO Y SIN EJECUTAR** (21-11-2026, agente `backend`). Nada de esto se ha hecho contra el n8n en marcha: ni MCP, ni API, ni base de datos, ni importar, ni publicar. Es un paso del despliegue: lo hace el lead o `devops`, **después del backend** (`docs/ultron-studio/ops/DEPLOY_A4_REGENERAR.md`) y con la orden del propietario (gate 4-H; L-6 de `plans/informes-motores/plan-arquitecto-a4-regenerar.md` §13). Derivado de `../n8n-copia-s1/LEEME.md` e `importar-s1.sh`.
+> **EJECUTADO el 22-11-2026 (03:20 a 03:33 UTC) por el lead, con la autorización del propietario (gate 4-H) y después del backend.** La copia S2 es `4CIwgGbPRneqUjLF` (versión `a68cf2bc…`), importada inactiva, comprobada, ensayada dentro de n8n y **publicada a las 03:33 UTC en lugar de la copia S1**, que queda despublicada e intacta como reserva. Evidencia: `plans/informes-motores/a4-evidencia/152` (importación), `153` (ensayo) y `154` (el cambio). Respaldo de las filas de antes: `/var/backups/ironbody/n8n-ultron-pre-s2-20261122-032421`.
+>
+> **Lo que el ensayo confirmó de lo marcado [S] más abajo:** (1) la trampa de los datos fijados EXISTE (ejecución 1078390: con «Composer Reintento» fijado de más, Preparar Commit dio `critic.attempt = 2`): se fijan solo los nodos de OpenAI que corren, y para generarlos está `pins-s2.cjs`; (2) `fullResponse` entrega `statusCode` como número (ejecución 1078398, una llamada REAL de n8n a `ai/check` con un token sintético: 422 `invalid_token` en 245 ms, con la credencial aceptada). **Sigue sin verse** hasta el primer turno canario de verdad: `flowRev S2` en `ultron:prompt-trace`, la forma de un tiempo agotado y si OpenAI entrega `usage`.
+>
+> Escrito el 21-11-2026 por el agente `backend`; derivado de `../n8n-copia-s1/LEEME.md` e `importar-s1.sh`. Lo que sigue es el procedimiento tal como se ejecutó; sirve para repetirlo (reimportar con el mismo id exige la copia S2 inactiva).
 
 **Qué es S2.** El flujo S1 con 14 nodos más, generado desde el repositorio (`php artisan ultron:prompts-n8n --rev=S2` → `n8n/flujos/ultron-studio-s2/`, con su `LEEME.md`): entre el redactor y el revisor le pregunta al servidor (`POST /api/internal/marketing/ai/check`) si aceptaría el borrador, reescribe con la nota del servidor y puede llegar a un tercer borrador como mucho. Sin la oferta de `decide` (Legacy, o un backend sin la ola 4) se comporta como S1.
 
@@ -8,10 +12,10 @@
 
 | | Reserva (el de siempre) | Copia S1 (publicada hoy) | Copia S2 (nueva) |
 |---|---|---|---|
-| id | `YspRwsXnqt33NouP` | `QSklqHlsDIxucRfk` | la que se elija en el paso 1 (16 letras o cifras) |
+| id | `YspRwsXnqt33NouP` | `QSklqHlsDIxucRfk` | `4CIwgGbPRneqUjLF` (elegida el 22-11-2026) |
 | nombre | Iron Body - ULTRON - Commercial Advisor | … (Studio S1) | Iron Body - ULTRON - Commercial Advisor (Studio S2) |
-| estado | despublicado, intacto | publicado | importado INACTIVO; se publica solo en el paso 5 |
-| webhook | `POST iron-body-ultron` (sin registrar) | el mismo, registrado | el mismo path, sin registrar mientras esté inactiva |
+| estado desde el 22-11-2026, 03:33 UTC | despublicado, intacto | despublicado, intacto: la reserva para volver atrás | **publicado** (versión activa `a68cf2bc…`) |
+| webhook | `POST iron-body-ultron` (sin registrar) | el mismo path, sin registrar | el mismo path, **registrado** |
 
 ## Orden y condiciones
 

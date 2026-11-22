@@ -1,0 +1,23 @@
+TRAS EL DESPLIEGUE · VIGILANCIA DE LOS 15 MINUTOS (solo lectura) · 03:35 UTC
+lead · n8n de producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6); después del servidor y con su ensayo de reversión en verde
+
+hora (UTC): 03:35:54
+commit servido: 66b14467 · cambios con seguimiento: 0
+procesos en segundo plano (supervisor):      14 RUNNING 
+   el más antiguo arrancó hace: uptime 0:17:08 · el más reciente: uptime 0:17:06
+servicio ironbody-billing-worker: active · en marcha desde Sun 2026-11-22 03:18:52 UTC
+servicio php8.3-fpm: active · en marcha desde Fri 2026-10-16 20:14:02 UTC
+servicio nginx: active · en marcha desde Sat 2026-11-21 06:52:38 UTC
+servicio postgresql: active · en marcha desde Fri 2026-10-16 20:14:04 UTC
+n8n: n8n-n8n-1 Up 5 weeks;n8n-postgres-1 Up 5 weeks;
+caché de rutas: www-data 600 · sha256 8bfbc4bb1ae3 · la del respaldo: 821a6091c99a
+caché de configuración: www-data 600 · igual que la del respaldo: sí
+production.ERROR en el log de hoy: 3250 · en los últimos 10 minutos: 0
+peticiones a la API en el access.log, últimas 3000 líneas, por clase de respuesta:      74 2xx       2 3xx      35 4xx 
+   5xx en las últimas 3000 líneas: 0
+   GET /up → 200
+   POST /api/internal/marketing/ai/decide → 401
+   POST /api/internal/marketing/ai/check → 401
+trabajos fallidos en los últimos 15 minutos | 0
+cerrojo: salientes a no canarias en la última hora | 0
+5xx en las puertas internas: 0

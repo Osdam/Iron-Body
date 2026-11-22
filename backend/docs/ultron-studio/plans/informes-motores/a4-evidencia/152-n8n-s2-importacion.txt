@@ -1,0 +1,36 @@
+n8n · COPIA «STUDIO S2» · IMPORTADA COMO FLUJO INACTIVO (ops/motores/n8n-copia-s2/LEEME.md, pasos 0 a 3) · 03:20 a 03:25 UTC
+lead · n8n de producción (VPS ironbody-vps) · 22-11-2026 UTC (21-11 por la noche en Bogotá) · autorizado por el propietario (gate 4-H, MATRIZ_CIERRE_V2.md §6); después del servidor y con su ensayo de reversión en verde
+
+── Paso 0 · en el repositorio: el generador no deja diferencias en n8n/ (0) y el comprobador da OK (226 comprobaciones)
+── Paso 1 · fichero de importación preparado con id nuevo 4CIwgGbPRneqUjLF; comprobador sobre el preparado: OK (226 comprobaciones)
+   huellas iguales en el Mac y en el servidor: fichero 3eba62ea0f06a012…, importar-s2.sh 3a78305c6e44fef3…; la copia local del fichero se borró
+
+── Paso 2 · importar-s2.sh --solo-comprobar (nada se importa) ──
+0. fichero: OK (39 nodos, 12 con credencial, selector y Preparar Commit = los generados, comprobación 3 s sin reintentos)
+   copia S1 (publicada): t | 01fecf7a-dc21-4c2f-8f1e-298e3afad61d | 01fecf7a-dc21-4c2f-8f1e-298e3afad61d | 2026-11-11 11:46:38.86+00 | 25 | e85b5b17b3b53bf71561f5175a2951d6 | b80182ba7d2d5482e2039625e9703e11 | 9e86a9a57f298c89a75309043118b8eb
+   reserva:              f | 29de5119-2e5a-4bc8-a479-60f4fe37c5b3 | (sin publicar) | 2026-09-30 02:28:21.125+00 | 24 | 0a6ae07d48b3b7795c6d24ea328d8dc1 | 499f6e61eeb937fb221870a0f9caf001 | 9e86a9a57f298c89a75309043118b8eb
+   webhook vivo: POST iron-body-ultron QSklqHlsDIxucRfk · ¿existe ya 4CIwgGbPRneqUjLF? 0
+SOLO COMPROBADO: nada importado
+
+── Paso 2 · importar-s2.sh (la importación) · código 0 ──
+0. fichero: OK (39 nodos, 12 con credencial, selector y Preparar Commit = los generados, comprobación 3 s sin reintentos)
+   copia S1 (publicada): t | 01fecf7a-dc21-4c2f-8f1e-298e3afad61d | 01fecf7a-dc21-4c2f-8f1e-298e3afad61d | 2026-11-11 11:46:38.86+00 | 25 | e85b5b17b3b53bf71561f5175a2951d6 | b80182ba7d2d5482e2039625e9703e11 | 9e86a9a57f298c89a75309043118b8eb
+   reserva:              f | 29de5119-2e5a-4bc8-a479-60f4fe37c5b3 | (sin publicar) | 2026-09-30 02:28:21.125+00 | 24 | 0a6ae07d48b3b7795c6d24ea328d8dc1 | 499f6e61eeb937fb221870a0f9caf001 | 9e86a9a57f298c89a75309043118b8eb
+   webhook vivo: POST iron-body-ultron QSklqHlsDIxucRfk · ¿existe ya 4CIwgGbPRneqUjLF? 0
+1. respaldo: /var/backups/ironbody/n8n-ultron-pre-s2-20261122-032421 (8 ficheros, 672K)
+2. importador (código 0): Importing 1 workflows... Successfully imported 1 workflow. [PostHog] `sendFeatureFlags` is deprecated and will be removed in a future major version. Pass a `flags` snapshot from `posthog.evaluateFlags(...)` instead — it avoids a second `/flags` request per capture and guarantees the event carries 
+3. copia S1 INTACTA (misma versión, nodos, conexiones y ajustes)
+   reserva INTACTA
+   webhook vivo intacto: POST iron-body-ultron QSklqHlsDIxucRfk
+4. flujo nuevo:
+4CIwgGbPRneqUjLF | Iron Body - ULTRON - Commercial Advisor (Studio S2) | f | (sin publicar) | a68cf2bc | 39 | f
+proyecto | TEt5qxIcC0S7DedW | workflow:owner
+   credenciales por nodo: 12
+   Elegir Prompts en la base: sha256 = el generado (2aa62c3f3dcf1624…)
+   Preparar Commit en la base: sha256 = el generado (8258faaefe8e7df2…)
+   ajustes = los de la copia S1 (flujo de errores incluido)
+historial del nuevo | 1
+5. exportado a /root/n8n-s2/exportado-de-n8n.json (198063 bytes): pasarle «verificar-flujo.cjs --rev=S2»
+COPIA S2 IMPORTADA, INACTIVA Y COMPROBADA
+
+── Paso 3 · el comprobador sobre lo que guardó n8n (exportado-de-n8n.json): OK (226 comprobaciones) · fallos: 0
