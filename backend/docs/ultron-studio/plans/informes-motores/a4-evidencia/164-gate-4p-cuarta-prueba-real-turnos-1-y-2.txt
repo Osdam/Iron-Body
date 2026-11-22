@@ -1,0 +1,108 @@
+GATE 4-P · CUARTA PRUEBA REAL · TURNOS 1 Y 2 · 22-11-2026, 16:47–16:49 UTC (11:47–11:49 a. m. en Bogotá)
+lead · solo lectura · conversación canaria #931 (nueva, en blanco desde las 16:13 UTC) · producción API f1fe6cac (con la corrección de PT-01) · versión 3 del Studio en canario
+El propietario envió los dos primeros mensajes seguidos (16:47:57 y 16:49:13 UTC), antes de la verificación del turno 1. Los dos quedaron trazados.
+
+RESULTADO: NO SUPERADA por el turno 2 (criterio A4). Turno 1, escrito por el modelo al primer intento. Turno 2, texto fijo de respaldo (SAFE_CURATED_REPLY, critic_failed).
+
+── 1. LA LECTURA DE LOS DOS TURNOS (cierre/cuarta-prueba/turnos.sql) ──
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8618 | 16:47:57 | inbound | lead |  | 19 | Hola, buenas tardes
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8619 | 16:48:11 | outbound | ai | read | 104 | Buenos días, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8620 | 16:49:13 | inbound | lead |  | 50 | ¿Qué planes tienen y cuánto cuesta la mensualidad?
+T1 · mensajes desde la conversación nueva (16:13 UTC) | 8621 | 16:49:28 | outbound | ai | read | 199 | Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+T2 · acciones desde la conversación nueva | 8422 | 16:47:58 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la conversación nueva | 8423 | 16:48:11 | reply | executed | greeting | inbound_message
+T2 · acciones desde la conversación nueva | 8424 | 16:49:14 | inbound_skipped | skipped | auto_analyze_disabled | -
+T2 · acciones desde la conversación nueva | 8425 | 16:49:28 | reply | executed | critic_failed | inbound_message
+T3 · A1 prompts del Studio | 8423 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078453", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T3 · A1 prompts del Studio | 8425 | {"v": 1, "state": "applied", "offered": {"seq": 5, "mode": "studio", "entry": "7e064cea-0847-40b0-90fd-8ec3ccac3bb7", "reason": null, "version": "39cfae9f-19a1-44bd-8d8e-f9f3327fed81", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075", "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122"}, "observed": {"mode": "studio", "reason": null, "flowRev": "S2", "execution": "1078454", "bundleHash": "26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075"}}
+T4 · A3 longitud y registro | 8423 | length={"to": 104, "cap": 200, "from": 104, "action": "fit", "dropped": 0} | register={"found": [], "action": "ok", "expected": "usted"} | respaldo=- | fallback_mismatch=-
+T4 · A3 longitud y registro | 8425 | length={"to": 199, "cap": 200, "from": 199, "action": "fit", "dropped": 0} | register=- | respaldo=SAFE_CURATED_REPLY | fallback_mismatch=-
+T5 · A5 regeneración y crítico | 8423 | regeneration={"checks": 1, "drafts": 1, "tokens": null, "critics": 1, "rewrites": [], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje es adecuado para un saludo inicial, con bienvenida cálida y una pregunta abierta para continuar la conversación. Se recomienda mantener el trato formal y evitar mezclar tuteo y usted en futuros mensajes.", "score": 0.95, "issues": [], "attempt": 1, "verdict": "pass", "hard_fail": null}
+T5 · A5 regeneración y crítico | 8425 | regeneration={"checks": 2, "drafts": 3, "tokens": null, "critics": 1, "rewrites": [{"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}, {"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}], "consistent": true, "check_errors": 0} | critic={"notes": "El mensaje mezcla trato de usted con 'Para orientarle mejor, ¿qué experiencia tiene entrenando?', que es una pregunta directa que ya se sabe (cliente es principiante) y no corresponde aún; además, no debe preguntar experiencia en este momento sin antes informar bien. Se recomienda pasar todo el mensaje a usted, evitar preguntar experiencia ahora y dar información más completa del gimnasio y planes para que el cliente se oriente mejor.", "score": 0.4, "issues": ["naturalness", "sales_judgment", "question_discipline", "progressive_disclosure"], "attempt": 3, "verdict": "fail", "hard_fail": null}
+T6 · A4 panorama de planes y política | 8423 | plans_overview=- | politica=- | origen="ultron" | intent=greeting
+T6 · A4 panorama de planes y política | 8425 | plans_overview=- | politica=- | origen="ultron" | intent=pricing_question
+T7 · claves de la metadata | 8423 | critic,customer_lifecycle,intent,knowledge_version,lead_temperature,length,message_id,needs_staff_review,next_best_action,next_phase,origin,outbound,plans_mentioned,previous_phase,price_enriched,reference_resolution,regeneration,register,risk_flags,source,strategy,strategy_goal,strategy_hints,studio,studio_prompts,tools_requested
+T7 · claves de la metadata | 8425 | critic,discarded_draft,discarded_draft_check,fallback_mode,intent,knowledge_version,length,message_id,needs_staff_review,next_best_action,next_phase,origin,outbound,previous_phase,regeneration,risk_flags,strategy_goal,studio,studio_prompts,tools_requested
+T8 · trabajos fallidos, salientes a no canarias e incidentes desde las 16:13 | 0 | 0 | 0
+T9 · hora del servidor (UTC y Bogotá) | 16:51:42 | 11:51:42
+T10 · A5/PT-01 comprobación determinista del borrador descartado | 8423 | - | descartado=-
+T10 · A5/PT-01 comprobación determinista del borrador descartado | 8425 | {"pass": false, "codes": ["plans_overview/missing", "length_over_cap"], "length": 211} | descartado="Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas y asesoría semi personalizada, todo por una mensualidad de {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?"
+T11 · memoria de la conversación nueva | NEW_LEAD | [{"at": "2026-11-22T16:49:29+00:00", "plan_id": 3, "message_id": 8621}, {"at": "2026-11-22T16:49:29+00:00", "plan_id": 4, "message_id": 8621}, {"at": "2026-11-22T16:49:29+00:00", "plan_id": 8, "message_id": 8621}] | [3, 4, 8]
+
+── 2. EL DETALLE DEL TURNO 2 (cierre/cuarta-prueba/turno2-detalle.sql) ──
+Y1 · texto enviado, exacto | 8621 | 199 | [Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?]
+Y1b · turno 1, texto exacto | 8619 | 104 | [Buenos días, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?]
+Y2 · borrador descartado (el tercero del modelo) | 8425 | "Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas y asesoría semi personalizada, todo por una mensualidad de {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?"
+Y2b · su comprobación determinista | 8425 | {"pass": false, "codes": ["plans_overview/missing", "length_over_cap"], "length": 211}
+Y3 · notas completas del revisor | 8425 | El mensaje mezcla trato de usted con 'Para orientarle mejor, ¿qué experiencia tiene entrenando?', que es una pregunta directa que ya se sabe (cliente es principiante) y no corresponde aún; además, no debe preguntar experiencia en este momento sin antes informar bien. Se recomienda pasar todo el mensaje a usted, evitar preguntar experiencia ahora y dar información más completa del gimnasio y planes para que el cliente se oriente mejor.
+Y4 · siguiente acción, herramientas, fases, objetivo | 8423 | next_best_action="check_in" | tools=[] | fases=NEW_LEAD → NEW_LEAD | strategy_goal=collect_data | revision=false | risk=[]
+Y4 · siguiente acción, herramientas, fases, objetivo | 8425 | next_best_action="recommend_plan" | tools=[] | fases=NEW_LEAD → NEW_LEAD | strategy_goal=understand | revision=false | risk=["critic_failed"]
+Y5 · regeneración completa | 8425 | {"checks": 2, "drafts": 3, "tokens": null, "critics": 1, "rewrites": [{"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}, {"by": "server", "codes": ["plans_overview", "length_over_cap"], "issues": ["relevance", "progressive_disclosure"]}], "consistent": true, "check_errors": 0}
+Y6 · estrategia del turno 1 (para comparar) | 8423 | {"buying_signal": "none", "response_goal": "Dar bienvenida cálida y preguntar en qué se puede ayudar para orientar mejor", "question_needed": false, "conversation_goal": "understand", "information_needed": [], "closing_opportunity": false, "payment_opportunity": false, "recommendation_goal": "none", "app_support_opportunity": false} | {"lifecycle_mode": "consultative", "hot_lead_fast_path": false}
+Y7 · origen y modo de respaldo | 8425 | "ultron" | SAFE_CURATED_REPLY | {"sent": true, "dry_run": false, "message_id": 8621, "provider_message_id": "wamid.<omitido>"}
+Y8 · catálogo: los tres planes de la lista | 3 | Plan Valera | 65000.00 | 30 | t | t | ["Acceso ilimitado al gimnasio","Zona de pesas y maquinaria","Asesoría semi personalizada con entrenador de planta","Seguimiento en ejecución de ejercicios","Valoración inicial","Acceso básico completo a la app","Perfil de usuario","Visualización de plan activo","Historial de pagos y documentos","Rutinas generales básicas","Registro básico de IMC, peso y racha","Acceso a reels, stories y eventos g
+Y8 · catálogo: los tres planes de la lista | 4 | Plan Mensual | 80000.00 | 30 | t | t | ["Acceso ilimitado al gimnasio","Zona de pesas y maquinaria","Asesoría semi personalizada con entrenador de planta","Seguimiento en ejecución de ejercicios","Valoración inicial","Acceso básico completo a la app","Perfil de usuario","Visualización de plan activo","Historial de pagos y documentos","Rutinas generales básicas","Registro básico de IMC, peso y racha","Acceso a reels, stories y eventos g
+Y8 · catálogo: los tres planes de la lista | 8 | Élite | 180000.00 | 30 | t | t | ["Acceso total al gimnasio","Acceso completo a IRONBODY WORKOUT","Sesiones funcionales por agenda","Entrenamiento intensivo y dinámico","Rutinas guiadas por entrenadores","Seguimiento continuo durante todo el proceso","Guía nutricional para mejorar resultados","Acceso completo a la app","IRON IA completa","IRON IA por texto, voz, audio, imagen y cámara","Análisis visual en vivo","IRON IA coach com
+Y9 · memoria completa de la conversación nueva | {"version":1,"facts_delivered":[],"benefits_delivered":[],"prices_delivered":[{"plan_id":3,"at":"2026-11-22T16:49:29+00:00","message_id":8621},{"plan_id":4,"at":"2026-11-22T16:49:29+00:00","message_id":8621},{"plan_id":8,"at":"2026-11-22T16:49:29+00:00","message_id":8621}],"plans_discussed":[3,4,8],"classes_discussed":[],"objections_seen":[],"questions_answered":[{"key":"price","at":"2026-11-22T16:49:29+00:00"}],"last_agent_question":{"text":"\u00bfSobre cu\u00e1l ampl\u00edo la informaci\u00f3n?","at":"2026-11-22T16:49:29+00:00","message_id":8621},"last_agent_offer":null,"courtesy_request":null,"last_user_question":{"source":"lead_verbatim","text":"\u00bfQu\u00e9 planes tienen y cu\u00e1nto cuesta la mensualidad?","at":"2026-11-22T16:49:29+00:00","message_id":8620},"unresolved_question":null,"pending_reference":{"type":"plan","plan_id":8,"at":"2026-11-22T16:49:29+00:00"},"pending_confirmation":null,"commercial_commitment":null,"last_recommendation":null,"last_reference_resolution":{"type":"price_of_pending","plan_id":null,"offer_kind":null,"evidence":"y cuanto","unresolved_question":{"source":"lead_verbatim","text":"\u00bfQu\u00e9 planes tienen y cu\u00e1nto cuesta la mensualidad?"}},"payment_context":null,"app_context":null,"greeted":{"at":"2026-11-22T16:48:12+00:00","message_id":8619},"initial_welcome_delivered":{"at":"2026-11-22T16:48:12+00:00","message_id":8619},"plans_rejected":[],"active_goal":null,"updated_at":"2026-11-22T16:49:29+00:00"}
+Y10 · tiempos del turno 2 | 16:49:13 | 16:49:28 | 15
+
+── 3. ultron:origin-report --conversation=931 --since="2026-11-22 16:13:00" ──
+ULTRON · ¿quién escribió cada respuesta? (solo lectura)
+  Ventana: desde 2026-11-22T16:13:00+00:00 · hasta ahora · conversaciones: 1
+  Respuestas enviadas: 2 (con traza de regeneración: 2)
+  Escrito por la IA: 1 de 2 (50,0 %) · objetivo 90 %: NO
+    al primer intento: 1 (50,0 %) · regeneradas: 0 (0,0 %) · intento sin dato: 0 (0,0 %)
+    Recortadas (sin su pregunta final): 0
+    Texto del servidor en el camino del modelo (no cuenta como IA): 0
+    Con la regla de la línea base (solo las filas reply; el texto del servidor, como del modelo): 1 de 2 (50,0 %)
+  Reescrituras: 2 (servidor: 2)
+    por código: length_over_cap: 2, plans_overview: 2
+  Respaldos: 1 de 2 (50,0 %)
+    el revisor rechazó el último borrador: 1 (el servidor tampoco lo habría aceptado: 1 (length_over_cap: 1, plans_overview/missing: 1))
+  Latencia del entrante al saliente: p50 14 s · p95 15 s · máx 15 s (n = 2)
+  Llamadas al modelo por turno: media 4,0 · máx 5 (n = 2) · comprobaciones del servidor por turno: media 1,5 · máx 2 (n = 2)
+  Tokens: sin dato (n8n no los entrega todavía)
+  Reintentos del job: 0 de 2 turnos con evento (máx. intentos 1)
+  Fuera del reparto: nada
+  Aviso: el 90 % se juzga con al menos 30 turnos con traza; aquí hay 2.
+
+── 4. LOS TRES BORRADORES DEL MODELO Y LAS DOS NOTAS DEL SERVIDOR (ejecución 1078454 del flujo S2 de n8n) ──
+Leída con el filtro de nodos (solo «Composer», «Nota del Servidor 1», «Composer Reintento», «Nota del Servidor 2» y «Composer Reintento 2»): sus salidas son el texto del
+modelo y la nota del servidor. No se leyó el nodo de entrada (que guarda la cabecera de autorización) ni ningún otro.
+
+Estrategia del turno (fila 8425): next_best_action = recommend_plan · strategy_goal = understand.
+
+BORRADOR 1 · «Composer» · 15 781 tokens de entrada, 87 de salida · plans_mentioned 1 · questions_asked 1
+  «Le comento que uno de nuestros planes destacados es el Plan Valera, que incluye acceso ilimitado al gimnasio, asesoría semi personalizada y seguimiento en la ejecución de ejercicios, entre otros beneficios, con un costo mensual de {{PLAN_1}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?»
+  → ai/check: plans_overview (nombre de un plan escrito a mano) y length_over_cap (315 expandido; tope 200).
+NOTA DEL SERVIDOR 1 (issues: relevance, progressive_disclosure)
+  «NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 315 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.»
+
+BORRADOR 2 · «Composer Reintento» · 15 454 tokens de entrada, 86 de salida · plans_mentioned 2 · questions_asked 1
+  «Claro, tenemos planes como el {{PLAN_1}} con acceso ilimitado y asesoría, y el {{PLAN_3}} que incluye entrenamientos intensivos y acceso completo a la app, ambos con mensualidad de {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?»
+  → ai/check: plans_overview (marcadores mezclados: PLAN_1 y PLAN_3 con PLAN_PRICE) y length_over_cap (276 expandido).
+NOTA DEL SERVIDOR 2 (issues: relevance, progressive_disclosure)
+  «MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. DEMASIADO LARGO: mide 276 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.»
+
+BORRADOR 3 · «Composer Reintento 2» · 15 494 tokens de entrada, 73 de salida · plans_mentioned 1 · questions_asked 1 · NO pasa por ai/check (va directo al revisor)
+  «Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas y asesoría semi personalizada, todo por una mensualidad de {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?»
+  → revisor: fail, 0,4. La comprobación determinista guardada en la fila (pieza 1b de PT-01): pass=false, plans_overview/missing y length_over_cap, 211.
+  → el commit lo sustituye por la lista fija («Claro. Algunos planes de un mes: …», 199).
+
+── 5. LECTURA DEL LEAD ──
+HECHOS [C]:
+· La corrección de PT-01 hizo lo que estaba construida para hacer: las dos notas llevaron el presupuesto ya expandido (71 ocupados, 89 libres de 160) y la fila guardó la causa
+  determinista del descarte; el informe de origen la enseña («el servidor tampoco lo habría aceptado»). No hubo errores de comprobación (check_errors 0).
+· No bastó: ninguno de los tres borradores cumple las reglas de la lista. El 1 presenta UN plan, con su nombre y tres beneficios; el 2 se acerca (dos marcadores, un beneficio cada
+  uno) y lo estropea un PLAN_PRICE suelto y la pregunta; el 3 vuelve al plan único. Los tres terminan con la misma pregunta de descubrimiento. Los tres pasan del tope.
+· La nota con el esqueleto («una frase con PLAN_1 a PLAN_3 … cada uno una vez») solo llegó en la SEGUNDA reescritura: la primera nota fue la de «nombre duplicado», que no lo lleva.
+  El tercer borrador, el único que la recibió, no la siguió.
+· La conversación estaba en blanco (memoria vacía antes del turno 1): el plan único y la pregunta de descubrimiento NO vienen de la memoria heredada, como se supuso tras la tercera
+  prueba (informe-debugger-a4-turno2.md, §A, marcado entonces como hipótesis).
+CAUSA [L + C]: las instrucciones firmadas empujan el primer borrador en contra de la lista, y las notas de reescritura no alcanzan a darle la vuelta en dos intentos.
+· resources/ultron-prompts/n8n-29de5119/strategist.txt:23 — «Si pide PLANES, opciones o una recomendacion, el PRIMERO de active_plans es el que el negocio quiere ofrecer primero
+  … Presentalo con dos o tres beneficios reales». La estrategia del turno fue recommend_plan.
+· resources/ultron-prompts/n8n-29de5119/composer.txt:49 — «Para decir un precio usas EXACTAMENTE el marcador PLAN_PRICE … Cualquier otro marcador hace que el mensaje se rechace.»
+· El parche de la lista (compilador 4, UltronPromptCompiler.php:331 y :697-701) solo se inserta en los dos redactores y en los dos revisores: el estratega no lo recibe.
+LO QUE SIGUE: el condicional anotado en MATRIZ_CIERRE_V2.md §11 se cumple. Pendiente nuevo PT-17: las instrucciones firmadas del turno de planes (compilador 5), con su
+republicación y una quinta prueba. Falta el turno 3 de esta prueba («¿Cuál es el horario de atención entre semana?»).

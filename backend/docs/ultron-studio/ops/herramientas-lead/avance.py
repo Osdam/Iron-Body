@@ -42,7 +42,7 @@ BLOQUES_4 = [
     ("A · Primeros bloqueantes", 22, 22.0),
     ("B · Trato de usted, textos de respaldo y lista fija", 14, 14.0),
     ("C · Regenerar antes de sustituir", 40, 40.0),
-    ("D · Despliegue, n8n S2, versión 3, publicación y tercera prueba real", 12, 9.0),
+    ("D · Despliegue, n8n S2, versión 3, publicación y tercera prueba real", 12, 9.0),  # la cuarta prueba (22-11) tampoco se superó: sigue en 9,0
     ("E · Frases prohibidas en real, ampliación por etapas, pendientes H4-11 y H4-13", 12, 0.0),
 ]
 
@@ -85,17 +85,17 @@ APARTADOS = {
         ("Modo asistido en vivo con una prueba real", 20, 0.00, "exige estrategias publicadas", "o"),
     ]),
     10: (0.35, [
-        ("Libro de autorizaciones, lector y rutas", 30, 0.34, "ronda 2 implementada (C-2, C-3, C-5 y menores); falta revalidarla con seguridad y unirlo a la bandeja", "c"),
+        ("Libro de autorizaciones, lector y rutas", 30, 0.40, "implementado, unido a la bandeja y revalidado por seguridad de API el 22-11 (0 bloqueantes); revisión final sin bloqueantes; falta la batería completa del lote 4", "c"),
         ("CRM: pantalla de autorizaciones de contacto", 10, 0.00, "", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
-        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.30, "implementado y probado en los dos motores; en revisión de seguridad de API", "c"),
+        ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.40, "implementado, probado en los dos motores y revalidado por seguridad de API el 22-11 (0 bloqueantes); falta la batería completa del lote 4", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),
         ("Dos personas reales vinculadas", 15, 0.00, "acción del propietario", "o"),
     ]),
     11: (0.45, [
         ("Permisos de Meta verificados en producción", 10, 1.00, "sonda ok el 22-11", "o"),
         ("Primeras plantillas redactadas y validadas", 15, 0.40, "cinco, contra el validador real", "t"),
-        ("El validador exige la línea de baja en el texto", 5, 0.30, "implementado y probado; en revisión de seguridad de API", "c"),
+        ("El validador exige la línea de baja en el texto", 5, 0.40, "implementado, probado y revalidado por seguridad de API el 22-11 (0 bloqueantes); falta la batería completa del lote 4", "c"),
         ("Primera plantilla enviada y aprobada por Meta", 35, 0.00, "exige dos personas vinculadas", "o"),
         ("Canario real con una plantilla aprobada", 35, 0.00, "", "o"),
     ]),

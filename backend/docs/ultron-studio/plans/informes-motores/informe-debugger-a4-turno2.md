@@ -159,3 +159,7 @@ Beneficios del catálogo, leídos en producción en solo lectura (`plans.benefit
 Confirmado [C]: el tercer borrador decía que el `{{PLAN_3}}` (el Élite) «incluye acceso ilimitado, asesoría y seguimiento con entrenador», que son beneficios del Plan Valera y del Plan Mensual, no del Élite. La corrección (3) (los beneficios de cada plan junto a su marcador) ataca un riesgo real.
 
 No se leyó la ejecución 1078446 de n8n: leer una ejecución con webhook autenticado enseña el secreto interno en claro. Los borradores 1 y 2 y la estrategia completa quedan sin leer; no cambian la causa raíz.
+
+---
+
+**Nota del lead (22-11-2026, cuarta prueba real).** En una conversación canaria en blanco (#931) y con las correcciones (1) a (3) desplegadas, el turno de planes volvió a salir con el texto de respaldo (`a4-evidencia/164`). Queda **refutada** la hipótesis [H] de §A sobre la memoria heredada para la estrategia de un solo plan y para la pregunta de descubrimiento: salen igual sin memoria. Queda **confirmado** lo estructural: `strategist.txt:23` ordena presentar primero un plan, `composer.txt:49` rechaza cualquier marcador que no sea el de precio, y el parche de la lista no llega al estratega. El paso (4) de este informe (los textos en el compilador 5, con su republicación) pasa a ser el pendiente PT-17 del control de cierre.
