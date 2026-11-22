@@ -191,6 +191,7 @@ class UltronCommitService
         private readonly MembershipFactsProvider $membershipFacts,
         private readonly MembershipFactGuard $membershipGuard,
         private readonly PaymentFactGuard $paymentGuard,
+        private readonly UltronDraftCheck $draftCheck,
         private readonly UltronAbortLatch $abortLatch = new UltronAbortLatch,
         private readonly StaffReviewAuthority $staffReview = new StaffReviewAuthority,
         private readonly PromiseAuthority $promises = new PromiseAuthority,
@@ -468,7 +469,7 @@ class UltronCommitService
 
         // ── Camino del critic fallido ─────────────────────────────────────────
         if (CriticContract::isFail($critic)) {
-            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, $turno);
+            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, $turno, (array) ($token['extra'] ?? []));
         }
 
         // 8) La propuesta se convierte en el objeto de decisión canónico. Un
@@ -2201,6 +2202,7 @@ class UltronCommitService
      * enriquece: se guarda como evidencia y muere ahí. Lo que sale en su lugar
      * lo decide {@see safeFallback()}.
      *
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`): el `sp` y la lista `po` de este turno
      * @return array<string,mixed>
      */
     private function handleCriticFailure(
@@ -2211,7 +2213,10 @@ class UltronCommitService
         ?array $studio,
         ?array $studioPrompts,
         array $turno = self::TURNO_LEGACY,
+        array $firmado = [],
     ): array {
+        $comprobacion = $turno['studio'] ? $this->causaDeterminista($conversation, $message, $payload, $firmado) : null;
+
         return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, [
             'flag' => 'critic_failed',
             'origin' => 'ultron_curated_fallback',
@@ -2221,8 +2226,64 @@ class UltronCommitService
                 // siempre dice el intento): si no dice el intento (ausente o null, que es
                 // como n8n manda lo que no aplica), fue el 2.
                 'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
-            ],
+            ] + ($comprobacion === null ? [] : ['discarded_draft_check' => $comprobacion]),
         ], $turno);
+    }
+
+    /**
+     * LA CAUSA DETERMINISTA DEL BORRADOR QUE EL REVISOR RECHAZÓ (corrección
+     * (1b) del turno 2 de la tercera prueba real, 22-11-2026;
+     * `informe-debugger-a4-turno2.md` §7).
+     *
+     * En la prueba, el revisor rechazó el tercer borrador y el informe de
+     * origen lo contó como «el revisor rechazó todos los intentos», cuando el
+     * servidor tampoco lo habría dejado salir (`plans_overview/mixed` y 251
+     * caracteres expandido): con el visto bueno del revisor habría salido la
+     * MISMA lista fija. Esto anota en la fila, en
+     * `metadata.discarded_draft_check`, lo que la comprobación `ai/check` le
+     * encuentra a ESE borrador, con la MISMA clase y el `sp` y la lista
+     * firmados ({@see UltronDraftCheck::inspect()}): `pass`, los códigos
+     * (`código` o `código/detalle`, en el orden de la comprobación) y la
+     * medida del texto expandido. Sin textos.
+     *
+     * ES TRAZA: no cambia lo que sale ni el camino; solo con versión del Studio
+     * (sin ella la comprobación no mira nada) y con un borrador. No hay
+     * transacción abierta aquí (el commit va con el cerrojo de la caché), así
+     * que una lectura que falle no deja nada a medias: la fila sale sin la
+     * clave, como una de antes, y queda el aviso.
+     *
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`)
+     * @return array{pass:bool,codes:list<string>,length:int}|null
+     */
+    private function causaDeterminista(MarketingConversation $conversation, MarketingMessage $message, array $payload, array $firmado): ?array
+    {
+        $proposal = (array) ($payload['proposal'] ?? []);
+        $borrador = (string) ($proposal['reply_draft'] ?? '');
+        if (trim($borrador) === '') {
+            return null;
+        }
+
+        try {
+            $r = $this->draftCheck->inspect((int) $conversation->id, (int) $message->id, (array) ($firmado['sp'] ?? []), $firmado['po'] ?? null, [
+                'reply_draft' => $borrador,
+                'intent' => (string) ($proposal['intent'] ?? ''),
+                'recommended_plan_id' => $proposal['recommended_plan_id'] ?? null,
+                'tools_requested' => array_values((array) ($proposal['tools_requested'] ?? [])),
+            ]);
+        } catch (Throwable $e) {
+            try {
+                ChannelLog::warning('ultron.commit.discarded_draft_check_failed', [
+                    'conversation_id' => (int) $conversation->id, 'error_class' => class_basename($e),
+                ]);
+            } catch (Throwable) {
+                // Tragado a propósito: es traza; un log que no se escribe no puede dejar el turno sin respuesta.
+            }
+
+            return null;
+        }
+        $codigos = array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], $r['defects']);
+
+        return ['pass' => $codigos === [], 'codes' => $codigos, 'length' => $r['length']];
     }
 
     /**

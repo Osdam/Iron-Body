@@ -125,48 +125,7 @@ final class UltronDraftCheck
             return self::respuesta(self::MODE_LEGACY, $attempt, [], false, ['max_drafts' => self::LEGACY_MAX_DRAFTS, 'elapsed_s' => null, 'reason' => self::REASON_LEGACY]);
         }
 
-        $draft = (array) $data['draft'];
-        $raw = (string) $draft['reply_draft'];
-        $intent = (string) $draft['intent'];
-        $tools = array_values((array) ($draft['tools_requested'] ?? []));
-
-        /*
-         * La lista del turno, con las mismas reglas que el commit (paso 8.ter):
-         * la firmada, si tiene la forma que emite `decide`, y vacía en un turno
-         * de cobro. Una forma rara solo la fabrica quien re-firma el token: se
-         * trata como «sin lista» sin avisar aquí, porque el commit del mismo
-         * turno lo registra (`ultron.commit.plans_overview_invalid`).
-         */
-        $po = UltronPlansOverview::signedList($token['extra']['po'] ?? null) ?? [];
-        $poDelTurno = UltronPlansOverview::isMoneyTurn($intent, $tools) ? [] : $po;
-
-        $catalog = $this->knowledge->activePlans();
-        $inbound = (string) MarketingMessage::query()->whereKey($messageId)->where('conversation_id', $conversationId)->value('body');
-
-        /*
-         * La política del turno, como la calcula el commit (ola 4b). El token
-         * ata el par, así que la conversación existe; si no (se borró en estos
-         * segundos), no hay política que mirar y el commit lo decidirá.
-         */
-        $conversation = MarketingConversation::query()->whereKey($conversationId)->first();
-        $turno = $conversation === null ? null : $this->policyReader->read($conversation, $inbound, $intent, $catalog);
-        $politica = $turno['policy'] ?? null;
-        // En modo memoria el commit retira los enlaces de la app (el marcador y la herramienta) antes de nada.
-        $modoMemoria = ($politica['memory_mode'] ?? false) === true;
-        $conEnlaces = ! $modoMemoria && in_array(SalesIntents::TOOL_APP_LINKS_SEND, $tools, true);
-
-        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $politica);
-        $defectos = array_slice([
-            ...UltronDraftDefects::of(
-                ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
-                $expandido,
-                $sp,
-                $poDelTurno,
-                $catalog,
-                $inbound,
-            ),
-            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
-        ], 0, UltronDraftDefects::MAX_DEFECTS);
+        $defectos = $this->inspect($conversationId, $messageId, $sp, $token['extra']['po'] ?? null, (array) $data['draft'])['defects'];
 
         $elapsed = max(0, now()->getTimestamp() - (int) $token['issued_at']);
         $reason = match (true) {
@@ -197,6 +156,74 @@ final class UltronDraftCheck
     }
 
     /**
+     * LO QUE ESTA COMPROBACIÓN LE ENCUENTRA A UN BORRADOR, sin el token ni el
+     * presupuesto de intentos: los defectos de {@see self::check()} (los
+     * cuatro de §4.4 y, detrás, los de la política, con el tope
+     * {@see UltronDraftDefects::MAX_DEFECTS}) y la medida del texto expandido
+     * ({@see UltronReplyFitter::measure()}), con el `sp` y la lista que firmó
+     * `decide` para ESE turno. Quien llama ya verificó el token.
+     *
+     * La usan `check()` y el commit (corrección (1b) del turno 2 de la tercera
+     * prueba real, 22-11-2026): cuando el revisor rechaza el último borrador,
+     * la fila del respaldo anota lo que el servidor le habría encontrado, para
+     * separar «lo rechazó el revisor» de «el revisor y el servidor». Las MISMAS
+     * lecturas, de solo lectura, que `check()`.
+     *
+     * @param  array<string,mixed>  $sp  el `sp` firmado; sin `m = studio`, ningún defecto
+     * @param  mixed  $po  la lista firmada tal cual (`x.po`); una forma rara cuenta como «sin lista»
+     * @param  array{reply_draft:string,intent:string,recommended_plan_id?:mixed,tools_requested?:list<string>|null}  $draft
+     * @return array{defects:list<array{code:string,detail:?string,issue:string,note:string}>,length:int}
+     */
+    public function inspect(int $conversationId, int $messageId, array $sp, mixed $po, array $draft): array
+    {
+        $raw = (string) ($draft['reply_draft'] ?? '');
+        $intent = (string) ($draft['intent'] ?? '');
+        $tools = array_values((array) ($draft['tools_requested'] ?? []));
+
+        /*
+         * La lista del turno, con las mismas reglas que el commit (paso 8.ter):
+         * la firmada, si tiene la forma que emite `decide`, y vacía en un turno
+         * de cobro. Una forma rara solo la fabrica quien re-firma el token: se
+         * trata como «sin lista» sin avisar aquí, porque el commit del mismo
+         * turno lo registra (`ultron.commit.plans_overview_invalid`).
+         */
+        $po = UltronPlansOverview::signedList($po) ?? [];
+        $poDelTurno = UltronPlansOverview::isMoneyTurn($intent, $tools) ? [] : $po;
+
+        $catalog = $this->knowledge->activePlans();
+        $inbound = (string) MarketingMessage::query()->whereKey($messageId)->where('conversation_id', $conversationId)->value('body');
+
+        /*
+         * La política del turno, como la calcula el commit (ola 4b). El token
+         * ata el par, así que la conversación existe; si no (se borró en estos
+         * segundos), no hay política que mirar y el commit lo decidirá.
+         */
+        $conversation = MarketingConversation::query()->whereKey($conversationId)->first();
+        $turno = $conversation === null ? null : $this->policyReader->read($conversation, $inbound, $intent, $catalog);
+        $politica = $turno['policy'] ?? null;
+        // En modo memoria el commit retira los enlaces de la app (el marcador y la herramienta) antes de nada.
+        $modoMemoria = ($politica['memory_mode'] ?? false) === true;
+        $conEnlaces = ! $modoMemoria && in_array(SalesIntents::TOOL_APP_LINKS_SEND, $tools, true);
+
+        $textosDeLaLista = $this->textosDeLaLista($poDelTurno);
+        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $textosDeLaLista, $politica);
+        $defectos = array_slice([
+            ...UltronDraftDefects::of(
+                ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
+                $expandido,
+                $sp,
+                $poDelTurno,
+                $catalog,
+                $inbound,
+                $textosDeLaLista,
+            ),
+            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
+        ], 0, UltronDraftDefects::MAX_DEFECTS);
+
+        return ['defects' => $defectos, 'length' => UltronReplyFitter::measure($expandido)];
+    }
+
+    /**
      * EL TEXTO EXPANDIDO, SOLO PARA MEDIR (§4.1, paso 3): lo que mediría el
      * commit, hasta donde se puede saber sin efectos.
      *  - `{{PLAN_k}}` de la lista del turno → «Nombre ($precio COP)» del plan
@@ -216,21 +243,16 @@ final class UltronDraftCheck
      *
      * @param  list<string>  $tools
      * @param  list<int>  $po
+     * @param  array<int,string>  $textosDeLaLista  {@see self::textosDeLaLista()}
      * @param  array<string,mixed>|null  $politica  la política del turno, si se pudo leer
      */
-    private function expandido(string $raw, mixed $planId, array $tools, array $po, ?array $politica = null): string
+    private function expandido(string $raw, mixed $planId, array $tools, array $po, array $textosDeLaLista, ?array $politica = null): string
     {
         $texto = $raw;
 
         if ($po !== []) {
-            $nombra = UltronPlansOverview::expand($texto, array_fill_keys($po, ''), $po)['used'];
-            $textos = [];
-            if ($nombra !== []) {
-                foreach (Plan::query()->sellable()->whereIn('id', $nombra)->get() as $plan) {
-                    $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
-                }
-            }
-            $texto = UltronPlansOverview::expand($texto, $textos, $po)['text'];
+            // Solo se sustituyen los marcadores que lleva el borrador: los demás textos de la lista no cambian nada.
+            $texto = UltronPlansOverview::expand($texto, $textosDeLaLista, $po)['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {
@@ -257,6 +279,30 @@ final class UltronDraftCheck
         }
 
         return $texto;
+    }
+
+    /**
+     * El texto de cada plan de la lista del turno que se vende AHORA
+     * («Nombre ($precio COP)», {@see UltronPlansOverview::item()}), en una
+     * sola consulta: el de un plan que ya no se vende falta (su marcador queda
+     * literal, eso lo decide el commit). Sirve para expandir el borrador y
+     * para el presupuesto de la lista de las notas
+     * ({@see UltronDraftDefects::listBudget()}): de TODOS los ofrecidos, los
+     * nombre o no el borrador. Vacío sin lista.
+     *
+     * @param  list<int>  $po
+     * @return array<int,string> plan_id → su texto
+     */
+    private function textosDeLaLista(array $po): array
+    {
+        $textos = [];
+        if ($po !== []) {
+            foreach (Plan::query()->sellable()->whereIn('id', $po)->get() as $plan) {
+                $textos[(int) $plan->id] = UltronPlansOverview::item($plan);
+            }
+        }
+
+        return $textos;
     }
 
     /**

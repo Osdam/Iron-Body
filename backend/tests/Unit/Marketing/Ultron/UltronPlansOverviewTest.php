@@ -206,9 +206,10 @@ class UltronPlansOverviewTest extends TestCase
     public function test_items_lleva_marcador_id_nombre_y_duracion_sin_precio(): void
     {
         $items = O::items([9, 3], self::catalogo());
+        // 22-11-2026, corrección (3): con los beneficios de SU plan, como en `active_plans` (sin la clave si no tiene).
         $this->assertSame([
             ['marker' => '{{PLAN_1}}', 'plan_id' => 9, 'name' => 'Plan Semana', 'duration_days' => 7],
-            ['marker' => '{{PLAN_2}}', 'plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30],
+            ['marker' => '{{PLAN_2}}', 'plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => ['Acceso ilimitado al gimnasio']],
         ], $items, 'en el orden de po y sin precio: el modelo nunca ve una cifra');
 
         $this->expectException(InvalidArgumentException::class);

@@ -30,7 +30,7 @@ use InvalidArgumentException;
  *    cual para que las dos listas, la fija y la del modelo, elijan los mismos
  *    (pendiente m-8 de H4-12 (f), solo la selección).
  *  - {@see self::markers()} y {@see self::items()}: lo que ve el modelo, sin
- *    precio.
+ *    precio (con los beneficios de cada plan junto a su marcador).
  *  - {@see self::item()} y {@see self::expand()}: lo que lee la persona.
  *  - {@see self::verify()}: si la lista del borrador vale, o por qué no
  *    (los seis detalles de §4.4).
@@ -210,12 +210,22 @@ final class UltronPlansOverview
 
     /**
      * La lista tal como la ve el modelo (`plans_overview.plans` de `decide`):
-     * marcador, id, nombre y duración, en el orden de `po`. SIN PRECIO: el
-     * modelo nunca ve una cifra.
+     * marcador, id, nombre, duración y beneficios, en el orden de `po`. SIN
+     * PRECIO: el modelo nunca ve una cifra.
+     *
+     * LOS BENEFICIOS, JUNTO A SU MARCADOR (22-11-2026, corrección (3) del turno
+     * 2 de la tercera prueba real): `PLAN_3` es una POSICIÓN, pero
+     * `active_plans` y la memoria hablan de los planes por su id; en la prueba,
+     * el modelo pegó detrás de `{{PLAN_3}}` (el Élite, id 8) los beneficios del
+     * Plan Valera (id 3). Aquí van los de SU plan, los MISMOS y con el MISMO
+     * filtro con que viajan en `active_plans` (`UltronDecideService::
+     * plansWithoutPrice()`): la lista de `activePlans()` tal cual (ya limpia,
+     * `Plan::benefitsArray()`), sin recortar en número ni en longitud, y sin la
+     * clave si está vacía. No viaja nada que el modelo no reciba ya.
      *
      * @param  list<int>  $po  la lista firmada
      * @param  array<int,array<string,mixed>>  $activePlans
-     * @return list<array{marker:string,plan_id:int,name:string,duration_days:int}>
+     * @return list<array{marker:string,plan_id:int,name:string,duration_days:int,benefits?:list<string>}>
      *
      * @throws InvalidArgumentException si un id de la lista no está en el catálogo (quien llama la sacó de él)
      */
@@ -236,7 +246,7 @@ final class UltronPlansOverview
                 'plan_id' => (int) $id,
                 'name' => trim((string) ($plan['name'] ?? '')),
                 'duration_days' => (int) ($plan['duration_days'] ?? 0),
-            ];
+            ] + (is_array($plan['benefits'] ?? null) && $plan['benefits'] !== [] ? ['benefits' => $plan['benefits']] : []);
         }
 
         return $items;

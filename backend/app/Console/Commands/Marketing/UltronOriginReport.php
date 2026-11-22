@@ -40,7 +40,9 @@ use Throwable;
  *
  * LO QUE DICE: el total; el porcentaje escrito por la IA frente al 90 % y,
  * aparte, el del primer intento; las reescrituras por autor (servidor o
- * revisor) y por código; los respaldos por causa; los recortes; el texto del
+ * revisor) y por código; los respaldos por causa (y, del rechazo del revisor,
+ * si el servidor habría aceptado ese borrador, con sus códigos, o sin dato en
+ * las filas de antes del 22-11: corrección (1b)); los recortes; el texto del
  * servidor en el camino del modelo, por causa (la hora de la visita y las
  * sustituciones, que la línea base cuenta como del modelo); la
  * latencia p50, p95 y máxima del entrante al saliente (`created_at` de los dos
@@ -248,6 +250,11 @@ class UltronOriginReport extends Command
                 'by_reason' => self::enOrden(self::frecuencias(array_column($respaldos, 'fallback_reason')), UltronReplyOrigin::REASONS),
                 'policy_codes' => self::porFrecuencia(self::frecuencias(array_merge([], ...array_column($respaldos, 'policy_codes')))),
                 'recovery_reasons' => self::porFrecuencia(self::frecuencias(array_filter(array_column($respaldos, 'recovery_reason'), 'is_string'))),
+                // Corrección (1b), 22-11-2026: del rechazo del revisor, si el servidor habría aceptado ese borrador (y si no, por qué).
+                'critic_server' => [
+                    'by' => self::enOrden(self::frecuencias(array_column($respaldos, 'server_verdict')), UltronReplyOrigin::SERVER_VERDICTS),
+                    'codes' => self::porFrecuencia(self::frecuencias(array_merge([], ...array_column($respaldos, 'server_codes')))),
+                ],
             ],
             'latency_s' => $this->latencias($turnos),
             'model_calls' => self::resumen(array_values(array_filter(array_map(UltronReplyOrigin::modelCalls(...), $origenes), 'is_int'))),
@@ -458,7 +465,8 @@ class UltronOriginReport extends Command
         $this->line(sprintf('  Respaldos: %d de %d (%s)', $re['count'], $total, self::porciento($re['pct'])));
         foreach ($re['by_reason'] as $causa => $n) {
             $this->line('    '.match ($causa) {
-                UltronReplyOrigin::REASON_CRITIC => 'el revisor rechazó todos los intentos: '.$n,
+                // Corrección (1b): era «rechazó todos los intentos», y con S2 el revisor solo juzga el último.
+                UltronReplyOrigin::REASON_CRITIC => 'el revisor rechazó el último borrador: '.$n.self::delServidor($re['critic_server']),
                 UltronReplyOrigin::REASON_RECOVERY => 'la rendición: '.$n.($re['recovery_reasons'] === [] ? '' : ' ('.self::lista($re['recovery_reasons']).')'),
                 UltronReplyOrigin::REASON_POLICY => 'la política del commit: '.$n.($re['policy_codes'] === [] ? '' : ' ('.self::lista($re['policy_codes']).')'),
                 UltronReplyOrigin::REASON_LAST_RESORT => 'el último recurso: '.$n,
@@ -501,6 +509,27 @@ class UltronOriginReport extends Command
     private static function media(array $r): string
     {
         return $r['samples'] === 0 ? 'sin dato' : 'media '.number_format((float) $r['mean'], 1, ',', '.').' · máx '.$r['max'].' (n = '.$r['samples'].')';
+    }
+
+    /**
+     * El reparto del rechazo del revisor (corrección (1b)): «el servidor lo
+     * habría aceptado», «tampoco» (con sus códigos) y «sin dato» (las filas de
+     * antes del 22-11), solo los que aparecen.
+     *
+     * @param  array{by:array<string,int>,codes:array<string,int>}  $r
+     */
+    private static function delServidor(array $r): string
+    {
+        $partes = [];
+        foreach ($r['by'] as $veredicto => $n) {
+            $partes[] = match ($veredicto) {
+                UltronReplyOrigin::SERVER_WOULD_ACCEPT => 'el servidor lo habría aceptado: '.$n,
+                UltronReplyOrigin::SERVER_WOULD_REJECT => 'el servidor tampoco lo habría aceptado: '.$n.($r['codes'] === [] ? '' : ' ('.self::lista($r['codes']).')'),
+                default => 'sin dato: '.$n,
+            };
+        }
+
+        return $partes === [] ? '' : ' ('.implode(' · ', $partes).')';
     }
 
     /** @param array<string,int> $frecuencias */

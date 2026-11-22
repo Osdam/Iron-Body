@@ -25,7 +25,8 @@ use PHPUnit\Framework\TestCase;
  */
 class UltronReplyOriginTest extends TestCase
 {
-    private const CLAVES = ['origin', 'attempt', 'drafts', 'critics', 'checks', 'rewrites', 'fallback_reason', 'policy_codes', 'recovery_reason', 'trimmed', 'server_text', 'traced', 'tokens'];
+    /** La forma cerrada; `server_verdict` y `server_codes`, desde la corrección (1b) del 22-11-2026. */
+    private const CLAVES = ['origin', 'attempt', 'drafts', 'critics', 'checks', 'rewrites', 'fallback_reason', 'policy_codes', 'recovery_reason', 'server_verdict', 'server_codes', 'trimmed', 'server_text', 'traced', 'tokens'];
 
     /** Un bloque `metadata.regeneration` tal como lo deja `UltronRegenerationTrace`. */
     private static function traza(int $drafts, ?int $critics, array $rewrites, ?array $tokens = null, ?int $checks = 2): array
@@ -145,6 +146,44 @@ class UltronReplyOriginTest extends TestCase
         $this->assertSame(['input' => null, 'output' => null], $c['tokens']);
         $this->assertStringNotContainsString('Ramiro', (string) json_encode($c));
         $this->assertStringNotContainsString('3209876543', (string) json_encode($c));
+    }
+
+    /**
+     * CORRECCIÓN (1b) DEL TURNO 2 DE LA TERCERA PRUEBA REAL (22-11-2026): del
+     * rechazo del revisor, si el servidor habría aceptado el borrador
+     * descartado (`metadata.discarded_draft_check`). Los tres tipos de fila,
+     * y nada fuera del vocabulario.
+     *
+     * @return array<string, array{array<string,mixed>, ?string, list<string>}>
+     */
+    public static function rechazosDelRevisor(): array
+    {
+        $falla3 = ['critic' => ['verdict' => 'fail', 'attempt' => 3, 'score' => 0.4], 'fallback_mode' => 'SAFE_CURATED_REPLY'];
+
+        return [
+            'solo el revisor: el servidor lo habría aceptado' => [$falla3 + ['discarded_draft_check' => ['pass' => true, 'codes' => [], 'length' => 120]], O::SERVER_WOULD_ACCEPT, []],
+            'el revisor y el servidor: la prueba real' => [$falla3 + ['discarded_draft_check' => ['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251]], O::SERVER_WOULD_REJECT, ['plans_overview/mixed', 'length_over_cap']],
+            'el revisor y el servidor: un código de la política' => [$falla3 + ['discarded_draft_check' => ['pass' => false, 'codes' => ['policy_greeting_sells'], 'length' => 90]], O::SERVER_WOULD_REJECT, ['policy_greeting_sells']],
+            'lo que no es del vocabulario no sale' => [$falla3 + ['discarded_draft_check' => ['pass' => false, 'codes' => ['register_tuteo', 'Ramiro 3209876543', 'plans_overview/otro', 'plans_overview', 'length_over_cap/x', 7, 'register_tuteo'], 'length' => 140]], O::SERVER_WOULD_REJECT, ['register_tuteo']],
+            'una fila de antes (S1, sin la clave): sin dato' => [['critic' => ['verdict' => 'fail', 'attempt' => 2], 'fallback_mode' => 'SAFE_CURATED_REPLY'], O::SERVER_UNKNOWN, []],
+            'una forma que no es la suya: sin dato' => [$falla3 + ['discarded_draft_check' => ['pass' => 'no', 'codes' => []]], O::SERVER_UNKNOWN, []],
+            'dice que pasa y trae códigos: sin dato' => [$falla3 + ['discarded_draft_check' => ['pass' => true, 'codes' => ['length_over_cap']]], O::SERVER_UNKNOWN, []],
+            'códigos que no son una lista: sin dato' => [$falla3 + ['discarded_draft_check' => ['pass' => false, 'codes' => ['a' => 'length_over_cap']]], O::SERVER_UNKNOWN, []],
+            // Fuera del rechazo del revisor, no aplica.
+            'la rendición' => [['fallback_mode' => 'SAFE_CURATED_REPLY', 'recovery' => ['reason' => 'critic_unavailable', 'attempt' => 2], 'discarded_draft_check' => ['pass' => true, 'codes' => []]], null, []],
+            'del modelo' => [['critic' => ['verdict' => 'pass', 'attempt' => 1], 'discarded_draft_check' => ['pass' => false, 'codes' => ['length_over_cap']]], null, []],
+        ];
+    }
+
+    /** @param list<string> $codigos */
+    #[DataProvider('rechazosDelRevisor')]
+    public function test_el_rechazo_del_revisor_dice_si_el_servidor_lo_habria_aceptado(array $metadata, ?string $veredicto, array $codigos): void
+    {
+        $c = O::classify($metadata);
+
+        $this->assertSame([$veredicto, $codigos], [$c['server_verdict'], $c['server_codes']]);
+        $this->assertSame([O::SERVER_WOULD_ACCEPT, O::SERVER_WOULD_REJECT, O::SERVER_UNKNOWN], O::SERVER_VERDICTS);
+        $this->assertStringNotContainsString('Ramiro', (string) json_encode($c));
     }
 
     /** Sin traza y con tres borradores (S2 sin bloque), no se adivina quién pidió las reescrituras. */
