@@ -3,10 +3,12 @@
 # del banco en <banco>/root: SOLO cambian las líneas de la cabecera «Lo propio de producción» (cada una tiene que casar
 # exactamente una vez, y al final se comprueba que el diff con el guion del repo son esas líneas y ninguna otra). El
 # migrador es la copia versionada del envoltorio de producción (iron-ia/ops/ironbody-migrate), con config:clear antes y
-# config:cache después como allí, y solo sin setpriv. Los dobles de <banco>/bin: sudo (sin cambio de usuario), stat (GNU
-# sobre BSD), supervisorctl (14 programas; el pid cambia con cada queue:restart; <banco>/run/fallo-workers pone uno en
-# BACKOFF), systemctl, sha256sum, sleep (como mucho 0,3 s) y php (sin red: proxy a un puerto cerrado; cuenta los
-# queue:restart). artisan, PostgreSQL, git y curl son de verdad.
+# config:cache después como allí, y solo sin setpriv. Los dobles de <banco>/bin: sudo (sin cambio de usuario; apunta el
+# modo de la caché tras cada config:cache en run/modos-config-cache), stat (GNU sobre BSD, con %Y), supervisorctl (14
+# programas; el pid cambia con cada queue:restart; run/fallo-workers pone uno en BACKOFF y run/lento lo retrasa),
+# systemctl, sha256sum, sleep (como mucho 0,3 s) y php (sin red: proxy a un puerto cerrado; cuenta los queue:restart y,
+# con run/inyecta-error, escribe una línea de error en el registro en el siguiente). artisan, PostgreSQL, git y curl son
+# de verdad.
 #   bash ensayar.sh <banco> arrancar | parar | estado
 #   bash ensayar.sh <banco> guion <argumentos de deploy-cierre-lote.sh…>
 #   bash ensayar.sh <banco> borrar          para la API y BORRA la base del banco (el directorio queda en el scratchpad)
@@ -27,25 +29,34 @@ ME=$(id -un); GRUPO=$(id -gn)
 dobles() {
   cat > "$B/bin/sudo" <<'S'
 #!/bin/bash
-# sudo del banco: ignora -u <usuario> y -H y ejecuta la orden como el usuario del Mac.
+# sudo del banco: ignora -u <usuario> y -H y ejecuta la orden como el usuario del Mac. Tras cada orden con
+# «config:cache», apunta en run/modos-config-cache el modo con que quedó la caché (el instante antes del chmod de root).
 while [ $# -gt 0 ]; do case "$1" in -u) shift 2 ;; -H) shift ;; *) break ;; esac; done
+case " $* " in
+  *" config:cache"*) "$@"; rc=$?; echo "$(/usr/bin/stat -f %Lp bootstrap/cache/config.php 2> /dev/null || echo -) $*" >> "$(dirname "$0")/../run/modos-config-cache"; exit $rc ;;
+esac
 exec "$@"
 S
   cat > "$B/bin/stat" <<'S'
 #!/bin/bash
-# stat -c de GNU sobre el stat de BSD: %U %G %a %n.
-if [ "${1:-}" = -c ]; then f=$2; shift 2; f=${f//%U/%Su}; f=${f//%G/%Sg}; f=${f//%a/%Lp}; f=${f//%n/%N}; exec /usr/bin/stat -f "$f" "$@"; fi
+# stat -c de GNU sobre el stat de BSD: %U %G %a %n %Y.
+if [ "${1:-}" = -c ]; then f=$2; shift 2; f=${f//%U/%Su}; f=${f//%G/%Sg}; f=${f//%a/%Lp}; f=${f//%n/%N}; f=${f//%Y/%m}; exec /usr/bin/stat -f "$f" "$@"; fi
 exec /usr/bin/stat "$@"
 S
   cat > "$B/bin/supervisorctl" <<S
 #!/bin/bash
 # supervisorctl del banco: los 14 programas de producción. El pid cambia con cada queue:restart (los cuenta el php del
-# banco); si $B/run/fallo-workers tiene un commit, mientras la «producción» lo sirva un worker queda en BACKOFF.
+# banco); si $B/run/fallo-workers tiene un commit, mientras la «producción» lo sirva un worker queda en BACKOFF. Si
+# $B/run/lento dice «<segundos> [backoff <commit>]», el primer worker no coge pid nuevo hasta esos segundos después del
+# último queue:restart (un trabajo largo) y, con «backoff», al cogerlo queda en BACKOFF si la «producción» sirve <commit>.
 case "\${1:-}" in status) ;; *) exit 0 ;; esac
 r=\$(cat "$B/run/reinicios" 2> /dev/null || echo 0); f=\$(cat "$B/run/fallo-workers" 2> /dev/null || echo -)
 h=\$(git -C "$B/prod" rev-parse HEAD); mal=0; case "\$h" in "\$f"*) mal=1 ;; esac
+lento=""; if [ -s "$B/run/lento" ] && [ "\$r" -gt 0 ]; then read -r ls lm lc < "$B/run/lento"; t0=\$(cat "$B/run/reinicio-ts" 2> /dev/null || echo 0)
+  if [ \$(( \$(date +%s) - t0 )) -lt "\$ls" ]; then lento=viejo; elif [ "\${lm:-}" = backoff ]; then case "\$h" in "\${lc:-x}"*) mal=1 ;; esac; fi; fi
 n=0
-linea() { n=\$((n + 1)); if [ "\$mal" = 1 ] && [ "\$n" = 1 ]; then printf '%-38s BACKOFF   Exited too quickly (process log may have details)\n' "\$1:\$1_\$2"; else printf '%-38s RUNNING   pid %s, uptime 0:10:00\n' "\$1:\$1_\$2" "\$((20000 + r * 100 + n))"; fi; }
+linea() { n=\$((n + 1)); local rr=\$r; [ "\$lento" = viejo ] && [ "\$n" = 1 ] && rr=\$((r - 1))
+  if [ "\$mal" = 1 ] && [ "\$n" = 1 ]; then printf '%-38s BACKOFF   Exited too quickly (process log may have details)\n' "\$1:\$1_\$2"; else printf '%-38s RUNNING   pid %s, uptime 0:10:00\n' "\$1:\$1_\$2" "\$((20000 + rr * 100 + n))"; fi; }
 for i in 00 01 02 03; do linea ironbody-whatsapp "\$i"; done
 for i in 00 01 02 03; do linea ironbody-agent "\$i"; done
 for i in 00 01; do linea ironbody-media "\$i"; done
@@ -70,8 +81,13 @@ exec /bin/sleep 0.3
 S
   cat > "$B/bin/php" <<S
 #!/bin/bash
-# php del banco: sin red (proxy a un puerto cerrado) y cuenta los queue:restart para el supervisorctl del banco.
-if [ "\${1:-}" = artisan ] && [ "\${2:-}" = queue:restart ]; then echo \$(( \$(cat "$B/run/reinicios" 2> /dev/null || echo 0) + 1 )) > "$B/run/reinicios"; fi
+# php del banco: sin red (proxy a un puerto cerrado) y cuenta los queue:restart para el supervisorctl del banco. Si
+# $B/run/inyecta-error existe, en el siguiente queue:restart añade su contenido (con @APP@ = la «producción») a
+# laravel.log y lo vacía: un error que llega mientras el guion espera a los workers.
+if [ "\${1:-}" = artisan ] && [ "\${2:-}" = queue:restart ]; then
+  echo \$(( \$(cat "$B/run/reinicios" 2> /dev/null || echo 0) + 1 )) > "$B/run/reinicios"; date +%s > "$B/run/reinicio-ts"
+  if [ -s "$B/run/inyecta-error" ]; then sed "s#@APP@#$B/prod#g" "$B/run/inyecta-error" >> "$B/prod/backend/storage/logs/laravel.log"; : > "$B/run/inyecta-error"; fi
+fi
 export http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 no_proxy=127.0.0.1,localhost NO_PROXY=127.0.0.1,localhost PGGSSENCMODE=disable
 exec "$PHPREAL" "\$@"
 S
@@ -156,7 +172,8 @@ case "$ORDEN" in
   borrar)
     p=$(pid_api)
     if [ -n "$p" ]; then for c in $(pgrep -P "$p" 2> /dev/null) "$p"; do kill "$c" 2> /dev/null || true; done; fi
-    [[ "$BANCO_DB" =~ ^ultron_studio_ops_[a-z0-9_]{1,40}$ ]] || muere "la base $BANCO_DB no es del banco del cierre: no se borra"
+    RE_DB='^ultron_studio_ops2?_[a-z0-9_]{1,40}$'
+    [[ "$BANCO_DB" =~ $RE_DB ]] || muere "la base $BANCO_DB no es del banco del cierre: no se borra"
     psql -X -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U ironbody -d postgres -c "DROP DATABASE IF EXISTS $BANCO_DB;"
     echo "base $BANCO_DB borrada; el directorio $B queda (scratchpad de la sesión)" ;;
   *) muere "orden desconocida: $ORDEN" ;;

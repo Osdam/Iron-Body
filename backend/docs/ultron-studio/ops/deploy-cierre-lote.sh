@@ -1,5 +1,5 @@
 #!/bin/bash
-# Despliegue POR LOTES del cierre de ULTRON STUDIO (lotes 2, 3 y 4; el lote 1 va por hotfix-backend.sh). Ficha de cada
+# Despliegue POR LOTES del cierre de ULTRON STUDIO (lotes 2 a 5; el lote 1 va por hotfix-backend.sh). Ficha de cada
 # lote, órdenes exactas, impacto y vuelta atrás: ops/DEPLOY_CIERRE_LOTES.md. Derivado de deploy-a4-regenerar-backend.sh
 # (la lista exacta, el respaldo, las cachés como www-data, la verificación sin credenciales y la vuelta atrás automática) y
 # de deploy-h9-backend-cierre.sh e iron-ia/ops/deploy-recuperacion-rutinas.sh (las migraciones con el rol dueño por
@@ -8,22 +8,31 @@
 # Uso (servidor, root; la lista y las declaraciones las sube el lead desde el Mac: DEPLOY_CIERRE_LOTES.md §2):
 #   bash /root/deploy-cierre-lote.sh <commit que sirve producción> <commit nuevo = origin/main> <lista>
 #        [--migraciones=<fichero> --orden=migracion-primero|codigo-primero] [--config=<fichero>] [--rutas=<fichero>]
-#        [--programador=<fichero>] [--solo-comprobar]
-#   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo>
+#        [--programador=<fichero>] [--sin-filas=<fichero>] [--solo-comprobar] [--sin-tmux]
+#   bash /root/deploy-cierre-lote.sh <previo> <nuevo> <lista> --vuelta-atras=<directorio del respaldo> [--sin-tmux]
+# El despliegue y la vuelta atrás se niegan a correr fuera de tmux o screen (C2: un corte de ssh deja el guion a medias y
+# sin la línea PARAR); --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige.
 # Las declaraciones (una línea por entrada; «#» al principio de línea es comentario):
 #   --migraciones  «nombre tipo tabla objeto marca privilegios vuelta», en el orden de aplicación (el de los nombres):
 #                  tipo check      → objeto = el CHECK; marca = un literal que su definición tiene DESPUÉS y no ANTES
 #                  tipo transicion → objeto = el disparador de avance de estado; marca = «desde>hasta» (la transición
 #                                    que se añade a la cláusula de OLD.<col> = 'desde')
 #                  tipo tabla      → objeto «-»; marca = el prefijo de sus funciones propias (o «-»); privilegios = los
-#                                    de la aplicación en la tabla nueva (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE)
+#                                    de la aplicación en la tabla nueva, uno a uno y en este orden (r SELECT · a INSERT ·
+#                                    w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER; r a w x, también por
+#                                    columna); con «a», además, USAGE en todas sus secuencias
+#                  tipo columna    → objeto = la columna nueva, NULA y SIN DEFECTO (solo catálogo); marca = su tipo
+#                                    (json, text…); privilegios «-»; vuelta SIEMPRE «conservar»
 #                  vuelta          → deshacer (la vuelta atrás la deshace si la base lo admite: un CHECK que las filas
 #                                    cumplen, un disparador que no mira filas, una tabla vacía) · conservar (no se toca)
-#   --config       «clave.con.puntos=valor» (false · true · null · vacia · un número): lo que tiene que valer en la caché de
-#                  configuración después; el valor nunca se imprime salvo esas formas (una cadena sale como «cadena»).
+#   --config       «clave.con.puntos=valor» (false · true · null · vacia · un número · texto:<palabra>): lo que tiene que
+#                  valer en la caché de configuración después; el valor nunca se imprime salvo esas formas (una cadena
+#                  sale como «cadena»; con «texto:<palabra>», como «texto:<palabra>» solo si es exactamente esa palabra).
 #   --rutas        la diferencia EXACTA de route:list: «+MÉTODO uri» / «-MÉTODO uri».
 #   --programador  la diferencia EXACTA de schedule:list («+línea» / «-línea», con la forma que imprime el paso 0) y
 #                  «ausente <texto>» / «presente <texto>».
+#   --sin-filas    «tabla columna valor[,valor…]»: el paso 0, y otra vez justo antes del primer cambio, exigen que no
+#                  haya ninguna fila con esos valores (lote 5: ninguna ejecución del laboratorio en curso).
 # Los commits, en hexadecimal (7 a 40 cifras): se resuelven y se comparan enteros.
 #
 # 0. Comprobaciones previas (si una falla: «ABORTA (no se ha tocado nada)», código 1; con --solo-comprobar termina aquí):
@@ -41,15 +50,20 @@
 #    supervisor, las migraciones registradas, el esquema (solo estructura) de cada tabla que tocan las migraciones y la
 #    definición de partida de cada objeto, el propio guion y SHA256SUMS. Todo lo que imprime queda en su registro.log.
 # 2. En el ORDEN declarado: (M) cada migración, sola, con ironbody-migrate --path=<copia de root, comprobada contra git>
-#    (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces), registrada y con su esquema de después; (C) el
-#    código: git merge --ff-only con umask 022 y www-data lee cada fichero; (K) config:cache y route:cache como www-data
-#    con umask 077, cuando el lote las declara. Si algo falla: VUELTA ATRÁS AUTOMÁTICA (código 4).
-# 3. queue:restart; cada worker con pid nuevo (≤ 90 s) y, pasado un margen, dos lecturas: todos en RUNNING.
+#    (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces; lanzado desde un umask 077, m4), registrada y con
+#    su esquema de después; (C) el código: git merge --ff-only con umask 022 y www-data lee cada fichero; (K)
+#    config:cache y route:cache como www-data con umask 077, cuando el lote las declara. Si algo falla: VUELTA ATRÁS
+#    AUTOMÁTICA (código 4).
+# 3. queue:restart; cada worker con pid nuevo (≤ 90 s; si no, hasta 300 s más) y, pasado un margen, dos lecturas: todos en
+#    RUNNING.
 # 4. Comprobaciones posteriores (si una falla: VUELTA ATRÁS AUTOMÁTICA, código 4): HEAD = nuevo y árbol limpio; www-data
-#    lee lo nuevo; los mismos workers en RUNNING; admin/voice/status sin token → 401; ninguna línea production.ERROR nueva
-#    (salvo las de un 55P03 reintentado); migrate:status sin pendientes; el esquema de después de cada migración;
-#    schedule:list y route:list con exactamente la diferencia declarada (ninguna si no se declara); las banderas
-#    declaradas con su valor en la caché de configuración; las cachés, de www-data en 600.
+#    lee lo nuevo; los mismos workers en RUNNING (si alguno tarda en coger pid nuevo, hasta 300 s más y otras dos
+#    lecturas); admin/voice/status sin token → 401; migrate:status sin pendientes; el esquema de después de cada
+#    migración (una tabla nueva, con los privilegios de la aplicación uno a uno); schedule:list y route:list con
+#    exactamente la diferencia declarada (ninguna si no se declara); las banderas declaradas con su valor en la caché de
+#    configuración; las cachés, de www-data en 600. Y las entradas production.ERROR nuevas DESDE EL PRIMER CAMBIO (sin
+#    las de un 55P03 reintentado), cada una con su clase y su fichero:línea de la aplicación (nunca el mensaje): si
+#    alguna nombra un fichero del diff, vuelta atrás; si ninguna, DESVÍO (código 3) sin vuelta atrás automática.
 # VUELTA ATRÁS (--vuelta-atras=<respaldo>, o la automática). Lee del respaldo el orden y las declaraciones. Solo si
 #    producción está en el nuevo o en el previo y con el árbol limpio. Si el lote migró PRIMERO, vuelve primero el código
 #    (las cachés del respaldo byte a byte, escritas por www-data, y después git checkout --detach <previo>) y después el
@@ -58,17 +72,24 @@
 #    definición del respaldo (si alguna fila no la cumple, la base se niega y el CHECK ancho se queda), un disparador
 #    vuelve a la definición del respaldo, una tabla nueva se borra solo vacía y sin dependencias (con sus funciones
 #    propias); y en la misma transacción se quita su fila de migrations. Nunca migrate:rollback. Después queue:restart,
-#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo y 401.
+#    workers, route:list y schedule:list = las de antes, las cachés = las del respaldo y 401. En la vuelta MANUAL, si el
+#    fichero de entorno es posterior al respaldo (solo su fecha, por stat), la caché de configuración no se repone: se
+#    regenera con config:cache como www-data (umask 077) con el código previo, y se dice (C3).
 #    NO deshace: los datos que escribió el código nuevo; una migración «conservar», o cuya vuelta la base rechaza (queda
 #    el esquema ancho, que el código previo admite: las de este cierre son de ampliar); el fichero de entorno (este guion
-#    no lo lee ni lo escribe); n8n, el CRM, nginx, FPM, supervisor ni el crontab. HEAD queda suelto en <previo> y la rama
+#    no lo lee ni lo escribe: solo mira su fecha); n8n, el CRM, nginx, FPM, supervisor ni el crontab. HEAD queda suelto en <previo> y la rama
 #    main del servidor en <nuevo> (como hotfix-backend.sh). Las copias de las migraciones en /var/lib/ironbody-deploy se
 #    quedan (son la evidencia de lo que se ejecutó).
 # No imprime secretos, ni teléfonos, ni valores de configuración salvo las formas de --config; no lee ficheros de entorno.
-# Códigos: 0 bien · 1 aborta sin tocar nada · 2 uso (sin tocar nada) · 4 vuelta atrás automática hecha (producción en el
-# previo) · 5 PARAR: vuelta atrás incompleta o salida inesperada a medias (DEPLOY_CIERRE_LOTES.md §6).
+# Códigos: 0 bien · 1 aborta sin tocar nada · 2 uso (sin tocar nada) · 3 desplegado CON DESVÍO (errores nuevos ajenos al
+# diff: producción en el nuevo, decide el lead) · 4 vuelta atrás automática hecha (producción en el previo) · 5 PARAR:
+# vuelta atrás incompleta o salida inesperada a medias (DEPLOY_CIERRE_LOTES.md §6).
 set -euo pipefail
 export LC_ALL=C
+# m5 (rev-guion): el umask fijo, como deploy-h9-backend-cierre.sh. git (fetch, merge, checkout) corre como root y deja los
+# ficheros legibles por www-data solo con 022 (memoria «umask-077-y-git-merge-en-el-vps»); lo restrictivo va SIEMPRE en
+# un subshell con su propio umask 077 (el respaldo, los registros, las cachés y el envoltorio de las migraciones).
+umask 022
 
 # ── Lo propio de producción (el banco sustituye estas líneas y ninguna otra) ──────────────────────────────────────────────
 APP=/var/www/api
@@ -98,25 +119,44 @@ OSG=backend/app/Services/Outreach/Run/OutreachSendGate.php
 RE_SENDS='^outreach\(sends-open\):'
 RE_CALLS='^voice\(calls-open\):'
 DIR_MIG=backend/database/migrations
-DECLS="migraciones config rutas programador"
+MIG_VERSIONADO=backend/docs/iron-ia/ops/ironbody-migrate
+DECLS="migraciones config rutas programador sin_filas"
+# m2 (rev-guion): ninguna expresión de [[ =~ ]] lleva barras invertidas. Escrita en la línea, bash 5 entrega a regcomp
+# lo citado con una barra delante («\>»), y en glibc «\>» es «fin de palabra», no «>» (en el bash 3.2 del Mac, sí): la
+# marca «desde>hasta» no casaría nunca. Cada expresión va en una variable, sin citar al usarla (llega tal cual a
+# regcomp), y lo literal va en una clase de caracteres ([>], [.], « » sin escapar).
+RE_COMMIT='^[0-9a-f]{7,40}$'
+RE_ID='^[a-z_][a-z0-9_]{0,62}$'
+RE_NOM_MIG='^[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{6}_[a-z0-9_]{1,120}$'
+RE_MARCA_CHECK='^[A-Za-z0-9_:.-]{1,64}$'
+RE_MARCA_TRANS='^[a-z_][a-z0-9_]{0,62}[>][a-z_][a-z0-9_]{0,62}$'
+RE_TIPO_COL='^[a-z][a-z0-9_]{0,30}$'
+RE_PRIV='^(-|r?a?w?d?D?x?t?)$'
+RE_CONFIG='^[a-z0-9_]+([.][a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+([.][0-9]+)?|texto:[a-z][a-z0-9_-]{0,31})$'
+RE_RUTA='^[+-][A-Z|]+ [^ ]+( @[^ ]+)?$'
+RE_PROG='^([+-].+|(ausente|presente) .+)$'
+RE_SIN_FILAS='^[a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,30}(,[a-z_][a-z0-9_]{0,30})*$'
 
 uso() {
-  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--solo-comprobar]"
-  echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo>"
+  echo "uso: bash $GUION <commit que sirve producción> <commit nuevo = origin/main> <lista> [--migraciones=<f> --orden=migracion-primero|codigo-primero] [--config=<f>] [--rutas=<f>] [--programador=<f>] [--sin-filas=<f>] [--solo-comprobar] [--sin-tmux]"
+  echo "     bash $GUION <previo> <nuevo> <lista> --vuelta-atras=<respaldo> [--sin-tmux]"
+  echo "     Despliegue y vuelta atrás, solo dentro de tmux o screen (un corte de ssh los dejaría a medias sin aviso);"
+  echo "     --sin-tmux lo salta a sabiendas. --solo-comprobar no toca nada y no lo exige."
 }
 
 # ── Argumentos ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 [ "$#" -ge 3 ] || { uso; echo "no se ha tocado nada"; exit 2; }
 PREVIO=$1; NUEVO=$2; LISTA=$3; shift 3
-MODO=despliegue; BK=""; ORDEN=""
-F_migraciones=""; F_config=""; F_rutas=""; F_programador=""
+MODO=despliegue; BK=""; ORDEN=""; SIN_TMUX=0
+F_migraciones=""; F_config=""; F_rutas=""; F_programador=""; F_sin_filas=""
 for a in "$@"; do
   case "$a" in
     --solo-comprobar) [ "$MODO" = despliegue ] || { uso; echo "--solo-comprobar y --vuelta-atras no van juntos; no se ha tocado nada"; exit 2; }; MODO=comprobar ;;
     --vuelta-atras=?*) [ "$MODO" = despliegue ] || { uso; echo "--vuelta-atras va sola; no se ha tocado nada"; exit 2; }; MODO=vuelta; BK=${a#--vuelta-atras=} ;;
     --orden=migracion-primero|--orden=codigo-primero) [ -z "$ORDEN" ] || { echo "--orden repetido; no se ha tocado nada"; exit 2; }; ORDEN=${a#--orden=} ;;
-    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*)
-      k=${a%%=*}; k=${k#--}; v=${a#*=}
+    --sin-tmux) SIN_TMUX=1 ;;
+    --migraciones=?*|--config=?*|--rutas=?*|--programador=?*|--sin-filas=?*)
+      k=${a%%=*}; k=${k#--}; k=${k//-/_}; v=${a#*=}
       eval "[ -z \"\$F_$k\" ]" || { echo "--$k repetido; no se ha tocado nada"; exit 2; }
       case "$v" in /*) ;; *) v="$PWD/$v" ;; esac
       [ -f "$v" ] && [ -r "$v" ] || { echo "no se puede leer el fichero de --$k: $v; no se ha tocado nada"; exit 2; }
@@ -124,13 +164,33 @@ for a in "$@"; do
     *) uso; echo "argumento desconocido: $a; no se ha tocado nada"; exit 2 ;;
   esac
 done
-[[ "$PREVIO" =~ ^[0-9a-f]{7,40}$ ]] && [[ "$NUEVO" =~ ^[0-9a-f]{7,40}$ ]] || { echo "los commits van en hexadecimal, de 7 a 40 cifras (git rev-parse --short=8 …); no se ha tocado nada"; exit 2; }
+[[ "$PREVIO" =~ $RE_COMMIT ]] && [[ "$NUEVO" =~ $RE_COMMIT ]] || { echo "los commits van en hexadecimal, de 7 a 40 cifras (git rev-parse --short=8 …); no se ha tocado nada"; exit 2; }
 case "$LISTA" in /*) ;; *) LISTA="$PWD/$LISTA" ;; esac
 if [ "$MODO" = vuelta ]; then
-  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
+  [ -z "$ORDEN$F_migraciones$F_config$F_rutas$F_programador$F_sin_filas" ] || { uso; echo "la vuelta atrás lee las declaraciones del respaldo: no se le pasan; no se ha tocado nada"; exit 2; }
 else
   if [ -n "$F_migraciones" ]; then [ -n "$ORDEN" ] || { echo "--migraciones exige --orden=migracion-primero|codigo-primero (la ficha del lote lo dice); no se ha tocado nada"; exit 2; }
   else [ -z "$ORDEN" ] || { echo "--orden solo va con --migraciones; no se ha tocado nada"; exit 2; }; fi
+fi
+# C2 (rev-guion): un corte de ssh (SIGHUP) mata el tee del registro y la trampa ya no puede decir PARAR: el guion queda a
+# medias sin aviso (si cae dentro de ironbody-migrate, sin caché de configuración). El guion no puede protegerse solo de
+# eso, pero sí negarse a desplegar o a volver atrás fuera de tmux o screen. Se mira el entorno (TMUX, STY) y, porque sudo
+# los borra, también los procesos padres. --sin-tmux lo salta a sabiendas; --solo-comprobar no toca nada y no lo exige.
+en_multiplexor() {
+  local p=$$ c i
+  { [ -n "${TMUX:-}" ] || [ -n "${STY:-}" ]; } && return 0
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    c=$(ps -o comm= -p "$p" 2>/dev/null) || return 1
+    c=${c##*/}
+    case "$c" in tmux*|screen*|SCREEN*) return 0 ;; esac
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ') || return 1
+    [ -n "$p" ] && [ "$p" -gt 1 ] || return 1
+  done
+  return 1
+}
+if [ "$MODO" != comprobar ] && [ "$SIN_TMUX" = 0 ] && ! en_multiplexor; then
+  echo "este guion despliega y vuelve atrás SOLO dentro de tmux o screen (un corte de ssh lo dejaría a medias sin aviso: DEPLOY_CIERRE_LOTES.md §6): tmux new -s lote, y lanzarlo ahí; --sin-tmux lo salta a sabiendas; no se ha tocado nada"
+  exit 2
 fi
 cd /
 
@@ -162,18 +222,19 @@ sin_comentarios() { grep -vE '^[[:space:]]*(//|/\*|\*|#)' | grep -v '^[[:space:]
 # ── Las declaraciones ─────────────────────────────────────────────────────────────────────────────────────────────────────
 NM=0
 lee_migraciones() { # <fichero> → M_NOM M_TIPO M_TABLA M_OBJ M_MARCA M_PRIV M_VUELTA (0..NM-1); el motivo si no vale
-  local nom tipo tabla obj marca priv vuelta resto ant="" id='^[a-z_][a-z0-9_]{0,62}$'
+  local nom tipo tabla obj marca priv vuelta resto ant=""
   NM=0
   while read -r nom tipo tabla obj marca priv vuelta resto; do
     [ -n "${vuelta:-}" ] && [ -z "${resto:-}" ] || { echo "la línea de $nom no tiene 7 campos (nombre tipo tabla objeto marca privilegios vuelta)"; return 1; }
-    [[ "$nom" =~ ^[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{6}_[a-z0-9_]{1,120}$ ]] || { echo "nombre de migración no válido: $nom"; return 1; }
-    [[ "$tabla" =~ $id ]] || { echo "$nom: tabla no válida ($tabla)"; return 1; }
+    [[ "$nom" =~ $RE_NOM_MIG ]] || { echo "nombre de migración no válido: $nom"; return 1; }
+    [[ "$tabla" =~ $RE_ID ]] || { echo "$nom: tabla no válida ($tabla)"; return 1; }
     case "$vuelta" in deshacer|conservar) ;; *) echo "$nom: vuelta «$vuelta» (deshacer | conservar)"; return 1 ;; esac
     case "$tipo" in
-      check) [[ "$obj" =~ $id ]] && [[ "$marca" =~ ^[A-Za-z0-9_:.-]{1,64}$ ]] && [ "$priv" = - ] || { echo "$nom: check exige objeto (el CHECK), una marca literal y privilegios «-»"; return 1; } ;;
-      transicion) [[ "$obj" =~ $id ]] && [[ "$marca" =~ ^[a-z_][a-z0-9_]{0,62}\>[a-z_][a-z0-9_]{0,62}$ ]] && [ "$priv" = - ] || { echo "$nom: transicion exige objeto (el disparador), marca «desde>hasta» y privilegios «-»"; return 1; } ;;
-      tabla) [ "$obj" = - ] && { [ "$marca" = - ] || [[ "$marca" =~ $id ]]; } && [[ "$priv" =~ ^(-|[rawdD]{1,5})$ ]] || { echo "$nom: tabla exige objeto «-», marca = prefijo de sus funciones (o «-») y privilegios en r a w d D (o «-»)"; return 1; } ;;
-      *) echo "$nom: tipo «$tipo» (check | transicion | tabla)"; return 1 ;;
+      check) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_MARCA_CHECK ]] && [ "$priv" = - ] || { echo "$nom: check exige objeto (el CHECK), una marca literal y privilegios «-»"; return 1; } ;;
+      transicion) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_MARCA_TRANS ]] && [ "$priv" = - ] || { echo "$nom: transicion exige objeto (el disparador), marca «desde>hasta» y privilegios «-»"; return 1; } ;;
+      tabla) [ "$obj" = - ] && { [ "$marca" = - ] || [[ "$marca" =~ $RE_ID ]]; } && [[ "$priv" =~ $RE_PRIV ]] || { echo "$nom: tabla exige objeto «-», marca = prefijo de sus funciones (o «-») y privilegios en el orden r a w d D x t (o «-»)"; return 1; } ;;
+      columna) [[ "$obj" =~ $RE_ID ]] && [[ "$marca" =~ $RE_TIPO_COL ]] && [ "$priv" = - ] && [ "$vuelta" = conservar ] || { echo "$nom: columna exige objeto (la columna), marca = su tipo (json, text…), privilegios «-» y vuelta «conservar» (quitar una columna con filas pierde datos: este guion nunca la quita)"; return 1; } ;;
+      *) echo "$nom: tipo «$tipo» (check | transicion | tabla | columna)"; return 1 ;;
     esac
     [ -z "$ant" ] || [[ "$ant" < "$nom" ]] || { echo "las migraciones van en el orden de sus nombres, sin repetir ($ant antes que $nom): es el orden en que las prueban las baterías"; return 1; }
     ant=$nom
@@ -185,13 +246,32 @@ lee_migraciones() { # <fichero> → M_NOM M_TIPO M_TABLA M_OBJ M_MARCA M_PRIV M_
 valida_config() { # <fichero> → 0 si cada línea es clave=valor con las formas admitidas
   local l n=0
   while IFS= read -r l; do
-    [[ "$l" =~ ^[a-z0-9_]+(\.[a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+(\.[0-9]+)?)$ ]] || { echo "línea de --config no válida: «$l» (clave.con.puntos=false|true|null|vacia|número)"; return 1; }
+    [[ "$l" =~ $RE_CONFIG ]] || { echo "línea de --config no válida: «$l» (clave.con.puntos=false|true|null|vacia|número|texto:<palabra>)"; return 1; }
     n=$((n + 1))
   done < <(decl "$1")
   [ "$n" -gt 0 ] || { echo "el fichero de --config no declara ninguna bandera"; return 1; }
 }
-valida_rutas() { local l; while IFS= read -r l; do [[ "$l" =~ ^[+-][A-Z|]+\ [^\ ]+(\ @[^\ ]+)?$ ]] || { echo "línea de --rutas no válida: «$l» (+MÉTODO uri / -MÉTODO uri)"; return 1; }; done < <(decl "$1"); }
-valida_programador() { local l; while IFS= read -r l; do [[ "$l" =~ ^([+-].+|(ausente|presente)\ .+)$ ]] || { echo "línea de --programador no válida: «$l» (+línea / -línea / ausente <texto> / presente <texto>)"; return 1; }; done < <(decl "$1"); }
+valida_rutas() { local l; while IFS= read -r l; do [[ "$l" =~ $RE_RUTA ]] || { echo "línea de --rutas no válida: «$l» (+MÉTODO uri / -MÉTODO uri)"; return 1; }; done < <(decl "$1"); }
+valida_programador() { local l; while IFS= read -r l; do [[ "$l" =~ $RE_PROG ]] || { echo "línea de --programador no válida: «$l» (+línea / -línea / ausente <texto> / presente <texto>)"; return 1; }; done < <(decl "$1"); }
+valida_sin_filas() { # <fichero> → 0 si cada línea es «tabla columna valor[,valor…]»
+  local l n=0
+  while IFS= read -r l; do
+    [[ "$l" =~ $RE_SIN_FILAS ]] || { echo "línea de --sin-filas no válida: «$l» (tabla columna valor[,valor…])"; return 1; }
+    n=$((n + 1))
+  done < <(decl "$1")
+  [ "$n" -gt 0 ] || { echo "el fichero de --sin-filas no declara ninguna"; return 1; }
+}
+# Las filas «vivas» que el lote exige que no haya (p. ej. ejecuciones del laboratorio en curso): una línea «tabla columna
+# [valores] n» por declaración; 0 si todas dan 0. Solo SELECT, con identificadores y valores ya validados.
+filas_vivas() { # <fichero --sin-filas>
+  local t c v n ok=0
+  while read -r t c v; do
+    n=$(q "SELECT count(*) FROM public.$t WHERE $c::text IN ('$(printf '%s' "$v" | sed "s/,/','/g")')") || n="?"
+    echo "$t.$c en [$v]: $n"
+    [ "$n" = 0 ] || ok=1
+  done < <(decl "$1")
+  return "$ok"
+}
 
 # ── Lo del servidor ───────────────────────────────────────────────────────────────────────────────────────────────────────
 # 13 programas de producción y el de la voz si está instalado (14 desde el 11-11-2026), como deploy-a4-regenerar-backend.sh.
@@ -230,26 +310,99 @@ http() { # <ruta bajo /api> → código HTTP de un GET sin credenciales (000 si 
 }
 http_espera() { local i c=000; for i in 1 2 3; do c=$(http "$2"); [ "$c" = "$1" ] && break; [ "$i" = 3 ] || sleep 3; done; echo "$c"; }
 lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$f $(wc -l < "$f" | tr -d ' ')"; done; return 0; }
-errores_nuevos() { # <lineas_log de antes> <patrón que se descuenta, o vacío> → líneas de NIVEL_ERROR nuevas
-  local f n e total=0
+# C1 (rev-guion): las entradas $NIVEL_ERROR nuevas, una línea «tipo<TAB>quién<TAB>dónde<TAB>del diff» por entrada: tipo
+# excepcion (quién = su clase) o registro (un Log::error sin excepción; quién = la clave del mensaje); dónde = el primer
+# fichero:línea de la APLICACIÓN de su traza (la «at …» de la cabecera o el primer «#n …» fuera de vendor/); del diff =
+# el primer fichero de su traza que está en la lista del lote, o «-». NUNCA el mensaje: puede llevar datos personales.
+# Lo que se imprime se valida otra vez al leerlo (RE_CLASE, RE_CLAVE, RE_DONDE). Con un patrón, se descuentan las
+# entradas cuya cabecera lo tiene (las del 55P03 que el guion reintentó).
+AWK_ERRORES='
+    function rel(p) { return index(p, pre) == 1 ? substr(p, length(pre) + 1) : "" }
+    function mira(r, l) {
+      if (r == "" || r !~ /^backend\// || r ~ /^backend\/vendor\//) return
+      if (donde == "") donde = r ":" l
+      if (endiff == "" && (r in lote)) endiff = r
+    }
+    function cierra() { if (abierta && !descontar) print tipo "\t" quien "\t" (donde == "" ? "-" : donde) "\t" (endiff == "" ? "-" : endiff); abierta = 0 }
+    NR == FNR { if ($0 != "") lote[$0] = 1; next }
+    /^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T]/ {
+      cierra()
+      k = index($0, "] " nivel ": ")
+      if (k == 0) next
+      abierta = 1; donde = ""; endiff = ""; descontar = (desc != "" && index($0, desc) > 0)
+      i = index($0, "[object] (")
+      if (i > 0) {
+        tipo = "excepcion"; s = substr($0, i + 10); j = index(s, "(code:"); quien = (j > 1) ? substr(s, 1, j - 1) : "?"
+        base = 0; ult = 0
+        while ((m = index(substr($0, base + 1), " at " pre)) > 0) { ult = base + m; base = ult }
+        if (ult > 0) { s = substr($0, ult + 4); j = index(s, ")"); if (j > 0) s = substr(s, 1, j - 1); c = s; sub(/:[0-9]+$/, "", c); mira(rel(c), substr(s, length(c) + 2)) }
+      } else {
+        tipo = "registro"; s = substr($0, k + length(nivel) + 4); j = index(s, " "); quien = (j > 0) ? substr(s, 1, j - 1) : s
+      }
+      next
+    }
+    abierta && /^#[0-9]+ \// {
+      s = substr($0, index($0, " ") + 1); j = index(s, "(")
+      if (j > 0) { c = substr(s, 1, j - 1); l = substr(s, j + 1); j = index(l, ")"); if (j > 0) l = substr(l, 1, j - 1); mira(rel(c), l) }
+    }
+    END { cierra() }'
+errores_detalle() { # <lineas_log de antes> <patrón que se descuenta, o vacío>
+  local f n
   for f in "$LOGS"/laravel*.log; do
     [ -f "$f" ] || continue
     n=$(printf '%s\n' "$1" | awk -v f="$f" '$1 == f {print $2}')
-    if [ -n "$2" ]; then e=$(tail -n +"$(( ${n:-0} + 1 ))" "$f" | grep "$NIVEL_ERROR" | grep -vc "$2" || true)
-    else e=$(tail -n +"$(( ${n:-0} + 1 ))" "$f" | grep -c "$NIVEL_ERROR" || true); fi
-    total=$((total + e))
-  done
-  echo "$total"
+    tail -n +"$(( ${n:-0} + 1 ))" "$f"
+  done | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="$2" "$AWK_ERRORES" <(tr -d '\r' < "$BK/lista.txt") - | tr -s '\\'
 }
-legibles() { # <commit A> <commit B>: $WWW lee cada fichero del diff que exista ahora → 0 si todos; deja LEGIBLES «revisados ilegibles»
+# Autoprueba del analizador con el awk de ESTE servidor (en Ubuntu, mawk; el banco solo tiene el de macOS): dos entradas
+# sintéticas, sin ningún dato, tienen que dar exactamente esto. Si no, C1 no podría decidir: el paso 0 aborta.
+autoprueba_errores() {
+  local sal esp
+  sal=$(printf '%s\n' \
+    "[2026-01-01 00:00:00] $NIVEL_ERROR: prueba {\"exception\":\"[object] (App\\\\Prueba\\\\Falla(code: 0): texto at $APP/backend/vendor/x/Y.php:3)" \
+    "[stacktrace]" "#0 $APP/backend/vendor/x/Y.php(9): Z->a()" "#1 $APP/backend/app/Prueba.php(7): Y->b()" "#2 {main}" "\"} " \
+    "[2026-01-01 00:00:01] $NIVEL_ERROR: prueba.clave_ajena {\"a\":1} " "[2026-01-01 00:00:02] produccion.INFO: nada " \
+    | awk -v nivel="$NIVEL_ERROR" -v pre="$APP/" -v desc="" "$AWK_ERRORES" <(printf 'backend/app/Prueba.php\n') - | tr -s '\\') || return 1
+  esp=$(printf 'excepcion\tApp\\Prueba\\Falla\tbackend/app/Prueba.php:7\tbackend/app/Prueba.php\nregistro\tprueba.clave_ajena\t-\t-')
+  [ "$sal" = "$esp" ]
+}
+RE_CLASE='^[A-Za-z_][A-Za-z0-9_\]{0,159}$'
+RE_CLAVE='^[a-z][a-z0-9_.:-]{0,79}$'
+RE_DONDE='^backend/[A-Za-z0-9_./-]+:[0-9]+$'
+# Decide sobre las entradas de errores_detalle: imprime cada una (como mucho 12) y deja NERR y NDIFF. Un Log::error sin
+# traza cuenta como del diff si su clave está escrita en el código del diff (app, config, routes, database, bootstrap).
+clasifica_errores() { # <salida de errores_detalle>
+  local tipo quien donde endiff v x
+  local -a arch=()
+  NERR=0; NDIFF=0
+  while IFS= read -r x; do case "$x" in backend/app/*|backend/config/*|backend/routes/*|backend/database/*|backend/bootstrap/*) arch+=("$x") ;; esac; done < <(tr -d '\r' < "$BK/lista.txt")
+  while IFS=$'\t' read -r tipo quien donde endiff; do
+    [ -n "$tipo" ] || continue
+    NERR=$((NERR + 1))
+    if [ "$tipo" = excepcion ]; then [[ "$quien" =~ $RE_CLASE ]] || quien="?"; else [[ "$quien" =~ $RE_CLAVE ]] || quien="?"; fi
+    [[ "$donde" =~ $RE_DONDE ]] || donde="-"
+    if [ "$endiff" = - ] && [ "$tipo" = registro ] && [ "$quien" != "?" ] && [ "${#arch[@]}" -gt 0 ]; then
+      x=$(g grep -lF -e "$quien" "$N" -- "${arch[@]}" 2>/dev/null) || x=""
+      x=${x%%$'\n'*}; [ -z "$x" ] || endiff="${x#"$N":} (escribe esa clave)"
+    fi
+    if [ "$endiff" = - ]; then v="ajena al diff"; else v="DEL DIFF: $endiff"; NDIFF=$((NDIFF + 1)); fi
+    [ "$NERR" -gt 12 ] || echo "      · $tipo ${quien} · ${donde} → $v"
+  done <<< "$1"
+  [ "$NERR" -le 12 ] || echo "      … y $((NERR - 12)) más (en laravel.log)"
+}
+# m8 (rev-guion): los ficheros del diff que HEAD tiene, cada uno presente y legible por $WWW. Un lote de ficheros todos
+# NUEVOS, al volver al previo, no deja ninguno: eso es correcto (antes «0 revisados» se leía como fallo y la vuelta
+# acababa en PARAR). Nombres sin comillas (core.quotepath=off): uno con acentos se mira como es.
+legibles() { # <commit A> <commit B> → 0 si todos; deja LEGIBLES «revisados ilegibles»
   local f rev=0 mal=0
   while IFS= read -r f; do
-    [ -n "$f" ] && [ -e "$APP/$f" ] || continue
+    [ -n "$f" ] || continue
     rev=$((rev + 1))
+    if [ ! -e "$APP/$f" ]; then echo "   ✗ $f está en HEAD y no en el disco"; mal=$((mal + 1)); continue; fi
     sudo -u "$WWW" test -r "$APP/$f" || { echo "   ✗ $WWW no puede leer $f ($(stat -c '%U:%G %a' "$APP/$f"))"; mal=$((mal + 1)); }
-  done < <(g diff --name-only --no-renames "$1" "$2")
+  done < <(comm -12 <(g -c core.quotepath=off diff --name-only --no-renames "$1" "$2" | sort) <(g -c core.quotepath=off ls-tree -r --name-only HEAD | sort))
   LEGIBLES="$rev $mal"
-  [ "$rev" -gt 0 ] && [ "$mal" = 0 ]
+  [ "$mal" = 0 ]
 }
 # Una caché: fichero normal (no un enlace) de www-data en 600. Si el modo no es 600, chmod COMO www-data (root no hace
 # chmod en bootstrap/cache: seguiría un enlace puesto en su lugar; H-5 de SEC7).
@@ -310,12 +463,14 @@ lee_tareas() { TAREAS_JSON=$(artisan schedule:list --json 2>/dev/null) || TAREAS
 # Las banderas de --config leídas de la caché de configuración, como www-data: «clave forma» (false · true · null · vacia ·
 # un número · cadena · lista:N · ausente). Una cadena NUNCA se imprime: solo «cadena». Un número (o una cadena numérica,
 # como los importes de config/outreach.php) solo sale si tiene como mucho 6 cifras enteras: uno más largo podría ser un
-# teléfono y sale como «número largo».
+# teléfono y sale como «número largo». Una cadena declarada «texto:<palabra>» sale como «texto:<palabra>» SOLO si es
+# exactamente esa palabra (que ya está escrita en la declaración); si no, «cadena», como siempre.
 banderas() { # <fichero --config> → una línea por clave, en su orden
-  decl "$1" | sed 's/=.*$//' | ( cd "$APP/backend" && sudo -u "$WWW" php -r '
+  decl "$1" | ( cd "$APP/backend" && sudo -u "$WWW" php -r '
 $c = @include "bootstrap/cache/config.php";
 if (! is_array($c)) { fwrite(STDERR, "sin caché de configuración\n"); exit(3); }
-foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $k) {
+foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $l) {
+    [$k, $esperado] = explode("=", $l, 2) + [1 => ""];
     $v = $c; $hay = true;
     foreach (explode(".", $k) as $p) { if (is_array($v) && array_key_exists($p, $v)) { $v = $v[$p]; } else { $hay = false; break; } }
     if (! $hay) { $f = "ausente"; }
@@ -327,6 +482,7 @@ foreach (file("php://stdin", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $
         if (strpos($s, ".") !== false) { $s = rtrim(rtrim($s, "0"), "."); }
         $f = preg_match("/^-?[0-9]{1,6}(\\.[0-9]+)?\$/", $s) === 1 ? $s : "número largo";
     }
+    elseif (is_string($v) && strncmp($esperado, "texto:", 6) === 0 && $v === substr($esperado, 6)) { $f = $esperado; }
     elseif (is_string($v)) { $f = "cadena"; }
     elseif (is_array($v)) { $f = "lista:" . count($v); }
     else { $f = "otro"; }
@@ -354,16 +510,39 @@ estado_mig() {
          FROM pg_trigger tg JOIN pg_class r ON r.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace JOIN pg_proc p ON p.oid = tg.tgfoid
          WHERE NOT tg.tgisinternal AND n.nspname = 'public' AND r.relname = '$t' AND tg.tgname = '$o'" ;;
     tabla)
+      # Los privilegios de la aplicación, UNO A UNO (has_table_privilege con varios a la vez dice true si tiene CUALQUIERA:
+      # memoria «migraciones-produccion-rol-dueno»), con las letras de PostgreSQL en su orden: r SELECT · a INSERT ·
+      # w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER. Los que admiten columnas, también por columna
+      # (has_any_column_privilege: un GRANT UPDATE (col) también escribe).
       q "SELECT CASE WHEN to_regclass('public.$t') IS NULL THEN 'ausente - -' ELSE 'presente '
            || (SELECT ro.rolname FROM pg_class c JOIN pg_roles ro ON ro.oid = c.relowner WHERE c.oid = to_regclass('public.$t')) || ' '
-           || coalesce(nullif(concat(CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'SELECT') THEN 'r' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'INSERT') THEN 'a' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'UPDATE') THEN 'w' END,
+           || coalesce(nullif(concat(CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'SELECT') THEN 'r' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'INSERT') THEN 'a' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'UPDATE') THEN 'w' END,
                                      CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'DELETE') THEN 'd' END,
-                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRUNCATE') THEN 'D' END), ''), '-') END
+                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRUNCATE') THEN 'D' END,
+                                     CASE WHEN has_any_column_privilege('$APP_BD', 'public.$t', 'REFERENCES') THEN 'x' END,
+                                     CASE WHEN has_table_privilege('$APP_BD', 'public.$t', 'TRIGGER') THEN 't' END), ''), '-') END
            || ' ' || (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                       WHERE n.nspname = 'public' AND '$m' <> '-' AND left(p.proname, length('$m')) = '$m')" ;;
+    columna)
+      # «número de columnas con ese nombre · tipo · null|notnull · defecto|-»: antes «0 - - -», después «1 <tipo> null -».
+      q "SELECT count(*) || ' ' || coalesce(string_agg(format_type(a.atttypid, a.atttypmod) || ' ' || CASE WHEN a.attnotnull THEN 'notnull' ELSE 'null' END
+                                                       || ' ' || CASE WHEN a.atthasdef THEN 'defecto' ELSE '-' END, ','), '- - -')
+         FROM pg_attribute a WHERE a.attrelid = to_regclass('public.$t') AND a.attname = '$o' AND a.attnum > 0 AND NOT a.attisdropped" ;;
   esac
+}
+# Para el paso 4 de una tabla nueva: sus privilegios uno a uno, en palabras, y USAGE de la aplicación en sus secuencias
+# (sin él, un INSERT con id serial da 42501). Deja PRIV_TEXTO y SEQ («secuencias con USAGE»).
+privilegios_uno_a_uno() { # <i> <estado>
+  local p=${2#presente * } l n
+  p=${p%% *}
+  PRIV_TEXTO=""
+  for l in r:SELECT a:INSERT w:UPDATE d:DELETE D:TRUNCATE x:REFERENCES t:TRIGGER; do
+    case "$p" in *"${l%%:*}"*) n=sí ;; *) n=no ;; esac
+    PRIV_TEXTO="$PRIV_TEXTO${PRIV_TEXTO:+ · }${l#*:} $n"
+  done
+  SEQ=$(q "SELECT count(*) || ' ' || count(*) FILTER (WHERE has_sequence_privilege('$APP_BD', s.oid, 'USAGE')) FROM pg_depend d JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S' WHERE d.classid = 'pg_class'::regclass AND d.refobjid = to_regclass('public.${M_TABLA[$1]}') AND d.deptype IN ('a', 'i')" 2>/dev/null) || SEQ="?"
 }
 clase_mig() { # <i> <estado> [<estado de antes, del respaldo>]
   local i=$1 e=$2 a=${3:-}
@@ -382,6 +561,7 @@ clase_mig() { # <i> <estado> [<estado de antes, del respaldo>]
         "presente $DUENO_BD ${M_PRIV[$i]} "*) if [ "${M_MARCA[$i]}" = - ] || [ "${e##* }" -gt 0 ]; then echo despues; else echo otro; fi ;;
         *) echo otro ;;
       esac ;;
+    columna) case "$e" in "0 - - -") echo antes ;; "1 ${M_MARCA[$i]} null -") echo despues ;; *) echo otro ;; esac ;;
   esac
 }
 def_mig() { # <i> → la definición exacta del objeto (para el respaldo y la vuelta atrás), en una línea
@@ -390,6 +570,7 @@ def_mig() { # <i> → la definición exacta del objeto (para el respaldo y la vu
     check) q "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = 'public' AND r.relname = '$t' AND c.conname = '$o' AND c.contype = 'c'" ;;
     transicion) q "SELECT pg_get_triggerdef(tg.oid) FROM pg_trigger tg JOIN pg_class r ON r.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE NOT tg.tgisinternal AND n.nspname = 'public' AND r.relname = '$t' AND tg.tgname = '$o'" ;;
     tabla) q "SELECT coalesce(string_agg(p.proname, ' ' ORDER BY p.proname), '') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND '$m' <> '-' AND left(p.proname, length('$m')) = '$m'" ;;
+    columna) estado_mig "$i" ;;   # no se deshace nunca: queda como constancia (la tabla entera, en su pg_dump --schema-only)
   esac
 }
 registrada() { [ "$(q "SELECT count(*) FROM migrations WHERE migration = '$1'")" = 1 ]; }
@@ -427,11 +608,31 @@ sql_deshacer() { # <i> <directorio del respaldo>
 # Usa P, N, BK, RUN0 y las declaraciones LEÍDAS DEL RESPALDO. 0 si producción queda en P con todo lo de antes (salvo el
 # esquema que se conserva, que se dice). Se ejecuta en un `if`: `set -e` no corta aquí dentro, cada paso se comprueba.
 VA_CONSERVADO=""
+# C3 (rev-guion): en la vuelta atrás MANUAL (horas después, quizá), si el fichero de entorno es posterior al respaldo (una
+# contraseña rotada, una bandera movida), la caché de configuración del respaldo llevaría valores viejos: no se repone,
+# se REGENERA con config:cache con el código previo. Solo se mira su fecha (stat), nunca su contenido. La automática,
+# segundos después del respaldo, la repone byte a byte como siempre.
+VA_REGENERA=0
+entorno_posterior() { # 0 si el fichero de entorno es más nuevo que el respaldo; deja ENT_SEG (segundos de diferencia)
+  local e r
+  [ -e "$APP/backend/.env" ] || return 1
+  e=$(stat -c %Y "$APP/backend/.env") && r=$(stat -c %Y "$BK/SHA256SUMS") || return 1
+  ENT_SEG=$((e - r))
+  [ "$ENT_SEG" -gt 0 ]
+}
 va_codigo() {
   local h ok=1
   h=$(g rev-parse HEAD) || return 1
-  if pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS" && pon_cache "$BK/bootstrap-cache/config.php" "$CACHE_CONFIG"; then
-    echo "   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por $WWW; root no escribe en bootstrap/cache)"
+  VA_REGENERA=0
+  if [ "$MODO" = vuelta ] && entorno_posterior; then
+    VA_REGENERA=1
+    if pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS"; then
+      echo "   · caché de rutas: la del respaldo, byte a byte. La de configuración NO: el fichero de entorno es $ENT_SEG s posterior al respaldo (solo stat); se regenera con config:cache tras el código"
+    else
+      echo "   ✗ la caché de rutas del respaldo no se pudo poner: se regeneran las dos después del código"; ok=2
+    fi
+  elif pon_cache "$BK/bootstrap-cache/routes-v7.php" "$CACHE_RUTAS" && pon_cache "$BK/bootstrap-cache/config.php" "$CACHE_CONFIG"; then
+    echo "   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por $WWW; root no escribe en bootstrap/cache)$([ "$MODO" = vuelta ] && echo "; el fichero de entorno no es posterior al respaldo (solo stat)")"
   else
     echo "   ✗ las cachés del respaldo no se pudieron poner: se regeneran después del código"; ok=2
   fi
@@ -439,11 +640,15 @@ va_codigo() {
     ( cd "$APP" && umask 022 && git checkout -q --detach "$P" ) || { echo "   ✗ git checkout --detach $(corto "$P") falló"; return 1; }
   fi
   [ "$(g rev-parse HEAD)" = "$P" ] || { echo "   ✗ HEAD no quedó en $(corto "$P")"; return 1; }
-  if legibles "$P" "$N"; then echo "   · código: HEAD=$(corto HEAD) (checkout --detach, umask 022) · $WWW lee los ${LEGIBLES%% *} ficheros del diff"
+  if legibles "$P" "$N"; then echo "   · código: HEAD=$(corto HEAD) (checkout --detach, umask 022) · $([ "${LEGIBLES%% *}" = 0 ] && echo "ningún fichero del diff existe en $(corto "$P") (todos nuevos): nada que leer" || echo "$WWW lee los ${LEGIBLES%% *} ficheros del diff que existen en $(corto "$P")")"
   else echo "   ✗ código: HEAD=$(corto HEAD), pero hay ficheros que $WWW no lee (arriba)"; return 1; fi
   if [ "$ok" = 2 ]; then
     ( cd "$APP/backend" && sudo -u "$WWW" sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' ) || { echo "   ✗ config:cache o route:cache falló"; return 1; }
     echo "   · cachés regeneradas con el código de $(corto "$P") (como $WWW, umask 077)"
+    VA_REGENERA=2
+  elif [ "$VA_REGENERA" = 1 ]; then
+    ( cd "$APP/backend" && sudo -u "$WWW" sh -c 'umask 077; php artisan config:cache -q' ) || { echo "   ✗ config:cache falló"; return 1; }
+    echo "   · caché de configuración regenerada con el código de $(corto "$P") y el fichero de entorno de hoy (config:cache como $WWW, umask 077)"
   fi
   cache_ok "$CACHE_RUTAS" && cache_ok "$CACHE_CONFIG"
 }
@@ -519,8 +724,13 @@ vuelta_atras_ejecuta() {
       [ "$c" = 404 ] || ok=0
     done < <(gets_nuevas "$BK/decl/rutas")
   fi
-  cmp -s "$BK/bootstrap-cache/config.php" "$APP/backend/$CACHE_CONFIG" && cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" \
-    || { echo "   ✗ las cachés no son las del respaldo"; ok=0; }
+  if [ "$VA_REGENERA" = 1 ]; then
+    cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" || { echo "   ✗ la caché de rutas no es la del respaldo"; ok=0; }
+    echo "   e. caché de rutas = la del respaldo · caché de configuración REGENERADA (el fichero de entorno es posterior al respaldo), de $WWW en 600"
+  else
+    cmp -s "$BK/bootstrap-cache/config.php" "$APP/backend/$CACHE_CONFIG" && cmp -s "$BK/bootstrap-cache/routes-v7.php" "$APP/backend/$CACHE_RUTAS" \
+      || { echo "   ✗ las cachés no son las del respaldo"; ok=0; }
+  fi
   [ "$ok" = 1 ]
 }
 # Los `grep -c … || true` de este guion: grep -c imprime 0 y sale con 1 cuando no casa nada; con pipefail cortaría. El
@@ -566,10 +776,11 @@ if [ "$MODO" = vuelta ]; then
   ( umask 077; : > "$LOG" ) || { echo "no se pudo crear $LOG; no se ha tocado nada"; exit 2; }
   exec > >(tee -a "$LOG") 2>&1
   echo "== deploy-cierre-lote.sh · VUELTA ATRÁS · $(date -u +%Y-%m-%dT%H:%M:%SZ) · de $(corto "$N") a $(corto "$P") · orden del lote: $(cat "$BK/orden.txt") · $NM migración(es) declarada(s) · respaldo $BK · registro $LOG"
+  [ "$SIN_TMUX" = 0 ] || echo "   AVISO: --sin-tmux: fuera de tmux o screen, a sabiendas; si se corta la sesión, DEPLOY_CIERRE_LOTES.md §6"
   RUN0=$(workers_esperados)
   ETAPA=vuelta
   if vuelta_atras_ejecuta; then
-    ETAPA=fin; echo "VUELTA ATRÁS HECHA: producción en $(corto "$P"), con las cachés, las rutas y el programador de antes${VA_CONSERVADO:+; SE CONSERVA el esquema de:$VA_CONSERVADO}"; exit 0
+    ETAPA=fin; echo "VUELTA ATRÁS HECHA: producción en $(corto "$P"), con $([ "$VA_REGENERA" = 1 ] && echo "la caché de rutas de antes, la de configuración REGENERADA (entorno posterior al respaldo)" || echo "las cachés de antes"), las rutas y el programador de antes${VA_CONSERVADO:+; SE CONSERVA el esquema de:$VA_CONSERVADO}"; exit 0
   fi
   ETAPA=fin; echo "VUELTA ATRÁS CON DESVÍOS: PARAR y revisar a mano (DEPLOY_CIERRE_LOTES.md §6)"; exit 5
 fi
@@ -577,12 +788,14 @@ fi
 # ── 0. Comprobaciones previas ─────────────────────────────────────────────────────────────────────────────────────────────
 [ "$(id -un)" = "$ROOT_U" ] || aborta "se ejecuta como $ROOT_U en el servidor"
 say "== deploy-cierre-lote.sh · $(date -u +%Y-%m-%dT%H:%M:%SZ) · modo $MODO · PREVIO=$PREVIO · NUEVO=$NUEVO · lista $LISTA"
+[ "$SIN_TMUX" = 0 ] || [ "$MODO" = comprobar ] || say "   AVISO: --sin-tmux: fuera de tmux o screen, a sabiendas; si se corta la sesión, DEPLOY_CIERRE_LOTES.md §6"
 say "   declaraciones: migraciones ${F_migraciones:-—}${ORDEN:+ (orden $ORDEN)} · config ${F_config:-—} · rutas ${F_rutas:-—} · programador ${F_programador:-—}"
 [ -r "$LISTA" ] && [ -f "$LISTA" ] || aborta "no se puede leer la lista $LISTA"
 if [ -n "$F_migraciones" ]; then m=$(lee_migraciones "$F_migraciones") || aborta "--migraciones: $m"; lee_migraciones "$F_migraciones" > /dev/null; fi
 if [ -n "$F_config" ]; then m=$(valida_config "$F_config") || aborta "--config: $m"; fi
 if [ -n "$F_rutas" ]; then m=$(valida_rutas "$F_rutas") || aborta "--rutas: $m"; fi
 if [ -n "$F_programador" ]; then m=$(valida_programador "$F_programador") || aborta "--programador: $m"; fi
+if [ -n "$F_sin_filas" ]; then m=$(valida_sin_filas "$F_sin_filas") || aborta "--sin-filas: $m"; fi
 g rev-parse --is-inside-work-tree > /dev/null 2>&1 || aborta "$APP no es un checkout de git"
 say "0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):"
 P=$(g rev-parse -q --verify "${PREVIO}^{commit}" 2>/dev/null) || aborta "el commit previo $PREVIO no existe en $APP"
@@ -710,7 +923,7 @@ for ((i = 0; i < NM; i++)); do
     # Informativo: lo que la tabla nueva heredará del dueño (memoria «migraciones-produccion-rol-dueno»); el paso 4 exige
     # después exactamente lo declarado, ya con los REVOKE que haga la propia migración.
     dp=$(q "SELECT coalesce(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '-') FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a JOIN pg_roles o ON o.oid = d.defaclrole JOIN pg_roles r ON r.oid = a.grantee WHERE o.rolname = '$DUENO_BD' AND r.rolname = '$APP_BD' AND d.defaclobjtype = 'r'" 2>/dev/null) || dp="?"
-    say "      privilegios por defecto de $DUENO_BD para $APP_BD en tablas nuevas: [$dp] · después se exige «${M_PRIV[$i]}» (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE)"
+    say "      privilegios por defecto de $DUENO_BD para $APP_BD en tablas nuevas: [$dp] · después se exige «${M_PRIV[$i]}» (uno a uno: r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER)"
   fi
 done
 [ "$PEND_N" = "${ESPERADAS# }" ] || aborta "migraciones pendientes frente a origin/main [$PEND_N], distintas de las declaradas que faltan [${ESPERADAS# }]: lo ajeno se despliega antes por su vía"
@@ -724,12 +937,25 @@ if [ "$NM" -gt 0 ]; then
   [ -x "$MIGRADOR" ] || aborta "falta $MIGRADOR (el envoltorio de las migraciones con el rol dueño)"
   # Este guion cuenta con lo que hace el envoltorio versionado (config:clear antes, config:cache después y --path tal cual)
   # y aguanta también uno que no vacíe la caché; si el instalado no es esa copia, se dice para que el lead lo mire.
-  H_MIG=$(sha256sum < "$MIGRADOR" | cut -c1-16); H_VER=$(g show "$N:backend/docs/iron-ia/ops/ironbody-migrate" 2>/dev/null | sha256sum | cut -c1-16)
+  # m3 (rev-guion): sin la copia en N, «g show | sha256sum» moría por pipefail + set -e sin decir por qué.
+  g cat-file -e "$N:$MIG_VERSIONADO" 2>/dev/null || aborta "falta la copia versionada del envoltorio ($MIG_VERSIONADO) en $(corto "$N"): sin ella no se puede comprobar que $MIGRADOR hace lo que este guion espera (config:clear antes, config:cache después y --path tal cual)"
+  H_MIG=$(sha256sum < "$MIGRADOR" | cut -c1-16); H_VER=$(g show "$N:$MIG_VERSIONADO" | sha256sum | cut -c1-16)
   if [ "$H_MIG" = "$H_VER" ]; then say "   $MIGRADOR = la copia versionada de iron-ia/ops (sha256 $H_MIG…)"
   else say "   AVISO: $MIGRADOR (sha256 $H_MIG…) no es la copia versionada de iron-ia/ops en $(corto "$N") ($H_VER…): mirar qué hace antes de desplegar"; fi
+  UM=$( (umask 077; sudo -u "$WWW" sh -c umask) 2>/dev/null ) || UM="?"
+  case "$UM" in
+    0077|077) say "   umask de sudo -u $WWW desde un umask 077: $UM (la caché que rehace ironbody-migrate nace en 600)" ;;
+    *) say "   AVISO: umask de sudo -u $WWW desde un umask 077: $UM (no 0077: la caché que rehace ironbody-migrate queda un instante legible hasta su chmod 600; m4, para security)" ;;
+  esac
   [ "$BLOQ" = 0 ] || say "   AVISO: hay cerrojos sobre las tablas de las migraciones (lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces)"
 else
   say "   pendientes frente a origin/main: ninguna (el lote no migra)"
+fi
+if [ -n "$F_sin_filas" ]; then
+  # Lo que el lote exige que no haya mientras se despliega (lote 5: ninguna ejecución del laboratorio en curso). Se mira
+  # aquí y otra vez justo antes del primer cambio.
+  SF=$(filas_vivas "$F_sin_filas") || aborta "--sin-filas: hay filas que el lote exige que no haya [$(printf '%s\n' "$SF" | paste -sd '|' -)]: esperar a que terminen (o pararlas por su vía) y repetir"
+  say "   sin filas vivas (--sin-filas): $(printf '%s\n' "$SF" | paste -sd '|' -)"
 fi
 lee_rutas; [ "$RUTAS" != "?" ] || aborta "route:list --json (como $WWW) no se puede leer"
 RUTAS0=$RUTAS; RUTAS0_JSON=$RUTAS_JSON
@@ -740,6 +966,8 @@ if [ -n "$F_config" ]; then
   B0=$(banderas "$F_config") || aborta "no se pudo leer la caché de configuración como $WWW"
   say "   banderas declaradas, hoy en la caché: $(printf '%s\n' "$B0" | paste -sd '|' -)"
 fi
+autoprueba_errores || aborta "el analizador de errores (C1) no da lo esperado con el awk de este servidor ($(awk --version < /dev/null 2>&1 | head -1 || true)): sin él no se puede decidir entre desvío y vuelta atrás"
+say "   analizador de errores (C1), autoprueba con el awk de este servidor: bien"
 C_VOZ0=$(http admin/voice/status)
 [ "$C_VOZ0" = 401 ] || aborta "GET admin/voice/status sin token → $C_VOZ0 (esperado 401): sin esa referencia no se puede verificar nada después"
 LOG_ANTES=$(lineas_log)
@@ -820,7 +1048,10 @@ migra() {
   intento=0
   while :; do
     intento=$((intento + 1))
-    set +e; sal=$("$MIGRADOR" --path="$dir" --realpath 2>&1); rc=$?; set -e
+    # m4 (rev-guion): el envoltorio, desde un umask 077. Su config:cache va por sudo, que aplica la unión de este umask
+    # con el suyo (022): la caché nace en 600 y no queda el instante en 644 hasta su chmod (si PAM no lo pisa: el paso 0
+    # dice qué umask da sudo en este servidor). Lo que escriba la migración como www-data también nace en 600/700.
+    set +e; sal=$(umask 077; "$MIGRADOR" --path="$dir" --realpath 2>&1); rc=$?; set -e
     # La salida entera (con la traza, si falla) queda en el respaldo; aquí, solo el resumen (el filtro puede no casar
     # nada, y eso no es un error: de ahí el || true).
     ( umask 077; printf '%s\n' "$sal" > "$BK/migracion-$i-intento-$intento.log" )
@@ -868,6 +1099,13 @@ paso_caches() {
   fi
   echo "K. cachés: $([ -n "$F_config" ] && echo "config:cache" || echo "configuración sin regenerar") · $([ -n "$F_rutas" ] && echo "route:cache" || echo "rutas sin regenerar") (como $WWW, umask 077) · $(stat -c '%U %a' "$APP/backend/$CACHE_CONFIG") / $(stat -c '%U %a' "$APP/backend/$CACHE_RUTAS")"
 }
+if [ -n "$F_sin_filas" ]; then
+  SF=$(filas_vivas "$F_sin_filas") || { ETAPA=fin; echo "ABORTA (no se ha tocado nada; el respaldo $BK queda): --sin-filas, justo antes del primer cambio: [$(printf '%s\n' "$SF" | paste -sd '|' -)]: esperar y repetir"; exit 1; }
+  echo "   sin filas vivas, justo antes del primer cambio: $(printf '%s\n' "$SF" | paste -sd '|' -)"
+fi
+# C1: los errores que cuentan para volver atrás son los de DESDE AQUÍ (el primer cambio: la primera migración o el
+# merge, lo que vaya antes); los del paso 0 y el respaldo solo se cuentan para que se vean.
+LOG_CAMBIO=$(lineas_log)
 echo "2. $PLAN:"
 if [ "$NM" -gt 0 ] && [ "$ORDEN" = migracion-primero ]; then paso_migraciones; paso_codigo
 elif [ "$NM" -gt 0 ]; then paso_codigo; paso_migraciones
@@ -887,7 +1125,21 @@ ETAPA=verificacion
 FALLOS=""
 falla() { echo "   ✗ $*"; FALLOS="$FALLOS · $*"; }
 { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
-[ "$REIN" -ge "$RUN0" ] || aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 s (¿un trabajo largo?): volver a mirar supervisorctl status"
+if [ "$REIN" -lt "$RUN0" ]; then
+  # m9 (rev-guion): un worker sin pid nuevo sigue con el código anterior y, si no arranca con el nuevo, se verá en su
+  # reinicio (la trampa del retardo). Antes de avisar, hasta 300 s más a que lo coja; si lo coge, margen y dos lecturas.
+  echo "   solo $REIN de $RUN0 workers con pid nuevo tras 90 s (un trabajo largo termina antes de reiniciar): se espera hasta 300 s más"
+  hasta=$(( $(date +%s) + 300 ))
+  while [ "$(reiniciados "$PIDS_PRE")" -lt "$RUN0" ] && [ "$(date +%s)" -lt "$hasta" ]; do sleep 5; done
+  REIN=$(reiniciados "$PIDS_PRE")
+  if [ "$REIN" -ge "$RUN0" ]; then
+    sleep 15; W1=$(workers "$RUN0" 30); sleep 8; W2=$(workers "$RUN0" 30)
+    echo "   ya con pid nuevo $REIN de $RUN0; pasado el margen: [$W1] y [$W2]"
+    { [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ]; } || falla "workers tras el reinicio tardío: [$W1] y [$W2] (esperado [$RUN0 0] las dos veces)"
+  else
+    aviso "solo $REIN de $RUN0 workers tienen pid nuevo tras 90 + 300 s: esos siguen con el código anterior; mirar supervisorctl status hasta ver los $RUN0 con pid nuevo y en RUNNING (DEPLOY_CIERRE_LOTES.md §7)"
+  fi
+fi
 [ "$FACT1" = "$FACT0" ] || aviso "$SERVICIO_FACT pasó de «$FACT0» a «$FACT1»"
 [ "$(g rev-parse HEAD)" = "$N" ] || falla "producción ya no está en $(corto "$N") (HEAD $(corto HEAD))"
 [ -z "$(g status --porcelain --untracked-files=no)" ] || falla "el checkout tiene cambios tras el despliegue"
@@ -905,6 +1157,11 @@ for ((i = 0; i < NM; i++)); do
   e=$(estado_mig "$i" 2>/dev/null) || e="?"; c=$(clase_mig "$i" "$e" "${M_E0[$i]}")
   echo "   esquema de $(nombre_corto "${M_NOM[$i]}"): [$e] = $c"
   [ "$c" = despues ] || falla "el esquema de ${M_NOM[$i]} es [$e], no el de después"
+  if [ "${M_TIPO[$i]}" = tabla ] && [ "${e%% *}" = presente ]; then
+    privilegios_uno_a_uno "$i" "$e"
+    echo "      $APP_BD en ${M_TABLA[$i]}, uno a uno: $PRIV_TEXTO · sus secuencias (total · con USAGE): [$SEQ] (declarado «${M_PRIV[$i]}»)"
+    case "${M_PRIV[$i]}" in *a*) [ "$SEQ" != "?" ] && [ "${SEQ%% *}" = "${SEQ##* }" ] || falla "$APP_BD tiene INSERT en ${M_TABLA[$i]} y no USAGE en todas sus secuencias [$SEQ]: el INSERT daría 42501" ;; esac
+  fi
 done
 lee_tareas
 if [ "$TAREAS" = "?" ]; then falla "schedule:list no se puede leer"
@@ -929,10 +1186,17 @@ else
   [ -z "$F_rutas" ] || ER=$(decl "$F_rutas" | sort)
   echo "   route:list: $(cuenta_lineas "$RUTAS0") → $(cuenta_lineas "$RUTAS") rutas · diferencia [$(printf '%s\n' "$DR" | sed '/^$/d' | sed -n 1,8p | paste -sd '|' -)] (declarada: $(cuenta_lineas "$ER") línea(s))"
   [ "$DR" = "$ER" ] || falla "route:list no tiene exactamente la diferencia declarada"
-  if [ -n "$F_rutas" ] && artisan list --raw 2>/dev/null | grep -q '^auth:coverage '; then
-    COB=$(artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-120 || true)
-    echo "   auth:coverage --unmapped → [${COB:-vacío}]"
-    [ -z "$COB" ] || falla "auth:coverage --unmapped no está vacío: hay rutas sin su llave de permiso"
+  if [ -n "$F_rutas" ]; then
+    # m1 (rev-guion): SIN tubería, como hotfix-backend.sh. Con pipefail, «artisan list --raw | grep -q» lee como «no está»
+    # el SIGPIPE de artisan cuando grep sale al primer acierto, y la cobertura se saltaba en silencio (falso verde).
+    ART_LISTA=$(artisan list --raw 2>/dev/null) || ART_LISTA=""
+    if grep -qE '^auth:coverage[[:space:]]' <<< "$ART_LISTA"; then
+      COB=$(artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-120 || true)
+      echo "   auth:coverage --unmapped → [${COB:-vacío}]"
+      [ -z "$COB" ] || falla "auth:coverage --unmapped no está vacío: hay rutas sin su llave de permiso"
+    else
+      falla "auth:coverage no está en artisan list --raw (como $WWW): sin él no se comprueba que cada ruta nueva tenga su llave"
+    fi
   fi
   if [ -n "$F_rutas" ]; then
     while IFS= read -r u; do
@@ -951,13 +1215,31 @@ elif [ "$NM" = 0 ]; then
   cmp -s "$APP/backend/$CACHE_CONFIG" "$BK/bootstrap-cache/config.php" || aviso "la caché de configuración cambió durante el despliegue y este lote no la toca: ¿otra sesión?"
 fi
 DESCUENTO=""; [ "$REINTENTOS" = 0 ] || DESCUENTO="55P03"
-ERR=$(errores_nuevos "$LOG_ANTES" "$DESCUENTO")
-echo "   $NIVEL_ERROR nuevos en laravel*.log desde el inicio: $ERR$([ "$REINTENTOS" = 0 ] || echo " (sin contar los del 55P03 reintentado, $REINTENTOS)")"
-[ "$ERR" = 0 ] || falla "$ERR líneas $NIVEL_ERROR nuevas en el log desde el inicio del despliegue"
+# C1 (rev-guion): un error AJENO (un webhook cualquiera) ya no vuelve atrás solo. Se cuentan los de desde el primer
+# cambio; de cada uno, solo su clase y su fichero:línea; si alguno nombra un fichero del diff, es del despliegue y se
+# vuelve atrás como siempre; si ninguno, DESVÍO (código 3) con aviso y sin vuelta atrás: decide el lead, que lo ve aquí.
+ERR0=$(cuenta_lineas "$(errores_detalle "$LOG_ANTES" "$DESCUENTO")")
+ERRS=$(errores_detalle "$LOG_CAMBIO" "$DESCUENTO")
+echo "   $NIVEL_ERROR nuevos en laravel*.log: $ERR0 desde el paso 0 · $(cuenta_lineas "$ERRS") desde el primer cambio (los que cuentan)$([ "$REINTENTOS" = 0 ] || echo "; sin los del 55P03 reintentado, $REINTENTOS")"
+DESVIO=""
+if [ -n "$ERRS" ]; then
+  clasifica_errores "$ERRS"
+  if [ "$NDIFF" -gt 0 ]; then
+    echo "   decisión: $NDIFF de $NERR nombran un fichero del diff → son del despliegue: VUELTA ATRÁS"
+    falla "$NDIFF de $NERR entradas $NIVEL_ERROR nuevas nombran un fichero del diff"
+  else
+    echo "   decisión: ninguna de las $NERR nombra un fichero del diff → DESVÍO con aviso, SIN vuelta atrás automática"
+    DESVIO="$NERR entrada(s) $NIVEL_ERROR nuevas desde el primer cambio y ninguna con un fichero del diff en su traza"
+  fi
+fi
 if [ -n "$FALLOS" ]; then revertir_auto "comprobaciones posteriores${FALLOS}"; fi
 echo "   producción sirve $(corto HEAD) · respaldo $BK · registro $LOG"
 echo "   VIGILANCIA (15 min, solo lectura): supervisorctl status (los $RUN0 en RUNNING) · $NIVEL_ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)"
 orden_vuelta
 ETAPA=fin
+if [ -n "$DESVIO" ]; then
+  echo "LOTE DESPLEGADO CON DESVÍO: $DESVIO (arriba: la clase y el fichero:línea de cada una). NO se ha vuelto atrás: mirarlas en laravel.log y decidir; si son del despliegue, la vuelta atrás es la de arriba (DEPLOY_CIERRE_LOTES.md §6)"
+  exit 3
+fi
 echo "LOTE DESPLEGADO SIN DESVÍOS$([ "$AVISOS" = 0 ] || echo " (con $AVISOS aviso(s) arriba)")"
 exit 0
