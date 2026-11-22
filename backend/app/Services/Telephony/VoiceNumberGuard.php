@@ -94,7 +94,7 @@ final class VoiceNumberGuard
     /** Enmienda del 22-11-2026, condición 1: `VOICE_NUMBER_SHARED_WITH_MESSAGING` no está encendida. */
     public const SHARED_REASON_NOT_DECLARED = 'not_declared';
 
-    /** Condición 2: el número no es exactamente el visible de la mensajería (otro protegido no vale nunca). */
+    /** Condición 2, sobre lo CONFIGURADO: `TWILIO_VOICE_FROM` no es exactamente el visible de la mensajería (otro protegido no vale nunca). */
     public const SHARED_REASON_NOT_BUSINESS_NUMBER = 'not_business_number';
 
     /** Condición 3: `VOICE_NUMBER_INBOUND_CAPABLE` no está declarada `false` (sin declarar o `true`). */
@@ -106,6 +106,15 @@ final class VoiceNumberGuard
     /** Condición 5: sin una observación verificada (de menos de 2 h, del id configurado y que es `TWILIO_VOICE_FROM`). */
     public const SHARED_REASON_OBSERVATION_UNVERIFIED = 'observation_unverified';
 
+    /**
+     * Condición 2, sobre lo OBSERVADO (ronda 2, decisión del lead): el número que la
+     * conciliación vio en el proveedor no es el visible, o no se sabe (una caché de
+     * antes de este hecho). Se comprueba tras la 5, para que sin observación el motivo
+     * siga siendo `observation_unverified`. Cierra el caso de cambiar `TWILIO_VOICE_FROM`
+     * al visible sin volver a conciliar: la observación de antes era de otro número.
+     */
+    public const SHARED_REASON_OBSERVED_NOT_BUSINESS_NUMBER = 'observed_not_business_number';
+
     /** Condición 6: el proveedor no dice `supports_inbound = false` (true, ausente o ilegible). */
     public const SHARED_REASON_OBSERVED_INBOUND = 'observed_inbound';
 
@@ -114,7 +123,8 @@ final class VoiceNumberGuard
 
     /** Los motivos de {@see sharedVerdict()}, en el orden en que se comprueban (cerrado; null = admitida). */
     public const SHARED_REASONS = [self::SHARED_REASON_NOT_DECLARED, self::SHARED_REASON_NOT_BUSINESS_NUMBER, self::SHARED_REASON_INBOUND_CAPABLE_DECLARED,
-        self::SHARED_REASON_INBOUND_ENABLED, self::SHARED_REASON_OBSERVATION_UNVERIFIED, self::SHARED_REASON_OBSERVED_INBOUND, self::SHARED_REASON_OBSERVED_AGENT];
+        self::SHARED_REASON_INBOUND_ENABLED, self::SHARED_REASON_OBSERVATION_UNVERIFIED, self::SHARED_REASON_OBSERVED_NOT_BUSINESS_NUMBER,
+        self::SHARED_REASON_OBSERVED_INBOUND, self::SHARED_REASON_OBSERVED_AGENT];
 
     /** Pura (DF-G10). Sin número de voz no hay con qué chocar: false. */
     public static function collides(?string $voiceFrom, ?string $displayPhone, array|string|null $protectedNumbers): bool
@@ -177,20 +187,24 @@ final class VoiceNumberGuard
      * `TWILIO_VOICE_FROM` (null si no se pudo comparar) y si choca con la
      * mensajería. Sin el número ni su huella.
      *
-     * Enmienda del 22-11-2026: y los dos hechos del proveedor que pide la
-     * identidad compartida, `inboundCapable` (`supports_inbound`; null si no lo
-     * dice) y `agentAssigned` (si el número tiene agente). Sus valores por
-     * defecto (null) FALLAN CERRADO: no admiten nada ({@see sharedVerdict()}).
+     * Enmienda del 22-11-2026: y los hechos del proveedor que pide la identidad
+     * compartida, `inboundCapable` (`supports_inbound`; null si no lo dice),
+     * `agentAssigned` (si el número tiene agente) y, ronda 2, `businessNumber`
+     * (si el número OBSERVADO es el visible de la mensajería, {@see isBusinessNumber()};
+     * un booleano, sin el número ni su huella). Sus valores por defecto (null)
+     * FALLAN CERRADO: no admiten nada ({@see sharedVerdict()}).
      */
-    public static function rememberObservation(string $phoneNumberId, ?bool $matchesFrom, bool $collides, ?bool $inboundCapable = null, ?bool $agentAssigned = null): void
+    public static function rememberObservation(string $phoneNumberId, ?bool $matchesFrom, bool $collides, ?bool $inboundCapable = null, ?bool $agentAssigned = null,
+        ?bool $businessNumber = null): void
     {
         Cache::put(self::OBSERVED_CACHE_KEY, ['at' => now()->utc()->format('Y-m-d\TH:i:s\Z'), 'phoneNumberId' => $phoneNumberId,
-            'matchesFrom' => $matchesFrom, 'collides' => $collides, 'inboundCapable' => $inboundCapable, 'agentAssigned' => $agentAssigned], self::OBSERVED_CACHE_SECONDS);
+            'matchesFrom' => $matchesFrom, 'collides' => $collides, 'inboundCapable' => $inboundCapable, 'agentAssigned' => $agentAssigned,
+            'businessNumber' => $businessNumber], self::OBSERVED_CACHE_SECONDS);
     }
 
     /**
      * La última observación, con la forma de siempre ({@see OBSERVED_KEYS}): los
-     * dos hechos de la enmienda no salen de aquí (los lee solo
+     * hechos de la enmienda no salen de aquí (los lee solo
      * {@see sharedIdentity()}), así que la puerta, el estado y el doctor leen
      * lo mismo que antes.
      *
@@ -205,9 +219,9 @@ final class VoiceNumberGuard
 
     /**
      * La observación de la caché tal cual, si tiene la forma de B8-g; si no,
-     * null. Una caché de antes de la enmienda (sin `inboundCapable` ni
-     * `agentAssigned`) sigue valiendo para la puerta: los dos hechos que le
-     * faltan los lee {@see providerFacts()} como «no se sabe».
+     * null. Una caché de antes de la enmienda (sin `inboundCapable`,
+     * `agentAssigned` ni `businessNumber`) sigue valiendo para la puerta: los
+     * hechos que le faltan los lee {@see providerFacts()} como «no se sabe».
      *
      * @return array<string, mixed>|null
      */
@@ -221,18 +235,19 @@ final class VoiceNumberGuard
     }
 
     /**
-     * Enmienda del 22-11-2026: los dos hechos del proveedor de una observación
-     * guardada. Ausentes (caché de antes del despliegue) o con otra forma, null:
-     * no se sabe, y {@see sharedVerdict()} no admite.
+     * Enmienda del 22-11-2026: los tres hechos del proveedor de una observación
+     * guardada. Ausentes (caché de antes del despliegue o de la ronda 2) o con otra
+     * forma, null: no se sabe, y {@see sharedVerdict()} no admite.
      *
      * @param  array<string, mixed>|null  $o
-     * @return array{inboundCapable: ?bool, agentAssigned: ?bool}
+     * @return array{inboundCapable: ?bool, agentAssigned: ?bool, businessNumber: ?bool}
      */
     private static function providerFacts(?array $o): array
     {
         $leer = static fn (mixed $v): ?bool => is_bool($v) ? $v : null;
 
-        return ['inboundCapable' => $leer($o['inboundCapable'] ?? null), 'agentAssigned' => $leer($o['agentAssigned'] ?? null)];
+        return ['inboundCapable' => $leer($o['inboundCapable'] ?? null), 'agentAssigned' => $leer($o['agentAssigned'] ?? null),
+            'businessNumber' => $leer($o['businessNumber'] ?? null)];
     }
 
     /**
@@ -328,16 +343,20 @@ final class VoiceNumberGuard
 
     /**
      * Enmienda del 22-11-2026, PURA: ¿se admite el número empresarial como origen
-     * de las salientes? Solo si se cumplen las siete a la vez, cada una con su
+     * de las salientes? Solo si se cumplen las siete a la vez (la 2, sobre lo
+     * configurado y sobre lo observado: ocho hechos), cada una con su
      * valor EXACTO (cualquier otro, también null o un hecho que falte, no la
      * cumple). El primer motivo que falla, en el orden de
      * {@see SHARED_REASONS}; null solo si se admite.
      *  1. `declared` === true (`VOICE_NUMBER_SHARED_WITH_MESSAGING`);
-     *  2. `businessNumber` === true: es exactamente `WHATSAPP_DISPLAY_PHONE`;
+     *  2. `businessNumber` === true: `TWILIO_VOICE_FROM` es exactamente
+     *     `WHATSAPP_DISPLAY_PHONE`;
      *  3. `inboundCapableDeclared` === false (`VOICE_NUMBER_INBOUND_CAPABLE`);
      *  4. `inboundEnabled` === false (`VOICE_INBOUND_ENABLED`);
      *  5. `observationVerified` === true: menos de 2 h, del id configurado e
      *     igual a `TWILIO_VOICE_FROM`;
+     *  2b. `observedBusinessNumber` === true: el número que vio la conciliación
+     *     es el visible (ronda 2; tras la 5);
      *  6. `observedInboundCapable` === false: lo observado es solo saliente
      *     (`supports_inbound = false`; ausente o null no vale);
      *  7. `observedAgentAssigned` === false: sin agente en el número.
@@ -353,6 +372,7 @@ final class VoiceNumberGuard
             ($f['inboundCapableDeclared'] ?? null) !== false => self::SHARED_REASON_INBOUND_CAPABLE_DECLARED,
             ($f['inboundEnabled'] ?? null) !== false => self::SHARED_REASON_INBOUND_ENABLED,
             ($f['observationVerified'] ?? null) !== true => self::SHARED_REASON_OBSERVATION_UNVERIFIED,
+            ($f['observedBusinessNumber'] ?? null) !== true => self::SHARED_REASON_OBSERVED_NOT_BUSINESS_NUMBER,
             ($f['observedInboundCapable'] ?? null) !== false => self::SHARED_REASON_OBSERVED_INBOUND,
             ($f['observedAgentAssigned'] ?? null) !== false => self::SHARED_REASON_OBSERVED_AGENT,
             default => null,
@@ -406,6 +426,7 @@ final class VoiceNumberGuard
         $veredicto = self::sharedVerdict($configuracion + [
             'businessNumber' => self::isBusinessNumber(VoicePhone::isE164($desde) ? $desde : null),
             'observationVerified' => self::verdictOf($o, $now)['check'] === OutboundPolicy::NUMBER_VERIFIED,
+            'observedBusinessNumber' => $proveedor['businessNumber'],
             'observedInboundCapable' => $proveedor['inboundCapable'],
             'observedAgentAssigned' => $proveedor['agentAssigned'],
         ]);

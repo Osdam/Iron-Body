@@ -191,6 +191,8 @@ class VoiceDoctorCommand extends Command
                 VoiceNumberGuard::SHARED_REASON_INBOUND_CAPABLE_DECLARED => 'falta VOICE_NUMBER_INBOUND_CAPABLE=false',
                 VoiceNumberGuard::SHARED_REASON_INBOUND_ENABLED => 'las entrantes están encendidas: VOICE_INBOUND_ENABLED',
                 VoiceNumberGuard::SHARED_REASON_OBSERVATION_UNVERIFIED => 'sin una conciliación de menos de 2 h que cuadre: voice:reconcile --numbers',
+                // Ronda 2: la conciliación vio otro número (p. ej., TWILIO_VOICE_FROM cambió después) o es de antes de este hecho.
+                VoiceNumberGuard::SHARED_REASON_OBSERVED_NOT_BUSINESS_NUMBER => 'el número que vio la conciliación no es el visible de la mensajería, o no se sabe: repite voice:reconcile --numbers',
                 VoiceNumberGuard::SHARED_REASON_OBSERVED_INBOUND => 'el proveedor no dice que el importado sea solo saliente',
                 VoiceNumberGuard::SHARED_REASON_OBSERVED_AGENT => 'el importado tiene un agente asignado, o no se sabe',
                 default => 'motivo desconocido',

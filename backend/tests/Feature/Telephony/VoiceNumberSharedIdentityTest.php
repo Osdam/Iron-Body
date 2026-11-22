@@ -148,7 +148,7 @@ class VoiceNumberSharedIdentityTest extends TestCase
 
     /**
      * LA POSITIVA. Con las siete en regla, la conciliación da `outbound_only` sin freno, la caché guarda el
-     * veredicto con los dos hechos del proveedor (nunca el número) y la puerta ya no dice `voice_number_is_whatsapp`;
+     * veredicto con los tres hechos del proveedor (nunca el número) y la puerta ya no dice `voice_number_is_whatsapp`;
      * todo lo demás sigue diciéndose: el canario sin activar, el cupo, el presupuesto, los de los contactos y la constante.
      */
     public function test_con_las_siete_condiciones_la_conciliacion_no_frena_y_la_puerta_sigue_con_todo_lo_demas(): void
@@ -169,9 +169,10 @@ class VoiceNumberSharedIdentityTest extends TestCase
         $this->assertFalse(VoiceBrake::isOpen());
         $this->assertSame(0, VoiceBrakeEntry::query()->count());
 
-        // La caché: el veredicto de siempre más los dos hechos del proveedor; la puerta lee la forma de siempre.
+        // La caché: el veredicto de siempre más los tres hechos del proveedor (ronda 2: el número observado es el visible);
+        // la puerta lee la forma de siempre.
         $this->assertSame(['at' => '2026-11-09T15:00:00Z', 'phoneNumberId' => self::PHONE_NUMBER_ID, 'matchesFrom' => true, 'collides' => true,
-            'inboundCapable' => false, 'agentAssigned' => false], Cache::get(self::KEY));
+            'inboundCapable' => false, 'agentAssigned' => false, 'businessNumber' => true], Cache::get(self::KEY));
         $this->assertStringNotContainsString('6010000090', (string) json_encode(Cache::get(self::KEY)), 'la caché no guarda el número');
         $this->assertSame(['at' => '2026-11-09T15:00:00Z', 'phoneNumberId' => self::PHONE_NUMBER_ID, 'matchesFrom' => true, 'collides' => true], VoiceNumberGuard::lastObservation());
         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
@@ -308,9 +309,9 @@ class VoiceNumberSharedIdentityTest extends TestCase
         $this->provider(self::OTRO);
 
         $r = $this->reconcile();
-        // La conciliación mira la condición 2 con el número OBSERVADO (no es el visible); la identidad real, con
-        // TWILIO_VOICE_FROM (que sí lo es), llega a la 5: la observación no cuadra. Las dos, no admitida.
-        $this->assertSame([1, 'number_mismatch', false, false, ['declared' => true, 'admitted' => false, 'reason' => 'not_business_number'], true],
+        // Ronda 2: la conciliación y la identidad real miran la condición 2 sobre TWILIO_VOICE_FROM (que es el visible) y
+        // llegan las dos a la 5: la observación no cuadra.
+        $this->assertSame([1, 'number_mismatch', false, false, ['declared' => true, 'admitted' => false, 'reason' => 'observation_unverified'], true],
             [$r['code'], $r['result'], $r['matchesFrom'], $r['collidesWithMessaging'], $r['sharedWithMessaging'], $r['brakeOpened']]);
         $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observation_unverified'], VoiceNumberGuard::sharedIdentity());
         $this->assertSame('number:'.self::PHONE_NUMBER_ID.':mismatch', VoiceBrakeEntry::query()->where('kind', 'open')->sole()->open_key);
@@ -320,7 +321,8 @@ class VoiceNumberSharedIdentityTest extends TestCase
         config(['voice.twilio.from' => self::OTRO]);
         $this->provider(self::VOICE_FROM);
         $r = $this->reconcile();
-        $this->assertSame(['number_is_messaging', false, true, 'observation_unverified'], [$r['result'], $r['matchesFrom'], $r['collidesWithMessaging'], $r['sharedWithMessaging']['reason']]);
+        $this->assertSame(['number_is_messaging', false, true, 'not_business_number'], [$r['result'], $r['matchesFrom'], $r['collidesWithMessaging'], $r['sharedWithMessaging']['reason']]);
+        $this->assertSame('not_business_number', VoiceNumberGuard::sharedIdentity()['reason']);
         $this->assertFalse(VoiceNumberGuard::collidesWithConfig());
         $this->assertTrue(VoiceNumberGuard::collidesForPolicy(), 'el importado de la mensajería cuenta aunque TWILIO_VOICE_FROM diga otro');
     }
@@ -360,7 +362,71 @@ class VoiceNumberSharedIdentityTest extends TestCase
         $this->assertSame('number_unverified', $this->recheckDelJob($llamada));
     }
 
-    /** Una caché de antes del despliegue (sin los dos hechos) sigue valiendo para la puerta, pero NO admite. */
+    /**
+     * RONDA 2 (decisión del lead): el escenario exacto del hallazgo. La conciliación vio el importado cuando
+     * `TWILIO_VOICE_FROM` era OTRO número (un dedicado): cuadraba. El mando cambia `TWILIO_VOICE_FROM` al visible
+     * (`config:cache`) y NO vuelve a conciliar: la observación, de menos de 2 h y del id configurado, sigue diciendo
+     * «cuadra», pero era de otro número. Antes de la ronda 2 se admitía; ahora no (`observed_not_business_number`) y
+     * la puerta dice `voice_number_is_whatsapp`, como antes de la enmienda, hasta que una conciliación vea el visible.
+     */
+    public function test_cambiar_el_origen_al_visible_sin_conciliar_no_admite_hasta_la_siguiente_observacion(): void
+    {
+        $canario = $this->activeVoiceCanary();
+        $this->publishVoice();
+        VoiceProviderState::recordStudioVerification(true, now());
+        config(['voice.twilio.from' => self::OTRO]);
+        $this->provider(self::OTRO);
+        $r = $this->reconcile();
+        $this->assertSame([0, 'outbound_only', true, false, ['declared' => true, 'admitted' => false, 'reason' => 'not_business_number']],
+            [$r['code'], $r['result'], $r['matchesFrom'], $r['collidesWithMessaging'], $r['sharedWithMessaging']]);
+        $this->assertFalse((bool) Cache::get(self::KEY)['businessNumber'], 'la observación guarda que lo visto NO es el visible');
+
+        // El cambio sin conciliar: la vigilancia del número sigue «verificada» (la de siempre, B8-h), la identidad no.
+        config(['voice.twilio.from' => self::VOICE_FROM]);
+        $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
+        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_not_business_number'], VoiceNumberGuard::sharedIdentity());
+        $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
+        $this->assertSame(['voice_number_is_whatsapp'], $this->puerta($canario), 'como antes de la enmienda');
+        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_not_business_number'], $this->estado()['sharedWithMessaging']);
+        $this->assertStringContainsString('Compartido : declarado y NO admitido (observed_not_business_number: el número que vio la conciliación no es el visible', $this->doctor());
+
+        // La siguiente conciliación ve el visible (reimportado): admitida, y la puerta ya no lo deniega por el número.
+        $this->provider(self::VOICE_FROM);
+        $r = $this->reconcile();
+        $this->assertSame([0, 'outbound_only', ['declared' => true, 'admitted' => true, 'reason' => null]], [$r['code'], $r['result'], $r['sharedWithMessaging']]);
+        $this->assertTrue(Cache::get(self::KEY)['businessNumber']);
+        $this->assertFalse(VoiceNumberGuard::collidesForPolicy());
+        $this->assertSame([], $this->puerta($canario));
+    }
+
+    /**
+     * Ronda 2, la variante con OTRO PROTEGIDO de la mensajería que no es el visible: la conciliación ya frenaba
+     * (`number_is_messaging`, `not_business_number`); al cambiar `TWILIO_VOICE_FROM` al visible sin conciliar, la
+     * identidad sigue sin admitirse (antes de la ronda 2 se admitía: un protegido que no es el visible habría sido de voz).
+     */
+    public function test_cambiar_el_origen_al_visible_tras_observar_otro_protegido_no_admite(): void
+    {
+        $canario = $this->activeVoiceCanary();
+        $this->publishVoice();
+        VoiceProviderState::recordStudioVerification(true, now());
+        config(['meta.protected_numbers' => [self::VISIBLE_DISTINTO], 'voice.twilio.from' => self::VISIBLE_DISTINTO]);
+        $this->provider(self::VISIBLE_DISTINTO);
+        $r = $this->reconcile();
+        $this->assertSame([1, 'number_is_messaging', true, 'not_business_number', true],
+            [$r['code'], $r['result'], $r['matchesFrom'], $r['sharedWithMessaging']['reason'], $r['brakeOpened']]);
+
+        config(['voice.twilio.from' => self::VOICE_FROM]);
+        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_not_business_number'], VoiceNumberGuard::sharedIdentity());
+        $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
+        $this->assertSame(['voice_number_is_whatsapp', 'voice_braked'], $this->puerta($canario));
+
+        $this->provider(self::VOICE_FROM);
+        $this->assertSame(['outbound_only', true], [($r = $this->reconcile())['result'], $r['sharedWithMessaging']['admitted']]);
+        $this->assertFalse(VoiceNumberGuard::collidesForPolicy(), 'admitida con la observación del visible; el freno de antes sigue echado');
+        $this->assertSame(['voice_braked'], $this->puerta($canario));
+    }
+
+    /** Una caché de antes del despliegue (sin los hechos del proveedor) sigue valiendo para la puerta, pero NO admite. */
     public function test_una_cache_de_antes_de_la_enmienda_no_admite(): void
     {
         $canario = $this->activeVoiceCanary();
@@ -371,19 +437,22 @@ class VoiceNumberSharedIdentityTest extends TestCase
 
         $this->assertSame($vieja, VoiceNumberGuard::lastObservation(), 'la observación se sigue leyendo');
         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict(), 'la vigilancia del número no cambia');
-        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_inbound'], VoiceNumberGuard::sharedIdentity());
+        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_not_business_number'], VoiceNumberGuard::sharedIdentity());
         $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
         $this->assertSame(['voice_number_is_whatsapp'], $this->puerta($canario));
 
-        // Con un solo hecho, o con una forma que no es un booleano, tampoco.
-        foreach ([['inboundCapable' => false], ['agentAssigned' => false], ['inboundCapable' => 'false', 'agentAssigned' => false],
-            ['inboundCapable' => false, 'agentAssigned' => 0]] as $hechos) {
+        // Sin alguno de los tres, o con una forma que no es un booleano, tampoco. La caché de la primera ronda (los dos
+        // hechos, sin `businessNumber`) tampoco admite: hace falta una conciliación con el código nuevo.
+        $en = ['inboundCapable' => false, 'agentAssigned' => false, 'businessNumber' => true];
+        foreach ([['inboundCapable' => false], ['agentAssigned' => false], ['inboundCapable' => false, 'agentAssigned' => false],
+            ['businessNumber' => 'true'] + $en, ['inboundCapable' => 'false'] + $en, ['agentAssigned' => 0] + $en, ['businessNumber' => false] + $en,
+            ['businessNumber' => null] + $en] as $hechos) {
             Cache::put(self::KEY, $vieja + $hechos, 3600);
             $this->assertFalse(VoiceNumberGuard::sharedIdentity()['admitted'], (string) json_encode($hechos));
             $this->assertTrue(VoiceNumberGuard::collidesForPolicy(), (string) json_encode($hechos));
         }
-        // Los dos, booleanos y en regla: se admite (lo escribe así la conciliación).
-        Cache::put(self::KEY, $vieja + ['inboundCapable' => false, 'agentAssigned' => false], 3600);
+        // Los tres, booleanos y en regla: se admite (lo escribe así la conciliación).
+        Cache::put(self::KEY, $vieja + $en, 3600);
         $this->assertTrue(VoiceNumberGuard::sharedIdentity()['admitted']);
         $this->assertSame([], $this->puerta($canario));
     }
@@ -392,11 +461,17 @@ class VoiceNumberSharedIdentityTest extends TestCase
     public function test_los_valores_por_defecto_de_la_observacion_fallan_cerrado(): void
     {
         VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true);
-        $this->assertSame(['inboundCapable' => null, 'agentAssigned' => null], array_intersect_key(Cache::get(self::KEY), ['inboundCapable' => 1, 'agentAssigned' => 1]));
-        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_inbound'], VoiceNumberGuard::sharedIdentity());
-        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true, false);
-        $this->assertSame('observed_agent', VoiceNumberGuard::sharedIdentity()['reason']);
+        $this->assertSame(['inboundCapable' => null, 'agentAssigned' => null, 'businessNumber' => null],
+            array_intersect_key(Cache::get(self::KEY), ['inboundCapable' => 1, 'agentAssigned' => 1, 'businessNumber' => 1]));
+        $this->assertSame(['declared' => true, 'admitted' => false, 'reason' => 'observed_not_business_number'], VoiceNumberGuard::sharedIdentity());
+        // Los cinco argumentos de la primera ronda (sin el número observado): tampoco.
         VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true, false, false);
+        $this->assertSame('observed_not_business_number', VoiceNumberGuard::sharedIdentity()['reason']);
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true, null, null, true);
+        $this->assertSame('observed_inbound', VoiceNumberGuard::sharedIdentity()['reason']);
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true, false, null, true);
+        $this->assertSame('observed_agent', VoiceNumberGuard::sharedIdentity()['reason']);
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, true, false, false, true);
         $this->assertTrue(VoiceNumberGuard::sharedIdentity()['admitted']);
     }
 

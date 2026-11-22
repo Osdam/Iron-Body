@@ -659,12 +659,12 @@ final class VoiceReconciler
      * Enmienda del 22-11-2026 (protección 6 y D8-5, por decisión expresa del
      * propietario): el número empresarial NO echa el freno `number_is_messaging`
      * si la identidad compartida se ADMITE con esta misma observación
-     * (`VoiceNumberGuard::sharedVerdict()`: la declaración, que el importado sea
-     * `TWILIO_VOICE_FROM` y el visible de la mensajería, solo saliente declarado
+     * (`VoiceNumberGuard::sharedVerdict()`: la declaración, que `TWILIO_VOICE_FROM`
+     * y el importado sean el visible de la mensajería y el mismo, solo saliente declarado
      * y observado, entrantes apagadas y sin agente); entonces es
      * `outbound_only`. Con cualquiera sin cumplir, el freno de siempre. El
      * resumen lo dice en `sharedWithMessaging` (null sin observación) y la caché
-     * guarda también los dos hechos del proveedor (en seco, nada).
+     * guarda también los tres hechos del proveedor (en seco, nada).
      *
      * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, sharedWithMessaging: array{declared: bool, admitted: bool, reason: ?string}|null, brakeOpened: bool, wouldOpenBrake?: bool}
      */
@@ -705,10 +705,13 @@ final class VoiceReconciler
         $choca = $o->phoneNumber() !== null && VoiceNumberGuard::collidesWithMessaging($o->phoneNumber());
         $observado = $o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED;
         // Enmienda del 22-11-2026: la identidad compartida, con ESTA observación (fresca y del id configurado por construcción).
+        // Ronda 2: la condición 2 sobre lo configurado (como VoiceNumberGuard::sharedIdentity()) y sobre lo observado.
+        $visible = $observado ? VoiceNumberGuard::isBusinessNumber($o->phoneNumber()) : null;
         $configuracion = VoiceNumberGuard::sharedConfigFacts();
         $compartida = ['declared' => $configuracion['declared']] + VoiceNumberGuard::sharedVerdict($configuracion + [
-            'businessNumber' => VoiceNumberGuard::isBusinessNumber($o->phoneNumber()),
+            'businessNumber' => VoiceNumberGuard::isBusinessNumber(VoicePhone::isE164($desde) ? $desde : null),
             'observationVerified' => $observado && $coincide === true,
+            'observedBusinessNumber' => $visible,
             'observedInboundCapable' => $o->inboundCapable,
             'observedAgentAssigned' => $observado ? $o->agentId !== null : null,
         ]);
@@ -717,7 +720,7 @@ final class VoiceReconciler
             $resumen['collidesWithMessaging'] = $choca;
             $resumen['sharedWithMessaging'] = $compartida;
             if (! $this->dryRun) {
-                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca, $o->inboundCapable, $o->agentId !== null);
+                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca, $o->inboundCapable, $o->agentId !== null, $visible);
             }
         }
         $identidad = ['where' => 'reconcile', 'part' => self::NUMBER_PART, 'seq' => $parte->seq];
