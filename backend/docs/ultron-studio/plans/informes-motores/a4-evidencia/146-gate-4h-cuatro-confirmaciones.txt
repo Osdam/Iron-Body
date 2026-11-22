@@ -246,3 +246,27 @@ Ejecutadas en la rama principal (origin/main = bc5167cb, sin nada de este trabaj
 Lo demás: batería completa sobre 0400b267, 18 985 pruebas, sin ninguna otra roja (a4-evidencia/142); guardas estáticas,
 141 con esa única roja; revisión de seguridad APTO CON CONDICIONES, sin bloqueantes (las condiciones son para antes de
 ampliar más allá de la canaria: informe-security-a4-regenerar.md).
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+5. EL ENSAYO DE REVERSIÓN Y LOS SERVICIOS CRÍTICOS (añadido el 22-11, 03:40 UTC, a petición del propietario)
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+El ensayo es: desplegar → comprobar → --vuelta-atras=<respaldo> → comprobar → desplegar otra vez, con el mismo guion.
+
+Qué toca y qué no (ops/deploy-a4-regenerar-backend.sh, cabecera, línea 51): «No toca nginx, FPM, supervisor (más allá de
+queue:restart), el crontab, la base ni n8n.» Sin migraciones. Cambia los 27 ficheros del motor y la caché de rutas (la
+vuelta atrás la restaura del respaldo con cat y mv, de forma atómica).
+
+Lo único que se reinicia son los procesos en segundo plano, con queue:restart, tres veces (una por paso): cada worker
+termina el trabajo que tiene entre manos y arranca de nuevo; lo que esté en cola espera unos segundos. El guion se niega a
+empezar si algún worker está en BACKOFF o FATAL («no se despliega sobre un sistema degradado»); tras cada reinicio espera a
+que los 14 tengan pid nuevo, hace dos lecturas pasado un margen y comprueba que ironbody-billing-worker (facturación)
+sigue como estaba.
+
+El código de acceso por SMS (OTP) no pasa por esos procesos: OtpService lo envía en la propia petición (su canal, Twilio
+Verify o el envío directo; «private function dispatch(): bool» es un método propio, no una cola). En app/Jobs el único
+trabajo que nombra Twilio es la llamada de voz saliente, cerrada en el código.
+
+Límite, dicho tal cual: son las operaciones de cualquier despliegue anterior, hechas tres veces, pero es la primera vez que
+la vuelta atrás del servidor se ejecuta en el servidor real (lo que no se puede comprobar antes está en
+ops/DEPLOY_A4_REGENERAR.md §10). Si un paso no cuadra, el guion se detiene o vuelve atrás solo (códigos 3, 4 o 5) y el
+lead para ahí: no sigue con n8n ni con la versión 3.
