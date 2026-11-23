@@ -1,0 +1,367 @@
+UNIDAD 1 DEL CIERRE OPERATIVO · PT-19 (la puerta del secreto interno antes que el limitador) · DESPLIEGUE EN PRODUCCIÓN
+23-11-2026 (UTC; 22-11 por la noche en Bogotá) · lead
+
+TIPO DE PRUEBA: despliegue REAL en producción (API), con la autorización específica del propietario, y comprobaciones
+reales contra producción antes y después. Nada simulado. Ningún secreto, teléfono ni dato personal en este fichero: el
+secreto interno no salió del proceso de PHP que lo usó. Ninguna llamada, campaña ni automatización activada. Las
+unidades 2 a 7, sin desplegar. La vuelta atrás no hizo falta.
+
+RESULTADO: DESPLEGADA SIN DESVÍOS (código 0 del guion). Producción sirve d52e46a9 desde las 01:49 UTC.
+  · ANTES: 6 peticiones sin secreto bajaron el cupo de n8n en 6 (de 119 a 112 con la legítima).
+  · DESPUÉS: las mismas 6 no lo movieron (de 119 a 118: solo la legítima). Las 21 rutas de api/internal/ responden 401
+    sin cabeceras X-RateLimit-*. Con el secreto, los tres grupos de puertas llegan a su controlador con su tope de siempre.
+  · Vigilancia de 15 minutos: 14 workers en RUNNING, 0 errores, 0 trabajos fallidos, 0 respuestas 5xx, 0 respuestas 429.
+
+[0] LA AUTORIZACIÓN (el propietario, en la conversación; 23-11-2026 hacia las 01:40 UTC, 8:40 p. m. del 22-11 en Bogotá; literal)
+    «Autorizo el despliegue en producción de la UNIDAD 1 — PT-19, exclusivamente sobre el commit d52e46a9.
+    Antes del despliegue verifica que el estado del servidor coincide con el esperado y que no hay errores ni cambios
+    ajenos.
+    Ejecuta el procedimiento aprobado, comprueba que las solicitudes sin credenciales no consumen el cupo legítimo y que
+    las solicitudes autorizadas continúan funcionando.
+    Si alguna comprobación falla, detén el proceso y aplica la reversión segura prevista.
+    No despliegues todavía las unidades 2 a 7 ni actives llamadas o automatizaciones.
+    Cuando termines, presenta la evidencia y solicítame la autorización de la unidad 2.»
+
+[1] 01:43 UTC · ESTADO DEL SERVIDOR ANTES (solo lectura)
+    reloj del servidor: 01:43:33 UTC
+    sirve: f1fe6cacf2ee333b9c9a31c1406f02a625fd76ef · HEAD
+    cambios con seguimiento (modificados, borrados o en el índice): 0
+      NO VACÍO o no es fichero: www-data 644 740 bytes 2026-06-03 16:37:01.720229041 +0000  backend/public.backup-before-privacy-policy-20260629_204504/.htaccess
+      NO VACÍO o no es fichero: root 644 88260 bytes 2026-06-26 21:08:02.986494428 +0000  backend/public.backup-before-privacy-policy-20260629_204504/brand/iron-body-email-gmail-logo.png
+      NO VACÍO o no es fichero: root 644 53220 bytes 2026-06-26 21:02:44.991313311 +0000  backend/public.backup-before-privacy-policy-20260629_204504/brand/iron-body-email-logo-dark.png
+      NO VACÍO o no es fichero: root 644 136080 bytes 2026-06-26 21:29:56.658581045 +0000  backend/public.backup-before-privacy-policy-20260629_204504/brand/iron-body-email-logo.png
+      NO VACÍO o no es fichero: root 644 227381 bytes 2026-06-26 20:51:24.749479942 +0000  backend/public.backup-before-privacy-policy-20260629_204504/brand/iron-body-logo.png
+      NO VACÍO o no es fichero: www-data 644 543 bytes 2026-06-03 16:37:01.720229041 +0000  backend/public.backup-before-privacy-policy-20260629_204504/index.php
+      NO VACÍO o no es fichero: www-data 644 24 bytes 2026-06-03 16:37:01.720229041 +0000  backend/public.backup-before-privacy-policy-20260629_204504/robots.txt
+      NO VACÍO o no es fichero: root 777 39 bytes 2026-06-18 03:43:52.838661785 +0000  backend/public.backup-before-privacy-policy-20260629_204504/storage
+    --- sin seguimiento: 89 · ficheros vacíos (0 bytes): 81, creados entre 2026-06-03 16:37 y 2026-10-08 18:41 UTC · otros: 8
+        por carpeta:  5 "backend; 75 backend; 5 backend/public.backup-before-privacy-policy-20260629_204504; 4 backend/public.backup-before-privacy-policy-20260629_204504/brand
+    --- workers (supervisor):
+         14 RUNNING
+    --- sesiones de tmux de root: 0 · procesos de despliegue vivos: 0
+    --- registro: storage/logs/laravel.log · production.ERROR hoy (2026-11-23 UTC): 0 · ayer (2026-11-22): 1
+    [2026-11-22 14:23:40] production.ERROR: Not enough arguments (missing: "conversation"). {"exception":"[object] (Symfony\\Component\\Console\
+    --- ultron-studio:publication-check: salida 0
+    --- cachés: www-data 600 bootstrap/cache/config.php www-data 600 bootstrap/cache/routes-v7.php
+    --- bootstrap/app.php que sirve: sha256 294e57ab759aebc002771180bd0fd7f6ef62673f7c7b9a7e8d2a1b46693f387c
+    --- OPcache del FPM:
+    --- disco: 165G libres, 15% usado · respaldos: 165G libres
+    --- /root: guion que hay ahora 6911f61a76e028c0… · /root/cierre-pt19: 0 ficheros
+    --- respaldos de despliegues anteriores: cierre-lote-20261122-145816
+    --- llamadas a /api/internal/ en access.log (hoy UTC, por hora → código:veces):
+      13h: 200×2
+      14h: 200×14
+      16h: 200×10 499×1
+      17h: 200×50
+      18h: 200×4122
+      19h: 200×4341
+      20h: 200×4143 504×1
+      21h: 401×1
+    --- últimas llamadas a /api/internal/ (hora, método, ruta sin consulta, código):
+    22/Nov/2026:20:17:20 POST /api/internal/automation/notify-member 200
+    22/Nov/2026:20:17:20 POST /api/internal/automation/notify-member 200
+    22/Nov/2026:20:17:20 POST /api/internal/automation/notify-member 200
+    22/Nov/2026:21:42:40 GET /api/internal/marketing/ai/doctor 401
+    23/Nov/2026:00:01:13 POST /api/internal/automation/wellness-run 499
+    23/Nov/2026:00:01:43 POST /api/internal/automation/wellness-run 200
+
+    Lectura: producción en f1fe6cac y sin ningún cambio en ficheros con seguimiento; el bootstrap/app.php que sirve es el
+    294e57ab…387c que da la ficha para f1fe6cac. Los 89 ficheros SIN seguimiento son anteriores y ajenos a este cierre:
+    80 ficheros vacíos en backend/ (1 del 7 y 79 del 8 de octubre de 2026; nombres como «0,» o «[label»: restos de una
+    orden de consola mal entrecomillada) y una copia de public/ de junio de 2026 (la carpeta
+    public.backup-before-privacy-policy-20260629_204504: 9 ficheros con fechas del 3, el 18 y el 26 de junio, uno de
+    ellos vacío). Ninguno es de hoy y ninguno se ha tocado. El guion mira el árbol con --untracked-files=no y pasó igual
+    con ellos el 22-11. Quedan señalados al propietario como limpieza pendiente, fuera de este cierre. El único production.ERROR de la víspera es una orden de consola del lead lanzada sin su argumento
+    (14:23 UTC del 22-11; sin efecto). Las llamadas internas de las 21h (un 401) y la de las 00:01 son la sonda de la
+    evidencia 10 del 22-11 y la tanda de bienestar de n8n.
+
+[2] 01:41 y 01:46 UTC · LA UNIDAD, EN LOCAL (antes de subirla)
+    origin/main = bfe61ba6 (sin moverse) · despliegue/u1-pt19 = d52e46a9a35379cc19b2077df9134d0f9a2e81c8 (el commit
+    autorizado), que desciende de origin/main: avance rápido, 42 commits.
+    Fuera de backend/docs/, frente a f1fe6cac, exactamente dos ficheros:
+        backend/bootstrap/app.php
+        backend/tests/Feature/Marketing/PuertasInternasSecretoAntesDelCupoTest.php
+    (65 ficheros en total; 63 de documentación.)
+    sha256 de backend/bootstrap/app.php en d52e46a9: d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710
+    (la huella de la ficha: el fichero que revisó seguridad de API y pasó la batería).
+    sha256 del guion en d52e46a9: db4bc1f5d856da8d945c9f305cded769ba6c9d8c14ebc8a4a8672f0bea78547a.
+    Constantes de llamadas y de envíos: CALLS_ENABLED_IN_CODE = false · SENDS_ENABLED_IN_CODE = false.
+    Batería completa sobre d52e46a9 (01:16–01:36 UTC): 19 265 pruebas, 506 154 aserciones; el único fallo, el tolerado
+    de la línea base (PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote, que corrige la unidad 5);
+    0 regresiones.
+
+[3] 01:46 UTC · LÍNEA BASE DEL CUPO, CON EL CÓDIGO ANTERIOR
+    Sonda: ops/comprobacion-produccion/sonda-cupo-puertas-internas.php, ejecutada en el servidor como www-data. Una
+    petición con el secreto, cinco sin credenciales, una con un secreto falso y otra con el secreto, todas a
+    GET api/internal/marketing/ai/doctor (solo lee configuración), por el mismo camino que n8n.
+    ── ANTES del despliegue · sonda en el servidor · 23-11-2026 01:46:41 UTC · producción sirve f1fe6cac ──
+      01:46:44 UTC · CON el secreto (como n8n)          → 200 · X-RateLimit-*: presentes · tope 120 · quedan 119 · ok=true
+      01:46:45 UTC · SIN credenciales (1 de 5)          → 401 · X-RateLimit-*: presentes · tope 120 · quedan 118 · ok=false
+      01:46:45 UTC · SIN credenciales (2 de 5)          → 401 · X-RateLimit-*: presentes · tope 120 · quedan 117 · ok=false
+      01:46:45 UTC · SIN credenciales (3 de 5)          → 401 · X-RateLimit-*: presentes · tope 120 · quedan 116 · ok=false
+      01:46:45 UTC · SIN credenciales (4 de 5)          → 401 · X-RateLimit-*: presentes · tope 120 · quedan 115 · ok=false
+      01:46:45 UTC · SIN credenciales (5 de 5)          → 401 · X-RateLimit-*: presentes · tope 120 · quedan 114 · ok=false
+      01:46:45 UTC · con un secreto FALSO               → 401 · X-RateLimit-*: presentes · tope 120 · quedan 113 · ok=false
+      01:46:45 UTC · CON el secreto (como n8n)          → 200 · X-RateLimit-*: presentes · tope 120 · quedan 112 · ok=true
+      entre las dos peticiones con secreto hubo 6 sin él: el cupo de n8n bajó 7 (1 = solo la suya; 7 = las 6 anónimas también contaron)
+      RESULTADO: las peticiones sin secreto SÍ gastan el cupo de n8n
+    ── ANTES · desde fuera (el Mac), sin credenciales ──
+      estado 401
+      cabeceras x-ratelimit-*: 2
+
+[4] 01:47 UTC · SUBIDA A LA RAMA PRINCIPAL
+    git push origin despliegue/u1-pt19:main  →  bfe61ba6..d52e46a9 (avance rápido; sin forzar).
+
+[5] 01:48 UTC · GUION, LISTA Y MARCADOR EN EL SERVIDOR (/root, 600 de root; la aplicación no se toca)
+    P (producción) = f1fe6cac · N (origin/main) = d52e46a9 · avance rápido
+    guion     local y servidor: db4bc1f5d856da8d945c9f305cded769ba6c9d8c14ebc8a4a8672f0bea78547a
+    lista     local y servidor: 47934ee4f2211b36bd38322f5bb137ea81a851f5bd6c729acf91a897716c6183 (65 ficheros)
+    marcador  local y servidor: 9db5b0def01746683cb387f16e624e987db4eea3a4bbc1e378217ab623be3ed5
+              GET api/internal/marketing/ai/doctor 401 x-ratelimit-limit presente ausente
+
+[6] 01:48:15 UTC · --solo-comprobar (salida entera del guion; no toca nada)
+    == deploy-cierre-lote.sh · 2026-11-23T01:48:15Z · modo comprobar · PREVIO=f1fe6cac · NUEVO=d52e46a9 · lista /root/cierre-pt19/lista.txt
+       declaraciones: migraciones — · config — · rutas — · programador —
+       declaraciones de PT-19: bootstrap/app.php con huella d8e9cd270b928afe… (--bootstrap) · marcador /root/cierre-pt19/marcador.txt: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente en el previo y ausente en el nuevo
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción f1fe6cac limpia · origin/main d52e46a9 · 46 commit(s) · 65 ficheros = la lista: 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · 63 de docs · 0 otros
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       bootstrap/app.php: sha256 en d52e46a9 = la declarada con --bootstrap (d8e9cd270b928afe…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en f1fe6cac y en d52e46a9; los dos ficheros sin cambios
+          d52e46a9 merge: el guion de despliegue enmendado y el orden del cierre operativo (cierre/ops-orden 7ecc4596)
+          80255f4d merge: unidad 1 del cierre operativo, PT-19 (la puerta del secreto interno antes que el limitador)
+          2cff6971 docs(ultron-studio): CIERRE TÉCNICO READY: PT-14 cerrado; los 19 pendientes de la lista, cerrados con su crit
+          7ecc4596 ops(ultron-studio): el orden del cierre operativo: siete unidades con su ficha, ensayadas encadenadas en el ba
+          df095ad9 ops(ultron-studio): PT-19, una vía de despliegue declarada para bootstrap/app.php, ensayada en el banco
+          ba0ef673 docs(ultron-studio): PT-19 cerrado (seguridad de API apta, batería sin regresiones, integrado); PT-14 en impl
+          c78e248e test(seguridad): PT-19 tras su revisión de seguridad de API: la guarda ampliada y la firma mala
+          de38b119 docs(ultron-studio): la decisión final del propietario (PT-14 con A y B, PT-19 en código, modelo del laborat
+          5cd201eb fix(seguridad): PT-19, la puerta del secreto interno corre antes que el limitador
+          0a8d3c61 docs(ultron-studio): informe completo de cierre técnico entregado al propietario; §0 al día
+          b8f7c2ec docs(ultron-studio): control de cierre, 17 de 18: PT-15 cerrado; PT-19 propuesto (puertas internas), sin abrir
+          e325d93a docs(ultron-studio): control de cierre, 16 de 18: PT-13 y PT-18 cerrados; PT-15 implementado y en revisión
+          … y 34 commit(s) más
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       pendientes frente a origin/main: ninguna (el lote no migra)
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · tras el código nuevo tiene que dar x-ratelimit-limit ausente antes de 32 s (revalidate_freq + 30 s)
+       plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+    código de salida: 0
+
+[7] 01:48:43 → 01:49:30 UTC · EL DESPLIEGUE, DENTRO DE tmux (sesión pt19; salida entera del guion)
+    bash /root/deploy-cierre-lote.sh f1fe6cac d52e46a9 /root/cierre-pt19/lista.txt \
+         --bootstrap=d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710 --marcador=/root/cierre-pt19/marcador.txt
+    == deploy-cierre-lote.sh · 2026-11-23T01:48:43Z · modo despliegue · PREVIO=f1fe6cac · NUEVO=d52e46a9 · lista /root/cierre-pt19/lista.txt
+       declaraciones: migraciones — · config — · rutas — · programador —
+       declaraciones de PT-19: bootstrap/app.php con huella d8e9cd270b928afe… (--bootstrap) · marcador /root/cierre-pt19/marcador.txt: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente en el previo y ausente en el nuevo
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción f1fe6cac limpia · origin/main d52e46a9 · 46 commit(s) · 65 ficheros = la lista: 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · 63 de docs · 0 otros
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       bootstrap/app.php: sha256 en d52e46a9 = la declarada con --bootstrap (d8e9cd270b928afe…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en f1fe6cac y en d52e46a9; los dos ficheros sin cambios
+          d52e46a9 merge: el guion de despliegue enmendado y el orden del cierre operativo (cierre/ops-orden 7ecc4596)
+          80255f4d merge: unidad 1 del cierre operativo, PT-19 (la puerta del secreto interno antes que el limitador)
+          2cff6971 docs(ultron-studio): CIERRE TÉCNICO READY: PT-14 cerrado; los 19 pendientes de la lista, cerrados con su crit
+          7ecc4596 ops(ultron-studio): el orden del cierre operativo: siete unidades con su ficha, ensayadas encadenadas en el ba
+          df095ad9 ops(ultron-studio): PT-19, una vía de despliegue declarada para bootstrap/app.php, ensayada en el banco
+          ba0ef673 docs(ultron-studio): PT-19 cerrado (seguridad de API apta, batería sin regresiones, integrado); PT-14 en impl
+          c78e248e test(seguridad): PT-19 tras su revisión de seguridad de API: la guarda ampliada y la firma mala
+          de38b119 docs(ultron-studio): la decisión final del propietario (PT-14 con A y B, PT-19 en código, modelo del laborat
+          5cd201eb fix(seguridad): PT-19, la puerta del secreto interno corre antes que el limitador
+          0a8d3c61 docs(ultron-studio): informe completo de cierre técnico entregado al propietario; §0 al día
+          b8f7c2ec docs(ultron-studio): control de cierre, 17 de 18: PT-15 cerrado; PT-19 propuesto (puertas internas), sin abrir
+          e325d93a docs(ultron-studio): control de cierre, 16 de 18: PT-13 y PT-18 cerrados; PT-15 implementado y en revisión
+          … y 34 commit(s) más
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       pendientes frente a origin/main: ninguna (el lote no migra)
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · tras el código nuevo tiene que dar x-ratelimit-limit ausente antes de 32 s (revalidate_freq + 30 s)
+       plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    1. respaldo /var/backups/ironbody/cierre-lote-20261123-014845 (700 de root; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (13 ficheros)
+    2. código → cachés:
+    C. código: HEAD=d52e46a9 (merge --ff-only, umask 022) · www-data lee los 65 ficheros del merge
+    K. cachés: configuración sin regenerar · rutas sin regenerar (como www-data, umask 077) · www-data 600 / www-data 600
+    3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+    4. sin credenciales: admin/voice/status → 401 (esperado 401)
+       marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401 ausente tras 1 lectura(s) (esperado 401 ausente: el servidor sirve el bootstrap/app.php nuevo)
+       migrate:status --pending (como www-data): ninguna pendiente · declaradas registradas: 0 de 0
+       schedule:list: 53 → 53 tareas · diferencia [] (declarada [])
+       route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+       production.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+       producción sirve d52e46a9 · respaldo /var/backups/ironbody/cierre-lote-20261123-014845 · registro /var/backups/ironbody/cierre-lote-20261123-014845/registro.log
+       VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · production.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+       vuelta atrás: bash /root/deploy-cierre-lote.sh f1fe6cac d52e46a9 /root/cierre-pt19/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-014845
+    LOTE DESPLEGADO SIN DESVÍOS
+    CÓDIGO DE SALIDA DEL GUION: 0
+
+[8] 01:49:55 UTC · LA MISMA SONDA DEL CUPO, CON EL CÓDIGO NUEVO
+    ── DESPUÉS del despliegue · sonda en el servidor · 23-11-2026 01:49:52 UTC · producción sirve d52e46a9 ──
+      01:49:55 UTC · CON el secreto (como n8n)          → 200 · X-RateLimit-*: presentes · tope 120 · quedan 119 · ok=true
+      01:49:55 UTC · SIN credenciales (1 de 5)          → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · SIN credenciales (2 de 5)          → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · SIN credenciales (3 de 5)          → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · SIN credenciales (4 de 5)          → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · SIN credenciales (5 de 5)          → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · con un secreto FALSO               → 401 · X-RateLimit-*: AUSENTES (no cuenta) · ok=false
+      01:49:56 UTC · CON el secreto (como n8n)          → 200 · X-RateLimit-*: presentes · tope 120 · quedan 118 · ok=true
+      entre las dos peticiones con secreto hubo 6 sin él: el cupo de n8n bajó 1 (1 = solo la suya; 7 = las 6 anónimas también contaron)
+      RESULTADO: las peticiones sin secreto NO gastan el cupo de n8n
+    ── DESPUÉS · desde fuera (el Mac), sin credenciales ──
+      estado 401
+      cabeceras x-ratelimit-*: 0
+
+[9] 01:50:39 UTC · BARRIDO DE TODAS LAS PUERTAS INTERNAS SIN CREDENCIALES
+    ops/comprobacion-produccion/barrido-puertas-internas-sin-credenciales.php: una petición sin credenciales a cada ruta
+    de api/internal/ que da route:list, con su método. Sin secreto ninguna llega a su controlador.
+    ── DESPUÉS · barrido de las puertas internas sin credenciales · 23-11-2026 01:50:39 UTC ──
+      POST  api/internal/automation/notify-member                      → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/automation/notify-trainer                     → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/automation/weekly-summary                     → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/automation/wellness-run                       → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai-action                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai/analyze-message                  → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai/check                            → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai/commit                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai/decide                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      GET   api/internal/marketing/ai/doctor                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/ai/ultron/incidents                 → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      GET   api/internal/marketing/context/{lead}                      → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/followups                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/human-takeover                      → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      GET   api/internal/marketing/knowledge                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/knowledge                           → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      GET   api/internal/marketing/knowledge/doctor                    → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      GET   api/internal/marketing/meta/doctor                         → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/payment-links                       → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/payment-links/send                  → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      POST  api/internal/marketing/send-message                        → 401 · X-RateLimit-*: ausentes · puerta del secreto: sí
+      rutas de api/internal/: 21 · con la puerta del secreto: 21 · 401 sin contar: 21 de 21
+      RESULTADO: las 21 puertas internas rechazan sin credenciales y ninguna descuenta cupo
+
+[10] 01:55 y 01:57 UTC · LAS PETICIONES AUTORIZADAS SIGUEN ENTRANDO, POR LOS TRES GRUPOS DE PUERTAS
+    ops/comprobacion-produccion/sonda-puertas-internas-autorizadas.php: con el secreto, una petición sin efectos por grupo.
+    Primera pasada (01:55): la tercera petición fue a knowledge/doctor, que está en el cubo del asesor y no en el tercer
+    grupo (por eso su contador siguió al de ai/doctor: 119 y 118). Se corrigió la sonda y se repitió.
+    ── DESPUÉS · peticiones AUTORIZADAS por los tres grupos de puertas · 23-11-2026 01:55:51 UTC ──
+      01:55:53 UTC · CON el secreto · GET  marketing/ai/doctor          → 200 (esperado 200) · tope 120 · quedan 119 · el asesor (decide, commit…)
+      01:55:53 UTC · CON el secreto · POST automation/notify-member     → 422 (esperado 422) · tope 600 · quedan 599 · las notificaciones a socios
+      01:55:53 UTC · CON el secreto · GET  marketing/knowledge/doctor   → 200 (esperado 200) · tope 120 · quedan 118 · la base de conocimiento y el contexto
+      RESULTADO: con el secreto, los tres grupos pasan la puerta y el limitador y llegan a su controlador, con su tope de siempre
+    Segunda pasada (01:57), con el tercer grupo bien elegido (un prospecto que no existe: 404 tras una lectura):
+    ── DESPUÉS · peticiones AUTORIZADAS por los tres grupos de puertas (segunda pasada, con el tercer grupo bien elegido) · 23-11-2026 01:57:23 UTC ──
+      01:57:25 UTC · CON el secreto · GET  marketing/ai/doctor          → 200 (esperado 200) · tope 120 · quedan 119 · el asesor (decide, commit…)
+      01:57:25 UTC · CON el secreto · POST automation/notify-member     → 422 (esperado 422) · tope 600 · quedan 599 · las notificaciones a socios
+      01:57:25 UTC · CON el secreto · GET  marketing/context/999999999  → 404 (esperado 404) · tope 120 · quedan 119 · el tercer grupo (send-message, followups, context)
+      RESULTADO: con el secreto, los tres grupos pasan la puerta y el limitador y llegan a su controlador, con su tope de siempre
+
+    Lectura: el 422 de notify-member es la validación del controlador (su primera línea) ante un cuerpo vacío: prueba
+    que la petición pasó la puerta y el limitador de las notificaciones (tope 600) sin crear nada. El 404 de
+    context/999999999 es la respuesta del controlador a un prospecto que no existe.
+
+[11] 01:51 UTC · ESTADO DEL SERVIDOR DESPUÉS, PRIMERA LECTURA (solo lectura)
+    reloj del servidor: 23-11-2026 01:51:14 UTC · desde el despliegue (2026-11-23 01:48:43 UTC): 2 min
+    sirve: d52e46a9a35379cc19b2077df9134d0f9a2e81c8 · cambios con seguimiento: 0 · sin seguimiento: 89 (los mismos de antes: 89)
+    bootstrap/app.php que sirve: sha256 d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710
+    workers:  14 RUNNING · el más antiguo lleva: 0:02:27 · facturación: active
+    sesión tmux pt19: terminada · procesos de despliegue vivos: 0
+    production.ERROR desde el despliegue: 0 · WARNING: 0
+    failed_jobs desde el despliegue: 0 · en total: 2
+    ultron-studio:publication-check: salida 0
+    cachés: www-data 600;www-data 600 · route:list: 1046 rutas
+    respuestas de la API desde el despliegue, por clase: 2xx=15 4xx=32
+    5xx desde el despliegue: 0 · 429: 0
+    llamadas a /api/internal/ desde el despliegue (ruta → código × veces):
+      GET /api/internal/marketing/ai/doctor 200 ×2
+      GET /api/internal/marketing/ai/doctor 401 ×10
+      GET /api/internal/marketing/context/N 401 ×1
+      GET /api/internal/marketing/knowledge 401 ×1
+      GET /api/internal/marketing/knowledge/doctor 401 ×1
+      GET /api/internal/marketing/meta/doctor 401 ×1
+      POST /api/internal/automation/notify-member 401 ×1
+      POST /api/internal/automation/notify-trainer 401 ×1
+      POST /api/internal/automation/weekly-summary 401 ×1
+      POST /api/internal/automation/wellness-run 401 ×1
+      POST /api/internal/marketing/ai-action 401 ×1
+      POST /api/internal/marketing/ai/analyze-message 401 ×1
+      POST /api/internal/marketing/ai/check 401 ×1
+      POST /api/internal/marketing/ai/commit 401 ×1
+      POST /api/internal/marketing/ai/decide 401 ×1
+      POST /api/internal/marketing/ai/ultron/incidents 401 ×1
+      POST /api/internal/marketing/followups 401 ×1
+      POST /api/internal/marketing/human-takeover 401 ×1
+      POST /api/internal/marketing/knowledge 401 ×1
+      POST /api/internal/marketing/payment-links 401 ×1
+      POST /api/internal/marketing/payment-links/send 401 ×1
+      POST /api/internal/marketing/send-message 401 ×1
+    llamadas a /api/internal/ con 200 desde el despliegue (hora UTC, ruta): las de la sonda son GET ai/doctor a las 01:49:55-56
+      01:49:55 GET /api/internal/marketing/ai/doctor
+      01:49:56 GET /api/internal/marketing/ai/doctor
+
+[12] 02:04 UTC · VIGILANCIA A LOS 15 MINUTOS (DEPLOY_CIERRE_LOTES.md §7; solo lectura)
+    reloj del servidor: 23-11-2026 02:04:16 UTC · desde el despliegue (2026-11-23 01:48:43 UTC): 15 min
+    sirve: d52e46a9a35379cc19b2077df9134d0f9a2e81c8 · cambios con seguimiento: 0 · sin seguimiento: 89 (los mismos de antes: 89)
+    bootstrap/app.php que sirve: sha256 d8e9cd270b928afe0e5495809c779c4cd0c753abd025f4919cc1c755c26cb710
+    workers:  14 RUNNING · el más antiguo lleva: 0:15:30 · facturación: active
+    sesión tmux pt19: terminada · procesos de despliegue vivos: 0
+    production.ERROR desde el despliegue: 0 · WARNING: 0
+    failed_jobs desde el despliegue: 0 · en total: 2
+    ultron-studio:publication-check: salida 0
+    cachés: www-data 600;www-data 600 · route:list: 1046 rutas
+    respuestas de la API desde el despliegue, por clase: 2xx=87 4xx=35
+    5xx desde el despliegue: 0 · 429: 0
+    llamadas a /api/internal/ desde el despliegue (ruta → código × veces):
+      GET /api/internal/marketing/ai/doctor 200 ×4
+      GET /api/internal/marketing/ai/doctor 401 ×10
+      GET /api/internal/marketing/context/N 401 ×1
+      GET /api/internal/marketing/context/N 404 ×1
+      GET /api/internal/marketing/knowledge 401 ×1
+      GET /api/internal/marketing/knowledge/doctor 200 ×1
+      GET /api/internal/marketing/knowledge/doctor 401 ×1
+      GET /api/internal/marketing/meta/doctor 401 ×1
+      POST /api/internal/automation/notify-member 401 ×1
+      POST /api/internal/automation/notify-member 422 ×2
+      POST /api/internal/automation/notify-trainer 401 ×1
+      POST /api/internal/automation/weekly-summary 401 ×1
+      POST /api/internal/automation/wellness-run 401 ×1
+      POST /api/internal/marketing/ai-action 401 ×1
+      POST /api/internal/marketing/ai/analyze-message 401 ×1
+      POST /api/internal/marketing/ai/check 401 ×1
+      POST /api/internal/marketing/ai/commit 401 ×1
+      POST /api/internal/marketing/ai/decide 401 ×1
+      POST /api/internal/marketing/ai/ultron/incidents 401 ×1
+      POST /api/internal/marketing/followups 401 ×1
+      POST /api/internal/marketing/human-takeover 401 ×1
+      POST /api/internal/marketing/knowledge 401 ×1
+      POST /api/internal/marketing/payment-links 401 ×1
+      POST /api/internal/marketing/payment-links/send 401 ×1
+      POST /api/internal/marketing/send-message 401 ×1
+    llamadas a /api/internal/ con 200 desde el despliegue (hora UTC, ruta): las de la sonda son GET ai/doctor a las 01:49:55-56
+      01:49:55 GET /api/internal/marketing/ai/doctor
+      01:49:56 GET /api/internal/marketing/ai/doctor
+      01:55:53 GET /api/internal/marketing/ai/doctor
+      01:55:53 GET /api/internal/marketing/knowledge/doctor
+      01:57:25 GET /api/internal/marketing/ai/doctor
+
+    Todas las llamadas a /api/internal/ desde el despliegue son las de este fichero (el marcador del guion, las sondas y
+    el barrido). n8n no ha hecho ninguna: su registro de ejecuciones (solo metadatos) no tiene ninguna desde las
+    01:48 UTC; la última es la tanda de bienestar de las 00:00 UTC, correcta.
+
+[13] VUELTA ATRÁS (disponible; no usada)
+    bash /root/deploy-cierre-lote.sh f1fe6cac d52e46a9 /root/cierre-pt19/lista.txt \
+         --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-014845          (dentro de tmux)
+    Devuelve el código a f1fe6cac y exige el marcador otra vez en «presente». No hay datos que deshacer.
+
+[14] LO QUE QUEDA POR VER, Y POR QUÉ
+    · La primera llamada REAL de n8n con el código nuevo (un turno del asesor de WhatsApp o una notificación a un socio).
+      Entre el despliegue y las 02:04 UTC no hubo ninguna: era domingo por la noche. Lo comprobado con el secreto es el
+      mismo camino (nombre público, TLS, nginx, FPM, la misma cabecera) y los tres grupos, pero no es n8n. Se mira en
+      solo lectura en cuanto ocurra: en access.log, las llamadas a /api/internal/ con sus códigos de siempre y ningún
+      401, 403 ni 429 nuevo; en n8n, la ejecución en «success».
+    · El tope legítimo en producción (la petición 121 del minuto con secreto → 429) no se ha provocado a propósito: lo
+      fijan las 12 pruebas de PuertasInternasSecretoAntesDelCupoTest y gastarlo en producción dejaría sin cupo al asesor
+      ese minuto.
