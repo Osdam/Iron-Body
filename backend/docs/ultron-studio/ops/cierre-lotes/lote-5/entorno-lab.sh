@@ -94,8 +94,14 @@ PY
 # 0 si se lee. Con dos contenidos separados por NUL, dice qué claves cambian de uno a otro (sus nombres, nunca valores),
 # si no cambia ninguna que no esté decidida y, con «aplicar», si en el segundo las decididas valen lo decidido.
 parsea() { sudo -u "$WWW" php -r 'require "vendor/autoload.php"; try { Dotenv\Dotenv::parse(stream_get_contents(STDIN)); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }' > /dev/null 2>&1; }
+# CORREGIDO el 23-11-2026 (lead, al desplegar la unidad 2): DECIDIDO y COMO se le pasan a php con `env` DESPUÉS de sudo.
+# Puestas delante (`DECIDIDO=… sudo -u …`), el sudo de producción (`Defaults env_reset`) las borraba, php se quedaba sin
+# la declaración y la comparación abortaba con un TypeError antes de escribir: `aplicar` fallaba cerrado SIEMPRE (código
+# 1, «no se ha tocado nada»). El banco no lo vio porque su sudo conservaba el entorno. Los dos valores son públicos (la
+# declaración de entorno-lab.txt y «aplicar»/«vuelta»): pueden constar en el registro de sudo. Los ficheros de entorno
+# siguen yendo solo por la entrada.
 compara() { # <antes> <después> <aplicar|vuelta>
-  { cat "$1"; printf '\0'; cat "$2"; } | DECIDIDO="$DECIDIDO" COMO="$3" sudo -u "$WWW" php -r '
+  { cat "$1"; printf '\0'; cat "$2"; } | sudo -u "$WWW" env DECIDIDO="$DECIDIDO" COMO="$3" php -r '
 require "vendor/autoload.php";
 [$a, $b] = explode("\0", stream_get_contents(STDIN), 2) + [1 => ""];
 try { $va = Dotenv\Dotenv::parse($a); $vb = Dotenv\Dotenv::parse($b); } catch (Throwable $e) { echo "no se lee\n"; exit(1); }

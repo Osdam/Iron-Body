@@ -54,8 +54,8 @@ BLOQUES_4 = [
 APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
-        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.50, "integrado el 22-11 (lote 5, bdb93199): seguridad, base de datos y revisión final sin bloqueantes abiertos (B-1 corregido) y batería completa sin regresiones; falta desplegarlo (HUMAN GATE)", "c"),
-        ("CRM: lanzar y ver una ejecución del motor", 15, 0.40, "implementada, probada y con su revisión final aprobada (PT-09 y PT-10, 22-11); falta publicarla (HUMAN GATE)", "c"),
+        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.70, "desplegado y verificado en producción el 23-11 (unidad 2, 9c2325a1): la migración, las 6 banderas, el modelo del laboratorio alineado con el del asesor (gpt-4.1-mini) y la puerta de publicar idéntica antes y después; falta la primera ejecución real (la línea base, que lanza el propietario)", "c"),
+        ("CRM: lanzar y ver una ejecución del motor", 15, 0.70, "publicada el 23-11 (CRM 744dfc2) y verificada en producción con la sesión técnica: el lanzador con «Recorrido del motor», la estimación permitida y el filtro por tipo; falta ver una ejecución del motor (la línea base)", "c"),
         ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
     ]),
     6: (0.50, [
@@ -88,7 +88,7 @@ APARTADOS = {
     ]),
     10: (0.35, [
         ("Libro de autorizaciones, lector y rutas", 30, 0.50, "integrado el 22-11 (lote 4, ba4b143e): vuelve a 0,50 al cerrarse PT-18 (el identificador del socio), con seguridad de API y revisión final sin bloqueantes y su batería completa; falta desplegarlo (HUMAN GATE)", "c"),
-        ("CRM: pantalla de autorizaciones de contacto", 10, 0.40, "implementada, probada y con su revisión final aprobada tras cerrar el bloqueante del identificador del socio (PT-07, PT-10 y PT-18, 22-11); falta publicarla (HUMAN GATE)", "c"),
+        ("CRM: pantalla de autorizaciones de contacto", 10, 0.40, "implementada, probada y con su revisión final aprobada tras cerrar el bloqueante del identificador del socio (PT-07, PT-10 y PT-18, 22-11); va dentro del CRM publicado el 23-11 (744dfc2), pero la pestaña no aparece hasta que el servidor conozca sus llaves (unidad 4): no sube hasta entonces", "c"),
         ("Texto legal, fuentes e identidad de socios sin prospecto", 10, 0.00, "decisión del propietario y su asesoría", "o"),
         ("Quejas presenciales y descarte de una queja mal detectada", 15, 0.50, "integrado el 22-11 (lote 4, ba4b143e): vuelve a 0,50 al cerrarse PT-18 (el identificador del socio), con seguridad de API y revisión final sin bloqueantes y su batería completa; falta desplegarlo (HUMAN GATE)", "c"),
         ("Cuatro ojos por regla", 20, 0.70, "desplegado y verificado en producción el 22-11 (lote 2, fddd3450); apagado: falta la prueba real", "c"),

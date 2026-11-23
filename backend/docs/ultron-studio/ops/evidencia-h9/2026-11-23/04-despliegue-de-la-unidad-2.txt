@@ -1,0 +1,576 @@
+UNIDAD 2 DEL CIERRE OPERATIVO · EL LABORATORIO FRENTE AL MOTOR, SU MODELO ALINEADO (2b) Y EL CRM · DESPLIEGUE EN PRODUCCIÓN
+23-11-2026 (UTC; 22-11 por la noche en Bogotá) · lead
+
+TIPO DE PRUEBA: despliegue REAL en producción (API, base de datos, fichero de entorno y CRM), con la autorización específica
+del propietario, y comprobaciones reales contra producción antes y después. Nada simulado. Ningún secreto, teléfono ni dato
+personal en este fichero: del fichero de entorno solo constan nombres de claves y «= lo decidido»/«otro valor»; el secreto
+interno y la sesión de la cuenta técnica no se imprimieron en ningún sitio. Ninguna llamada, campaña ni automatización
+activada. Ninguna ejecución del laboratorio lanzada. Las unidades 3 a 7, sin desplegar. La vuelta atrás no hizo falta.
+
+RESULTADO: DESPLEGADA SIN DESVÍOS (código 0 del guion, 02:39:19 a 02:40:07 UTC) Y CRM PUBLICADO (02:42:48 UTC).
+  · Producción sirve la API 9c2325a1 y el CRM 744dfc2.
+  · UN INCIDENTE, resuelto antes de tocar producción: el primer intento se detuvo solo en su primer paso (el guion que
+    escribe las cuatro líneas del laboratorio falló CERRADO, código 1, «no se ha tocado nada»). Causa raíz demostrada, una
+    línea corregida, ensayada en el propio servidor contra un fichero inventado, y segundo intento limpio ([6] a [9]).
+  · Entre antes y después solo cambia lo declarado ([11]): el commit, la migración (una columna nula), el modelo y los
+    precios del laboratorio y la llave nueva lab_source=simulation. Las 27 tablas del Studio, con los mismos recuentos.
+  · WhatsApp y la versión 3 en canario, sin cambios ([11] a [13]): misma publicación, misma huella (26d57565), misma oferta
+    a la canaria (traza idéntica byte a byte), la puerta de publicar idéntica requisito a requisito, y las puertas internas
+    respondiendo con el secreto. A las 02:46:10 UTC n8n hizo su primera llamada REAL tras los dos despliegues: 200.
+  · Pantallas nuevas del CRM, abiertas en producción en solo lectura ([15]): 0 errores de página y 0 respuestas de error.
+  · Vigilancia a los 15 minutos ([17]): 14 workers en RUNNING, 0 errores, 0 trabajos fallidos, 0 respuestas 5xx, 0 de 429.
+
+[0] LA AUTORIZACIÓN (el propietario, en la conversación; 23-11-2026 hacia las 02:25 UTC, 9:25 p. m. del 22-11 en Bogotá; literal)
+    «HUMAN GATE — AUTORIZACIÓN UNIDAD 2 DE 7
+    Autorizo desplegar exclusivamente la unidad 2 en producción.
+    Commits autorizados: - Backend/API: 9c2325a1. - CRM: 744dfc2.
+    Alcance autorizado: - Laboratorio frente al motor real. - Migración aditiva de la columna del laboratorio.
+    - Alineación del modelo del laboratorio con gpt-4.1-mini, manteniendo los presupuestos existentes. - Publicación de las
+    nuevas pantallas del CRM.
+    Condiciones: 1. Verifica el estado actual de producción y las dependencias antes de modificar nada. 2. Ejecuta el
+    procedimiento de despliegue y las comprobaciones posteriores. 3. Confirma que WhatsApp y la versión 3 en canario
+    siguen funcionando sin modificaciones. 4. Comprueba la integridad de la base de datos, las colas y las nuevas
+    pantallas del CRM. 5. Ante cualquier fallo bloqueante, detén el proceso y aplica la reversión segura documentada.
+    6. Conserva la evidencia completa del despliegue.
+    No despliegues las unidades 3 a 7 ni actives llamadas o automatizaciones.
+    Una vez verificada la unidad 2, guíame paso a paso para ejecutar desde ULTRON Studio la línea base del turno de
+    planes con 20 muestras usando el modelo real.
+    Respeta los HUMAN GATES y solicita mi siguiente autorización antes de continuar.»
+
+[1] 02:28 UTC · ESTADO DE PRODUCCIÓN Y DE SUS DEPENDENCIAS, ANTES (solo lectura; ops/comprobacion-produccion/estado-antes-despues.sh)
+    [1] CÓDIGO Y PROCESOS · 23-11-2026 02:28:56 UTC
+      sirve: d52e46a9a35379cc19b2077df9134d0f9a2e81c8 · cambios con seguimiento: 0 · sin seguimiento: 89
+      workers por estado:  14 RUNNING
+        ironbody-agent ×4
+        ironbody-commercial ×2
+        ironbody-lab ×1
+        ironbody-media ×2
+        ironbody-voice ×1
+        ironbody-whatsapp ×4
+      facturación: active · sesiones de tmux: 0 · despliegues vivos: 0
+      production.ERROR desde 2026-11-23 01:48:43 UTC: 0 · 5xx: 0 · 429: 0
+      cachés: www-data 600 config.php;www-data 600 routes-v7.php · fichero de entorno: www-data:www-data 600, modificado 2026-11-22 16:
+    [2] COLAS
+      failed_jobs desde 2026-11-23 01:48:43 UTC: 0 · en total: 2
+      trabajos en espera por cola: ninguno
+    [3] BASE DE DATOS
+      migraciones registradas: 350 · último lote: 143 · la última: 2026_11_22_100001_allow_classifier_budget_scope
+      columna ultron_studio_lab_run_cases.engine: NO EXISTE
+      columnas de ultron_studio_lab_run_cases: 24
+      ejecuciones del laboratorio por estado: completed=11 · en curso (queued, running): 0
+      índices no válidos: 0 · restricciones sin validar: 0 · transacciones abiertas hace más de 5 min: 0
+      privilegios de iron_app en ultron_studio_lab_run_cases: DELETE,INSERT,SELECT,UPDATE
+      filas por tabla del Studio (ultron_studio_*):
+        ultron_studio_audit_events                           58
+        ultron_studio_campaign_links                         0
+        ultron_studio_canary_numbers                         0
+        ultron_studio_drafts                                 2
+        ultron_studio_integration_snapshots                  9
+        ultron_studio_lab_events                             37
+        ultron_studio_lab_run_cases                          112
+        ultron_studio_lab_runs                               11
+        ultron_studio_lab_scenarios                          11
+        ultron_studio_lab_verdicts                           3
+        ultron_studio_message_templates                      0
+        ultron_studio_meta_template_submissions              0
+        ultron_studio_person_bindings                        0
+        ultron_studio_publications                           5
+        ultron_studio_rules                                  12
+        ultron_studio_strategies                             0
+        ultron_studio_strategy_publications                  0
+        ultron_studio_strategy_reviews                       0
+        ultron_studio_strategy_simulations                   0
+        ultron_studio_strategy_versions                      0
+        ultron_studio_template_meta_checks                   0
+        ultron_studio_version_reviews                        4
+        ultron_studio_versions                               4
+        ultron_studio_voice_agents                           4
+        ultron_studio_voice_lab_sessions                     4
+        ultron_studio_voice_profiles                         3
+        ultron_studio_voice_publications                     0
+      huella de la lista anterior: se compara antes y después
+    [4] STUDIO, WHATSAPP Y LA CANARIA
+      ultron-studio:publication-check → salida 0
+        Llave del motor: canary · estado: applied
+        Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+        Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+        Resto: Legacy
+        La publicación vigente cuadra con el motor.
+      ultron:prompt-trace --last=3 --json → sha256 d9cde934ae13a862…
+        llave de prompts: canary · sello: canary · canario configurado: True · base: n8n-29de5119 · compilador: 4
+        decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565 · motivo None
+        turno: {"at": "2026-11-22T16:48Z", "declared": {"state": "applied", "version8": "39cfae9f"}, "offered": {"mode": "studio", "reason": null, "version8": "39cfae9f", "bundle8": "26d57565"}, "observed": {"mode": "studio", "bundle8
+        turno: {"at": "2026-11-22T16:49Z", "declared": {"state": "applied", "version8": "39cfae9f"}, "offered": {"mode": "studio", "reason": null, "version8": "39cfae9f", "bundle8": "26d57565"}, "observed": {"mode": "studio", "bundle8
+        turno: {"at": "2026-11-22T17:06Z", "declared": {"state": "applied", "version8": "39cfae9f"}, "offered": {"mode": "studio", "reason": null, "version8": "39cfae9f", "bundle8": "26d57565"}, "observed": {"mode": "studio", "bundle8
+    [5] CONFIGURACIÓN EFECTIVA (la caché; solo valores que no son secretos)
+      laboratorio: enabled=true · driver=openai · modelo=gpt-6.1-terra · esfuerzo=[medium] · temperatura=null
+      precios (USD por millón): entrada=1.00 · salida=5.00
+      presupuestos y topes: diario=2 · por ejecución=0.50 · ejecuciones al día=20 · casos por ejecución=12 · espera=60 s
+      clave propia del laboratorio: PUESTA
+      puerta de publicar: lab_gate=required · lab_source=null
+      asesor de WhatsApp: driver=openai · modelo=gpt-4.1-mini · canario configurado=sí
+    [6] LLAMADAS REALES DE n8n A /api/internal/ DESDE LAS 01:58 UTC (después de las sondas de la unidad 1)
+        ninguna
+
+    Dependencias, además: n8n, flujo «Iron Body - ULTRON - Commercial Advisor (Studio S2)» (4CIwgGbPRneqUjLF) ACTIVO y sin
+    cambios desde el 22-11 a las 03:24 UTC (solo metadatos). CRM público: a9e7e7a. origin/main de la API: d52e46a9.
+    El script de la cuenta técnica en el servidor es el del repositorio (sha256 78a09664…15ee); la cuenta 32, inactiva y
+    sin sesiones.
+
+[2] 02:31 UTC · LA PUERTA DE PUBLICAR DE LA VERSIÓN EN CANARIO Y EL LABORATORIO, ANTES (sesión de la cuenta técnica 32:
+    abierta 02:31:25, cerrada 02:31:30 UTC; «cuenta 32 en reposo: inactiva», «la sesión ya no vale → 403»)
+    estado HTTP: 200 · claves: versionUuid,contentHash,previewHash,publishable,params,noEffect,requirements,blocking,effect,prompts
+    publicable: false · efecto: prompts · sin efecto: []
+      requisito status             → FALTA  · La versión está en «Canario»: solo se publica una aprobada.
+      requisito fourEyes           → FALTA  · Nadie publica lo que creó: tiene que publicarla otra persona.
+      requisito integrity          → CUMPLE · {"ok":true}
+      requisito revalidation       → CUMPLE · {"ok":true}
+      requisito labGate            → CUMPLE · {"mode":"required","ok":true,"latest":"approved"}
+      requisito engineCanary       → CUMPLE · {"ok":true}
+      requisito brake              → CUMPLE · {"ok":true}
+      requisito canaryFree         → CUMPLE · {"ok":true}
+      requisito window             → FALTA  · Fuera de la ventana de publicación (07:00–19:00, hora de Bogotá).
+      requisito keys               → FALTA  · {"studio":true,"engine":"canary"}
+       prompts : {"key":"canary","base":"n8n-29de5119","compiler":4,"legacyBundleHash":"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902","bundleHash":"26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075","shortHash":"26d5756
+    GET lab/status → 200 · claves: enabled,mode,configured,reasons,model,promptVersion,catalog,fidelity,budget,limits,can
+       {"enabled":true,"mode":"openai","configured":true,"reasons":[],"model":"gpt-6.1-terra","promptVersion":"2026-11-12.6","catalog":{"version":"2026-10-20.1","scenariosImported":11},"fidelity":"Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.","budget":{"timezone":"America/Bogota","day":"2026-11-22","dailyCapMicros":2000000,"spentMicros":0,"reservedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20},"limits":{"maxCasesPerRun":12,"maxLiveScenarios":100,"scenario":{"titleMax":120,"descriptionMax":500,"turnsMax":8,"turnTextMax":600,"criteriaMax":8,"cri
+    GET lab/scenarios?status=active → 200 · escenarios activos: 11
+    Escenarios activos: 11, todos del catálogo (C-01 a C-10 y C-12). Ninguno con la frase de los planes.
+
+[3] 02:32 UTC · LA UNIDAD, EN LOCAL, Y LA SUBIDA
+    origin/main = d52e46a9 · despliegue/u2-lote5 = 9c2325a11b2cb8309bcec44b0f96f4137faf0898 (el commit autorizado) =
+    d52e46a9 + cierre/lab bdb93199, sin choques · avance rápido, 30 commits.
+    Frente a la unidad 1: 46 ficheros, 42 fuera de docs/, exactamente los de ops/cierre-lotes/lote-5/fuera-de-docs.txt
+    (17 de app/, 22 de pruebas, config/ultron_studio.php, una migración y .env.example). El producto difiere del lote 5 ya
+    revisado solo en bootstrap/app.php (PT-19). CALLS_ENABLED_IN_CODE = false · SENDS_ENABLED_IN_CODE = false.
+    Batería completa sobre 9c2325a1 (01:52–02:14 UTC): 19 424 pruebas, 511 217 aserciones; el único fallo, el tolerado de
+    la línea base (la prueba de pagos que corrige la unidad 5); 0 regresiones.
+    git push origin despliegue/u2-lote5:main  →  d52e46a9..9c2325a1 (avance rápido; sin forzar).
+
+[4] 02:32 UTC · GUION, LISTA Y DECLARACIONES EN EL SERVIDOR (/root/cierre-lote-5, 600 de root; la aplicación no se toca)
+    guion     local y servidor: db4bc1f5d856da8d945c9f305cded769ba6c9d8c14ebc8a4a8672f0bea78547a
+    lista     local y servidor: 408d60387c35bb8388858556aa15a9268c599f801214653282dc26d52fbbb658 (46 ficheros)
+    declaraciones, las siete con la misma huella en local y en el servidor: config-sin-2b.txt 197a51c9… · config.txt
+    496ede7a… · entorno-lab.sh ead13949… · entorno-lab.txt 5b052638… · fuera-de-docs.txt 3ede5288… · migraciones.txt
+    0fbe7a69… · sin-filas.txt 89e11c9f…
+
+[5] 02:33 UTC · LAS DOS COMPROBACIONES PREVIAS (solo lectura): entorno-lab.sh comprobar y --solo-comprobar
+    == entorno-lab.sh · comprobar · 2026-11-23T02:33:02Z · /var/www/api/backend/.env (www-data:www-data 600)
+       decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+       decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+       decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+       decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+       hoy: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+       hoy: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+       hoy: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+       hoy: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+       el parser de la aplicación (Dotenv, como www-data) lee el fichero: sí
+    COMPROBADO: aplicar cambiaría 4 de 4 clave(s); no se ha tocado nada
+    código de salida de entorno-lab.sh comprobar: 0
+    == deploy-cierre-lote.sh · 2026-11-23T02:33:04Z · modo comprobar · PREVIO=d52e46a9 · NUEVO=9c2325a1 · lista /root/cierre-lote-5/lista.txt
+       declaraciones: migraciones /root/cierre-lote-5/migraciones.txt (orden migracion-primero) · config /root/cierre-lote-5/config.txt · rutas — · programador —
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción d52e46a9 limpia · origin/main 9c2325a1 · 30 commit(s) · 46 ficheros = la lista (…)
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en d52e46a9 y en 9c2325a1; los dos ficheros sin cambios
+          … y 18 commit(s) más
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [0 - - -] = antes · vuelta: conservar
+       pendientes frente a origin/main: [2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+       /usr/local/bin/ironbody-migrate = la copia versionada de iron-ia/ops (sha256 8ecb14798c0c260e…)
+       AVISO: umask de sudo -u www-data desde un umask 077: 0002 (no 0077: la caché que rehace ironbody-migrate queda un instante legible hasta su chmod 600; m4, para security)
+       sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 1|ultron_studio.lab.price_output_usd_per_mtok 5
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+    código de salida: 0
+
+[6] 02:33:43 UTC · PRIMER INTENTO: SE DETIENE SOLO, SIN TOCAR NADA (salida entera; sesión tmux u2)
+    == entorno-lab.sh · aplicar · 2026-11-23T02:33:43Z · /var/www/api/backend/.env (www-data:www-data 600)
+       decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+       decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+       decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+       decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+    1. respaldo /var/backups/ironbody/entorno-lab-20261123-023343 (700 de root): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+       antes: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+       antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+       antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+       antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+    PHP Fatal error:  Uncaught TypeError: array_key_exists(): Argument #2 ($array) must be of type array, null given in Command line code:10
+    Stack trace:
+    #0 {main}
+      thrown in Command line code on line 10
+    ENTORNO-LAB: lo que se escribiría no cambia exactamente las claves decididas (arriba): no se escribe (no se ha tocado nada)
+    CÓDIGO DE SALIDA DE entorno-lab.sh aplicar: 1
+    NO SE DESPLIEGA: entorno-lab.sh aplicar no terminó bien
+    CÓDIGO DE SALIDA DEL GUION: no lanzado
+
+    El lanzador (ops: primero entorno-lab.sh aplicar y SOLO si termina bien, el despliegue) no llegó a llamar al guion de
+    despliegue. Producción siguió en d52e46a9 y el fichero de entorno quedó intacto ([7], punto 6).
+
+[7] 02:36 UTC · CAUSA RAÍZ, DEMOSTRADA EN EL SERVIDOR CON ÓRDENES INOCUAS
+    1) variable puesta delante de sudo (como hace el guion): false
+    2) variable puesta con env DESPUÉS de sudo (la corrección): 'llega'
+    3) política de sudo: Defaults env_reset|Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+    4) env: /usr/bin/env · sudo: Sudo version 1.9.9
+    5) lo que dejó el intento: SHA256SUMS (316) · entorno-lab.txt (671) · env.antes (25231) · env.nuevo (25224) · estado-antes.txt (204)
+       · modo.txt (22), todos 600 de root en un directorio 700
+    6) el fichero de entorno, intacto: www-data:www-data 600, modificado 2026-11-22 16:13:2 · igual que su copia de antes: sí
+       · producción sirve d52e46a9
+
+    entorno-lab.sh, línea 98, pasaba DECIDIDO y COMO al proceso que compara los dos ficheros poniéndolas DELANTE de sudo;
+    el sudo de producción (Defaults env_reset) las borra, php se quedaba sin la declaración (json_decode de nada = null) y
+    la comparación abortaba con un TypeError antes de escribir. El banco de ensayo no lo vio: su sudo conservaba el
+    entorno. Es el ÚNICO sitio con ese patrón: el guion de despliegue pasa sus datos por la entrada (revisado con grep).
+    Corrección, una línea (más su comentario):
+      <   { cat "$1"; printf '\0'; cat "$2"; } | DECIDIDO="$DECIDIDO" COMO="$3" sudo -u "$WWW" php -r '
+      >   { cat "$1"; printf '\0'; cat "$2"; } | sudo -u "$WWW" env DECIDIDO="$DECIDIDO" COMO="$3" php -r '
+    sha256 del guion original (commit 9c2325a1): ead139498140316e66038bb070afc1cc273d79aa4d4d800c975876b3e0b75400
+    sha256 del guion corregido:                  1fac5d1fd13e7cdde68e038d2980ef59dec1d9c9e8fbd616e8bebb17ca6e37a4
+    Los dos valores que ahora constan en la orden (y, por tanto, en el registro de sudo) son públicos: la declaración de
+    entorno-lab.txt y «aplicar»/«vuelta». Los ficheros de entorno siguen yendo solo por la entrada.
+    SIN REVISIÓN INDEPENDIENTE: la corrección la hizo y la ensayó el lead ([8]).
+
+[8] 02:37:55 UTC · ENSAYO DE LA CORRECCIÓN EN EL PROPIO SERVIDOR, CONTRA UN FICHERO INVENTADO (no toca la aplicación)
+    ops/cierre-lotes/lote-5/banco-en-servidor.sh: un árbol de pega en /var/tmp con un fichero de entorno sin secretos, el
+    vendor real por un enlace y sus propios respaldos; el sudo, el php y el Dotenv de producción. (Una primera pasada, a
+    las 02:37:36, no llegó a probar el corregido: su respaldo coincidió en el mismo segundo con el del original; se
+    separaron dos segundos y se repitió.)
+    banco de ORI: 4 líneas sustituidas (2 de menos y 2 de más: APP y BK_RAIZ) · sha256 del guion probado: ead139498140316e…
+    banco de COR: 4 líneas sustituidas (2 de menos y 2 de más: APP y BK_RAIZ) · sha256 del guion probado: 1fac5d1fd13e7cdd…
+    diferencia entre el original y el corregido: 8 líneas (1 de código cambiada y 6 de comentario añadidas)
+    <   { cat "$1"; printf '\0'; cat "$2"; } | DECIDIDO="$DECIDIDO" COMO="$3" sudo -u "$WWW" php -r '
+    >   { cat "$1"; printf '\0'; cat "$2"; } | sudo -u "$WWW" env DECIDIDO="$DECIDIDO" COMO="$3" php -r '
+    ── ORIGINAL · comprobar
+       | == entorno-lab.sh · comprobar · 2026-11-23T02:37:55Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       |    el parser de la aplicación (Dotenv, como www-data) lee el fichero: sí
+       | COMPROBADO: aplicar cambiaría 4 de 4 clave(s); no se ha tocado nada
+       código de salida: 0
+    ── ORIGINAL · aplicar (tiene que fallar cerrado, como en producción)
+       | == entorno-lab.sh · aplicar · 2026-11-23T02:37:55Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       | 1. respaldo /var/tmp/banco-entorno-lab.n8k5AE/respaldos/entorno-lab-20261123-023755 (700 de root): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+       | PHP Fatal error:  Uncaught TypeError: array_key_exists(): Argument #2 ($array) must be of type array, null given in Command line code:10
+       | Stack trace:
+       | #0 {main}
+       |   thrown in Command line code on line 10
+       | ENTORNO-LAB: lo que se escribiría no cambia exactamente las claves decididas (arriba): no se escribe (no se ha tocado nada)
+       código de salida: 1
+       el fichero de pega, tras el original: INTACTO
+    ── CORREGIDO · comprobar
+       | == entorno-lab.sh · comprobar · 2026-11-23T02:37:55Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       |    el parser de la aplicación (Dotenv, como www-data) lee el fichero: sí
+       | COMPROBADO: aplicar cambiaría 4 de 4 clave(s); no se ha tocado nada
+       código de salida: 0
+    ── CORREGIDO · aplicar
+       | == entorno-lab.sh · aplicar · 2026-11-23T02:37:57Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       | 1. respaldo /var/tmp/banco-entorno-lab.n8k5AE/respaldos/entorno-lab-20261123-023757 (700 de root): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+       |    lo que se va a escribir: 10 claves antes · 10 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER
+       |    después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+       |    después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+       |    después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+       |    después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+       | 2. escrito (atómico, www-data:www-data 600, el dueño y el modo de antes: www-data:www-data 600) · releído con Dotenv como www-data: 10 claves antes · 10 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_L
+       | ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+       |    vuelta atrás: bash /var/tmp/banco-entorno-lab.n8k5AE/COR.sh vuelta=/var/tmp/banco-entorno-lab.n8k5AE/respaldos/entorno-lab-20261123-023757   (con --regenera si la unidad 2 se queda desplegada)
+       código de salida: 0
+       el fichero de pega, tras el corregido: www-data:www-data 600 · líneas que cambian frente a la partida:
+       | 6,9c6,9
+       | < ULTRON_STUDIO_LAB_OPENAI_MODEL=modelo-de-prueba
+       | < ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=medium
+       | < ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=1.00
+       | < ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK="5.00"
+       | ---
+       | > ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+       | > ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=
+       | > ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+       | > ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+    ── CORREGIDO · comprobar (después de aplicar)
+       | == entorno-lab.sh · comprobar · 2026-11-23T02:37:58Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       |    el parser de la aplicación (Dotenv, como www-data) lee el fichero: sí
+       | COMPROBADO: aplicar cambiaría 0 de 4 clave(s); no se ha tocado nada
+       código de salida: 0
+       respaldo del corregido: SHA256SUMS entorno-lab.txt env.antes estado-antes.txt modo.txt (env.nuevo ya no debe estar)
+    ── CORREGIDO · vuelta=<respaldo> (sin --regenera)
+       | == entorno-lab.sh · vuelta · 2026-11-23T02:37:58Z · /var/tmp/banco-entorno-lab.n8k5AE/app/backend/.env (www-data:www-data 600)
+       |    lo que se repone: 10 claves antes · 10 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK]
+       | 1. repuesto el del respaldo, byte a byte (atómico, www-data:www-data 600)
+       |    ahora: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+       |    ahora: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+       |    ahora: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+       |    ahora: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+       | 2. la caché de configuración NO se toca (sin --regenera): si la unidad 2 sigue desplegada, la caché aún tiene lo decidido; regenerarla es --regenera
+       | VUELTA ATRÁS HECHA: el fichero de entorno es el del respaldo /var/tmp/banco-entorno-lab.n8k5AE/respaldos/entorno-lab-20261123-023757
+       código de salida: 0
+       el fichero de pega, tras la vuelta: IGUAL A LA PARTIDA, byte a byte · www-data:www-data 600
+    banco borrado: sí
+    la aplicación real no se ha tocado: www-data:www-data 600, modificado 2026-11-22 16:13:2 · producción sirve d52e46a9
+
+[9] 02:39 UTC · ANTES DEL SEGUNDO INTENTO
+    Retirado con shred el temporal env.nuevo que dejó el primer intento en /var/backups/ironbody/entorno-lab-20261123-023343
+    (lo que el propio guion borra al terminar bien); el resto de ese respaldo se conserva y su SHA256SUMS cuadra.
+    /root/cierre-lote-5/entorno-lab.sh = el corregido (1fac5d1f…); el original queda al lado (entorno-lab.original.sh).
+    == entorno-lab.sh · comprobar · 2026-11-23T02:39:02Z · /var/www/api/backend/.env (www-data:www-data 600)
+       hoy: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+       hoy: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+       hoy: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+       hoy: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+       el parser de la aplicación (Dotenv, como www-data) lee el fichero: sí
+    COMPROBADO: aplicar cambiaría 4 de 4 clave(s); no se ha tocado nada
+    código de salida de entorno-lab.sh comprobar: 0
+       producción d52e46a9 limpia · origin/main 9c2325a1 · 30 commit(s) · 46 ficheros = la lista (…)
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       pendientes frente a origin/main: [2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+       sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+       banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 1|ultron_studio.lab.price_output_usd_per_mtok 5
+    COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+    código de salida: 0
+
+[10] 02:39:19 → 02:40:07 UTC · EL DESPLIEGUE, DENTRO DE tmux (sesión u2; salida entera: entorno-lab.sh aplicar y el guion)
+    == entorno-lab.sh · aplicar · 2026-11-23T02:39:19Z · /var/www/api/backend/.env (www-data:www-data 600)
+       decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+       decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+       decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+       decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+    1. respaldo /var/backups/ironbody/entorno-lab-20261123-023919 (700 de root): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+       antes: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+       antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+       antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+       antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+       lo que se va a escribir: 485 claves antes · 485 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+       después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+       después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+       después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+       después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+    2. escrito (atómico, www-data:www-data 600, el dueño y el modo de antes: www-data:www-data 600) · releído con Dotenv como www-data: 485 claves antes · 485 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+    ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+       vuelta atrás: bash entorno-lab.sh vuelta=/var/backups/ironbody/entorno-lab-20261123-023919   (con --regenera si la unidad 2 se queda desplegada)
+    CÓDIGO DE SALIDA DE entorno-lab.sh aplicar: 0
+    == deploy-cierre-lote.sh · 2026-11-23T02:39:19Z · modo despliegue · PREVIO=d52e46a9 · NUEVO=9c2325a1 · lista /root/cierre-lote-5/lista.txt
+       declaraciones: migraciones /root/cierre-lote-5/migraciones.txt (orden migracion-primero) · config /root/cierre-lote-5/config.txt · rutas — · programador —
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción d52e46a9 limpia · origin/main 9c2325a1 · 30 commit(s) · 46 ficheros = la lista (…)
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en d52e46a9 y en 9c2325a1; los dos ficheros sin cambios
+          9c2325a1 merge: unidad 2 del cierre operativo, el lote 5 (el laboratorio frente al motor) encima de PT-19
+          bdb93199 fix(ultron-studio): el port de la comprobación del laboratorio sigue a PT-01 (B-1 de la revisión final del l
+          86d4e875 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 5
+          fbd5010f Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en
+          36fb19da docs(ultron-studio): la enmienda 9 y el informe del laboratorio tras seguridad y base de datos
+          c13db1f4 chore(ultron-studio): el docblock de labGateMode() a su sitio y un rol de prueba propio por ejecución (NB6)
+          367df3c0 test(ultron-studio): la regresión de la fuga de la persona sintética, con filas reales y marcas (NB5)
+          a2fbdb39 fix(ultron-studio): down() de la columna engine se niega si perdería evidencia (C-A1)
+          8d040592 fix(ultron-studio): un caso del motor tiene un plazo total que cabe en el job (NB4)
+          bd2da75b test(ultron-studio): T8 y la enmienda 9 dicen la verdad sobre el precio (NB1)
+          67631aed fix(ultron-studio): con la llave en engine, la puerta ata el paquete de prompts (NB2)
+          f859716b fix(ultron-studio): el filtro de datos personales ve todo lo que el modo motor compila (B1)
+          … y 18 commit(s) más
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [0 - - -] = antes · vuelta: conservar
+       pendientes frente a origin/main: [2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+       /usr/local/bin/ironbody-migrate = la copia versionada de iron-ia/ops (sha256 8ecb14798c0c260e…)
+       AVISO: umask de sudo -u www-data desde un umask 077: 0002 (no 0077: la caché que rehace ironbody-migrate queda un instante legible hasta su chmod 600; m4, para security)
+       sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 1|ultron_studio.lab.price_output_usd_per_mtok 5
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    1. respaldo /var/backups/ironbody/cierre-lote-20261123-023921 (700 de root; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 1 esquema(s) de tabla, el guion y SHA256SUMS (17 ficheros)
+       sin filas vivas, justo antes del primer cambio: ultron_studio_lab_runs.status en [queued,running]: 0
+    2. migraciones → código → cachés:
+    M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+          2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases ... 13.49ms DONE
+          config cache regenerada (www-data:www-data); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+       2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: aplicada (intento 1) · esquema [1 json null -] = después · copia /var/lib/ironbody-deploy/cierre-lote-20261123-023921/0-2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases/2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases.php (9cf192ff0395…)
+       caché de configuración: la regeneró ironbody-migrate y no es byte a byte la del respaldo (se rehace con config:cache en K)
+    C. código: HEAD=9c2325a1 (merge --ff-only, umask 022) · www-data lee los 46 ficheros del merge
+    K. cachés: config:cache · rutas sin regenerar (como www-data, umask 077) · www-data 600 / www-data 600
+    3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+    4. sin credenciales: admin/voice/status → 401 (esperado 401)
+       migrate:status --pending (como www-data): ninguna pendiente · declaradas registradas: 1 de 1
+       esquema de 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: [1 json null -] = despues
+       schedule:list: 53 → 53 tareas · diferencia [] (declarada [])
+       route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+       banderas en la caché de configuración: ultron_studio.publishing.lab_source texto:simulation|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model texto:gpt-4.1-mini|ultron_studio.lab.openai.reasoning_effort vacia|ultron_studio.lab.price_input_usd_per_mtok 0.4|ultron_studio.lab.price_output_usd_per_mtok 1.6
+       production.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+       producción sirve 9c2325a1 · respaldo /var/backups/ironbody/cierre-lote-20261123-023921 · registro /var/backups/ironbody/cierre-lote-20261123-023921/registro.log
+       VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · production.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+       vuelta atrás: bash /root/deploy-cierre-lote.sh d52e46a9 9c2325a1 /root/cierre-lote-5/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-023921
+    LOTE DESPLEGADO SIN DESVÍOS
+    CÓDIGO DE SALIDA DEL GUION: 0
+
+    El AVISO del paso 0 (umask de sudo -u www-data) es el conocido como m4: la caché que rehace ironbody-migrate queda un
+    instante legible hasta su chmod 600; quedó en www-data 600. Ya salía en los despliegues anteriores con migración.
+
+[11] 02:40 UTC · ESTADO DE PRODUCCIÓN DESPUÉS: LO ÚNICO QUE CAMBIA FRENTE A [1] (misma lectura; todo lo demás, idéntico)
+    ANTES   sirve: d52e46a9a35379cc19b2077df9134d0f9a2e81c8 · cambios con seguimiento: 0 · sin seguimiento: 89
+    DESPUÉS sirve: 9c2325a11b2cb8309bcec44b0f96f4137faf0898 · cambios con seguimiento: 0 · sin seguimiento: 89
+    ANTES   migraciones registradas: 350 · último lote: 143 · la última: 2026_11_22_100001_allow_classifier_budget_scope
+    ANTES   columna ultron_studio_lab_run_cases.engine: NO EXISTE
+    ANTES   columnas de ultron_studio_lab_run_cases: 24
+    DESPUÉS migraciones registradas: 351 · último lote: 144 · la última: 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases
+    DESPUÉS columna ultron_studio_lab_run_cases.engine: json, nula=YES, defecto=ninguno
+    DESPUÉS columnas de ultron_studio_lab_run_cases: 25
+    ANTES   laboratorio: enabled=true · driver=openai · modelo=gpt-6.1-terra · esfuerzo=[medium] · temperatura=null
+    ANTES   precios (USD por millón): entrada=1.00 · salida=5.00
+    DESPUÉS laboratorio: enabled=true · driver=openai · modelo=gpt-4.1-mini · esfuerzo=[] · temperatura=null
+    DESPUÉS precios (USD por millón): entrada=0.40 · salida=1.60
+    ANTES   puerta de publicar: lab_gate=required · lab_source=null
+    DESPUÉS puerta de publicar: lab_gate=required · lab_source=simulation
+
+    Idéntico, línea a línea: los 14 workers y su reparto (agent 4, commercial 2, lab 1, media 2, voice 1, whatsapp 4), la
+    facturación, 0 errores, 0 trabajos fallidos nuevos, ningún trabajo en espera, las 11 ejecuciones del laboratorio
+    (ninguna en curso), 0 índices no válidos, 0 restricciones sin validar, los privilegios de iron_app, LOS RECUENTOS DE LAS
+    27 TABLAS DEL STUDIO, publication-check (salida 0, «La publicación vigente cuadra con el motor», canario «Prueba de
+    aceptación 3 · profesional 200»), la traza de prompts (sha256 d9cde934…, compilador 4, la canaria recibiría la versión
+    39cfae9f con la huella 26d57565), los presupuestos del laboratorio (2 USD al día, 0,50 por ejecución, 20 ejecuciones al
+    día, 12 casos) y el asesor de WhatsApp (openai, gpt-4.1-mini).
+
+[12] 02:40:55 UTC · LA PUERTA DE PUBLICAR Y EL LABORATORIO, DESPUÉS (sesión de la cuenta técnica: 02:40:55 a 02:41:00 UTC)
+    Vista previa de publicar la versión en canario: IDÉNTICA a la de [2], los 10 requisitos uno a uno.
+      requisito labGate            → CUMPLE · {"mode":"required","ok":true,"latest":"approved"}
+       prompts : {"key":"canary","base":"n8n-29de5119","compiler":4,"legacyBundleHash":"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902","bundleHash":"26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075","shortHash":"26d5756
+    GET lab/status → 200 · claves: enabled,mode,configured,reasons,model,promptVersion,catalog,fidelity,budget,limits,can
+       {"enabled":true,"mode":"openai","configured":true,"reasons":[],"model":"gpt-4.1-mini","promptVersion":"2026-11-12.6","catalog":{"version":"2026-10-20.1","scenariosImported":11},"fidelity":"Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.","budget":{"timezone":"America/Bogota","day":"2026-11-22","dailyCapMicros":2000000,"spentMicros":0,"reservedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20},"limits":{"maxCasesPerRun":12,"maxLiveScenarios":100,"scenario":{"titleMax":120,"descriptionMax":500,"turnsMax":8,"turnTextMax":600,"criteriaMax":8,"crit
+
+[13] 02:41 UTC · LAS PUERTAS INTERNAS DE WHATSAPP (el secreto, dentro de un proceso de PHP en el servidor)
+      02:41:02 UTC · CON el secreto · GET  marketing/ai/doctor          → 200 (esperado 200) · tope 120 · quedan 119 · el asesor (decide, commit…)
+      02:41:02 UTC · CON el secreto · POST automation/notify-member     → 422 (esperado 422) · tope 600 · quedan 599 · las notificaciones a socios
+      02:41:02 UTC · CON el secreto · GET  marketing/context/999999999  → 404 (esperado 404) · tope 120 · quedan 118 · el tercer grupo (send-message, followups, context)
+      RESULTADO: con el secreto, los tres grupos pasan la puerta y el limitador y llegan a su controlador, con su tope de siempre
+    Sin credenciales, desde fuera: HTTP 401 · cabeceras x-ratelimit-*: 0 (PT-19 sigue en su sitio).
+    LA PRIMERA LLAMADA REAL DE n8n tras los dos despliegues: 02:46:10 UTC, POST /api/internal/automation/wellness-run → 200
+    (ejecución 1091110 de n8n, de 02:45:13 a 02:46:10 UTC, «success»; solo metadatos). Era lo que quedaba por ver de la
+    unidad 1. Ningún turno del asesor de WhatsApp todavía: nadie ha escrito.
+
+[14] 02:41:56 → 02:42:48 UTC · EL CRM
+    Repositorio del CRM: cierre/crm-planes-voz 744dfc2143463c89bab9ff7153c247cf69fde7f5 (el commit autorizado), árbol
+    limpio, avance rápido sobre origin/main (a9e7e7a, lo que servía producción), 13 commits, 81 ficheros de src/app.
+    git push origin cierre/crm-planes-voz:main  →  a9e7e7a..744dfc2.
+    COMPILACIÓN SELLADA DEL CRM · 744dfc2 (cierre/crm-planes-voz = origin/main 744dfc2) · empieza 02:41:56 UTC
+    código de salida de build:prod: 0
+    termina 02:42:26 UTC
+    Sello: commit 744dfc2 · dirty false · builtAt 2026-11-23T02:42:26.324Z · main-ZYL6K3FA.js · 212 ficheros · árbol limpio
+    tras compilar. Avisos de la compilación: solo los presupuestos de tamaño de tres hojas de estilo (los de siempre).
+    publicación del CRM · inicio 02:42:35 UTC
+    == 1. Sello del build
+    main nuevo: main-ZYL6K3FA.js
+    == 2. Nada se movió
+    main en producción: main-4BJM6KB7.js
+    == 3. Respaldo
+    total 44
+    drwxr-xr-x   2 root root  4096 Nov 23 02:42 .
+    drwx------ 107 root root 12288 Nov 23 02:42 ..
+    -rw-r--r--   1 root root 20677 Nov 23 02:42 index.html
+    -rw-r--r--   1 root root   104 Nov 23 02:42 version.json
+    == 4. Publicar (sin --delete)
+    == 5. Verificación pública
+    {
+      "commit": "744dfc2",
+      "dirty": false,
+      "builtAt": "2026-11-23T02:42:26.324Z",
+      "inboxV2": true
+    }
+    index.html → main-ZYL6K3FA.js OK
+    main-ZYL6K3FA.js       200
+    main-4BJM6KB7.js       200
+    /marketing/ultron-studio 200
+    RESPALDO: /var/backups/ironbody/crm-pre-744dfc2-20261123-024235
+    CRM PUBLICADO Y VERIFICADO
+    código de salida del guion: 0 · fin 02:42:48 UTC
+
+[15] 02:44:52 → 02:45:40 UTC · LAS PANTALLAS NUEVAS, EN PRODUCCIÓN Y EN SOLO LECTURA (sesión de la cuenta técnica)
+    ops/comprobacion-produccion/pantallas-unidad-2.cjs: Chrome sin cabeza contra https://ironbodyneiva.cloud. Lo único que
+    pulsa: pestañas, opciones del lanzador y «Estimar el coste» (no escribe). NO pulsa «Ejecutar»: no se lanzó nada.
+
+    ── A. LABORATORIO · https://ironbodyneiva.cloud/marketing/ultron-studio/laboratorio?version=…
+       versión del CRM que carga la página: {"commit":"744dfc2","dirty":false,"builtAt":"2026-11-23T02:42:26.324Z","inboxV2":true}
+       título: Laboratorio de ULTRON STUDIO · modo y modelo: smart_toy OpenAI · gpt-4.1-mini
+       presupuesto (cabecera): Presupuesto de hoy dom, 22 de nov, día de Bogotá Queda US$ 2,00 de US$ 2,00 Gastado US$ 0,00 Reservado US$ 0,00 Ejecuciones 0 de 20 Tope por ejecución US$ 0,50
+       pestañas: ["forum Escenarios","biotech Ejecuciones (abierta)"]
+       «Qué se prueba»: Prueba de aceptación 3 · profesional 200 (Canario, 24b29173)
+       «Cómo se prueba» (lo nuevo):
+          (•) Simulación del Studio Lo de siempre: un modelo de laboratorio, con instrucciones propias, interpreta la versión entera.
+          ( ) Recorrido del motor (prompts compilados) Los cinco prompts compilados de la versión, con el modelo y los parámetros del motor, la comprobación del servidor y hasta dos reescrituras. Sin WhatsApp: la persona es sintética y no se envía nada.
+       escenarios en el lanzador: 11 · C-01 C-02 C-03 C-04 C-05 C-06 C-07 C-08 C-09 C-10 C-12 · contador: 0 de 12 como mucho
+       elegido «Recorrido del motor» y el escenario C-02 · contador: 1 de 12 como mucho · aviso junto a «Estimar»: habilitado
+       ESTIMACIÓN del recorrido del motor · estado: permitida
+           Recorrido del motor: los cinco prompts compilados de la versión, el modelo y los parámetros de los nodos del flujo S2 de n8n, la comprobación del servidor y hasta dos reescrituras, como en el WhatsApp real. Lo que no es igual: la persona y la memoria son sintéticas (un primer contacto), no hay commit ni envío (si saldría el texto del modelo o un respaldo es una predicción con la regla del commit), el juez de l
+          como mucho: US$ 0,0652 · Lo esperado: US$ 0,061 (orientativo; se acepta el máximo).
+           El máximo cuenta, por caso, el camino más largo del motor: el estratega, tres redacciones y tres revisiones (7 llamadas), más el juez del laboratorio. Casi siempre se gasta menos.
+          · Casos 1
+          · Modo OpenAI · gpt-4.1-mini
+          · Recorrido motor-S2-c4-2026-11-22.1
+          · Modelo de los nodos gpt-4.1-mini
+          · Prompts base n8n-29de5119, compilador 4
+          · Hoy (dom, 22 de nov) comprometido US$ 0,00 de US$ 2,00, quedan US$ 2,00
+          · Tope por ejecución US$ 0,50
+          · Ejecuciones hoy 0 de 20
+          negativa: null · «servidor que no conoce el recorrido»: null
+          botón de lanzar (NO se pulsa): play_arrow Ejecutar el recorrido del motor (máx. US$ 0,0652) · deshabilitado: false · Gasta como mucho lo que dice el botón: si el servidor estima más, pedirá confirmarlo otra vez.
+       lista de ejecuciones de la versión: 1 · filtros de la lista: Todas Mías | Todos los objetivos Versiones Borradores Línea base Versión Prueba de aceptación 3 · profesional 200 Versión Prueba de aceptación 2 · profesional 200 Versión Pr | Los dos tipos Simulaciones del Studio Recorridos del motor
+       pestaña «Escenarios» · botones: ["add Nuevo escenario","C-01 Solo saluda Saludo, catálogo (solo lectura)","C-02 Pregunta directa por el precio Precio, catálogo (solo lectura)","C-03 Pide descuento o algo gratis Descuento, catálogo (solo lectura)","C-04 «Ya pagué» sin pago registrado Pago, catálogo (solo lectura)","C-05 Pide el enlace para pagar Pago, catálogo (solo lectura)","C-06 Pide hablar con un asesor Derivac
+       pestaña «Escenarios» · encabezados: ["Escenarios"]
+
+    ── B. AUTORIZACIONES DE CONTACTO (su parte del servidor llega con la unidad 4) · /marketing/automatizaciones
+       pestañas: ["monitoring Panel","account_tree Estrategias","architecture Constructor","science Simulación","description Plantillas","verified_user Gobierno","inbox Bandeja asistida","history Historial por persona","badge Vínculos de personas"]
+       pestaña «Autorizaciones de contacto»: NO APARECE
+       lo que enseña: Estado de activación Por qué cada parte de las campañas automáticas funciona o no, según lo que dice hoy el servidor: su estado, lo que le falta y quién lo hace. task_alt 3 Disponible y operativa power_settings_new 0 Configurada y lista para activación pause_circle 0 Pausada voluntariamente gavel 4 Bloqueada por condición contractual pending 0 Pendiente de proveedor externo error 0 Error técnico rea
+
+    ── C. VOZ (su parte del servidor llega con la unidad 6) · /marketing/ultron-studio/voz
+       título: Voz y telefonía · pestañas: ["settings_input_antenna Estado","record_voice_over Perfil de voz","rocket_launch Publicación","call Llamadas","payments Costes y métricas","contacts Contactos","mic Laboratorio hablado"]
+       avisos a la vista: []
+
+    ── D. PLANES (el permiso nuevo llega con la unidad 6) · /plans
+       título: Planes y membresías · avisos de error a la vista: []
+       botones de la pantalla (los distintos): ["Vista de tabla","move_up Trasladar socios","Crear plan","Filtrar por estado","Filtrar por tier","Filtrar por duración","Editar plan","Ver miembros","Duplicar plan","Cambiar estado","Eliminar plan","Archivar plan Plan Semana","Archivar plan PLAN DÍA","Archivar plan PLAN SEPTIEMBRE","Archivar plan Plan Valera","Archivar plan Plan Mensual"]
+
+    ── RESUMEN
+       errores de página (JavaScript): 0 []
+       respuestas de la API con 4xx o 5xx durante el recorrido: 0
+
+    Lectura: la pestaña «Autorizaciones de contacto» NO aparece porque el servidor todavía no conoce sus llaves (llegan con
+    la unidad 4): es lo previsto («lo que no está desplegado no aparece o lo dice»). El editor de planes y la ficha del
+    socio no se abrieron (no hacía falta y la segunda enseña datos de personas). Las capturas quedan fuera del repositorio.
+
+[16] 02:57 UTC · ¿MEDIRÁ LA LÍNEA BASE EL TURNO DE PLANES? (solo lectura, sin llamar a ningún modelo)
+    ops/comprobacion-produccion/sonda-contexto-planes.php: lo mismo que hará una ejecución del recorrido antes de llamar al
+    modelo, con el catálogo real, dentro de una transacción de solo lectura que se deshace.
+    versión «Prueba de aceptación 3 · profesional 200» · compilador 4 · huella del paquete 26d57565… · sp: m=studio n=200 t=profesional o=1
+      · la frase de la prueba, sola: el contexto OFRECE la lista de planes · 3 planes [{{PLAN_1}} = 3 «Plan Valera» · {{PLAN_2}} = 4 «Plan Mensual» · {{PLAN_3}} = 8 «Élite»] · cuenta como pregunta de precio: sí
+      · la frase, tras el saludo y la bienvenida: el contexto OFRECE la lista de planes · 3 planes [{{PLAN_1}} = 3 «Plan Valera» · {{PLAN_2}} = 4 «Plan Mensual» · {{PLAN_3}} = 8 «Élite»] · cuenta como pregunta de precio: sí
+      · control: C-02 del catálogo, que NO debe dar la lista: el contexto NO ofrece la lista de planes
+    transacción de solo lectura deshecha; no se ha escrito nada
+
+[17] 02:54:39 UTC · VIGILANCIA A LOS 15 MINUTOS (DEPLOY_CIERRE_LOTES.md §7; solo lectura)
+    La misma lectura de [1] y [11]: IDÉNTICA a la de justo después del despliegue en sus secciones 1 a 5 (14 workers en
+    RUNNING, 0 production.ERROR, 0 respuestas 5xx, 0 de 429, 0 trabajos fallidos nuevos, ningún trabajo en espera, las
+    mismas tablas, la misma publicación y la misma traza). Lo que cambia es la sección 6, las llamadas a /api/internal/:
+    las sondas del lead y la llamada real de n8n de [13].
+    [7] CRM
+      público: {"commit":"744dfc2","dirty":false,"builtAt":"2026-11-23T02:42:26.324Z","inboxV2":true} · index → main-ZYL6K3FA.js
+      workers: el que menos lleva en marcha: 0:15:18 · el que más: 0:15:20
+      respuestas de la API desde el despliegue, por clase: 2xx=281 4xx=11
+      cuenta técnica 32: inactive · sesiones: 0 · autocierres pendientes: 3
+    Los tres «autocierres pendientes» eran los temporizadores (sleep) huérfanos de las tres sesiones técnicas ya cerradas:
+    sus envoltorios estaban muertos (padre = 1) y no podían cerrar nada; se retiraron. La cuenta 32, inactiva y sin sesiones.
+
+[18] VUELTAS ATRÁS (disponibles; ninguna usada)
+    API:      bash /root/deploy-cierre-lote.sh d52e46a9 9c2325a1 /root/cierre-lote-5/lista.txt \
+                   --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-023921        (dentro de tmux; la columna se queda)
+    Entorno:  bash /root/cierre-lote-5/entorno-lab.sh vuelta=/var/backups/ironbody/entorno-lab-20261123-023919
+              (con --regenera si la unidad 2 se queda desplegada; primero esta y después la de la API si se vuelve todo)
+    CRM:      /var/backups/ironbody/crm-pre-744dfc2-20261123-024235 (index.html y version.json de a9e7e7a; los ficheros
+              anteriores siguen en el servidor: se publicó sin --delete)
+
+[19] LO QUE NO SE HA COMPROBADO, Y POR QUÉ
+    · Una ejecución real del recorrido del motor (con llamadas al modelo): la lanza el propietario (la línea base). Aquí
+      solo se estimó (como mucho US$ 0,0652 por ejecución de un caso) y se construyó el contexto sin modelo ([16]).
+    · Un turno real del asesor de WhatsApp tras el despliegue: no ha escrito nadie. Lo que sí se comprobó es que su
+      configuración, su publicación y su oferta son idénticas y que sus puertas responden.
+    · Las pantallas de las unidades 4 y 6 (autorizaciones, quejas, el permiso de planes, el catálogo de la voz) con su
+      servidor: no existe hasta esas unidades. Hoy no aparecen o se ven como antes.
+    · La corrección de entorno-lab.sh no tiene revisión independiente ([7]).
