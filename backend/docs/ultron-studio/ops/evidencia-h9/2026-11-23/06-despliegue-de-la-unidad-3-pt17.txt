@@ -314,7 +314,36 @@ RESULTADO: DESPLEGADA SIN DESVÍOS (código 0 del guion, 05:17:07 a 05:17:55 UTC
     ejecuciones por día de Bogotá, US$ 2,00 al día, US$ 0,50 por ejecución y 12 casos por ejecución; lecturas, 120 por
     minuto; cambios, 30 por minuto. En la línea base, el propietario chocó con el de la hora:
       POST lab/runs, por hora UTC: 03h → 10 con 201 y 4 con 429 · 04h → 10 con 201 y 4 con 429.
-    El día de presupuesto de hoy (23-11, Bogotá) está a 0 de 20 ejecuciones y US$ 0,00 de US$ 2,00.
+    El día de presupuesto de hoy (23-11, Bogotá) está a 0 de 20 ejecuciones y US$ 0,00 de US$ 2,00 (leído a las 05:36 UTC):
+    AHORA: 2026-11-23 05:36:03 UTC · en Bogotá 2026-11-23 00:36
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-22 · ejecuciones 20 · casos 20 · gastado US$ 0.6235 · por estado: completed
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-21 · ejecuciones 1 · casos 11 · gastado US$ 0.0815 · por estado: completed
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-13 · ejecuciones 1 · casos 11 · gastado US$ 0.0752 · por estado: completed
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-12 · ejecuciones 6 · casos 66 · gastado US$ 0.4688 · por estado: completed
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-11 · ejecuciones 2 · casos 22 · gastado US$ 0.1634 · por estado: completed
+    POR DÍA DE PRESUPUESTO (Bogotá) · 2026-11-01 · ejecuciones 1 · casos 2 · gastado US$ 0.0141 · por estado: completed
+    LANZADAS EN LOS ÚLTIMOS 60 MINUTOS: 0 · desde las 05:00 UTC de hoy (día 23-11 de Bogotá): 0
+    EJECUCIONES CON VEREDICTO · run a6169238 · objetivo «Prueba de aceptación · profesional 200» (24b29173) · modo openai · prompts 2026-11-12.6 · completed · casos 11 · coste US$ 0.0774 (máx. estimado 0.2000) · lanzada por la cuenta 32 (Super Admin) el 2026-11-12 20:54 UTC · recomendación de la IA: review · veredicto: approved el 2026-11-12 21:32 UTC
+    EJECUCIONES CON VEREDICTO · run 2488221e · objetivo «Prueba de aceptación 2 · profesional 200» (24b29173) · modo openai · prompts 2026-11-12.6 · completed · casos 11 · coste US$ 0.0752 (máx. estimado 0.2000) · lanzada por la cuenta 32 (Super Admin) el 2026-11-13 16:52 UTC · recomendación de la IA: review · veredicto: approved el 2026-11-18 22:33 UTC
+    EJECUCIONES CON VEREDICTO · run b0e8f3b9 · objetivo «Prueba de aceptación 3 · profesional 200» (24b29173) · modo openai · prompts 2026-11-12.6 · completed · casos 11 · coste US$ 0.0815 (máx. estimado 0.2000) · lanzada por la cuenta 32 (Super Admin) el 2026-11-22 03:35 UTC · recomendación de la IA: review · veredicto: approved el 2026-11-22 03:57 UTC
+    ESCENARIOS · por origen y estado: catalog/vivo=11 · studio/vivo=1
+    ESCENARIO · C-02 · rev 1 · catalog · categoría precio · «Pregunta directa por el precio»
+    ESCENARIO · E-001 · rev 1 · studio · categoría precio · «Pregunta por los planes y la mensualidad»
+
+    Lectura de los precedentes y del código (cabc4138), para no llevar al propietario a un bloqueo:
+    · La puerta de publicar (`lab_gate=required`, `lab_source=simulation`) pide un veredicto «Aprobada» sobre una ejecución
+      de SIMULACIÓN de esa misma versión y con su misma huella de contenido. En las tres versiones anteriores fue una
+      ejecución con los 11 escenarios del catálogo (unos US$ 0,08), lanzada por la cuenta técnica; el veredicto lo dio el
+      propietario. Un veredicto sobre el «Recorrido del motor» no cuenta para esa puerta (`StudioLabVerdicts::latestFor`).
+    · El veredicto exige la llave de aprobar, una ejecución completada sobre una versión, que quien lo da no sea el autor de
+      la versión, y reconocer uno a uno los casos que no pasaron. Hay un solo veredicto por ejecución.
+    · Publicar: `fourEyes` = quien publica no creó la versión («Nadie publica lo que creó: tiene que publicarla otra persona»).
+    · Las 20 muestras: `scenarioUuids` no admite repetidos dentro de una ejecución, así que 20 muestras en pocas
+      ejecuciones piden copias del escenario. La tabla de escenarios solo tiene únicos el uuid, el código y el id de la
+      petición: admite copias con el mismo guion. El CRM no tiene botón de duplicar. Con E-001 y cuatro copias: 4 ejecuciones
+      de 5 casos = 20 muestras; con la simulación, 5 lanzamientos (límite: 10 por hora, 20 por día).
+    · Cada caso es un trabajo propio de la cola `studio-lab` (150 s como mucho; `StudioLabStepJob`): un caso que falla queda
+      en error y la ejecución sigue con el siguiente.
 
 [11] LO QUE NO SE HA COMPROBADO, Y POR QUÉ
     · Un turno real de la conversación canaria tras el despliegue (saldría con los prompts del asesor anterior): no ha
