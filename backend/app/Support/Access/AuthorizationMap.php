@@ -1063,6 +1063,10 @@ final class AuthorizationMap
         // `marketing.manage`); el controlador exige además esta llave cuando `complaint_category` es
         // `not_a_complaint`, porque suelta un freno.
         'commercial_automation.complaints_dismiss',
+        // PT-14: el nombre y los beneficios de un plan que se ofrece fuera, y
+        // ponerlo a la venta. Va en el mismo PUT que el precio: lo decide
+        // PlanController (y PlanArchive al reactivar) con PlanCommercialText.
+        'plans.commercial_text',
     ];
 
     /**

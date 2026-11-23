@@ -3,6 +3,7 @@
 namespace App\Services\UltronStudio;
 
 use App\Exceptions\UltronStudioException;
+use App\Models\Plan;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVersionReview;
@@ -104,6 +105,19 @@ use Throwable;
  * EL LIBRO DEL STUDIO: cada entrada deja su evento (`voice_publication.*`) con
  * el actor, la versión (`contentHash` y su uuid), el perfil (uuid y huella) y
  * la huella de la especificación del agente ({@see traceOf()}).
+ *
+ * EL CATÁLOGO DE PLANES (PT-14 · B, diseño `plans/informes-cierre/diseno-arq-pt14.md`
+ * D5, D6, D10 y D11): publicar CAPTURA el texto comercial de los planes
+ * vendibles (`Plan::commercialCatalogSnapshot()`: id, nombre y beneficios,
+ * nunca el precio) con su huella y sus autores, y lo guarda en la `evidence` de
+ * la entrada `publish` (`catalog`, formato `ultron-voice-catalog/1`; sin firmar,
+ * como `number`). La telefonía dice lo publicado ∩ lo vigente. Lo que se vio
+ * es lo que se publica: `expectedCatalogHash` → 409 `catalog_changed`. Cuatro
+ * ojos: quien escribió o puso a la venta un plan capturado
+ * (`plans.commercial_text_by`) no publica ni promueve la voz que lo recoge
+ * (403 `four_eyes_required`, `detail: plan_text_author`); al promover cuentan
+ * los autores de la instantánea del canario. Un texto sin autor no excluye a
+ * nadie. Revertir y apagar no lo miran (dirección segura).
  */
 final class StudioVoicePublishing
 {
@@ -114,6 +128,12 @@ final class StudioVoicePublishing
 
     /** S8-c: la huella de ahora no es la que se vio (`{expected, actual}`). */
     public const CODE_SPEC_CHANGED = 'spec_changed';
+
+    /** PT-14 (D11): el catálogo de planes de ahora no es el que se vio (`{expected, actual}`). */
+    public const CODE_CATALOG_CHANGED = 'catalog_changed';
+
+    /** PT-14 (D10): el `detail` del 403 `four_eyes_required` de quien escribió un plan capturado. */
+    public const DETAIL_PLAN_TEXT_AUTHOR = 'plan_text_author';
 
     public const LAB_REQUIRED = 'required';
 
@@ -250,6 +270,34 @@ final class StudioVoicePublishing
             'profile' => ['uuid' => (string) $perfil->uuid, 'label' => (string) $perfil->label, 'revision' => (int) $perfil->revision, 'status' => (string) $perfil->status],
             'labVerdict' => StudioVoiceEvidence::labVerdict($spec->specHash),
             'deployable' => ['missing' => self::missingPieces($spec)],
+            // PT-14 (D11): lo que Sofía dirá de los planes si se publica ahora; el laboratorio no publica nada.
+            'catalog' => $purpose === StudioVoiceCompiler::PURPOSE_PUBLICATION ? self::catalogPreview($access) : null,
+        ];
+    }
+
+    /**
+     * PT-14 (§5 B): el catálogo que capturaría publicar ahora, su huella y si
+     * quien mira lo puede publicar. De cada plan dice si QUIEN MIRA escribió su
+     * texto o lo puso a la venta (`authoredByYou`, B-1) y si su texto tiene
+     * autor registrado (`authorRecorded`); nunca quién escribió los demás.
+     *
+     * @return array{format:string,hash:string,shortHash:string,plans:list<array<string,mixed>>,fourEyes:array{ok:bool,message?:string}}
+     */
+    private static function catalogPreview(StudioAccess $access): array
+    {
+        $catalogo = self::catalogRecord();
+        $autores = array_column($catalogo['authors'], null, 'planId');
+        $mios = self::planTextAuthored($catalogo, $access->id());
+
+        return [
+            'format' => $catalogo['format'],
+            'hash' => $catalogo['hash'],
+            'shortHash' => substr($catalogo['hash'], 0, 8),
+            'plans' => array_map(static fn (array $p): array => $p + [
+                'authoredByYou' => isset($autores[$p['id']]) && self::isPlanAuthor($autores[$p['id']], $access->id()),
+                'authorRecorded' => ($autores[$p['id']]['by'] ?? null) !== null,
+            ], $catalogo['plans']),
+            'fourEyes' => $mios === [] ? ['ok' => true] : ['ok' => false, 'message' => self::planTextAuthorMessage($mios, StudioVoicePublication::ACTION_PUBLISH)],
         ];
     }
 
@@ -258,24 +306,26 @@ final class StudioVoicePublishing
     /**
      * @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool}
      */
-    public function publish(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, ?string $note): array
+    public function publish(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, string $expectedCatalogHash, ?string $note): array
     {
         $access->require(self::PUBLISH);
         $this->assertEnabled();
-        $cuerpo = ['version' => strtolower($versionUuid), 'profile' => strtolower($profileUuid), 'specHash' => $expectedSpecHash, 'note' => $note];
+        $cuerpo = ['version' => strtolower($versionUuid), 'profile' => strtolower($profileUuid), 'specHash' => $expectedSpecHash, 'catalogHash' => $expectedCatalogHash, 'note' => $note];
         if ($previa = $this->replay($access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo)) {
             return $previa;
         }
 
-        return $this->orReplayed(fn (): array => $this->publishGated($access, $request, $clientRequestId, $versionUuid, $profileUuid, $expectedSpecHash, $note), $access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo);
+        return $this->orReplayed(fn (): array => $this->publishGated($access, $request, $clientRequestId, $versionUuid, $profileUuid, $expectedSpecHash, $expectedCatalogHash, $note), $access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo);
     }
 
     /** @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool} */
-    private function publishGated(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, ?string $note): array
+    private function publishGated(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, string $expectedCatalogHash, ?string $note): array
     {
         $version = $this->versions->findByUuid($versionUuid);
         $perfil = StudioVoiceProfiles::findByUuid($profileUuid);
-        $this->assertFourEyes($access, $request, $version, $perfil, StudioVoicePublication::ACTION_PUBLISH);
+        // PT-14: el catálogo que se publica, capturado UNA vez con sus autores (los cuatro ojos y la huella miran el mismo).
+        $catalogo = self::catalogRecord();
+        $this->assertFourEyes($access, $request, $version, $perfil, StudioVoicePublication::ACTION_PUBLISH, $catalogo);
         $this->assertWindow();
         $this->assertBrakeReleased();
 
@@ -283,6 +333,7 @@ final class StudioVoicePublishing
         // Lo que se vio es lo que se publica: antes de la puerta del
         // laboratorio (su veredicto es de otra huella) y de desplegar nada.
         self::assertSeenSpec($expectedSpecHash, $spec->specHash, 'La compilación de la voz cambió desde que la previsualizaste: vuelve a previsualizarla y revísala antes de publicar.');
+        self::assertSeenCatalog($expectedCatalogHash, $catalogo['hash']);
         $puerta = self::labGate($spec->specHash);
         $numeroId = self::numberId();
         $faltan = self::missingPieces($spec);
@@ -322,18 +373,19 @@ final class StudioVoicePublishing
         }
 
         try {
-            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $agente, $puerta, $note, $cabezaAntes, $firma, $version, $perfil, $numero): array {
+            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $agente, $puerta, $note, $cabezaAntes, $firma, $version, $perfil, $numero, $catalogo): array {
                 $cabeza = $this->lockedHead($cabezaAntes);
                 $ahora = now();
                 $fila = StudioVoicePublications::insertEntry(StudioVoicePublication::ACTION_PUBLISH, StudioVoicePublication::SCOPE_CANARY, $agente, $cabeza, $ahora,
-                    $access, $clientRequestId, $puerta, ['number' => ['action' => $numero['action'], 'outcome' => $numero['outcome']]], $note, null, $firma);
+                    $access, $clientRequestId, $puerta, ['number' => ['action' => $numero['action'], 'outcome' => $numero['outcome']], 'catalog' => $catalogo], $note, null, $firma);
                 $this->serve($agente, StudioVoicePublication::SCOPE_CANARY);
 
                 $this->audit->record($request, $access->actor, 'voice_publication.published', StudioAuditEvent::SUBJECT_INTEGRATION, $fila->uuid,
                     "Publicó la voz en canario: «{$version->label}» con el perfil «{$perfil->label}» (entrada {$fila->seq})", [
                         'toStatus' => 'canary',
                         'contentHash' => $version->content_hash,
-                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'labGate' => $puerta['mode'], 'number' => $numero['outcome']] + self::traceOf($agente),
+                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'labGate' => $puerta['mode'], 'number' => $numero['outcome'],
+                            'catalogHash' => $catalogo['hash'], 'catalogPlans' => count($catalogo['plans'])] + self::traceOf($agente),
                     ]);
 
                 return [$fila];
@@ -381,7 +433,8 @@ final class StudioVoicePublishing
         if ($version === null || $perfil === null) {
             throw new LogicException('ultron_studio: el agente publicado no tiene su versión o su perfil.');
         }
-        $this->assertFourEyes($access, $request, $version, $perfil, StudioVoicePublication::ACTION_PROMOTE);
+        // PT-14: los autores de la instantánea del agente del canario, no los de ahora.
+        $this->assertFourEyes($access, $request, $version, $perfil, StudioVoicePublication::ACTION_PROMOTE, StudioVoicePublications::catalogOf($agente));
         $this->assertWindow();
         // El agente del canario es el que se vio (otra publicación en canario
         // entretanto lo cambia), antes de medir su evidencia.
@@ -996,6 +1049,8 @@ final class StudioVoicePublishing
                 'version' => $p->agent?->version?->uuid,
                 'profile' => $p->agent?->profile?->uuid,
                 'specHash' => $p->agent?->spec_hash,
+                // PT-14: la huella del catálogo que se vio es la que se guardó (publicar solo escribe si cuadran).
+                'catalogHash' => is_array($p->evidence) && is_array($p->evidence['catalog'] ?? null) ? ($p->evidence['catalog']['hash'] ?? null) : null,
                 'note' => $p->reason,
             ],
             StudioVoicePublication::ACTION_PROMOTE => [
@@ -1047,6 +1102,20 @@ final class StudioVoicePublishing
         }
     }
 
+    /**
+     * PT-14 (D11): el catálogo de planes que se vio (`expectedCatalogHash`, el
+     * de `compile-preview`) es el de ahora. Si no, 409 `catalog_changed` con
+     * las dos huellas, sin desplegar ni escribir nada; el CRM vuelve a
+     * enseñar lo que dirá Sofía.
+     */
+    private static function assertSeenCatalog(string $expected, string $actual): void
+    {
+        if (! hash_equals($actual, $expected)) {
+            throw new UltronStudioException('El catálogo de planes cambió desde que lo previsualizaste: vuelve a previsualizar y revisa lo que dirá Sofía antes de publicar.',
+                self::CODE_CATALOG_CHANGED, 409, ['expected' => $expected, 'actual' => $actual]);
+        }
+    }
+
     /** P-25: publicar y promover, solo dentro de la ventana (hora de Bogotá). */
     private function assertWindow(): void
     {
@@ -1080,8 +1149,18 @@ final class StudioVoicePublishing
      * versión, que la voz compila igual ({@see StudioVoiceCompiler}). Mismo
      * 403 con `detail: rule_phrase_author` y el mismo evento, con
      * `diff.rulePhraseAuthor`.
+     *
+     * PT-14 (D10, corregido por B-1): tampoco quien escribió el texto de un
+     * plan del catálogo que se publica (`by`) ni quien lo puso a la venta
+     * (`soldBy`) (`$catalog`: el capturado al publicar, o el de la instantánea
+     * del canario al promover): la aprobación de A y la de B no las da la
+     * misma persona, sea Super Admin o no. Se comparan identidades; un autor
+     * null no excluye a nadie. Mismo 403 con `detail: plan_text_author` y el
+     * mismo evento, con `diff.planTextAuthor` (ids).
+     *
+     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}|null  $catalog
      */
-    private function assertFourEyes(StudioAccess $access, Request $request, ?StudioVersion $version, ?StudioVoiceProfile $perfil, string $action): void
+    private function assertFourEyes(StudioAccess $access, Request $request, ?StudioVersion $version, ?StudioVoiceProfile $perfil, string $action, ?array $catalog = null): void
     {
         $mia = $version !== null && $access->isCreator($version);
         $miPerfil = $perfil !== null && (int) $perfil->created_by_admin_id === $access->id();
@@ -1094,13 +1173,92 @@ final class StudioVoicePublishing
         }
 
         $suyas = $version !== null ? (StudioRulePhraseAuthors::of(is_array($version->content) ? $version->content : [], $access->id()) ?? []) : [];
-        if ($suyas === []) {
+        if ($suyas !== []) {
+            $this->audit->recordDenied($request, $access->actor, 'voice_publication.four_eyes_denied', StudioAuditEvent::SUBJECT_INTEGRATION, $perfil?->uuid,
+                "Intentó {$verbo} una voz con ".StudioRulePhraseAuthors::auditReason($suyas), ['diff' => ['action' => $action, 'version' => false, 'profile' => false] + StudioRulePhraseAuthors::auditDiff($suyas)]);
+
+            throw StudioRulePhraseAuthors::refusal($suyas, $action);
+        }
+
+        $planes = $catalog === null ? [] : self::planTextAuthored($catalog, $access->id());
+        if ($planes === []) {
             return;
         }
         $this->audit->recordDenied($request, $access->actor, 'voice_publication.four_eyes_denied', StudioAuditEvent::SUBJECT_INTEGRATION, $perfil?->uuid,
-            "Intentó {$verbo} una voz con ".StudioRulePhraseAuthors::auditReason($suyas), ['diff' => ['action' => $action, 'version' => false, 'profile' => false] + StudioRulePhraseAuthors::auditDiff($suyas)]);
+            "Intentó {$verbo} una voz con el nombre o los beneficios de planes que escribió", ['diff' => ['action' => $action, 'version' => false, 'profile' => false,
+                'planTextAuthor' => array_column($planes, 'planId')]]);
 
-        throw StudioRulePhraseAuthors::refusal($suyas, $action);
+        throw new UltronStudioException(self::planTextAuthorMessage($planes, $action), 'four_eyes_required', 403, [
+            'detail' => self::DETAIL_PLAN_TEXT_AUTHOR,
+            'planTextAuthor' => $planes,
+        ]);
+    }
+
+    /**
+     * PT-14: el catálogo de planes de AHORA como se guarda en la `evidence`
+     * (`ultron-voice-catalog/1`): los planes, su huella y sus autores, de UNA
+     * lectura (`Plan::commercialCatalogSnapshot()`).
+     *
+     * @return array{format:string,hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}
+     */
+    private static function catalogRecord(): array
+    {
+        $captura = Plan::commercialCatalogSnapshot();
+
+        return [
+            'format' => Plan::COMMERCIAL_CATALOG_FORMAT,
+            'hash' => Plan::commercialCatalogHash($captura['plans']),
+            'plans' => $captura['plans'],
+            'authors' => $captura['authors'],
+        ];
+    }
+
+    /**
+     * Los planes del catálogo de los que `$adminId` escribió el texto o los
+     * puso a la venta ({@see isPlanAuthor()}), en su orden (solo los suyos:
+     * nunca dice quién escribió los demás).
+     *
+     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}  $catalog
+     * @return list<array{planId:int,name:string}>
+     */
+    private static function planTextAuthored(array $catalog, int $adminId): array
+    {
+        $autores = array_column($catalog['authors'], null, 'planId');
+        $suyos = [];
+        foreach ($catalog['plans'] as $p) {
+            if (isset($autores[$p['id']]) && self::isPlanAuthor($autores[$p['id']], $adminId)) {
+                $suyos[] = ['planId' => $p['id'], 'name' => $p['name']];
+            }
+        }
+
+        return $suyos;
+    }
+
+    /**
+     * B-1: ¿dio `$adminId` la aprobación de A de este plan? Escribió su texto
+     * (`by`) o lo puso a la venta (`soldBy`). Un null no es nadie.
+     *
+     * @param  array{planId:int,by:int|null,soldBy:int|null}  $author
+     */
+    private static function isPlanAuthor(array $author, int $adminId): bool
+    {
+        return ($author['by'] ?? null) === $adminId || ($author['soldBy'] ?? null) === $adminId;
+    }
+
+    /**
+     * «Escribiste o pusiste a la venta el nombre o los beneficios de «Mensual»:
+     * tiene que publicarla otra persona.» (al promover, «promoverla»).
+     *
+     * @param  list<array{planId:int,name:string}>  $planes
+     */
+    private static function planTextAuthorMessage(array $planes, string $action): string
+    {
+        $nombres = array_map(static fn (array $p): string => '«'.$p['name'].'»', $planes);
+        $ultimo = array_pop($nombres);
+        $lista = $nombres === [] ? $ultimo : implode(', ', $nombres).' y '.$ultimo;
+        $verbo = $action === StudioVoicePublication::ACTION_PROMOTE ? 'promoverla' : 'publicarla';
+
+        return "Escribiste o pusiste a la venta el nombre o los beneficios de {$lista}: tiene que {$verbo} otra persona.";
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────

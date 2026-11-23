@@ -89,6 +89,13 @@ final class CrmPermission
     /** Archivar un plan (retirarlo de la venta sin borrar su historia) y reactivarlo. */
     public const PLANS_ARCHIVE = 'plans.archive';
 
+    /**
+     * PT-14: cambiar el NOMBRE o los BENEFICIOS de un plan que se ofrece fuera
+     * y ponerlo a la venta. Se comprueba en el controlador
+     * ({@see PlanCommercialText}): viaja en el mismo PUT que el precio.
+     */
+    public const PLANS_COMMERCIAL_TEXT = 'plans.commercial_text';
+
     // ── Pagos ───────────────────────────────────────────────────────────────
     //
     // Cobrar es una cosa y fechar el cobro hacia atrás es otra: lo primero lo
@@ -357,6 +364,10 @@ final class CrmPermission
             // Archivar y reactivar planes: retira o devuelve un plan a la venta.
             // Solo Super Admin por defecto; el propietario decide a quién darla.
             self::PLANS_ARCHIVE,
+            // PT-14: el nombre y los beneficios de un plan que se ofrece fuera, y
+            // ponerlo a la venta. Solo Super Admin por defecto; el propietario la
+            // asigna en Usuarios y roles.
+            self::PLANS_COMMERCIAL_TEXT,
         ]));
 
         /*

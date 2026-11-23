@@ -45,6 +45,11 @@ class PlanArchiveTest extends TestCase
         // haría el propietario, desde la matriz de Usuarios y roles.
         $this->putJson('/api/admin/roles/permissions', ['role' => Admin::ROLE_ADMINISTRADOR,
             'permission' => 'plans.archive', 'granted' => true], $this->adminAs(Admin::ROLE_SUPER_ADMIN))->assertOk();
+        // PT-14 (cambio de requisito del propietario, diseño §7): reactivar mete el plan en la venta y pide además
+        // «Nombre y beneficios» (`plans.commercial_text`). Tampoco llega por defecto al Administrador: se la concede
+        // igual, desde la matriz. Sin ella, reactivar es 403 (lo fija test_archivar_exige_motivo_y_permiso_de_gestion).
+        $this->putJson('/api/admin/roles/permissions', ['role' => Admin::ROLE_ADMINISTRADOR,
+            'permission' => 'plans.commercial_text', 'granted' => true], $this->adminAs(Admin::ROLE_SUPER_ADMIN))->assertOk();
         $this->h = $this->actingAsAdmin($this->admin);
         $this->plan = Plan::create(['name' => 'Trimestral Élite', 'price' => 210000, 'duration_days' => 90,
             'active' => true, 'sellable' => true, 'visible_in_app' => true,
@@ -131,7 +136,13 @@ class PlanArchiveTest extends TestCase
         $archiva = $this->adminWithPermissions(['plans.view', 'plans.archive']);
         $this->postJson("/api/plans/{$this->plan->id}/archive", ['reason' => 'Motivo válido'], $archiva)->assertOk();
         $this->assertTrue($this->plan->fresh()->isArchived());
-        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $archiva)->assertOk();
+        // PT-14 (cambio de requisito del propietario, diseño §7): reactivar lo devuelve a la venta y pide además
+        // «Nombre y beneficios». Con `plans.archive` sola ya no basta; con las dos llaves, sí.
+        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $archiva)
+            ->assertForbidden()->assertJsonPath('code', 'plan_commercial_text_forbidden')->assertJsonPath('reasons', ['becomes_sellable']);
+        $this->assertTrue($this->plan->fresh()->isArchived());
+        $archivaYTexto = $this->adminWithPermissions(['plans.view', 'plans.archive', 'plans.commercial_text']);
+        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $archivaYTexto)->assertOk();
         $this->assertFalse($this->plan->fresh()->isArchived());
     }
 

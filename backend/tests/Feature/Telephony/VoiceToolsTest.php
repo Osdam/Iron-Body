@@ -91,6 +91,10 @@ class VoiceToolsTest extends TestCase
         }
         if (in_array($c['tool'], ['consultar_planes'], true)) {
             Plan::query()->create(['name' => 'Mensual', 'price' => 89000, 'duration_days' => 30, 'active' => true, 'sellable' => true]);
+            // PT-14 (cambio de requisito del propietario, diseño §7): la llamada dice el catálogo PUBLICADO de su agente
+            // ∩ el vigente. La voz del agente sellado, publicada con este catálogo (VoiceToolsPublishedCatalogTest fija
+            // lo publicado frente a lo vigente).
+            $this->publishVoice(evidence: $this->voiceCatalogEvidence());
         }
 
         $r = $this->rawPost('/api/voice/tools/'.$c['tool'], $cuerpo, array_filter(['Authorization' => $c['headers']['Authorization'] ?? null], static fn ($v) => $v !== null));
@@ -256,6 +260,9 @@ class VoiceToolsTest extends TestCase
         Plan::query()->create(['name' => 'Trimestral', 'price' => 239900.0, 'duration_days' => 90, 'active' => true, 'sellable' => true, 'sort_order' => 2]);
         Plan::query()->create(['name' => 'Oculto', 'price' => 10000, 'duration_days' => 30, 'active' => true, 'sellable' => false]);
         Plan::query()->create(['name' => 'Gratis', 'price' => 0, 'duration_days' => 30, 'active' => true, 'sellable' => true]);
+        // PT-14 (cambio de requisito del propietario, diseño §7): la voz del agente sellado, publicada con este catálogo.
+        // Lo que no se vende no entra en lo publicado (el catálogo es el de `Plan::sellable()`) ni se entrega.
+        $this->publishVoice(evidence: $this->voiceCatalogEvidence());
         $r = $this->rawPost('/api/voice/tools/consultar_planes', '{"conversation_id":"conv_h8fx_0031"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])->assertOk();
         $this->assertSame([['nombre' => 'Trimestral', 'condiciones' => '90 días de vigencia', 'precio' => '$ 239.900']], $r->json('planes'));
 

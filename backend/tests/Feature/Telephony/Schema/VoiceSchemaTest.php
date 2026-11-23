@@ -464,6 +464,9 @@ class VoiceSchemaTest extends TestCase
             (require database_path('migrations/2026_11_14_100001_allow_webhook_unhealthy_reason_on_voice_brakes.php'))->up();
             // SC-13 del cierre: el índice parcial de «una llamada por trabajo» (2026_11_14_100002), en los dos motores.
             (require database_path('migrations/2026_11_14_100002_add_one_call_per_strategy_job_index_on_voice_calls.php'))->up();
+            // E19-3 (2026_11_22_100002) rehace `vc_status_forward` con `ambiguous → failed_to_start`, en los dos motores: el
+            // mismo nombre, evento, función y motivo. El recuento de 27 (21 en SQLite) no cambia.
+            (require database_path('migrations/2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start.php'))->up();
             $this->assertSame($h8, $this->voiceFootprint(), 'up() no dejó lo mismo que la primera vez');
             // Y las guardas vuelven a funcionar.
             $id = $this->insertOutbound();

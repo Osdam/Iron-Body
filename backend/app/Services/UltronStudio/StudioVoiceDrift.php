@@ -25,6 +25,10 @@ use App\Services\Voice\VoiceAgentDeployer;
  *    La comparación es pura ({@see numberVerdict()}): este fichero no lee el
  *    número.
  *
+ *  - Del CATÁLOGO DE PLANES (PT-14, D12): el publicado de una parte frente al
+ *    vigente ({@see catalogVerdict()}), puro y sin red. No echa el freno ni
+ *    bloquea promover: la telefonía ya dice solo lo publicado ∩ lo vigente.
+ *
  * VIGILA, NO ACTÚA: devuelve veredictos. Abrir el freno por una deriva es de la
  * telefonía (D8-19, B8) y programar la vigilancia, de OPS8 (D8-21). Quien
  * publica la usa antes de promover y de revertir: no se promueve ni se vuelve a
@@ -51,6 +55,12 @@ final class StudioVoiceDrift
     public const NUMBER_DRIFT = 'number_drift';
 
     public const NUMBER_UNKNOWN = 'unknown';
+
+    public const CATALOG_OK = 'ok';
+
+    public const CATALOG_CHANGED = 'changed';
+
+    public const CATALOG_MISSING = 'missing';
 
     /**
      * @param  VoiceAgentDeployer|null  $deployer  solo las pruebas lo pasan: en producción, {@see VoiceAdapters::deployer()}
@@ -134,6 +144,41 @@ final class StudioVoiceDrift
         }
 
         return hash_equals($publishedAgentId, $observedAgentId) ? self::NUMBER_OK : self::NUMBER_DRIFT;
+    }
+
+    /**
+     * PT-14 (D12), puro: el catálogo de planes PUBLICADO (`null` si la parte no
+     * lo tiene o no verifica: `missing`) frente al VIGENTE, plan a plan por id,
+     * en el orden del vigente. `renamed`: su nombre ya no es el publicado
+     * (Sofía no lo dice); `benefits_changed`: sus beneficios no son los
+     * publicados (solo dice los publicados que siguen); `new`: no estaba (no lo
+     * ofrece). Un cambio de precio o de vigencia no es deriva: no es texto.
+     *
+     * @param  list<array{id:int,name:string,benefits:list<string>}>|null  $published
+     * @param  list<array{id:int,name:string,benefits:list<string>}>  $current
+     * @return array{outcome:string,changes:list<array{planId:int,name:string,change:string}>}
+     */
+    public static function catalogVerdict(?array $published, array $current): array
+    {
+        if ($published === null) {
+            return ['outcome' => self::CATALOG_MISSING, 'changes' => []];
+        }
+        $porId = array_column($published, null, 'id');
+        $cambios = [];
+        foreach ($current as $p) {
+            $antes = $porId[$p['id']] ?? null;
+            $cambio = match (true) {
+                $antes === null => 'new',
+                $antes['name'] !== $p['name'] => 'renamed',
+                $antes['benefits'] !== $p['benefits'] => 'benefits_changed',
+                default => null,
+            };
+            if ($cambio !== null) {
+                $cambios[] = ['planId' => $p['id'], 'name' => $p['name'], 'change' => $cambio];
+            }
+        }
+
+        return ['outcome' => $cambios === [] ? self::CATALOG_OK : self::CATALOG_CHANGED, 'changes' => $cambios];
     }
 
     /**

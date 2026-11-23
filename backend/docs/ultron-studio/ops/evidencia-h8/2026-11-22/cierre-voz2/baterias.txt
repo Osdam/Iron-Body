@@ -1,0 +1,34 @@
+BATERÍAS DEL CIERRE DE LA VOZ (H-1, H-2, H-3) · 22-11-2026 · rama cierre/voz, punta 22d2026b · una cada vez, nice -n 10, sin red
+
+== 1. Constante CERRADA (la rama), SQLite: tests/Unit/{Voice,Telephony} tests/Feature/{Voice,Telephony}
+OK, but some tests were skipped!
+Tests: 917, Assertions: 243792, Skipped: 163.
+
+== 2. Constante CERRADA, SQLite: bateria-rapida.txt sin las ClosedCopy (21 ficheros)
+OK (614 tests, 24537 assertions)
+
+== 3. Constante CERRADA, SQLite: paquete de guardas estáticas (16 ficheros)
+OK (141 tests, 187082 assertions)
+
+== 4. Constante CERRADA, PostgreSQL 14 (pgunit.sh, ultron_studio_cierre_voz): tests/Feature/Telephony tests/Feature/Voice
+OK, but some tests were skipped!
+Tests: 548, Assertions: 218968, Skipped: 27.
+
+== 4b. Constante CERRADA, SQLite: las 23 del Studio de voz (*Voice*Test.php: usan los dobles de VoiceAgentDeployer)
+OK, but some tests were skipped!
+Tests: 623, Assertions: 5819, Skipped: 73.
+
+== 5. Árbol desechable, rama local tmp/voz-abierta-medicion-2 = 22d2026b + la apertura simulada (cherry-pick de cbf94374) + git am de los 3 parches (limpio; range-diff «=» en los tres)
+   bateria-rapida.txt (24 ficheros):
+OK (624 tests, 25075 assertions)
+   tests/Unit/{Voice,Telephony} tests/Feature/{Voice,Telephony}:
+Tests: 926, Assertions: 244256, Skipped: 163.
+   las 23 del Studio de voz (*Voice*Test.php):
+Tests: 624, Assertions: 5834, Skipped: 73.
+
+== 6. E2E del H8 (H8_E2E_VENTANA= H8_E2E_DB=ultron_studio_h8_e2e_cvoz h8-e2e.sh todas)
+cerrada: pruebas 6 (6 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 113 (113 OK, 0 FALLO) · 25 s
+abierta: pruebas 9 (9 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 301 (301 OK, 0 FALLO) · 80 s
+salientes: pruebas 11 (11 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 247 (247 OK, 0 FALLO) · 55 s
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 832085b4ae85cf34c6423f6d8bd70ce3dfba4a47b99e397651994d37af1f887b
+evidencia: backend/docs/ultron-studio/ops/evidencia-h8/2026-11-22/20261122T060659Z-22d2026b

@@ -228,7 +228,7 @@ class VoiceReconcileDryRunTest extends TestCase
                 throw new \LogicException('solo lee');
             }
 
-            public function describeAgent(string $agentId): VoiceAgentObservation
+            public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation
             {
                 return new VoiceAgentObservation(VoiceAgentObservation::OUTCOME_OBSERVED, $agentId, null, null, ['prompt' => 'cambiado'], 200, null);
             }

@@ -234,7 +234,10 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->assertNotSame($vista, $otra);
 
         // 401 sin sesión; 422 sin la huella o si no es un sha256 en minúsculas; 403 sin la llave.
-        $cuerpo = static fn (array $over = []): array => $over + ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid, 'expectedSpecHash' => $vista];
+        // PT-14 (cambio de requisito del propietario, diseño §5 B): el cuerpo lleva también la huella del catálogo que se
+        // vio; sin ella es 422 (UltronStudioVoiceCatalogTest), y la validación va antes que la llave.
+        $cuerpo = static fn (array $over = []): array => $over + ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid, 'expectedSpecHash' => $vista,
+            'expectedCatalogHash' => self::seenCatalogHash()];
         $this->json('POST', '/api/admin/ultron-studio/voice/publish', $cuerpo())->assertStatus(401);
         $sinHuella = $cuerpo();
         unset($sinHuella['expectedSpecHash']);

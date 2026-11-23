@@ -1,0 +1,31 @@
+{
+    "snapshots": [
+        {
+            "provider": "meta_ads",
+            "fingerprint": "f015334fcc0cd0cdcf04c08a26f4c6162f8daf15ceb2baed7d02c3ee0d9d4bff",
+            "recorded": true,
+            "uuid": "f63edeee-83c6-4a6a-b604-4da452e77d49"
+        },
+        {
+            "provider": "twilio",
+            "fingerprint": "08c2879d0b5e44038ae2bc2c61131d5fb521863e71d166a4934ca793be7ac6d2",
+            "recorded": true,
+            "uuid": "c8c37c79-b6fd-4b6c-a077-6d1df1f999be"
+        },
+        {
+            "provider": "voice",
+            "fingerprint": "45cbd3e03ed549246bbe143031d42299b0600c76af35fdac060aaf0f338ee078",
+            "recorded": true,
+            "uuid": "da0e8c8b-383f-4e54-8159-2c20573108e3"
+        }
+    ],
+    "voice": {
+        "verified": true,
+        "outcome": "credentials_ok",
+        "snapshotOutcome": "ok",
+        "snapshot": "4c2a5036-a46c-42cc-abcb-4bdc1072bd74",
+        "httpStatus": 200,
+        "agentAudioUlaw8000": true,
+        "telephonyMark": "written"
+    }
+}

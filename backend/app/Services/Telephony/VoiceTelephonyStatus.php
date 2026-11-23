@@ -9,8 +9,9 @@ use Throwable;
 /**
  * El estado de la telefonía SIN RED y SIN SECRETOS (contrato H8, D8-20,
  * D8-21; `GET /api/admin/voice/status` y `voice:doctor --telephony`): las
- * banderas, la constante, el proveedor, el número (si está y si choca con el
- * de WhatsApp, por nombre), la cadena por partes, el freno, los límites y lo
+ * banderas, la constante, el proveedor, el número (si está, si choca con el
+ * de WhatsApp, por nombre, y si la identidad compartida de la enmienda del
+ * 22-11-2026 está admitida), la cadena por partes, el freno, los límites y lo
  * del día. Nunca valores de configuración sensibles ni números.
  */
 final class VoiceTelephonyStatus
@@ -69,6 +70,11 @@ final class VoiceTelephonyStatus
                 // B8-h (REV8-c M-1), aditivo: por qué (`VoiceNumberGuard::CHECK_REASONS`; null con `verified`). P. ej.
                 // `other_number_id`: la observación es de otro ELEVENLABS_AGENT_PHONE_NUMBER_ID que el configurado.
                 'checkReason' => $vigilancia['reason'],
+                // Enmienda del 22-11-2026, aditivo: el número empresarial como origen de las salientes. `declared`
+                // (VOICE_NUMBER_SHARED_WITH_MESSAGING), `admitted` (las siete condiciones) y `reason` (el primer
+                // motivo de `VoiceNumberGuard::SHARED_REASONS` que falla; null si se admite). `collidesWithMessaging`
+                // sigue siendo el HECHO: con la identidad admitida es true y la política no deniega por él.
+                'sharedWithMessaging' => VoiceNumberGuard::sharedIdentity(),
             ],
             'carrierConfigured' => TwilioVoiceCarrier::configured(),
             // Auditoría B-T5 (D8-21, decisión f), aditivo: el último veredicto de `voice:webhook-health` (sin URL, ids ni

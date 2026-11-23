@@ -100,6 +100,7 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
         $herramientas = [];
         $destinos = [];
         $guarda = [];
+        $tamanos = [];
         $transcripcion = is_array($datos['transcript'] ?? null) && array_is_list($datos['transcript']) ? $datos['transcript'] : [];
         foreach (array_slice($transcripcion, 0, self::MAX_TURNS) as $indice => $turno) {
             if (! is_array($turno) || ($turno['role'] ?? null) !== 'agent') {
@@ -123,6 +124,7 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
                 }
             }
             $guarda[] = ['index' => $indice, 'text' => $texto, 'tools' => $delTurno, 'transfers' => $destinosDelTurno, 'planResults' => self::planResults($turno['tool_results'] ?? null)];
+            $tamanos = [...$tamanos, ...self::planResultSizes($turno['tool_results'] ?? null)];
         }
 
         return new VoiceWebhookVerdict(
@@ -144,6 +146,7 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
             agentTurns: $turnos,
             transferTargets: $destinos,
             guardTurns: $guarda,
+            planResultBytes: array_slice($tamanos, 0, VoiceWebhookVerdict::MAX_PLAN_RESULT_SIZES),
         );
     }
 
@@ -253,6 +256,27 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
             if (is_array($r) && ($r['tool_name'] ?? null) === 'consultar_planes' && ($r['is_error'] ?? false) !== true
                 && is_string($r['result_value'] ?? null) && strlen($r['result_value']) <= self::MAX_TOOL_ARGUMENTS_BYTES) {
                 $out[] = $r['result_value'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * M-1 (revisión de security del 22-11-2026): el TAMAÑO en bytes de cada
+     * `result_value` de `consultar_planes` de un turno (los mismos que lee
+     * {@see planResults()}, pero también los que pasan de su tope: lo que se
+     * quiere ver en la primera llamada es si el proveedor lo infla por encima
+     * de 8 192 al guardarlo). Solo el número, nunca el texto.
+     *
+     * @return list<int>
+     */
+    private static function planResultSizes(mixed $resultados): array
+    {
+        $out = [];
+        foreach (is_array($resultados) && array_is_list($resultados) ? $resultados : [] as $r) {
+            if (is_array($r) && ($r['tool_name'] ?? null) === 'consultar_planes' && ($r['is_error'] ?? false) !== true && is_string($r['result_value'] ?? null)) {
+                $out[] = strlen($r['result_value']);
             }
         }
 

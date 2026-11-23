@@ -97,3 +97,31 @@ SELECT (SELECT count(*) FROM ultron_studio_publications)          AS filas_caden
        (SELECT count(*) FROM ultron_studio_audit_events)          AS filas_libro,
        (SELECT count(*) FROM ultron_studio_integration_snapshots) AS filas_instantaneas,
        (SELECT count(*) FROM ultron_studio_versions)              AS filas_versiones;
+-- ══ E19-3 (cierre de ULTRON STUDIO, 22-11-2026; migración 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start;
+-- plans/informes-cierre/informe-be-voz2.md, «E19-3 · la migración»): vc_status_forward admite ambiguous → failed_to_start.
+-- Antes → después de `ironbody-migrate --path=… --realpath` con esa migración. Ningún recuento de arriba cambia (27 disparadores y
+-- 51 CHECK en voice_%). Todo por to_regclass. Si algo no cuadra, PARAR y avisar a database-specialist.
+SELECT
+  (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid = to_regclass('public.voice_calls')
+      AND tgname = 'vc_status_forward')                                                    AS e193_disparador,        -- 1 → 1
+  (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = to_regclass('public.voice_calls')
+      AND tgname = 'vc_status_forward')                                                    AS e193_encendido,         -- O → O
+  (SELECT p.proname FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid WHERE t.tgrelid = to_regclass('public.voice_calls')
+      AND t.tgname = 'vc_status_forward')                                                  AS e193_funcion,           -- voice_forbid → voice_forbid
+  (SELECT pg_get_triggerdef(oid) ~ $$'ambiguous'::text\) AND \(\(new\.status\)::text = ANY \(\(ARRAY\[[^]]*'failed_to_start'$$
+     FROM pg_trigger WHERE tgrelid = to_regclass('public.voice_calls') AND tgname = 'vc_status_forward') AS e193_admite_la_salida, -- f → t
+  (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid = to_regclass('public.voice_calls')) AS e193_disparadores_llamadas, -- 6 → 6
+  (SELECT md5(pg_get_functiondef(oid)) FROM pg_proc WHERE proname = 'voice_forbid')        AS e193_huella_voice_forbid, -- la misma antes y después (no se toca)
+  (SELECT count(*) FROM migrations WHERE migration = '2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start') AS e193_migracion_registrada, -- 0 → 1
+  (SELECT CASE WHEN to_regclass('public.voice_calls') IS NULL THEN NULL
+          ELSE (xpath('/row/n/text()', query_to_xml('SELECT count(*) AS n FROM public.voice_calls', false, true, '')))[1]::text || ' llamadas, '
+            || (xpath('/row/n/text()', query_to_xml($$SELECT count(*) AS n FROM public.voice_calls WHERE status = 'ambiguous'$$, false, true, '')))[1]::text
+            || ' ambiguous' END)                                                           AS e193_filas;             -- igual antes y después (la migración no toca filas; hoy 0)
+-- Cerrojos que harían caer E19-3 por lock_timeout (55P03): CREATE OR REPLACE TRIGGER pide SHARE ROW EXCLUSIVE sobre voice_calls,
+-- que choca con un ESCRITOR (ROW EXCLUSIVE en adelante), no con un lector ni con un FOR UPDATE (ACCESS SHARE / ROW SHARE).
+-- Esperado: 0 filas; con filas, esperar y repetir.
+SELECT a.pid, a.state, now() - a.xact_start AS en_transaccion, l.mode, l.granted
+  FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+ WHERE l.relation = to_regclass('public.voice_calls') AND a.pid <> pg_backend_pid()
+   AND l.mode NOT IN ('AccessShareLock', 'RowShareLock')
+ ORDER BY a.pid;

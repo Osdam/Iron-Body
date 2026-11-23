@@ -514,7 +514,9 @@ if (require.main === module) {
     const numeros = [...estado.numeros.values()].filter((n) => n.agente === id).map((n) => ({ phone_number: n.phone_number, provider: 'twilio', label: n.label, phone_number_id: n.phone_number_id }));
     return { agent_id: id, ...C.mezclar(DEFECTOS, a.payload), metadata: { created_at_unix_secs: a.creado }, phone_numbers: numeros, access_info: { is_creator: true, creator_name: 'banco', creator_email: null, role: 'admin' } };
   };
-  const vistaNumero = (n) => ({ phone_number: n.phone_number, label: n.label, phone_number_id: n.phone_number_id, provider: 'twilio', assigned_agent: n.agente ? { agent_id: n.agente, agent_name: estado.agentes.get(n.agente)?.payload?.name ?? null } : null });
+  // OPS8-f (enmienda 20): `supports_inbound` solo sale si el control /__numero lo fija (por defecto, ausente, como hasta hoy:
+  // la identidad compartida no se admite sin él; el campo está marcado como obsoleto en la referencia de ElevenLabs).
+  const vistaNumero = (n) => ({ phone_number: n.phone_number, label: n.label, phone_number_id: n.phone_number_id, provider: 'twilio', ...(typeof n.supportsInbound === 'boolean' ? { supports_inbound: n.supportsInbound } : {}), assigned_agent: n.agente ? { agent_id: n.agente, agent_name: estado.agentes.get(n.agente)?.payload?.name ?? null } : null });
   const vistaConversacion = (c, completa) => {
     const corta = { agent_id: c.agentId, agent_name: estado.agentes.get(c.agentId)?.payload?.name ?? null, conversation_id: c.conversation_id, start_time_unix_secs: c.started, call_duration_secs: c.duration, message_count: c.status === 'done' ? 3 : 0, status: c.status, call_successful: c.status === 'done' ? 'success' : 'unknown' };
     if (!completa) return corta;
@@ -572,9 +574,9 @@ if (require.main === module) {
 
   // ── Twilio (la llamada la crea ElevenLabs con SU credencial de la subcuenta: C-A1) ──────────
   const basicEl = () => `Basic ${Buffer.from(`${P.TW_EL_KEY_SID}:${P.TW_EL_KEY_SECRET}`).toString('base64')}`;
-  async function twilioCrear(to, timeout, amd) {
+  async function twilioCrear(to, timeout, amd, desde = P.VOICE_NUMBER) {
     if (!P.EL_TWILIO_BASE) return { sid: C.sidTwilio('CA'), local: true };
-    const f = [['To', to], ['From', P.VOICE_NUMBER], ['Twiml', `<Response><Connect><Stream url="wss://api.elevenlabs.invalid/v1/convai/twilio"/></Connect></Response>`], ['Timeout', String(timeout)], ['Record', 'false']];
+    const f = [['To', to], ['From', desde], ['Twiml', `<Response><Connect><Stream url="wss://api.elevenlabs.invalid/v1/convai/twilio"/></Connect></Response>`], ['Timeout', String(timeout)], ['Record', 'false']];
     const md = typeof amd === 'string' ? amd : C.esObjeto(amd) && /^enable$/i.test(String(amd.mode ?? '')) ? 'Enable' : null;
     if (md) f.push(['MachineDetection', md]);
     const r = await C.emitir({ base: P.EL_TWILIO_BASE, path: `/2010-04-01/Accounts/${P.TW_ACCOUNT_SID}/Calls.json`, cabeceras: { Authorization: basicEl(), 'Content-Type': 'application/x-www-form-urlencoded' }, cuerpo: new URLSearchParams(f).toString(), timeoutMs: 5000 });
@@ -752,7 +754,7 @@ if (require.main === module) {
       if (Number.isInteger(limites.daily_limit) && limites.daily_limit >= 0 && deHoy(b.agent_id) >= limites.daily_limit) return error(429, 'daily_limit_exceeded', 'Agent daily limit reached');
       const esc = escenarios.get(b.to_number);
       if (esc === 'success_false') return { status: 200, body: { success: false, message: 'Simulador: Twilio rechazó el destino', conversation_id: null, callSid: null } };
-      const tw = esc === 'twilio_down' ? { error: 503 } : await twilioCrear(b.to_number, b.telephony_call_config?.ringing_timeout_secs ?? 60, b.telephony_call_config?.twilio_machine_detection);
+      const tw = esc === 'twilio_down' ? { error: 503 } : await twilioCrear(b.to_number, b.telephony_call_config?.ringing_timeout_secs ?? 60, b.telephony_call_config?.twilio_machine_detection, numero.phone_number);
       if (tw.error) return error(500, 'twilio_error', 'Simulador: no se pudo crear la llamada en Twilio');
       const conv = {
         conversation_id: C.idEleven('conv'), agentId: b.agent_id, direction: 'outbound', remote: b.to_number, agentNumber: numero.phone_number,
@@ -998,6 +1000,31 @@ if (require.main === module) {
         }
         estado.derivas++;
         return ok(res, { ok: true, drifts: estado.derivas });
+      }
+      case '/__numero': {
+        // OPS8-f (enmienda 20, la identidad compartida): el número importado tal como lo devuelve GET phone-numbers/{id}.
+        // phone=voz|whatsapp|<E.164> (el E.164 de la importación; voz = VOICE_NUMBER, whatsapp = WHATSAPP_NUMBER de las
+        // piezas), supports_inbound=true|false|ausente y agente=ninguno|ajeno (un agente que no es de Laravel). Nunca
+        // devuelve el número: solo sus cuatro últimas cifras. /__reset?state=1 lo devuelve a su defecto.
+        const n = estado.numeros.get(P.EL_PHONE_NUMBER_ID);
+        if (q.has('phone')) {
+          const v = q.get('phone');
+          const e = v === 'voz' ? P.VOICE_NUMBER : v === 'whatsapp' ? P.WHATSAPP_NUMBER : v;
+          if (!C.E164.test(e ?? '')) return mal(res, 'phone = voz|whatsapp|<E.164> (whatsapp exige WHATSAPP_NUMBER en las piezas)');
+          n.phone_number = e;
+        }
+        if (q.has('supports_inbound')) {
+          const v = q.get('supports_inbound');
+          if (!['true', 'false', 'ausente'].includes(v)) return mal(res, 'supports_inbound = true|false|ausente');
+          if (v === 'ausente') delete n.supportsInbound;
+          else n.supportsInbound = v === 'true';
+        }
+        if (q.has('agente')) {
+          const v = q.get('agente');
+          if (!['ninguno', 'ajeno'].includes(v)) return mal(res, 'agente = ninguno|ajeno');
+          n.agente = v === 'ajeno' ? 'agent_ajeno_del_panel' : null;
+        }
+        return ok(res, { ok: true, phoneLast4: n.phone_number.slice(-4), supportsInbound: typeof n.supportsInbound === 'boolean' ? n.supportsInbound : 'ausente', agente: n.agente ? 'asignado' : 'ninguno' });
       }
       case '/__webhook':
         if (q.get('reset') === '1') estado.webhook = { fallosSeguidos: 0, ultimaBuena: null, desactivado: false };

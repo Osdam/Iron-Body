@@ -11,7 +11,7 @@ SEAL_COLUMNS = ["voice_publication_seq", "part", "stamp_state", "studio_version_
 IDENTITY_COLUMNS = ["direction", "remote_hash", "remote_last4", "client_request_id", "attempt", "parent_call_id"]
 AFTER_COLUMNS = ["observed_agent_id", "observed_version_id", "observed_branch_id", "seal_verified"]
 
-# (de, a, dirección, base, decisión, disparador)
+# (de, a, dirección, base, decisión, disparador[, referencia del contrato si no es D8-13])
 ALLOWED = [
     ("requested", "canceled", "outbound", "contrato", None, "antes de marcar: política, publicación movida (publication_moved), freno o corte"),
     ("requested", "failed_to_start", "outbound", "contrato", None, "ElevenLabs respondió 4xx a outbound-call; la reserva se libera"),
@@ -26,6 +26,8 @@ ALLOWED = [
     ("ambiguous", "busy", "outbound", "decision-fixture", "DF-S3", "ídem"),
     ("ambiguous", "no_answer", "outbound", "decision-fixture", "DF-S3", "ídem"),
     ("ambiguous", "failed", "outbound", "decision-fixture", "DF-S3", "la conciliación prueba que no hubo llamada, o Twilio canceled/failed"),
+    ("ambiguous", "failed_to_start", "outbound", "contrato", None,
+     "E19-3: no llegó a iniciarse (la conciliación con una pasada completa del operador, o voice:resolve-ambiguous); la reserva se libera", "D8-13, E19-3"),
     ("dialing", "completed", "outbound", "contrato", None, "post_call_transcription con duración"),
     ("dialing", "busy", "outbound", "contrato", None, "call_initiation_failure = busy"),
     ("dialing", "no_answer", "outbound", "contrato", None, "call_initiation_failure = no-answer"),
@@ -47,7 +49,8 @@ ST = Fixture("state-transitions.json", header(
     "state-transitions.json",
     ["D8-13 (voice_calls.status, 11 estados; transiciones solo hacia delante con un disparador de PostgreSQL; un final no cambia; voice_call_events con UNIQUE (provider, kind, provider_event_key))",
      "D8-8 (el sello se escribe al empezar)", "D8-9 (publication_moved)", "D8-12 (job tries = 1; ambiguous no se reintenta)", "D8-20 (corte de las dialing y active)",
-     "Contratos de datos (voice_calls, voice_call_events)"],
+     "Contratos de datos (voice_calls, voice_call_events)",
+     "E19-3 (22-11-2026, enmienda de DF-S3: una ambiguous que no llegó a iniciarse pasa a failed_to_start; migración 2026_11_22_100002)"],
     [{"what": "El contrato", "url": "(repositorio)", "consulted": "03-11-2026", "how": "Las transiciones que el contrato no escribe llevan su DF-S."}],
     closedSets={"statuses": STATUSES, "finalStatuses": FINALS, "nonFinalStatuses": [s for s in STATUSES if s not in FINALS],
                 "events": EVENTS, "eventsProposed": ["usage_alert (DF-W1, Q-5)"], "directions": ["outbound", "inbound"],
@@ -56,7 +59,7 @@ ST = Fixture("state-transitions.json", header(
     decisions={
         "DF-S1": "Una actualización que no cambia status no es una transición: vale en cualquier estado, también en los finales (coste real, sello posterior), salvo las columnas inmutables (DF-S5).",
         "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final).",
-        "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled ni failed_to_start (ya se intentó).",
+        "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled (ya se intentó). Desde E19-3 (contrato, 22-11-2026), también failed_to_start si no llegó a iniciarse: esa fila es del contrato, no de esta decisión.",
         "DF-S4": "active → failed para el «otro fallo final» de una entrante o de una saliente ya active (E1-1).",
         "DF-S5": "El sello y la identidad se escriben al insertar y no cambian nunca (sealColumns e identityColumns).",
         "DF-S6": "Las columnas posteriores (afterColumns) pasan de null a un valor una sola vez; cambiarlas después se rechaza.",
@@ -71,8 +74,8 @@ for a, b, d, *_ in ALLOWED:
     assert a in REACHABLE[d] and b in REACHABLE[d], (a, b, d)
     assert STATUSES.index(a) != STATUSES.index(b)
 
-for a, b, d, basis, dec, why in ALLOWED:
-    ST.add("allowed", d, f"{a} → {b}", "D8-13", basis, {"from": a, "to": b, "direction": d, "trigger": why}, {"allowed": True}, decision=dec)
+for a, b, d, basis, dec, why, *ref in ALLOWED:
+    ST.add("allowed", d, f"{a} → {b}", ref[0] if ref else "D8-13", basis, {"from": a, "to": b, "direction": d, "trigger": why}, {"allowed": True}, decision=dec)
 
 # Matriz completa: 11 × 11 por dirección (la diagonal es «sin cambio», DF-S1)
 for d in ("outbound", "inbound"):
@@ -90,7 +93,8 @@ for d in ("outbound", "inbound"):
                                   "no es una transición hacia delante prevista")
                 row = next((x for x in ALLOWED if (x[0], x[1], x[2]) == (a, b, d)), None)
                 basis, dec = (row[3], row[4]) if row else ("contrato" if a in FINALS else "decision-fixture", None if a in FINALS else "DF-S9")
-            ST.add("matrix", d, f"{d}: {a} → {b}", "D8-13", basis, {"from": a, "to": b, "direction": d}, exp, decision=dec)
+            ref = row[6] if a != b and row is not None and len(row) > 6 else "D8-13"
+            ST.add("matrix", d, f"{d}: {a} → {b}", ref, basis, {"from": a, "to": b, "direction": d}, exp, decision=dec)
 
 # Inserción
 for d in ("outbound", "inbound"):
@@ -129,6 +133,10 @@ SEQ("el fallo de inicio llega antes que el job: requested → busy y dialing rec
     basis="decision-fixture", decision="DF-S2")
 SEQ("hacia atrás: dialing → requested rechazado", "outbound", ["requested", "dialing", "requested"], "dialing")
 SEQ("ambigua nunca vuelve a requested ni se reintenta en la misma fila", "outbound", ["requested", "ambiguous", "requested"], "ambiguous", ref="D8-12, D8-13")
+SEQ("una ambigua no se cancela: requested → ambiguous y canceled rechazado (ya se intentó)", "outbound", ["requested", "ambiguous", "canceled"], "ambiguous",
+    basis="decision-fixture", decision="DF-S3")
+SEQ("ambigua que no salió: requested → ambiguous → failed_to_start, y su post-llamada no la resucita (completed rechazado)", "outbound",
+    ["requested", "ambiguous", "failed_to_start", "completed"], "failed_to_start", ref="D8-13, E19-3")
 SEQ("un final no cambia: completed → failed rechazado", "outbound", ["requested", "dialing", "completed", "failed"], "completed")
 SEQ("entrante: active → completed", "inbound", ["active", "completed"], "completed")
 SEQ("entrante cortada: active → hung_up", "inbound", ["active", "hung_up"], "hung_up")

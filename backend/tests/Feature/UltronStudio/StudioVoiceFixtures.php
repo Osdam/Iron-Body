@@ -5,6 +5,7 @@ namespace Tests\Feature\UltronStudio;
 use App\Exceptions\UltronStudioException;
 use App\Http\Middleware\EnforceAdminAuthorization;
 use App\Models\Admin;
+use App\Models\Plan;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVoiceAgent;
 use App\Models\UltronStudio\StudioVoiceProfile;
@@ -230,17 +231,28 @@ trait StudioVoiceFixtures
 
     /**
      * Publica como lo hace el CRM (S8-c): con la `specHash` que se VIO al
-     * previsualizar esa versión y ese perfil, salvo que se dé otra.
+     * previsualizar esa versión y ese perfil, salvo que se dé otra. Y, desde
+     * PT-14 (cambio de requisito del propietario, diseño §7 y §5 B), con la
+     * huella del catálogo de planes que enseñó esa vista previa
+     * ({@see seenCatalogHash()}), salvo que se dé otra.
      */
-    protected function publishVoice(Admin $as, StudioVersion $v, StudioVoiceProfile $p, ?string $clientRequestId = null, ?string $note = null, ?string $expectedSpecHash = null): TestResponse
+    protected function publishVoice(Admin $as, StudioVersion $v, StudioVoiceProfile $p, ?string $clientRequestId = null, ?string $note = null, ?string $expectedSpecHash = null,
+        ?string $expectedCatalogHash = null): TestResponse
     {
         return $this->voice('POST', 'publish', $as, array_filter([
             'clientRequestId' => $clientRequestId ?? (string) Str::uuid(),
             'versionUuid' => $v->uuid,
             'profileUuid' => $p->uuid,
             'expectedSpecHash' => $expectedSpecHash ?? self::seenSpecHash($v, $p),
+            'expectedCatalogHash' => $expectedCatalogHash ?? self::seenCatalogHash(),
             'note' => $note,
         ], static fn (mixed $x): bool => $x !== null));
+    }
+
+    /** PT-14: la huella del catálogo de planes que enseñaría `compile-preview` ahora (`catalog.hash`). */
+    protected static function seenCatalogHash(): string
+    {
+        return Plan::commercialCatalogHash(Plan::commercialCatalog());
     }
 
     /**

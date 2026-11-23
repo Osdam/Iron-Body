@@ -20,6 +20,15 @@
 # voz con el remitente del OTP (TWILIO_FROM) y con los de WhatsApp (VoiceNumberGuard), y la cuenta de voz con la del OTP
 # (TWILIO_SID / TWILIO_ACCOUNT_SID). Imprime un VEREDICTO para la decisión del propietario: «misma cuenta con claves
 # restringidas» frente a «subcuenta con el número trasladado», con el procedimiento oficial según el tipo de número.
+# ENMIENDA 20 (22-11-2026, decisión expresa del propietario: MATRIZ_CIERRE_V2.md §9; contrato H8 E20-1; diseño
+# diseno-arq-telefonia.md §6): la cuenta PRINCIPAL sin subcuenta sale «APTA · cuenta principal» (código 0) SOLO con la
+# API key SK… restringida que no es la del OTP, los mensajes denegados, la ventana de llamadas leída entera con 0
+# llamadas ajenas, TWILIO_VOICE_SIGNING_TOKEN vacío y el número como CALLER ID VERIFICADO; con cualquiera sin cumplir,
+# código 3 y lo que falta. El número VISIBLE de WhatsApp deja de ser FALLO solo con la identidad compartida declarada
+# en el fichero (VOICE_NUMBER_SHARED_WITH_MESSAGING), «Outbound Only», las entrantes apagadas y como caller ID
+# verificado (otro protegido, comprado o portado: FALLO); la admisión la da el servidor, no esta comprobación. Dice
+# siempre lo que NO comprueba: que el destino vea el identificador (en Colombia Twilio no lo garantiza), la credencial
+# de la importación de ElevenLabs, la lista exacta de permisos de la key, los permisos geográficos y las entrantes.
 #   bash /root/h8-twilio-check.sh [--dias=N]      N = días de la ventana de llamadas (1–30; 7 por defecto)
 # Se ejecuta EN EL SERVIDOR como root (lee el fichero de entorno como www-data) o en el banco. Códigos: 0 apta (sin
 # FALLO), 3 NO apta o falta una decisión (dice cuál), 1 error, 2 uso. No escribe nada en ningún sitio.
@@ -69,6 +78,15 @@ $out = ["piezas" => [
     "key_es_la_del_otp" => $ksid !== "" && in_array($ksid, $otpSids, true),
     "mismo_numero" => $from === "" || $g("TWILIO_FROM") === "" ? null : hash_equals($dig($g("TWILIO_FROM")), $dig($from)),
 ], "whatsapp" => $from === "" ? null : App\Services\Telephony\VoiceNumberGuard::collides($from, $g("WHATSAPP_DISPLAY_PHONE"), $g("WHATSAPP_PROTECTED_NUMBERS") !== "" ? $g("WHATSAPP_PROTECTED_NUMBERS") : $g("WHATSAPP_DISPLAY_PHONE")),
+// Enmienda 20 (22-11-2026): lo DECLARADO en el fichero para la identidad compartida, con la misma lectura que config/voice.php
+// (solo booleanos y si el número es EXACTAMENTE el visible; nunca el número). La admisión no se decide aquí: la da el
+// servidor con la conciliación del número (h8-voice-scope.sh estado).
+"compartida" => [
+    "declarada" => filter_var($g("VOICE_NUMBER_SHARED_WITH_MESSAGING"), FILTER_VALIDATE_BOOLEAN) === true,
+    "es_visible" => $from !== "" && method_exists(App\Services\Telephony\VoiceNumberGuard::class, "sameNumber") && App\Services\Telephony\VoiceNumberGuard::sameNumber($from, $g("WHATSAPP_DISPLAY_PHONE")) === true,
+    "solo_saliente" => $g("VOICE_NUMBER_INBOUND_CAPABLE") !== "" && filter_var($g("VOICE_NUMBER_INBOUND_CAPABLE"), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === false,
+    "entrantes" => filter_var($g("VOICE_INBOUND_ENABLED"), FILTER_VALIDATE_BOOLEAN) === true,
+],
 "cuenta" => null, "numero" => null, "sms" => null, "llamadas" => null, "errors" => []];
 $fin = function () use (&$out) { echo json_encode($out, JSON_UNESCAPED_SLASHES), PHP_EOL; exit(0); };
 if (!$out["piezas"]["account"] || $out["piezas"]["key_sid"] !== "SK" || !$out["piezas"]["key_secret"]) { $out["errors"][] = "piezas_incompletas"; $fin(); }
@@ -173,8 +191,19 @@ if d.get("errors"):
     sys.exit(3)
 linea("OK", "credencial: API key SK… con su secreto (las de ElevenLabs y el OTP no se leen)") if p["key_sid"] == "SK" and p["key_secret"] else None
 linea("INFO", "TWILIO_VOICE_SIGNING_TOKEN " + ("presente" if p["signing"] else "vacío: el aviso de gasto de Twilio de la voz falla cerrado (401); no lo necesitan las salientes"))
-# Número de voz frente a WhatsApp y al OTP
-if d.get("whatsapp"): linea("FALLO", "el número de voz es el de WhatsApp o uno protegido (protección 6, D8-5)")
+# Número de voz frente a WhatsApp y al OTP. Enmienda 20 (diseño §7.3, «:177»): el VISIBLE de WhatsApp deja de ser FALLO
+# solo con la identidad compartida declarada, «Outbound Only», las entrantes apagadas y como CALLER ID VERIFICADO de esta
+# cuenta (nunca comprado ni portado); otro número protegido sigue siendo FALLO.
+cp = d.get("compartida") or {}
+t = nu.get("tipo")
+if d.get("whatsapp"):
+    falta = [n for n, ok in (("el número no es EXACTAMENTE el visible de WhatsApp (WHATSAPP_DISPLAY_PHONE): otro protegido nunca se admite", cp.get("es_visible")),
+                             ("la identidad compartida no está declarada (h8-voice-scope.sh numero-compartido on, con la autorización del propietario)", cp.get("declarada")),
+                             ("el número no está declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false)", cp.get("solo_saliente")),
+                             ("las entrantes están encendidas (VOICE_INBOUND_ENABLED)", not cp.get("entrantes")),
+                             ("en esta cuenta no es un CALLER ID VERIFICADO (tipo: %s; el número de WhatsApp nunca se compra, porta ni traslada)" % (t or "?"), t == "caller_id")) if not ok]
+    if falta: linea("FALLO", "el número de voz es el de WhatsApp o uno protegido (protección 6, D8-5): " + "; ".join(falta))
+    else: linea("INFO", "el número de voz es el VISIBLE de WhatsApp como identidad compartida declarada (enmienda 20 del 22-11-2026): solo saliente, caller ID verificado y entrantes apagadas. La ADMISIÓN no se decide aquí: la da el servidor cuando voice:reconcile --numbers lo ve importado en ElevenLabs solo saliente y sin agente (h8-voice-scope.sh estado)")
 else: linea("OK", "el número de voz no es ninguno de WhatsApp (VoiceNumberGuard)")
 if otp.get("mismo_numero"): linea("FALLO", "el número de voz es el remitente del OTP (TWILIO_FROM): trasladarlo o tocarlo rompería el OTP")
 elif otp.get("mismo_numero") is False: linea("OK", "el número de voz no es el remitente del OTP")
@@ -230,22 +259,47 @@ if ll.get("http") == 200:
         linea("AVISO", "%s llamada(s) de la ventana NO son del número de voz: hay tráfico de voz ajeno en esta cuenta; con la conciliación encendida, cada una echaría el freno" % ll["ajenas"])
 elif ll.get("http") in (401, 403): linea("FALLO", "la key no puede listar llamadas (HTTP %s): la conciliación y el corte de emergencia (D8-20, 0b) la necesitan (/twilio/voice/calls/list, /read y /update)" % ll["http"])
 else: linea("AVISO", "las llamadas no se pudieron listar (HTTP %s)" % ll.get("http"))
+# Lo que esta comprobación NO ve (enmienda 20): se dice siempre, para que nadie lo dé por comprobado.
+linea("INFO", "NO comprueba que el teléfono de destino vea este número: Twilio no garantiza en Colombia el identificador de una llamada nacional («Domestic: Local (Non-guaranteed)»); se observa en la primera llamada canaria")
+linea("INFO", "NO comprueba con qué credencial importó ElevenLabs el número (API key SK… restringida, nunca el Auth Token: A-1), ni la lista exacta de permisos de la key (una key podría crear mensajes sin poder listarlos), ni los permisos geográficos de voz (solo Colombia): los confirma el propietario en las consolas")
+linea("INFO", "NO hace entrantes: un caller ID verificado solo presenta una identidad al llamar; quien devuelva la llamada llama a la línea del gimnasio, no a Sofía")
 # Veredicto
 print()
 madre = misma is True or sub is False
+# Enmienda 20 (E20-1; diseño §6): la CUENTA PRINCIPAL, sin subcuenta, es APTA solo con todas estas a la vez (las de la
+# credencial y la del número OTP ya son FALLO arriba si no se cumplen): mensajes denegados, la ventana de llamadas leída
+# entera y sin llamadas ajenas, TWILIO_VOICE_SIGNING_TOKEN vacío (con la cuenta principal sería el Auth Token maestro, el
+# del OTP) y el número como CALLER ID VERIFICADO. La credencial de la importación de ElevenLabs no se ve desde aquí: AVISO.
+faltan_principal = [n for n, ok in (
+    ("la sonda de mensajes no salió denegada (HTTP %s)" % sms.get("http"), sms.get("denegado") is True),
+    ("la ventana de llamadas no se leyó entera (HTTP %s%s)" % (ll.get("http"), ", truncada" if ll.get("truncado") else ""), ll.get("http") == 200 and not ll.get("truncado")),
+    ("hay %s llamada(s) ajena(s) en la ventana (cada una echaría el freno unknown_provider_call)" % ll.get("ajenas"), ll.get("ajenas") == 0),
+    ("TWILIO_VOICE_SIGNING_TOKEN no está vacío (con la cuenta principal sería el Auth Token maestro del OTP: quitarlo)", not p.get("signing")),
+    ("el número no es un CALLER ID VERIFICADO de esta cuenta (tipo: %s)" % (t or "?"), t == "caller_id"),
+) if not ok]
 como = {"comprado": "trasladarlo SIN COMPRAR: POST /2010-04-01/Accounts/{MADRE}/IncomingPhoneNumbers/{PN…}.json con AccountSid={SUBCUENTA}, con las credenciales de la cuenta MADRE (twilio.com/docs/iam/api/subaccounts#exchanging-numbers); si exige dirección, crearla antes en la subcuenta; los registros de Trust Hub y A2P se reenvían; un remitente de WhatsApp conectado no se mueve (ticket)",
         "caller_id": "un caller ID verificado NO se traslada: se verifica OTRA VEZ en la subcuenta (POST /2010-04-01/Accounts/{SUBCUENTA}/OutgoingCallerIds.json con PhoneNumber: Twilio llama al número del negocio y se teclea el código de 6 dígitos; twilio.com/docs/voice/api/outgoing-caller-ids), sin comprar nada; después se reimporta en ElevenLabs con la key de la subcuenta y se quita la importación vieja"}.get(t, "según el tipo de número (comprado: traslado; caller ID: verificación nueva)")
 if fallos:
     print("VEREDICTO: NO APTA: %d FALLO (arriba). Corregir antes de cualquier fase." % len(fallos))
     rc = 3
+elif madre and not faltan_principal:
+    print("VEREDICTO: APTA · cuenta principal (enmienda del 22-11-2026, E20-1): la voz en la cuenta MADRE%s con una API key restringida solo de voz," % (" (la del OTP)" if misma else ""))
+    print("  caller ID verificado, mensajes denegados, 0 llamadas ajenas en la ventana y TWILIO_VOICE_SIGNING_TOKEN vacío. Lo que asume esta opción (contrato H8, D8-4/D8-5 enmendadas):")
+    print("  · la conciliación ve TODAS las llamadas de la cuenta: cualquier llamada de voz que no pida Laravel echa el freno (unknown_provider_call);")
+    print("  · sin avisos de gasto de Twilio para la voz (sin token de firma: 401, falla cerrado); quedan VoiceCostGuard, el cupo y el freno por coste;")
+    print("  · el saldo es el mismo que paga los SMS del inicio de sesión (C-6);")
+    print("  · el nivel 3 de la vuelta atrás NUNCA es suspender la cuenta (tumbaría el OTP): se revocan las keys de voz y se quita la importación de ElevenLabs.")
+    linea("AVISO", "la importación del número en ElevenLabs tiene que estar hecha con una API key SK… restringida, como «Outbound Only» y sin agente: desde aquí no se ve; lo confirma el propietario por escrito (consola de ElevenLabs → Phone numbers → el número) y lo observa voice:reconcile --numbers")
+    rc = 0
 elif madre:
-    print("VEREDICTO: SUBCUENTA (recomendada; D8-4 y D8-5). La voz está hoy en la cuenta MADRE%s:" % (" (la del OTP)" if misma else ""))
+    print("VEREDICTO: SUBCUENTA (recomendada; D8-4 y D8-5) o CUENTA PRINCIPAL con la enmienda del 22-11-2026 (E20-1), que HOY NO se cumple. La voz está en la cuenta MADRE%s:" % (" (la del OTP)" if misma else ""))
+    print("  · para la cuenta principal falta: " + "; ".join(faltan_principal) + ";")
     print("  · la conciliación ve TODAS las llamadas de la cuenta: toda llamada de voz que no pida Laravel echa el freno (en la ventana: %s);" % ll.get("total", "?"))
     print("  · validar los avisos de gasto de voz exigiría el Auth Token MAESTRO en TWILIO_VOICE_SIGNING_TOKEN (dejarlo vacío: sin avisos de Twilio para la voz);")
     print("  · los avisos y techos de gasto de Twilio se comparten con el OTP; una key filtrada de la voz vive en la cuenta del OTP.")
-    print("  «Misma cuenta con claves restringidas» solo es VIABLE con: 0 llamadas ajenas en la cuenta; la importación de ElevenLabs hecha con una key SK… restringida (solo llamadas y números)")
+    print("  La enmienda E20-1 admite la cuenta principal con: 0 llamadas ajenas en la cuenta; la importación de ElevenLabs hecha con una key SK… restringida (solo llamadas y números)")
     print("   y NUNCA con el Account SID + Auth Token (desde aquí no se ve: consola de ElevenLabs → Phone numbers → el número; si se usó el Auth Token, ElevenLabs tiene la credencial")
-    print("   maestra del OTP: reimportar con una key SK… y rotar el Auth Token tras B-6); TWILIO_VOICE_SIGNING_TOKEN vacío; y una ENMIENDA del contrato con el visto bueno de security.")
+    print("   maestra del OTP: reimportar con una key SK… y rotar el Auth Token tras B-6); TWILIO_VOICE_SIGNING_TOKEN vacío; el número como caller ID verificado; y el visto bueno de security.")
     print("  Subcuenta sin comprar número (crearla no tiene coste propio: el uso se factura a la madre): las keys se crean DENTRO de la subcuenta (las de la madre no ven sus recursos);")
     print("  el número: " + como)
     rc = 3

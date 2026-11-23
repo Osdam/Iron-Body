@@ -7,6 +7,7 @@ use App\Models\MembershipSubscription;
 use App\Models\Plan;
 use App\Services\Audit\AuditTrail;
 use App\Support\Access\AdminActor;
+use App\Support\Access\PlanCommercialText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -133,7 +134,16 @@ class PlanArchive
                 'archived_at' => null,
                 'archived_by' => null,
                 'archive_reason' => null,
-            ])->save();
+            ]);
+            // PT-14: reactivar mete el plan en la venta, y eso pide además
+            // «Nombre y beneficios»; quien lo hace queda como quien lo puso a la
+            // venta (B-1), no como autor del texto, que no cambia. El throw
+            // deshace la transacción.
+            if ($p->isSellable()) {
+                PlanCommercialText::assertAllowed($request, PlanCommercialText::REASON_BECOMES_SELLABLE);
+                $p->forceFill(['commercial_sale_by' => AdminActor::id($request)]);
+            }
+            $p->save();
 
             $this->audit->record($request, [
                 'action' => 'status',
@@ -142,7 +152,7 @@ class PlanArchive
                 'entity_id' => $p->id,
                 'target_name' => $p->name,
                 'summary' => "Reactivó el plan {$p->name}",
-                'changes' => $this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app', 'counter_sellable']),
+                'changes' => PlanCommercialText::withoutAuthor($this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app', 'counter_sellable'])),
                 'metadata' => [
                     'event' => self::EVENT,
                     'operation' => 'reactivate',

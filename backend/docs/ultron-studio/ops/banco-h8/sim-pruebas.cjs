@@ -1143,6 +1143,54 @@ caso('TW · OPS8-c · /__numero?cuenta=madre → la ficha de la cuenta dice owne
   assert.equal((await tw('GET', `${ACC}.json`)).json.owner_account_sid, PZ.TW_MASTER_SID);
 });
 
+// ══ M. OPS8-f (enmienda 20 del 22-11-2026): la identidad compartida del número de WhatsApp como origen ═══════════
+caso('EL · OPS8-f · /__numero: por defecto el número no trae supports_inbound; phone, supports_inbound y agente cambian lo que lee GET; valores fuera → 400', async () => {
+  const ruta = `/v1/convai/phone-numbers/${PZ.EL_PHONE_NUMBER_ID}`;
+  const antes = (await el('GET', ruta)).json;
+  const { d } = await nuevas(statsEl, async () => {
+    assert.equal(Object.hasOwn(antes, 'supports_inbound'), false);
+    assert.equal(antes.phone_number, PZ.VOICE_NUMBER);
+    const c = await ctl(BASE_EL, '/__numero?phone=whatsapp&supports_inbound=false&agente=ninguno');
+    assert.deepEqual(c, { ok: true, phoneLast4: PZ.WHATSAPP_NUMBER.slice(-4), supportsInbound: false, agente: 'ninguno' });
+    let n = (await el('GET', ruta)).json;
+    assert.equal(n.phone_number, PZ.WHATSAPP_NUMBER);
+    assert.equal(n.supports_inbound, false);
+    assert.equal(n.assigned_agent, null);
+    await ctl(BASE_EL, '/__numero?supports_inbound=true&agente=ajeno');
+    n = (await el('GET', ruta)).json;
+    assert.equal(n.supports_inbound, true);
+    assert.equal(n.assigned_agent.agent_id, 'agent_ajeno_del_panel');
+    await ctl(BASE_EL, '/__numero?supports_inbound=ausente');
+    assert.equal(Object.hasOwn((await el('GET', ruta)).json, 'supports_inbound'), false);
+    for (const q of ['phone=fijo', 'supports_inbound=si', 'agente=otro']) assert.equal((await pedir(BASE_EL, 'GET', `/__numero?${q}`)).status, 400);
+  });
+  assert.deepEqual(d, {});
+  await ctl(BASE_EL, '/__numero?phone=voz&agente=ninguno');
+  if (antes.assigned_agent) await el('PATCH', ruta, { body: { agent_id: antes.assigned_agent.agent_id } });
+  assert.deepEqual((await el('GET', ruta)).json, antes);
+});
+caso('TW · OPS8-f · From = el de WhatsApp: violación por defecto y con compartido=1 sin el escenario completo; con numero=whatsapp, caller ID y compartido=1, ninguna', async () => {
+  const llamar = () => tw('POST', `${ACC}/Calls.json`, { cred: CRED.elevenlabs, form: { To: '+573000000011', From: PZ.WHATSAPP_NUMBER, Twiml: '<Response/>' } });
+  let { r, d } = await nuevas(statsTw, llamar);
+  assert.equal(r.status, 201);
+  assert.deepEqual(d, { from_is_whatsapp_number: 1 });
+  await ctl(BASE_TW, '/__numero?compartido=1');
+  ({ d } = await nuevas(statsTw, llamar));
+  assert.deepEqual(d, { from_is_whatsapp_number: 1 }, 'compartido=1 con el número de voz de siempre no admite el de WhatsApp');
+  const c = await ctl(BASE_TW, '/__numero?numero=whatsapp&tipo=caller_id');
+  assert.equal(c.numero, 'whatsapp');
+  assert.equal(c.compartido, true);
+  ({ r, d } = await nuevas(statsTw, llamar));
+  assert.equal(r.status, 201);
+  assert.deepEqual(d, {});
+  ({ d } = await nuevas(statsTw, () => tw('POST', `${ACC}/Calls.json`, { cred: CRED.elevenlabs, form: { To: '+573000000011', From: PZ.VOICE_NUMBER, Twiml: '<Response/>' } })));
+  assert.deepEqual(d, { from_not_voice_number: 1 }, 'en el escenario compartido, el número de voz es el de WhatsApp');
+  const ci = (await tw('GET', `${ACC}/OutgoingCallerIds.json?PageSize=100`)).json.outgoing_caller_ids;
+  assert.deepEqual(ci.map((x) => x.phone_number), [PZ.WHATSAPP_NUMBER]);
+  assert.equal((await pedir(BASE_TW, 'GET', '/__numero?numero=otro')).status, 400);
+  await ctl(BASE_TW, '/__numero?numero=voz&compartido=0&tipo=comprado');
+});
+
 // ══ K. Registro, control y arranque ════════════════════════════════════════════════════════════
 caso('CTL · un POST al control → 405 y violación control_method (en los dos simuladores)', async () => {
   const a = await nuevas(statsEl, () => pedir(BASE_EL, 'POST', '/__stats', { body: '{}' }));

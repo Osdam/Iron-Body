@@ -2,6 +2,8 @@
 
 namespace App\Services\Telephony;
 
+use App\Models\Plan;
+use App\Models\Voice\VoiceCall;
 use App\Services\Voice\Dto\VoiceCanonicalJson;
 use App\Services\Voice\Dto\VoiceIds;
 use Closure;
@@ -40,6 +42,15 @@ use Throwable;
  * de la fila del agente que la sentencia YA une y no se descifra nada. Sin
  * escribir (null) o sin forma: ningún destino aprobado (fallo cerrado: toda
  * transferencia es violación), sin tocar el resto de la parte.
+ *
+ * EL CATÁLOGO DE PLANES PUBLICADO (PT-14 · B, D5, D7 y D8): el que se capturó
+ * al publicar el agente, en la `evidence` (sin firmar, como `number` y
+ * `lab_gate`; la tabla es de solo inserción) de su entrada `publish` (la de
+ * menor `seq` de ese agente: una vuelta atrás o una promoción no la repiten).
+ * Viene en la MISMA sentencia ({@see rows()}) y se lee estricto
+ * ({@see Plan::readCommercialCatalog()}): sin catálogo, o si no verifica,
+ * null y ningún plan (fallo cerrado), sin tocar el resto de la parte. La firma
+ * no cambia: `evidence` nunca entró en el mensaje.
  *
  * Solo lee: no escribe la cadena ni el agente.
  */
@@ -300,7 +311,47 @@ final class VoicePublishedConfig
             compilerVersion: $fila->a_compiler_version,
             providerAgentId: $e['provider_agent_id'],
             transferDestinations: self::destinations($fila->a_transfer_destinations),
+            commercialCatalog: self::catalog($fila->a_origin_evidence),
         );
+    }
+
+    /**
+     * D8 (PT-14): la parte vigente de la llamada si apunta al MISMO agente que
+     * la selló, o null (sin sello, otra parte, otro agente o ilegible: no se
+     * sabe qué se aprobó para ella). Es la regla de los destinos de
+     * transferencia (E5-1), en un solo sitio para los dos: los destinos y el
+     * catálogo de planes los fija el agente, que es inmutable.
+     */
+    public static function partForCall(VoiceCall $call): ?VoicePublishedPart
+    {
+        if ($call->stamp_state !== 'applied' || ! in_array($call->part, self::PARTS, true) || $call->voice_publication_seq === null) {
+            return null;
+        }
+        $parte = self::read()[$call->part];
+
+        return $parte->ok() && is_string($call->provider_agent_id) && hash_equals((string) $parte->providerAgentId, $call->provider_agent_id)
+            ? $parte : null;
+    }
+
+    /**
+     * PT-14: el catálogo de planes de la `evidence` de la entrada `publish` del
+     * agente, leído estricto. null si no lo hay o no verifica.
+     *
+     * @return list<array{id: int, name: string, benefits: list<string>}>|null
+     */
+    private static function catalog(mixed $evidencia): ?array
+    {
+        if (! is_string($evidencia) || $evidencia === '') {
+            return null;
+        }
+        try {
+            $e = json_decode($evidencia, true, 16, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            // Tragado a propósito: una `evidence` que no es JSON no aprueba ningún plan (fallo cerrado).
+            return null;
+        }
+
+        return is_array($e) ? (Plan::readCommercialCatalog($e['catalog'] ?? null)['plans'] ?? null) : null;
     }
 
     /**
@@ -344,7 +395,9 @@ final class VoicePublishedConfig
 
     /**
      * UNA sentencia: las vigentes de cada parte y la anterior de cada una en
-     * la cadena, con su agente (y, de él, los destinos compilados, E5-1).
+     * la cadena, con su agente (y, de él, los destinos compilados, E5-1) y la
+     * `evidence` de la entrada `publish` de ese agente (su catálogo de planes,
+     * PT-14), en una subconsulta correlacionada (PostgreSQL y SQLite).
      *
      * @return list<object>
      */
@@ -357,13 +410,17 @@ final class VoicePublishedConfig
                     ->orWhereIn('p.seq', fn ($s) => $s->from(self::TABLE)->selectRaw('max(seq) - 1')->groupBy('scope'));
             })
             ->orderBy('p.seq')
-            ->get([
+            ->select([
                 'p.seq', 'p.scope', 'p.agent_id', 'p.effective_json', 'p.effective_hash', 'p.signature',
                 'a.provider_agent_id as a_provider_agent_id', 'a.spec_hash as a_spec_hash', 'a.payload_hash as a_payload_hash',
                 'a.projection_hash as a_projection_hash', 'a.studio_content_hash as a_studio_content_hash',
                 'a.voice_profile_hash as a_voice_profile_hash', 'a.compiler_version as a_compiler_version',
                 'a.purpose as a_purpose', 'a.status as a_status', 'a.transfer_destination_hashes as a_transfer_destinations',
             ])
+            ->selectSub(fn ($s) => $s->from(self::TABLE.' as o')->select('o.evidence')
+                ->whereColumn('o.agent_id', 'p.agent_id')->where('o.action', 'publish')
+                ->orderBy('o.seq')->limit(1), 'a_origin_evidence')
+            ->get()
             ->all();
     }
 }

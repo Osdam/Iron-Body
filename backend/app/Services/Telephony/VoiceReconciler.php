@@ -15,6 +15,7 @@ use App\Services\Voice\VoiceNumberObserver;
 use Closure;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -47,6 +48,17 @@ use Illuminate\Support\Facades\Log;
  * pasa del presupuesto (y de cero: E10-8), freno por coste (el techo duro).
  * La deriva y el techo SE REARMAN si la evidencia cambió después de soltar el
  * freno (E10-6: {@see VoiceBrake::openOrRearm()}).
+ *
+ * LA `ambiguous` QUE NO SALIÓ (Enmienda del 22-11-2026, E19-3; H-1;
+ * {@see VoiceAmbiguousResolution}): con una pasada COMPLETA del operador (todas
+ * sus páginas listadas, ninguna truncada y sin cortar por el tope) que cubre la
+ * ventana de la fila y no ve NINGUNA llamada desconocida, una `ambiguous` sin
+ * ids del proveedor y más vieja que el plazo de gracia pasa a
+ * `failed_to_start`, con su `reconciled` (`ambiguous_resolved`, la pasada y la
+ * ventana como evidencia). Si no, se queda `ambiguous` y el resumen dice por
+ * qué (`ambiguous.held`). Hasta la migración E19-3, `schema_pending`; y si
+ * el esquema niega la transición que el código cree admitida (un despliegue
+ * en mal orden), también `schema_pending`, y la pasada sigue (C-0).
  *
  * Una saliente CORTADA mientras el job esperaba al proveedor y que el
  * proveedor inició igual (E10-5, SEC8-b M-3): su SID está en su evento
@@ -123,22 +135,29 @@ final class VoiceReconciler
         $this->dryRun = $dryRun;
         $this->simulated = [];
         $resumen = ['staleRequested' => $this->staleRequested(), 'carrier' => null, 'known' => 0, 'legs' => 0, 'unknown' => 0, 'pages' => 0,
-            'truncated' => false, 'drift' => [], 'stuckDialing' => 0, 'costCap' => false];
+            'truncated' => false, 'drift' => [], 'stuckDialing' => 0, 'costCap' => false, 'ambiguous' => ['resolved' => 0, 'held' => []]];
 
+        // E19-3: ¿la pasada vio la lista ENTERA? Todas las páginas listadas, ninguna truncada, y sin cortar por el tope.
+        $completa = true;
         $token = null;
         do {
             $pagina = $carrier->listCalls($since, $token);
             $resumen['carrier'] = $pagina->outcome;
             $resumen['pages']++;
             if ($pagina->outcome !== CarrierCallsPage::OUTCOME_LISTED) {
+                $completa = false;
                 break;
             }
             foreach ($pagina->calls as $llamada) {
                 $resumen[$this->reconcileCall($carrier, $llamada)]++;
             }
             $resumen['truncated'] = $pagina->truncated;
+            $completa = $completa && ! $pagina->truncated;
             $token = $pagina->nextPageToken;
         } while ($token !== null && $resumen['pages'] < self::MAX_PAGES);
+        $completa = $completa && $token === null;
+
+        $resumen['ambiguous'] = $this->unstartedAmbiguous($completa, $since, $resumen['unknown'], $resumen['pages']);
 
         $resumen['drift'] = $this->drift($deployer);
         $atascadas = VoiceCall::query()->where('status', VoiceCall::STATUS_DIALING)
@@ -456,6 +475,123 @@ final class VoiceReconciler
         VoiceCall::bind((int) $fila->id, ['carrier_cost_micros' => $total]);
     }
 
+    /**
+     * E19-3 (H-1): las `ambiguous` que NO salieron, con las reglas de
+     * {@see VoiceAmbiguousResolution} y la evidencia de ESTA pasada. Cada una,
+     * en su transacción y con su cerrojo (las reglas de la fila se vuelven a
+     * mirar sobre la fila bloqueada: una post-llamada o otra pasada pudo
+     * adelantarse); en seco, lo que haría. Como mucho 50 por pasada.
+     *
+     * @return array{resolved: int, held: array<string, int>}
+     */
+    private function unstartedAmbiguous(bool $completa, DateTimeInterface $since, int $desconocidas, int $paginas): array
+    {
+        $out = ['resolved' => 0, 'held' => []];
+        $ahora = now();
+        // En seco: las que esta misma pasada habría pasado a `ambiguous` (sin job) lo serían desde ahora, dentro del plazo de
+        // gracia, como de verdad; y las que ya saca por su SID no se miran.
+        $recienAmbiguas = count(array_filter($this->simulated, static fn (array $s): bool => ($s['status'] ?? null) === VoiceCall::STATUS_AMBIGUOUS));
+        if ($recienAmbiguas > 0) {
+            $out['held'][VoiceAmbiguousResolution::HELD_WITHIN_GRACE] = $recienAmbiguas;
+        }
+        $filas = VoiceCall::query()->where('status', VoiceCall::STATUS_AMBIGUOUS)->where('direction', VoiceCall::DIRECTION_OUTBOUND)
+            ->whereNull('transfer_of_call_id')->whereNotIn('id', array_keys($this->simulated))->orderBy('id')->limit(50)->get();
+        foreach ($filas as $fila) {
+            $motivo = VoiceAmbiguousResolution::rowHold($fila, $ahora) ?? match (true) {
+                ! $completa => VoiceAmbiguousResolution::HELD_PASS_INCOMPLETE,
+                $desconocidas > 0 => VoiceAmbiguousResolution::HELD_UNKNOWN_CALLS,
+                ! VoiceAmbiguousResolution::windowCovered($fila, $since) => VoiceAmbiguousResolution::HELD_WINDOW,
+                ! VoiceAmbiguousResolution::schemaAllows() => VoiceAmbiguousResolution::HELD_SCHEMA,
+                default => null,
+            };
+            if ($motivo !== null) {
+                $out['held'][$motivo] = ($out['held'][$motivo] ?? 0) + 1;
+
+                continue;
+            }
+            $evidencia = [
+                'pass' => ['since' => self::utc($since), 'until' => self::utc($ahora), 'pages' => $paginas, 'carrier' => CarrierCallsPage::OUTCOME_LISTED, 'unknown' => 0],
+                'window' => ['requestedAt' => self::utc($fila->created_at), 'ambiguousAt' => self::utc($fila->status_changed_at),
+                    'graceMinutes' => VoiceAmbiguousResolution::GRACE_MINUTES, 'skewMinutes' => VoiceAmbiguousResolution::CLOCK_SKEW_MINUTES],
+                'before' => VoiceCall::STATUS_AMBIGUOUS, 'after' => VoiceAmbiguousResolution::FINAL,
+            ];
+            try {
+                $cerrada = $this->dryRun ? $this->resolveUnstarted($fila, $evidencia) : DB::transaction(fn (): bool => $this->resolveUnstarted($fila, $evidencia));
+            } catch (QueryException $e) {
+                // C-0 (revisión de security del 22-11-2026): el código cree admitida la transición (lee el grafo del
+                // modelo) y el esquema la niega (sin la migración E19-3, o con su down() aplicado antes que el código).
+                // La transacción ya se deshizo: la fila sigue `ambiguous` y viva (falla cerrado). Se cuenta como
+                // `schema_pending` y la pasada SIGUE, para que la deriva y el techo de gasto corran igual. Cualquier otro
+                // fallo de la base no es esto y sube, como antes.
+                if (! self::schemaRefused($e)) {
+                    throw $e;
+                }
+                $out['held'][VoiceAmbiguousResolution::HELD_SCHEMA] = ($out['held'][VoiceAmbiguousResolution::HELD_SCHEMA] ?? 0) + 1;
+                Log::channel('voice')->warning('voice.reconcile.ambiguous_schema_pending', ['call_uuid' => $fila->uuid, 'sqlstate' => self::sqlState($e)]);
+
+                continue;
+            }
+            if ($cerrada) {
+                $out['resolved']++;
+                if (! $this->dryRun) {
+                    Log::channel('voice')->warning('voice.reconcile.ambiguous_resolved', ['call_uuid' => $fila->uuid, 'pages' => $paginas]);
+                }
+            }
+        }
+        if ($out['held'] !== []) {
+            Log::channel('voice')->info('voice.reconcile.ambiguous_held', ['held' => $out['held']] + ($this->dryRun ? ['dry_run' => true] : []));
+        }
+
+        return $out;
+    }
+
+    /**
+     * E19-3: UNA `ambiguous` que no salió, a `failed_to_start` con su
+     * `reconciled`. Sobre la fila BLOQUEADA y con sus reglas otra vez; en seco,
+     * si lo haría (y lo apunta).
+     *
+     * @param  array<string, mixed>  $evidencia
+     */
+    private function resolveUnstarted(VoiceCall $fila, array $evidencia): bool
+    {
+        $bloqueada = $this->locked(VoiceCall::query()->whereKey($fila->id)->where('status', VoiceCall::STATUS_AMBIGUOUS));
+        if ($bloqueada === null || VoiceAmbiguousResolution::rowHold($bloqueada, now()) !== null) {
+            return false;
+        }
+        if (! $this->transition($bloqueada, [VoiceCall::STATUS_AMBIGUOUS], VoiceAmbiguousResolution::FINAL, VoiceAmbiguousResolution::transitionValues())) {
+            return false;
+        }
+        $this->event('reconciled', (int) $bloqueada->id, VoiceCallEvent::PROVIDER_LARAVEL, 'unstarted:'.$bloqueada->uuid, [
+            'outcome' => VoiceAmbiguousResolution::OUTCOME, 'codes' => $evidencia,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * C-0: ¿la negó una guarda del esquema de la voz? Son las de DB8: un
+     * disparador `voice_forbid()` (PostgreSQL, SQLSTATE `P0001`; SQLite,
+     * `RAISE(ABORT, …)`, `23000`) o un CHECK (PostgreSQL, `23514`).
+     */
+    private static function schemaRefused(QueryException $e): bool
+    {
+        return in_array(self::sqlState($e), ['P0001', '23514', '23000'], true);
+    }
+
+    /** El SQLSTATE de un fallo de la base (un código de cinco caracteres, nunca su mensaje: lleva el SQL). */
+    private static function sqlState(QueryException $e): string
+    {
+        $estado = (string) ($e->errorInfo[0] ?? $e->getCode());
+
+        return preg_match('/^[0-9A-Z]{5}$/D', $estado) === 1 ? $estado : 'unknown';
+    }
+
+    /** Un instante en UTC, ISO 8601 (la evidencia de E19-3). */
+    private static function utc(?DateTimeInterface $t): ?string
+    {
+        return $t === null ? null : \DateTimeImmutable::createFromInterface($t)->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM);
+    }
+
     /** Una `requested` vieja perdió su job: `ambiguous` (pudo haber salido). En seco, cuántas pasarían. */
     private function staleRequested(): int
     {
@@ -556,7 +692,17 @@ final class VoiceReconciler
      * 6); si no, freno. El veredicto (nunca el número) queda en la caché para la
      * política (`VoiceNumberGuard::rememberObservation()`); en seco, no.
      *
-     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, brakeOpened: bool, wouldOpenBrake?: bool}
+     * Enmienda del 22-11-2026 (protección 6 y D8-5, por decisión expresa del
+     * propietario): el número empresarial NO echa el freno `number_is_messaging`
+     * si la identidad compartida se ADMITE con esta misma observación
+     * (`VoiceNumberGuard::sharedVerdict()`: la declaración, que `TWILIO_VOICE_FROM`
+     * y el importado sean el visible de la mensajería y el mismo, solo saliente declarado
+     * y observado, entrantes apagadas y sin agente); entonces es
+     * `outbound_only`. Con cualquiera sin cumplir, el freno de siempre. El
+     * resumen lo dice en `sharedWithMessaging` (null sin observación) y la caché
+     * guarda también los tres hechos del proveedor (en seco, nada).
+     *
+     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, sharedWithMessaging: array{declared: bool, admitted: bool, reason: ?string}|null, brakeOpened: bool, wouldOpenBrake?: bool}
      */
     public function numbers(VoiceNumberObserver $observer, bool $dryRun = false): array
     {
@@ -570,7 +716,7 @@ final class VoiceReconciler
         $declarado = is_bool($declarado) ? $declarado : null;
         $resumen = ['result' => self::NUMBER_NOT_CONFIGURED, 'observed' => VoiceNumberAssignment::STATE_UNKNOWN, 'expected' => $esperadoEstado,
             'seq' => $parte->seq, 'outcome' => null, 'inboundCapable' => null, 'inboundDeclared' => $declarado,
-            'matchesFrom' => null, 'collidesWithMessaging' => null, 'brakeOpened' => false];
+            'matchesFrom' => null, 'collidesWithMessaging' => null, 'sharedWithMessaging' => null, 'brakeOpened' => false];
         if (! is_string($id) || trim($id) === '') {
             return $resumen;
         }
@@ -593,18 +739,32 @@ final class VoiceReconciler
         $desde = config('voice.twilio.from');
         $coincide = VoiceNumberGuard::sameNumber($o->phoneNumber(), VoicePhone::isE164($desde) ? $desde : null);
         $choca = $o->phoneNumber() !== null && VoiceNumberGuard::collidesWithMessaging($o->phoneNumber());
-        if ($o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED) {
+        $observado = $o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED;
+        // Enmienda del 22-11-2026: la identidad compartida, con ESTA observación (fresca y del id configurado por construcción).
+        // Ronda 2: la condición 2 sobre lo configurado (como VoiceNumberGuard::sharedIdentity()) y sobre lo observado.
+        $visible = $observado ? VoiceNumberGuard::isBusinessNumber($o->phoneNumber()) : null;
+        $configuracion = VoiceNumberGuard::sharedConfigFacts();
+        $compartida = ['declared' => $configuracion['declared']] + VoiceNumberGuard::sharedVerdict($configuracion + [
+            'businessNumber' => VoiceNumberGuard::isBusinessNumber(VoicePhone::isE164($desde) ? $desde : null),
+            'observationVerified' => $observado && $coincide === true,
+            'observedBusinessNumber' => $visible,
+            'observedInboundCapable' => $o->inboundCapable,
+            'observedAgentAssigned' => $observado ? $o->agentId !== null : null,
+        ]);
+        if ($observado) {
             $resumen['matchesFrom'] = $coincide;
             $resumen['collidesWithMessaging'] = $choca;
+            $resumen['sharedWithMessaging'] = $compartida;
             if (! $this->dryRun) {
-                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca);
+                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca, $o->inboundCapable, $o->agentId !== null, $visible);
             }
         }
         $identidad = ['where' => 'reconcile', 'part' => self::NUMBER_PART, 'seq' => $parte->seq];
         if ($o->outcome !== VoiceNumberAssignment::OUTCOME_OBSERVED) {
             $resumen['result'] = 'unobserved_'.$o->outcome;
-        } elseif ($choca) {
+        } elseif ($choca && ! $compartida['admitted']) {
             // Protección 6: con el número de WhatsApp no se llama ni se atiende, aunque `TWILIO_VOICE_FROM` diga otro.
+            // Enmienda del 22-11-2026: salvo la identidad compartida admitida, que sigue abajo y acaba en `outbound_only`.
             $resumen['result'] = self::NUMBER_IS_MESSAGING;
             $abre = $this->brake('number_is_messaging', 'number:'.$o->phoneNumberId.':messaging', $identidad, VoiceBrake::observedAfter($observada));
             $resumen['brakeOpened'] = $abre && ! $this->dryRun;

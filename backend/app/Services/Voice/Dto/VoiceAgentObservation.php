@@ -50,7 +50,10 @@ final class VoiceAgentObservation
     /** Falló la lectura de una de sus herramientas. */
     public const REASON_TOOL_STEP = 'tool_step';
 
-    public const REASONS = [self::REASON_INVALID_REQUEST, self::REASON_INVALID_RESPONSE, self::REASON_TOO_MANY_TOOLS, self::REASON_TOOL_STEP];
+    /** E19-2 (H-2): se acabó el plazo total de la lectura antes de terminarla (con `unreachable`). */
+    public const REASON_DEADLINE = 'deadline';
+
+    public const REASONS = [self::REASON_INVALID_REQUEST, self::REASON_INVALID_RESPONSE, self::REASON_TOO_MANY_TOOLS, self::REASON_TOOL_STEP, self::REASON_DEADLINE];
 
     public readonly ?string $projectionHash;
 

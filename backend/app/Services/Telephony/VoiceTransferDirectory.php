@@ -17,19 +17,21 @@ use App\Models\Voice\VoiceCall;
  * o la llamada no tiene sello, no se sabe cuáles eran y ninguno vale (fallo
  * cerrado: la guarda trata toda transferencia como
  * `voice_transfer_not_approved` y `solicitar_humano` dice que no hay nadie).
+ * La regla vive en {@see VoicePublishedConfig::partForCall()}: la usa también
+ * el catálogo de planes publicado (PT-14).
  */
 final class VoiceTransferDirectory
 {
     /** @return list<string>|null las huellas aprobadas para esta llamada; null = no se sabe (ninguna vale) */
     public static function approvedHashesFor(VoiceCall $call): ?array
     {
-        return self::partFor($call)?->transferDestinationHashes();
+        return VoicePublishedConfig::partForCall($call)?->transferDestinationHashes();
     }
 
     /** @return list<string> los alias aprobados para esta llamada (sin números) */
     public static function aliasesFor(VoiceCall $call): array
     {
-        return self::partFor($call)?->transferAliases() ?? [];
+        return VoicePublishedConfig::partForCall($call)?->transferAliases() ?? [];
     }
 
     /**
@@ -47,16 +49,5 @@ final class VoiceTransferDirectory
         }
 
         return $out;
-    }
-
-    private static function partFor(VoiceCall $call): ?VoicePublishedPart
-    {
-        if ($call->stamp_state !== 'applied' || ! in_array($call->part, VoicePublishedConfig::PARTS, true) || $call->voice_publication_seq === null) {
-            return null;
-        }
-        $parte = VoicePublishedConfig::read()[$call->part];
-
-        return $parte->ok() && is_string($call->provider_agent_id) && hash_equals((string) $parte->providerAgentId, $call->provider_agent_id)
-            ? $parte : null;
     }
 }

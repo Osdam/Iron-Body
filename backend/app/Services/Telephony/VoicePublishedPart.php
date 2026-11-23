@@ -2,6 +2,7 @@
 
 namespace App\Services\Telephony;
 
+use App\Models\Plan;
 use InvalidArgumentException;
 
 /**
@@ -20,6 +21,12 @@ use InvalidArgumentException;
  * número, nunca el número. null = sin escribir o ilegibles (ninguno vale: la
  * guarda trata toda transferencia como no aprobada y `solicitar_humano` dice
  * que no hay nadie).
+ *
+ * EL CATÁLOGO DE PLANES PUBLICADO (PT-14 · B, D7 y D8): el que se aprobó al
+ * publicar el agente de la parte (`evidence.catalog` de su entrada `publish`),
+ * ya verificado ({@see Plan::readCommercialCatalog()}): id, nombre y
+ * beneficios de cada plan, nunca el precio. null = sin catálogo o ilegible
+ * (`consultar_planes` no entrega ningún plan).
  */
 final class VoicePublishedPart
 {
@@ -38,6 +45,7 @@ final class VoicePublishedPart
 
     /**
      * @param  list<array{alias: string, hash: string}>|null  $transferDestinations  solo con la parte vigente
+     * @param  list<array{id: int, name: string, benefits: list<string>}>|null  $commercialCatalog  solo con la parte vigente
      *
      * @throws InvalidArgumentException
      */
@@ -56,6 +64,7 @@ final class VoicePublishedPart
         public readonly ?string $compilerVersion = null,
         public readonly ?string $providerAgentId = null,
         public readonly ?array $transferDestinations = null,
+        public readonly ?array $commercialCatalog = null,
     ) {
         if (! in_array($part, VoicePublishedConfig::PARTS, true) || ! in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('Parte o estado de la cadena de voz desconocidos.');
@@ -77,6 +86,9 @@ final class VoicePublishedPart
                     throw new InvalidArgumentException('Un destino de transferencia es su alias y su huella, nada más.');
                 }
             }
+        }
+        if ($commercialCatalog !== null && ($status !== self::STATUS_OK || Plan::commercialCatalogPlans($commercialCatalog) === null)) {
+            throw new InvalidArgumentException('El catálogo de planes publicado es de una parte vigente, con la forma de ultron-voice-catalog/1.');
         }
     }
 

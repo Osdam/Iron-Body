@@ -11,6 +11,10 @@
 #   bash /root/h8-voice-scope.sh fase 2 set CLAVE=VALOR [CLAVE=VALOR …]      las piezas NO secretas (y VOICE_NUMBER_INBOUND_CAPABLE)
 #   bash /root/h8-voice-scope.sh fase 2 secreto <fichero>                    las de Twilio que SÍ son secretas, desde un
 #                                                                             fichero 600 de root (nunca por argumentos)
+#   bash /root/h8-voice-scope.sh fase 2 secreto --terminal                   la key de Laravel (su SID y su secreto) tecleada
+#                                                                             en esta terminal SIN ECO (nunca chat ni argumentos)
+#   bash /root/h8-voice-scope.sh numero-compartido on --autorizacion=REF     VOICE_NUMBER_SHARED_WITH_MESSAGING=true (enmienda 20)
+#   bash /root/h8-voice-scope.sh numero-compartido off                       la retira (la política niega el visible) y apaga las salientes si están encendidas
 #   bash /root/h8-voice-scope.sh salientes on --cupo=N --presupuesto=USD    fase 4a: alcance canary, nada más
 #   bash /root/h8-voice-scope.sh salientes off                               nivel 0 de D8-20 para las salientes
 #   bash /root/h8-voice-scope.sh entrantes on --cupo=N                       fase 3
@@ -40,26 +44,43 @@
 #   · salientes on / entrantes on, si la constante VoiceCallPolicy::CALLS_ENABLED_IN_CODE no es exactamente `true` en el
 #     código DESPLEGADO (en ejecución y en el fichero, una sola declaración anclada, y el último commit que tocó
 #     VoiceCallPolicy.php empieza por `voice(calls-open):`): las fases 3 y 4a exigen ese commit (protección 2);
-#   · salientes on, además: sin el worker ironbody-voice en RUNNING, sin número, sin número importado, sin la subcuenta
-#     y su key (sin ella no hay corte de emergencia, nivel 0b), con el número de voz igual a uno de WhatsApp, o con un
+#   · salientes on, además: sin el worker ironbody-voice en RUNNING, sin número, sin número importado, sin la cuenta de
+#     voz y su key restringida (sin ella no hay corte de emergencia, nivel 0b), con el número de voz igual a uno de
+#     WhatsApp SALVO que el SERVIDOR admita la identidad compartida (enmienda 20 del 22-11-2026, abajo), o con un
 #     presupuesto que no cubre la reserva de la PUERTA para UNA saliente en el peor caso (C-1, 11-11-2026: OutboundGate
 #     reserva SIEMPRE con un tramo de transferencia a fijo, 0,9605 US$ a un móvil colombiano y 1,1220 en cualquier otro
 #     caso con los precios de hoy; las cifras se leen del código desplegado con las funciones de la puerta, y si la
 #     fórmula de la puerta ya no es la que conoce este mando, también se niega);
 #   · entrantes on, con el número declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false: un caller ID verificado
-#     no recibe llamadas por Twilio);
+#     no recibe llamadas por Twilio) o con la identidad compartida declarada (el número empresarial nunca recibe entrantes);
 #   · lab on --driver=elevenlabs, si falta alguna de las tres referencias (ELEVENLABS_TOOL_SECRET_REF,
 #     ELEVENLABS_INITIATION_SECRET_REF, ELEVENLABS_POST_CALL_WEBHOOK_REF) o VOICE_WEBHOOK_BASE_URL, o si el Studio no
 #     afirma ELEVENLABS_VERIFIED (el laboratorio respondería credentials_unverified);
 #   · fase 2 set / secreto, con las salientes o las entrantes encendidas (las piezas se cambian con las llamadas
-#     apagadas), con una clave fuera de su lista o un valor fuera de su forma; un número de voz que sea de WhatsApp;
-#     VOICE_NUMBER_INBOUND_CAPABLE si el código desplegado no la lee (la declaración de B8-g/S8-d);
+#     apagadas), con una clave fuera de su lista o un valor fuera de su forma; un número de voz que sea de WhatsApp,
+#     salvo EXACTAMENTE el visible (WHATSAPP_DISPLAY_PHONE) con la identidad compartida ya declarada y el número
+#     «Outbound Only» en el entorno resultante (nunca otro protegido); VOICE_NUMBER_INBOUND_CAPABLE=true con la identidad
+#     declarada; VOICE_NUMBER_SHARED_WITH_MESSAGING (solo por «numero-compartido»); VOICE_NUMBER_INBOUND_CAPABLE si el
+#     código desplegado no la lee (la declaración de B8-g/S8-d); «secreto --terminal» sin una terminal interactiva;
+#   · numero-compartido on, sin --autorizacion=<referencia escrita del propietario>, con las salientes o las entrantes
+#     encendidas, si el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING o no tiene
+#     VoiceNumberGuard::sharedIdentity(), o sin el número declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false);
 #   · monitor on, si `voice:reconcile --dry-run --numbers` (lecturas a los proveedores, no escribe nada) dice que la
 #     primera pasada echaría el freno, salvo --acepta-freno (p. ej. la llamada de prueba del propietario en la ventana de
 #     48 h de la conciliación: cada llamada de la cuenta sin su fila es `unknown_provider_call` y echa el freno);
 #   · expectativa <fase>, si integrations-doctor no confirma esa expectativa con el estado de ahora;
 #   · contactos on|off, si el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4, OPS8-e: sin ella, escribirla no
 #     tendría efecto). «contactos on» es de la fase 4b (visto bueno legal D-12 y la supresión 1581 de la voz, B-T3, antes).
+#
+# ENMIENDA 20 (22-11-2026, decisión expresa del propietario: MATRIZ_CIERRE_V2.md §9; contrato H8, protección 6 y D8-5;
+# diseño plans/informes-cierre/diseno-arq-telefonia.md, opción C): el número empresarial (el visible de WhatsApp) puede
+# ser el ORIGEN de las salientes SOLO por este camino: «numero-compartido on --autorizacion=…» escribe
+# VOICE_NUMBER_SHARED_WITH_MESSAGING=true (sola no admite nada), «fase 2 set TWILIO_VOICE_FROM=<el visible>» solo con esa
+# declaración y el número «Outbound Only», y la ADMISIÓN la decide el SERVIDOR (VoiceNumberGuard::sharedIdentity(): las
+# siete condiciones, con una conciliación del número de menos de 2 h que lo vea importado solo saliente y sin agente). El
+# mando no decide: lee ese veredicto (estado, salientes on y la comprobación posterior) y lo dice en español con uno de
+# los ocho motivos. Ninguna orden nueva abre las llamadas ni toca las entrantes, el consentimiento, los canarios, el
+# horario, los cupos, el presupuesto ni el freno: todo eso sigue igual.
 #
 # «hechos» (los dos hechos de `consultar_horarios`, config/voice.php `voice.facts`, vacíos en producción el 11-11-2026) va en
 # su PROPIO bloque, con las garantías de los mandos de la ola M-1 (plantillas/meta-templates-scope.sh): registro en
@@ -96,7 +117,7 @@ CERROJO=/run/lock/h8-voice-scope.lock
 NIVEL_ERROR=production.ERROR
 
 uso() {
-  sed -n '8,23p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '8,27p' "$0" | sed 's/^# \{0,1\}//'
 }
 aborta() { echo "ABORTA: $*"; exit 1; }
 niega() { echo "NO SE APLICA (no se ha tocado nada): $*"; exit 2; }
@@ -117,8 +138,46 @@ ENVF="$APPDIR/.env"
 # Las referencias, la base y el id del número importado no son secretos (config/voice.php) y salen tal cual.
 leer_voz() {
   local l
-  l=$(sudo -u "$WWW" php artisan tinker --execute='$e = "voice.elevenlabs."; $t = "voice.twilio."; $l = "voice.lab."; $hay = fn ($v) => is_string($v) && trim($v) !== ""; $txt = fn ($v) => is_string($v) && trim($v) !== "" ? trim($v) : null; $u4 = fn ($v) => is_string($v) && strlen(trim($v)) >= 4 ? substr(trim($v), -4) : null; $p = (array) config("voice.prices"); $max = (int) config("voice.limits.per_call_max_seconds"); echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "inbound_cap" => config("voice.inbound.daily_cap"), "outbound" => config("voice.outbound.enabled"), "outbound_scope" => config("voice.outbound.scope"), "outbound_cap" => config($t."daily_call_cap"), "budget" => (string) config("voice.limits.daily_budget_usd"), "twilio_voice" => config($t."enabled"), "lab" => config($l."enabled"), "lab_driver" => config($l."driver"), "lab_budget" => (string) config($l."daily_budget_usd"), "lab_session_budget" => (string) config($l."session_budget_usd"), "lab_max_seconds" => config($l."max_session_seconds"), "lab_sessions" => config($l."max_sessions_per_day"), "monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "webhook_base" => $txt(config("voice.webhook_base_url")), "phone_number_id" => $txt(config($e."agent_phone_number_id")), "from_last4" => $u4(config($t."from")), "account_last4" => $u4(config($t."account_sid")), "tool_ref" => $txt(config($e."tool_secret_ref")), "initiation_ref" => $txt(config($e."initiation_secret_ref")), "post_call_ref" => $txt(config($e."post_call_webhook_ref")), "s_api_key" => $hay(config($e."api_key")), "s_webhook" => $hay(config($e."webhook_secret")), "s_tool" => $hay(config($e."tool_secret")), "s_initiation" => $hay(config($e."initiation_secret")), "s_twilio_key_sid" => $hay(config($t."api_key_sid")), "s_twilio_key_secret" => $hay(config($t."api_key_secret")), "s_signing" => $hay(config($t."signing_token")), "expect" => $txt(config("ultron_studio.monitor.expect")), "h7_monitor" => config("ultron_studio.monitor.enabled"), "whatsapp_collision" => App\Services\Telephony\VoiceNumberGuard::collidesWithConfig(), "reserve_min_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("mobile", $max, null, $p), "reserve_max_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("landline", $max, "landline", $p), "studio_voice" => App\Services\UltronStudio\StudioIntegrations::voiceState(), "number_decl_known" => is_array(config("voice.number")), "number_inbound_capable" => config("voice.number.inbound_capable"), "contacts" => config("voice.contacts.enabled")]), PHP_EOL;' 2>&1 | tail -1) || true
+  l=$(sudo -u "$WWW" php artisan tinker --execute='$e = "voice.elevenlabs."; $t = "voice.twilio."; $l = "voice.lab."; $hay = fn ($v) => is_string($v) && trim($v) !== ""; $txt = fn ($v) => is_string($v) && trim($v) !== "" ? trim($v) : null; $u4 = fn ($v) => is_string($v) && strlen(trim($v)) >= 4 ? substr(trim($v), -4) : null; $p = (array) config("voice.prices"); $max = (int) config("voice.limits.per_call_max_seconds"); echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "inbound_cap" => config("voice.inbound.daily_cap"), "outbound" => config("voice.outbound.enabled"), "outbound_scope" => config("voice.outbound.scope"), "outbound_cap" => config($t."daily_call_cap"), "budget" => (string) config("voice.limits.daily_budget_usd"), "twilio_voice" => config($t."enabled"), "lab" => config($l."enabled"), "lab_driver" => config($l."driver"), "lab_budget" => (string) config($l."daily_budget_usd"), "lab_session_budget" => (string) config($l."session_budget_usd"), "lab_max_seconds" => config($l."max_session_seconds"), "lab_sessions" => config($l."max_sessions_per_day"), "monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "webhook_base" => $txt(config("voice.webhook_base_url")), "phone_number_id" => $txt(config($e."agent_phone_number_id")), "from_last4" => $u4(config($t."from")), "account_last4" => $u4(config($t."account_sid")), "tool_ref" => $txt(config($e."tool_secret_ref")), "initiation_ref" => $txt(config($e."initiation_secret_ref")), "post_call_ref" => $txt(config($e."post_call_webhook_ref")), "s_api_key" => $hay(config($e."api_key")), "s_webhook" => $hay(config($e."webhook_secret")), "s_tool" => $hay(config($e."tool_secret")), "s_initiation" => $hay(config($e."initiation_secret")), "s_twilio_key_sid" => $hay(config($t."api_key_sid")), "s_twilio_key_secret" => $hay(config($t."api_key_secret")), "s_signing" => $hay(config($t."signing_token")), "expect" => $txt(config("ultron_studio.monitor.expect")), "h7_monitor" => config("ultron_studio.monitor.enabled"), "whatsapp_collision" => App\Services\Telephony\VoiceNumberGuard::collidesWithConfig(), "reserve_min_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("mobile", $max, null, $p), "reserve_max_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("landline", $max, "landline", $p), "studio_voice" => App\Services\UltronStudio\StudioIntegrations::voiceState(), "number_decl_known" => is_array(config("voice.number")), "number_inbound_capable" => config("voice.number.inbound_capable"), "contacts" => config("voice.contacts.enabled"), "shared_known" => is_array(config("voice.number")) && array_key_exists("shared_with_messaging", config("voice.number")), "shared_declared" => config("voice.number.shared_with_messaging"), "from_is_business" => method_exists(App\Services\Telephony\VoiceNumberGuard::class, "isBusinessNumber") ? App\Services\Telephony\VoiceNumberGuard::isBusinessNumber($txt(config($t."from"))) : null]), PHP_EOL;' 2>&1 | tail -1) || true
   case "$l" in '{"calls_in_code":'*) printf '%s\n' "$l" ;; esac
+}
+# Enmienda 20 (22-11-2026): el VEREDICTO DEL SERVIDOR sobre la identidad compartida, VoiceNumberGuard::sharedIdentity() (la
+# configuración efectiva y la última conciliación del número, en una lectura de la caché). No va en leer_voz: depende del
+# reloj y de la pasada horaria, y leer_voz se compara antes → después byte a byte. Una línea JSON {"shared": {declared,
+# admitted, reason}} o {"shared": null} si el código desplegado no la tiene; nada si tinker falla.
+compartida() {
+  local l
+  l=$(sudo -u "$WWW" php artisan tinker --execute='$g = App\Services\Telephony\VoiceNumberGuard::class; echo json_encode(["shared" => method_exists($g, "sharedIdentity") ? $g::sharedIdentity() : null]), PHP_EOL;' 2>&1 | tail -1) || true
+  case "$l" in '{"shared":'*) printf '%s\n' "$l" ;; esac
+}
+# Ese veredicto en español: «si|-|texto», «no|<motivo>|texto», «ausente|-|texto» o «?|-|texto». Solo «si» cuenta como
+# admitida, y solo con la forma exacta del contrato (admitted true, reason null, declared true); cualquier otra cosa,
+# también un motivo que este mando no conoce, es NO admitida (falla cerrado). Los ocho motivos y su orden son los de
+# VoiceNumberGuard::SHARED_REASONS (informe-be-telefonia.md §6 y §11).
+lee_compartida() {
+  printf '%s' "$1" | python3 -I -c '
+import json, re, sys
+T = {
+    "not_declared": "la identidad compartida no está declarada (VOICE_NUMBER_SHARED_WITH_MESSAGING): con el número de WhatsApp, la política deniega por nombre",
+    "not_business_number": "TWILIO_VOICE_FROM no es EXACTAMENTE el número visible de WhatsApp (WHATSAPP_DISPLAY_PHONE): otro número protegido nunca se admite",
+    "inbound_capable_declared": "el número no está declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE tiene que ser false)",
+    "inbound_enabled": "las entrantes están encendidas (VOICE_INBOUND_ENABLED): el número empresarial nunca recibe entrantes de voz",
+    "observation_unverified": "falta una conciliación del número de menos de 2 h, del id importado configurado y que vea TWILIO_VOICE_FROM: esperar a la pasada horaria de voice:reconcile --numbers (monitor de voz encendido)",
+    "observed_not_business_number": "el número que vio la última conciliación no es el visible (o es de antes de cambiar TWILIO_VOICE_FROM): repetir voice:reconcile --numbers",
+    "observed_inbound": "ElevenLabs no dice que el número importado sea solo saliente (supports_inbound no es false): reimportarlo como «Outbound Only»",
+    "observed_agent": "el número importado tiene un agente asignado en ElevenLabs (cualquiera, también el publicado): quitárselo en la consola",
+}
+try:
+    s = json.load(sys.stdin)["shared"]
+except Exception:
+    print("?|-|no se pudo leer el veredicto del servidor (tinker; su salida no se imprime): se trata como NO admitida"); sys.exit(0)
+if s is None:
+    print("ausente|-|el código desplegado no tiene la identidad compartida (enmienda 20): el número empresarial no se admite"); sys.exit(0)
+if isinstance(s, dict) and s.get("admitted") is True and s.get("reason") is None and s.get("declared") is True:
+    print("si|-|ADMITIDA por el servidor: el visible de WhatsApp puede ser el origen de las salientes (solo saliente y sin agente)"); sys.exit(0)
+r = s.get("reason") if isinstance(s, dict) else None
+r = r if isinstance(r, str) and re.fullmatch(r"[a-z_]{1,40}", r) else "?"
+print("no|%s|NO admitida (%s): %s" % (r, r, T.get(r, "motivo que este mando no conoce (otro código desplegado): no se admite")))' 2>/dev/null || echo '?|-|veredicto ilegible: se trata como NO admitida'
 }
 # Lo que el mando NO toca y tiene que seguir igual: el motor, el H4, el H5, el H6, el monitor del H7 y el estado de
 # ElevenLabs (el proveedor neutro y lo que afirma el Studio). La misma lectura que leer_previa de la fase 1, sin la bandera
@@ -138,13 +197,16 @@ try:
     f = t["flags"]
     pub = t.get("publication") or {}
     l = t["limits"]
+    n = t.get("number") or {}
+    # Enmienda 20: «COMPARTIDO» solo si el doctor dice el hecho (choca) Y la admisión del servidor; «CHOCA» si choca sin ella.
+    w = ("COMPARTIDO" if (n.get("sharedWithMessaging") or {}).get("admitted") is True else "CHOCA") if n.get("collidesWithMessaging") else "no"
     print("estado=%s constante=%s encendidas=%d cadena=%s freno=%s cupos=%s/%s/%s numero=%s importado=%s subcuenta=%s whatsapp=%s proveedor=%s" % (
         d.get("state"), "abierta" if t.get("callsEnabledInCode") else "cerrada", sum(1 for v in f.values() if v is True),
         ",".join("%s:%s" % (k, (pub.get(k) or {}).get("status")) for k in ("canary", "rest")),
         {True: "echado", False: "suelto"}.get(t.get("brakeOpen"), "?"), l.get("outboundDailyCap"), l.get("inboundDailyCap"),
         l.get("dailyBudgetMicros"), "si" if (t.get("number") or {}).get("configured") else "no",
         "si" if (t.get("number") or {}).get("importedNumberIdConfigured") else "no", "si" if t.get("carrierConfigured") else "no",
-        "CHOCA" if (t.get("number") or {}).get("collidesWithMessaging") else "no", t.get("provider")))
+        w, t.get("provider")))
 except Exception:
     print("?")' 2>/dev/null || echo '?'
 }
@@ -321,7 +383,7 @@ cachea() {
 }
 
 # ── Las órdenes: cada una deja en CAMBIOS el JSON {CLAVE: valor} y en ORDEN su nombre ───────────────────────────────
-ORDEN=""; CAMBIOS=""; VUELTA_FUNCIONAL=""; PROG_DELTA=0; SECRETOS_FICHERO=""; ACEPTA_FRENO=0
+ORDEN=""; CAMBIOS=""; VUELTA_FUNCIONAL=""; PROG_DELTA=0; SECRETOS_FICHERO=""; SECRETOS_TERMINAL=0; ACEPTA_FRENO=0; AUTORIZACION=""
 json_de() { python3 -I -c 'import json, sys; print(json.dumps(dict(a.split("=", 1) for a in sys.argv[1:]), sort_keys=True))' "$@"; }
 
 ANTES=$(leer_voz)
@@ -346,10 +408,14 @@ print("   piezas no secretas: VOICE_WEBHOOK_BASE_URL %s · ELEVENLABS_AGENT_PHON
 print("   referencias (ids, no secretos): herramientas %s · iniciación %s · webhook post-llamada %s" % (x("tool_ref"), x("initiation_ref"), x("post_call_ref")))
 s = [("ELEVENLABS_API_KEY", "s_api_key"), ("ELEVENLABS_WEBHOOK_SECRET", "s_webhook"), ("ELEVENLABS_TOOL_SECRET", "s_tool"), ("ELEVENLABS_INITIATION_SECRET", "s_initiation"), ("TWILIO_VOICE_API_KEY_SID", "s_twilio_key_sid"), ("TWILIO_VOICE_API_KEY_SECRET", "s_twilio_key_secret"), ("TWILIO_VOICE_SIGNING_TOKEN", "s_signing")]
 print("   secretos (solo presencia): " + " · ".join("%s %s" % (n, "presente" if d.get(k) else "falta") for n, k in s))
-print("   número de voz igual a uno de WhatsApp: %s · ElevenLabs según el Studio: %s" % ("SÍ (la política deniega por nombre)" if d.get("whatsapp_collision") else "no", x("studio_voice")))
+print("   número de voz igual a uno de WhatsApp: %s · ElevenLabs según el Studio: %s" % ("SÍ (la política deniega por nombre salvo la identidad compartida ADMITIDA por el servidor, abajo)" if d.get("whatsapp_collision") else "no", x("studio_voice")))
+print("   identidad compartida (VOICE_NUMBER_SHARED_WITH_MESSAGING, enmienda 20): %s · TWILIO_VOICE_FROM es el visible de WhatsApp: %s" % ((("DECLARADA" if d.get("shared_declared") is True else "no declarada") if d.get("shared_known") else "el código desplegado no la lee"), {True: "sí", False: "no", None: "—"}.get(d.get("from_is_business"), "?")))
 print("   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): %s" % ({True: "sí (declarado)", False: "NO: «Outbound Only» declarado", None: "sin declarar (se trata como «admite»)"}.get(d.get("number_inbound_capable"), "?") if d.get("number_decl_known") else "el código desplegado no lee la declaración (B8-g/S8-d)"))
 print("   reserva por saliente (VoiceCostGuard): %.4f US$ a un móvil sin transferencia · %.4f US$ a un fijo con transferencia" % (d.get("reserve_min_micros", 0) / 1e6, d.get("reserve_max_micros", 0) / 1e6))
 print("   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): %s" % {True: "SÍ (fase 4b)", False: "no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)"}.get(d.get("contacts"), "el código desplegado no lee la bandera (antes de B-T4: el alta no tiene bandera)"))'
+  SH=$(lee_compartida "$(compartida)")
+  echo "   veredicto del servidor sobre la identidad compartida (VoiceNumberGuard::sharedIdentity()): ${SH#*|*|}"
+  [ "$(campo shared_declared) $(campo whatsapp_collision)" != "true false" ] || echo "   AVISO: la declaración está puesta y el número de voz no es el de WhatsApp: no tiene efecto (retirarla con «bash $0 numero-compartido off» si ya no se usa)"
   echo "   voice:doctor --telefonia (sin red): $(telefonia)"
   HE=$(leer_hechos)
   case "$HE" in
@@ -710,29 +776,69 @@ case "$1 ${2:-}" in
           k=${a%%=*}; v=${a#*=}
           [ "$a" != "$k" ] || niega "«$k» va como CLAVE=VALOR"
           case " $SECRETAS ELEVENLABS_API_KEY ELEVENLABS_WEBHOOK_SECRET ELEVENLABS_TOOL_SECRET ELEVENLABS_INITIATION_SECRET " in
-            *" $k "*) niega "$k es un SECRETO: nunca por argumentos (quedaría en ps y en el historial). Twilio: «fase 2 secreto <fichero>»; ElevenLabs: el-verificar.sh y h8-secrets-register.sh" ;;
+            *" $k "*) niega "$k es un SECRETO: nunca por argumentos (quedaría en ps y en el historial). Twilio: «fase 2 secreto <fichero>» o «fase 2 secreto --terminal»; ElevenLabs: el-verificar.sh y h8-secrets-register.sh" ;;
           esac
+          # Enmienda 20: la declaración tiene UN camino, con la autorización citada (no es una pieza más de la fase 2).
+          [ "$k" != VOICE_NUMBER_SHARED_WITH_MESSAGING ] || niega "VOICE_NUMBER_SHARED_WITH_MESSAGING no es una pieza de «fase 2 set»: la identidad compartida se declara solo con «bash $0 numero-compartido on --autorizacion=<referencia>» y se retira con «numero-compartido off»"
           forma_no_secreta "$k" "$v" || niega "$k no es una pieza de «fase 2 set» o su valor no tiene la forma (las admitidas: VOICE_WEBHOOK_BASE_URL, ELEVENLABS_AGENT_PHONE_NUMBER_ID, TWILIO_VOICE_FROM, TWILIO_VOICE_ACCOUNT_SID, las tres *_REF y VOICE_NUMBER_INBOUND_CAPABLE=true|false)"
           [ "$k" != VOICE_NUMBER_INBOUND_CAPABLE ] || [ "$(campo number_decl_known)" = true ] || niega "el código desplegado no lee VOICE_NUMBER_INBOUND_CAPABLE (la declaración «Outbound Only» de B8-g/S8-d): desplegar ese código antes; escribirla ahora no tendría efecto"
           [ "$(cuenta_var "$k")" -le 1 ] || niega "$k aparece repetida en el fichero de entorno (gana la última): deduplicar antes"
           A+=("$a")
         done
         CAMBIOS=$(json_de "${A[@]}")
-        # El número de voz nunca es uno de WhatsApp (D8-5, protección 6): la guarda pura del código, con el entorno.
+        # Enmienda 20: el entorno RESULTANTE de la declaración «Outbound Only» (lo que pide esta orden o, si no la trae, lo
+        # efectivo de hoy): «false», «true» o «null» (sin declarar).
+        IC_RESULTANTE=$(printf '%s' "$CAMBIOS" | IC="$(campo number_inbound_capable)" python3 -I -c 'import json, os, sys; c = json.load(sys.stdin); print(c["VOICE_NUMBER_INBOUND_CAPABLE"] if "VOICE_NUMBER_INBOUND_CAPABLE" in c else os.environ["IC"])')
+        # Con la identidad compartida declarada, el número nunca se declara «admite entrantes» (protección 6, enmienda 20).
+        [ "$IC_RESULTANTE" != true ] || [ "$(campo shared_declared)" != true ] || niega "VOICE_NUMBER_INBOUND_CAPABLE=true con la identidad compartida declarada: el número empresarial es solo un identificador verificado y nunca recibe entrantes (retirar antes la declaración: «bash $0 numero-compartido off»)"
+        # El número de voz nunca es uno de WhatsApp (D8-5, protección 6): la guarda pura del código, con el entorno. Enmienda
+        # 20 (diseño §7.3, «fase 2 set»): salvo EXACTAMENTE el visible (WHATSAPP_DISPLAY_PHONE; otro protegido, nunca), con
+        # la identidad compartida ya declarada por «numero-compartido on» y el número «Outbound Only» en el entorno
+        # resultante. Eso solo deja escribir la pieza: la ADMISIÓN la da el servidor tras conciliar el número.
         NUEVO_FROM=$(printf '%s' "$CAMBIOS" | python3 -I -c 'import json, sys; print(json.load(sys.stdin).get("TWILIO_VOICE_FROM", ""))')
         if [ -n "$NUEVO_FROM" ]; then
-          CHOCA=$(printf '%s' "$NUEVO_FROM" | sudo -u "$WWW" php -r 'require "vendor/autoload.php"; $n = trim((string) stream_get_contents(STDIN)); $e = Dotenv\Dotenv::createArrayBacked(".")->load(); $prot = $e["WHATSAPP_PROTECTED_NUMBERS"] ?? ""; $vis = $e["WHATSAPP_DISPLAY_PHONE"] ?? ""; echo App\Services\Telephony\VoiceNumberGuard::collides($n, $vis, trim((string) $prot) !== "" ? $prot : $vis) ? "si" : "no";' 2>/dev/null || echo '?')
-          [ "$CHOCA" = no ] || niega "TWILIO_VOICE_FROM coincide con el número de WhatsApp o con uno protegido ($CHOCA; protección 6: el número de WhatsApp nunca es de voz)"
+          CHOCA=$(printf '%s' "$NUEVO_FROM" | sudo -u "$WWW" php -r 'require "vendor/autoload.php"; $n = trim((string) stream_get_contents(STDIN)); $e = Dotenv\Dotenv::createArrayBacked(".")->load(); $prot = $e["WHATSAPP_PROTECTED_NUMBERS"] ?? ""; $vis = $e["WHATSAPP_DISPLAY_PHONE"] ?? ""; $g = App\Services\Telephony\VoiceNumberGuard::class; echo $g::collides($n, $vis, trim((string) $prot) !== "" ? $prot : $vis) ? (! method_exists($g, "sameNumber") ? "antiguo" : ($g::sameNumber($n, $vis) === true ? "visible" : "si")) : "no";' 2>/dev/null || echo '?')
+          case "$CHOCA" in
+            no) ;;
+            visible)
+              [ "$(campo shared_known)" = true ] || niega "TWILIO_VOICE_FROM es el número visible de WhatsApp y el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING (enmienda 20): protección 6, el número de WhatsApp nunca es de voz"
+              [ "$(campo shared_declared)" = true ] || niega "TWILIO_VOICE_FROM es el número visible de WhatsApp y la identidad compartida NO está declarada (protección 6). Solo con la autorización del propietario: antes, «bash $0 numero-compartido on --autorizacion=<referencia>»"
+              [ "$IC_RESULTANTE" = false ] || niega "TWILIO_VOICE_FROM es el número visible de WhatsApp y el número no queda declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE: $IC_RESULTANTE): ponerla a false en la misma orden o antes"
+              echo "   TWILIO_VOICE_FROM = el visible de WhatsApp, con la identidad compartida declarada y «Outbound Only» (enmienda 20): se escribe; la admisión la dará el servidor cuando voice:reconcile --numbers vea el número" ;;
+            antiguo) niega "TWILIO_VOICE_FROM coincide con un número de WhatsApp y el código desplegado no tiene la identidad compartida (enmienda 20): protección 6, el número de WhatsApp nunca es de voz" ;;
+            si) niega "TWILIO_VOICE_FROM coincide con un número protegido de WhatsApp que NO es el visible (protección 6: solo el visible, WHATSAPP_DISPLAY_PHONE, puede compartirse, y solo con la declaración)" ;;
+            *) niega "no se pudo comprobar si TWILIO_VOICE_FROM es de WhatsApp ($CHOCA; la salida de php no se imprime): sin saberlo no se escribe" ;;
+          esac
         fi
         ;;
       secreto)
-        ORDEN=fase2-secreto; [ "$#" = 4 ] || niega "fase 2 secreto <fichero 600 de root con CLAVE=VALOR por línea>"
-        SECRETOS_FICHERO=$4
+        ORDEN=fase2-secreto; [ "$#" = 4 ] || niega "fase 2 secreto <fichero 600 de root con CLAVE=VALOR por línea>  |  fase 2 secreto --terminal"
         [ "$OUT $INB" = "false false" ] || niega "las piezas se cambian con las salientes y las entrantes apagadas (hoy: salientes $OUT, entrantes $INB)"
-        [ -f "$SECRETOS_FICHERO" ] && [ ! -L "$SECRETOS_FICHERO" ] || niega "$SECRETOS_FICHERO no es un fichero normal"
-        [ "$(stat -c '%U %a' "$SECRETOS_FICHERO")" = "$ROOT_U 600" ] || niega "$SECRETOS_FICHERO tiene que ser de root y 600"
-        # Solo las claves secretas de Twilio, cada una con su forma; el par de la key va junto. Nada se imprime salvo nombres.
-        CAMBIOS=$(python3 -I -c '
+        if [ "$4" = --terminal ]; then
+          # Enmienda 20 (cuenta principal, sin subcuenta): la key RESTRINGIDA de Laravel la teclea o la pega el propietario
+          # en ESTA terminal, sin eco (read -s): no pasa por el chat, ni por la línea de órdenes, ni por un fichero. Solo el
+          # par SID + secreto: con la cuenta principal, TWILIO_VOICE_SIGNING_TOKEN se queda vacío (D8-4/D8-5 enmendadas).
+          [ -t 0 ] || niega "«fase 2 secreto --terminal» exige una terminal interactiva (la entrada estándar no lo es): nada se lee de una tubería ni de un fichero por aquí; para un fichero 600, «fase 2 secreto <fichero>»"
+          SECRETOS_TERMINAL=1
+          T_SID=""; T_SEC=""
+          IFS= read -rs -p "TWILIO_VOICE_API_KEY_SID (SK…; no se ve al escribir): " T_SID || true; echo >&2
+          IFS= read -rs -p "TWILIO_VOICE_API_KEY_SECRET (no se ve al escribir): " T_SEC || true; echo >&2
+          CAMBIOS=$(printf '%s\n%s\n' "$T_SID" "$T_SEC" | python3 -I -c '
+import json, re, sys
+l = sys.stdin.read().split("\n")
+sid, sec = (l + ["", ""])[0].strip(), (l + ["", ""])[1].strip()
+if not re.fullmatch(r"SK[0-9a-f]{32}", sid):
+    sys.exit("TWILIO_VOICE_API_KEY_SID no tiene la forma esperada (SK + 32 hex; no se imprime): " + ("parece un Account SID (AC…): la voz usa una API KEY restringida, nunca la cuenta y su Auth Token" if sid.startswith("AC") else "repetir la orden"))
+if not re.fullmatch(r"[A-Za-z0-9]{32}", sec):
+    sys.exit("TWILIO_VOICE_API_KEY_SECRET no tiene la forma esperada (32 caracteres alfanuméricos; no se imprime): repetir la orden")
+print(json.dumps({"TWILIO_VOICE_API_KEY_SECRET": sec, "TWILIO_VOICE_API_KEY_SID": sid}, sort_keys=True))' 2>&1) || { unset T_SID T_SEC; niega "$CAMBIOS"; }
+          unset T_SID T_SEC
+        else
+          SECRETOS_FICHERO=$4
+          [ -f "$SECRETOS_FICHERO" ] && [ ! -L "$SECRETOS_FICHERO" ] || niega "$SECRETOS_FICHERO no es un fichero normal"
+          [ "$(stat -c '%U %a' "$SECRETOS_FICHERO")" = "$ROOT_U 600" ] || niega "$SECRETOS_FICHERO tiene que ser de root y 600"
+          # Solo las claves secretas de Twilio, cada una con su forma; el par de la key va junto. Nada se imprime salvo nombres.
+          CAMBIOS=$(python3 -I -c '
 import json, re, sys
 formas = {"TWILIO_VOICE_API_KEY_SID": r"SK[0-9a-f]{32}", "TWILIO_VOICE_API_KEY_SECRET": r"[A-Za-z0-9]{32}", "TWILIO_VOICE_SIGNING_TOKEN": r"[0-9a-f]{32}"}
 out = {}
@@ -754,6 +860,7 @@ if not out:
 if ("TWILIO_VOICE_API_KEY_SID" in out) != ("TWILIO_VOICE_API_KEY_SECRET" in out):
     sys.exit("TWILIO_VOICE_API_KEY_SID y TWILIO_VOICE_API_KEY_SECRET van juntas (son un par)")
 print(json.dumps(out, sort_keys=True))' "$SECRETOS_FICHERO" 2>&1) || niega "$CAMBIOS"
+        fi
         for k in $SECRETAS; do [ "$(cuenta_var "$k")" -le 1 ] || niega "$k aparece repetida en el fichero de entorno: deduplicar antes"; done
         ;;
       *) uso; exit 2 ;;
@@ -774,8 +881,15 @@ print(json.dumps(out, sort_keys=True))' "$SECRETOS_FICHERO" 2>&1) || niega "$CAM
       es_usd "$PRES" 0.01 20.00 || niega "--presupuesto en US$ al día, de 0.01 a 20.00"
       [ "$(worker_voz)" -ge 1 ] || niega "el worker ironbody-voice no está en RUNNING: sin él ninguna saliente sale de la cola voice (instalarlo antes: docs/ops/supervisor/ironbody-voice.conf, con autorización; plan, fase 4a)"
       FALTAN=$(printf '%s' "$ANTES" | python3 -I -c 'import json, sys; d = json.load(sys.stdin); print(" ".join(n for n, k in [("TWILIO_VOICE_FROM", "from_last4"), ("ELEVENLABS_AGENT_PHONE_NUMBER_ID", "phone_number_id"), ("TWILIO_VOICE_ACCOUNT_SID", "account_last4"), ("TWILIO_VOICE_API_KEY_SID", "s_twilio_key_sid"), ("TWILIO_VOICE_API_KEY_SECRET", "s_twilio_key_secret"), ("VOICE_WEBHOOK_BASE_URL", "webhook_base")] if not d.get(k)))')
-      [ -z "$FALTAN" ] || niega "faltan piezas para las salientes (sin la key de la subcuenta no hay corte de emergencia, nivel 0b): $FALTAN"
-      [ "$(campo whatsapp_collision)" = false ] || niega "el número de voz coincide con uno de WhatsApp (protección 6)"
+      [ -z "$FALTAN" ] || niega "faltan piezas para las salientes (sin la key restringida de la voz no hay corte de emergencia, nivel 0b): $FALTAN"
+      # Protección 6: el número de voz nunca es uno de WhatsApp. Enmienda 20 (diseño §7.3, «:778»): salvo que el SERVIDOR
+      # admita la identidad compartida (VoiceNumberGuard::sharedIdentity(): las siete condiciones, con una conciliación del
+      # número de menos de 2 h). El mando no la calcula: la lee y, si no es exactamente «admitida», se niega con el motivo.
+      if [ "$(campo whatsapp_collision)" != false ]; then
+        SH=$(lee_compartida "$(compartida)")
+        [ "${SH%%|*}" = si ] || niega "el número de voz coincide con uno de WhatsApp y el servidor no admite la identidad compartida (protección 6, enmienda 20): ${SH#*|*|}"
+        echo "   número de voz = el visible de WhatsApp: ${SH#*|*|} (VoiceNumberGuard::sharedIdentity())"
+      fi
       RP=$(reserva_puerta "$PRES")
       case "$RP" in
         '{"movil":'*) ;;
@@ -794,6 +908,9 @@ print("%s|reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, %d
     else
       [ -z "$PRES" ] || niega "--presupuesto es de las salientes"
       es_entero "$CUPO" 1 20 || niega "--cupo de entrantes al día, de 1 a 20 (P-5)"
+      # Enmienda 20 (diseño §7.3, «entrantes on :797»): con la identidad compartida declarada, nunca (va antes que la de
+      # «Outbound Only» para que lo diga por su nombre aunque las dos se cumplan).
+      [ "$(campo shared_declared)" != true ] || niega "la identidad compartida con la mensajería está declarada (VOICE_NUMBER_SHARED_WITH_MESSAGING=true): el número empresarial es solo un identificador verificado y nunca recibe entrantes de voz (protección 6, enmienda 20). Las entrantes necesitan otra ruta: RUNBOOK_PRIMERA_LLAMADA.md, «Entrantes: sin resolver»"
       [ "$(campo number_inbound_capable)" != false ] || niega "el número está declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false: un caller ID verificado no recibe llamadas por Twilio); la fase 3 exige un número comprado o portado"
       CAMBIOS=$(json_de VOICE_INBOUND_ENABLED=true TWILIO_VOICE_ENABLED=true "VOICE_INBOUND_DAILY_CAP=$CUPO")
     fi
@@ -837,6 +954,45 @@ print("%s|reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, %d
     case "$(campo contacts)" in true|false) ;; *) niega "el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4): desplegar antes ese código; escribirla ahora no tendría efecto" ;; esac
     CAMBIOS=$(json_de "VOICE_CONTACTS_ENABLED=$([ "$2" = on ] && echo true || echo false)")
     [ "$2" = off ] || VUELTA_FUNCIONAL="bash $0 contactos off" ;;
+  "numero-compartido on"|"numero-compartido off")
+    # Enmienda 20 (22-11-2026, decisión expresa del propietario; diseño §2 y §7.3): VOICE_NUMBER_SHARED_WITH_MESSAGING, la
+    # condición 1 de la identidad compartida. Sola no admite nada (las otras seis las comprueba el servidor). «on» exige la
+    # cita de la autorización escrita (como --autorizacion de deploy-h8-backend-fase1.sh), las llamadas apagadas, el
+    # código que la lee y el número ya declarado «Outbound Only»; «off» es la vuelta atrás y no espera a nadie.
+    ORDEN=numero-compartido-$2; APAGA_SALIENTES=0
+    if [ "$2" = on ]; then
+      for a in "${@:3}"; do
+        case "$a" in
+          --autorizacion=*) [ -z "$AUTORIZACION" ] || niega "--autorizacion va una sola vez"; AUTORIZACION=${a#--autorizacion=} ;;
+          *) niega "argumento desconocido (no se imprime): numero-compartido on --autorizacion=<referencia escrita del propietario>" ;;
+        esac
+      done
+      [ -n "$AUTORIZACION" ] || niega "«numero-compartido on» exige --autorizacion=<referencia escrita de la autorización del propietario> (A0 del runbook de la primera llamada, con la que se guardó)"
+      [[ "$AUTORIZACION" =~ ^[A-Za-z0-9][A-Za-z0-9\ ._:/#()-]{5,119}$ ]] || niega "--autorizacion: la referencia escrita de la autorización del propietario, de 6 a 120 caracteres (letras sin tilde, cifras, espacio y . _ : / # ( ) -)"
+      [ "$OUT $INB" = "false false" ] || niega "la identidad compartida se declara con las salientes y las entrantes apagadas (hoy: salientes $OUT, entrantes $INB)"
+      [ "$(campo shared_known)" = true ] || niega "el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING (enmienda 20): desplegar antes ese código; escribirla ahora no tendría efecto"
+      [ "$(lee_compartida "$(compartida)" | cut -d'|' -f1)" != ausente ] || niega "el código desplegado no tiene VoiceNumberGuard::sharedIdentity() (enmienda 20): desplegar antes ese código"
+      [ "$(campo number_decl_known) $(campo number_inbound_capable)" = "true false" ] || niega "el número no está declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false): la identidad compartida es solo para un identificador verificado, que no recibe llamadas; antes, «bash $0 fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false»"
+      echo "== AUTORIZACIÓN ESCRITA DEL PROPIETARIO (referencia citada): «$AUTORIZACION»"
+      VUELTA_FUNCIONAL="bash $0 numero-compartido off"
+    else
+      [ "$#" = 2 ] || { uso; exit 2; }
+      [ "$(campo shared_known)" = true ] || niega "el código desplegado no lee VOICE_NUMBER_SHARED_WITH_MESSAGING: no hay declaración que retirar"
+      # B-1 (informe-security-mandos.md, condición (2).8): primero las salientes, después la declaración. Si las salientes
+      # no constan apagadas, «off» las apaga en la MISMA escritura con lo mismo que «salientes off» y lo dice; no espera a
+      # nadie. Con las salientes apagadas, la orden es la de siempre (solo la declaración).
+      if [ "$OUT" != false ]; then
+        APAGA_SALIENTES=1
+        A=(VOICE_NUMBER_SHARED_WITH_MESSAGING=false VOICE_OUTBOUND_ENABLED=false TWILIO_VOICE_DAILY_CALL_CAP=0 VOICE_DAILY_BUDGET_USD=0)
+        [ "$INB" = true ] || A+=(TWILIO_VOICE_ENABLED=false)
+        echo "== las salientes están encendidas (VOICE_OUTBOUND_ENABLED: $OUT): esta orden las APAGA en la misma escritura que retira la declaración, con lo mismo que «salientes off» (${A[*]:1}), porque retirar la declaración con las salientes encendidas las dejaría abiertas sobre un número que la política ya niega (B-1: primero las salientes, después la declaración)"
+      fi
+    fi
+    if [ "$APAGA_SALIENTES" = 1 ]; then
+      CAMBIOS=$(json_de "${A[@]}")
+    else
+      CAMBIOS=$(json_de "VOICE_NUMBER_SHARED_WITH_MESSAGING=$([ "$2" = on ] && echo true || echo false)")
+    fi ;;
   *) uso; exit 2 ;;
 esac
 [ -n "$CAMBIOS" ] || aborta "no se calcularon los cambios"
@@ -873,7 +1029,10 @@ import json, sys
 try:
     d = json.load(sys.stdin)
     n = d.get("number") or {}
-    print("desconocidas=%s conocidas=%s ambiguas_sin_job=%s atascadas=%s techo=%s numero=%s haria_freno=%s causas=%s" % (d.get("unknown"), d.get("known"), d.get("staleRequested"), d.get("stuckDialing"), "SUPERADO" if d.get("costCap") else "dentro", n.get("result", "—"), "SÍ" if d.get("wouldOpenBrake") else "no", ",".join(sorted({str(b.get("cause")) for b in (d.get("would") or {}).get("brakes", [])})) or "—"))
+    # Enmienda 20: lo que concluiría la conciliación de la identidad compartida con ESTA observación (en seco no se guarda).
+    sh = n.get("sharedWithMessaging")
+    c = "—" if not isinstance(sh, dict) else ("admitida" if sh.get("admitted") is True else str(sh.get("reason"))[:40])
+    print("desconocidas=%s conocidas=%s ambiguas_sin_job=%s atascadas=%s techo=%s numero=%s compartida=%s haria_freno=%s causas=%s" % (d.get("unknown"), d.get("known"), d.get("staleRequested"), d.get("stuckDialing"), "SUPERADO" if d.get("costCap") else "dentro", n.get("result", "—"), c, "SÍ" if d.get("wouldOpenBrake") else "no", ",".join(sorted({str(b.get("cause")) for b in (d.get("would") or {}).get("brakes", [])})) or "—"))
 except Exception:
     print("?")' 2>/dev/null || echo '?')
   echo "   conciliación en seco (voice:reconcile --dry-run --numbers, código $RC): $RES"
@@ -898,7 +1057,13 @@ install -m 600 -o "$ROOT_U" -g "$ROOT_G" "$ENVF" "$COPIA"
 VUELTA="install -m $MODO -o ${DUENO%%:*} -g ${DUENO##*:} $COPIA $ENVF && cd $APPDIR && sudo -u $WWW sh -c 'umask 077; php artisan config:cache -q' && sudo -u $WWW chmod 600 bootstrap/cache/config.php && sudo -u $WWW php artisan queue:restart -q"
 ERR0=$(errores_log)
 echo "0. $ORDEN · copia previa: $COPIA (600, $ROOT_U) · fichero $DUENO $MODO · programador $PROG0 · workers $W0 · constante $CONST"
-if [ -n "$SECRETOS_FICHERO" ]; then
+[ -z "$AUTORIZACION" ] || echo "   autorización escrita citada: «$AUTORIZACION»"
+if [ "$SECRETOS_TERMINAL" = 1 ]; then
+  # Los valores tecleados solo están en CAMBIOS (memoria) y llegan al escritor por la entrada estándar; se borran después.
+  CLAVES_TOCADAS=$(printf '%s' "$CAMBIOS" | python3 -I -c 'import json, sys; print(" ".join(sorted(json.load(sys.stdin))))')
+  printf '%s' "$CAMBIOS" | escribir || aborta "no se pudo escribir el fichero de entorno (no se imprime nada). Vuelta: $VUELTA"
+  unset CAMBIOS
+elif [ -n "$SECRETOS_FICHERO" ]; then
   printf '%s' "$CAMBIOS" | escribir || aborta "no se pudo escribir el fichero de entorno (no se imprime nada). Vuelta: $VUELTA"
   unset CAMBIOS
   CLAVES_TOCADAS=$(python3 -I -c '
@@ -940,6 +1105,7 @@ mapa = {
     "TWILIO_VOICE_API_KEY_SID": ("s_twilio_key_sid", lambda v: True), "TWILIO_VOICE_API_KEY_SECRET": ("s_twilio_key_secret", lambda v: True),
     "TWILIO_VOICE_SIGNING_TOKEN": ("s_signing", lambda v: True), "ULTRON_STUDIO_MONITOR_EXPECT": ("expect", str),
     "VOICE_NUMBER_INBOUND_CAPABLE": ("number_inbound_capable", booleano), "VOICE_CONTACTS_ENABLED": ("contacts", booleano),
+    "VOICE_NUMBER_SHARED_WITH_MESSAGING": ("shared_declared", booleano),
 }
 esperado = {}
 for k, v in c.items():
@@ -947,8 +1113,9 @@ for k, v in c.items():
         print("FALLO clave sin lectura: " + k); raise SystemExit
     campo, conv = mapa[k]
     esperado[campo] = conv(v) if v is not None else True
-# Derivados que pueden cambiar con lo pedido sin ser una clave: la colisión con WhatsApp (el número) y la reserva no.
-derivados = {"whatsapp_collision"} if "TWILIO_VOICE_FROM" in c else set()
+# Derivados que pueden cambiar con lo pedido sin ser una clave: con el número, la colisión con WhatsApp y si es el visible
+# (enmienda 20); la reserva no.
+derivados = {"whatsapp_collision", "from_is_business"} if "TWILIO_VOICE_FROM" in c else set()
 mal = []; cambios = []
 for k in sorted(set(a) | set(b)):
     if k in esperado:
@@ -965,7 +1132,24 @@ case "$COMP" in
   OK*) echo "3. configuración efectiva, antes → después (sin valores de secretos): ${COMP#OK }" ;;
   *) echo "ABORTA: la configuración efectiva no es la pedida: ${COMP#FALLO }"; echo "   vuelta: $VUELTA"; exit 1 ;;
 esac
-[ "$(printf '%s' "$DESPUES" | grep -oE '"whatsapp_collision":(true|false)')" = '"whatsapp_collision":false' ] || desvio "tras el cambio, el número de voz coincide con uno de WhatsApp (la política deniega las salientes por nombre)"
+# Protección 6: tras el cambio, el número de voz no es uno de WhatsApp. Enmienda 20 (diseño §7.3, «:968»): o lo es y el
+# SERVIDOR admite la identidad compartida. Si la declaración está puesta y solo falta la conciliación del número (motivo
+# observation_unverified u observed_not_business_number: lo normal justo después de escribir TWILIO_VOICE_FROM), es un
+# AVISO y no un desvío: la política sigue negando por nombre hasta que voice:reconcile --numbers lo vea. Retirar la
+# declaración («numero-compartido off») con el visible puesto deja la política negando, que es lo que pide esa orden.
+if [ "$(printf '%s' "$DESPUES" | grep -oE '"whatsapp_collision":(true|false)')" != '"whatsapp_collision":false' ]; then
+  SH=$(lee_compartida "$(compartida)")
+  MOTIVO_SH=$(printf '%s' "$SH" | cut -d'|' -f2)
+  if [ "${SH%%|*}" = si ]; then
+    echo "   número de voz = el visible de WhatsApp: ${SH#*|*|}"
+  elif [ "$ORDEN" = numero-compartido-off ]; then
+    echo "   el número de voz es el de WhatsApp y la declaración está RETIRADA: la política deniega las salientes por nombre (voice_number_is_whatsapp), que es lo que pide esta orden"
+  elif [ "$(printf '%s' "$DESPUES" | grep -oE '"shared_declared":(true|false)')" = '"shared_declared":true' ] && { [ "$MOTIVO_SH" = observation_unverified ] || [ "$MOTIVO_SH" = observed_not_business_number ]; }; then
+    echo "   AVISO: número de voz = el visible de WhatsApp, PENDIENTE de la conciliación del número: ${SH#*|*|}. Hasta entonces la política deniega por nombre (voice_number_is_whatsapp)"
+  else
+    desvio "tras el cambio, el número de voz coincide con uno de WhatsApp y el servidor no admite la identidad compartida (la política deniega las salientes por nombre): ${SH#*|*|}"
+  fi
+fi
 RESTO=$(leer_resto)
 [ "$RESTO" = "$RESTO_ANTES" ] && echo "   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios" || desvio "la configuración del motor, del H4–H7 o de ElevenLabs cambió: antes $RESTO_ANTES · después ${RESTO:-ilegible}"
 # El fichero es la copia previa salvo las claves de la orden (sin imprimir nada de él).
@@ -1021,6 +1205,15 @@ case "$ORDEN" in
     echo "   AVISO (B-T4): es de la fase 4b: el visto bueno legal (D-12) y la supresión de la Ley 1581 que cubra las tablas de voz (B-T3) van ANTES; llamar a un contacto exige además VOICE_OUTBOUND_SCOPE=contacts, una publicación promovida a rest y el RNE (P-14). Alta y consentimiento siguen a cuatro ojos" ;;
   contactos-off)
     echo "   AVISO (B-T4): alta, carga y confirmación del consentimiento responden 409 voice_contacts_disabled; leer, revocar, excluir y el RNE siguen (solo restringen)" ;;
+  numero-compartido-on)
+    echo "   AVISO (enmienda 20): la declaración SOLA no admite nada. Falta, por este orden: «bash $0 fase 2 set TWILIO_VOICE_FROM=<el visible> ELEVENLABS_AGENT_PHONE_NUMBER_ID=<el phnum_… de la importación solo saliente>», y que voice:reconcile --numbers vea el número importado solo saliente y sin agente (la pasada horaria, con el monitor de voz encendido). «estado» dice el motivo mientras no se admita"
+    echo "   AVISO: no abre ninguna llamada ni toca las entrantes, el consentimiento, los canarios, el horario, los cupos, el presupuesto ni el freno; «salientes on» sigue exigiendo todo lo de antes" ;;
+  numero-compartido-off)
+    [ "$(campo whatsapp_collision)" != true ] || echo "   AVISO: TWILIO_VOICE_FROM sigue siendo el de WhatsApp: la política deniega por nombre y, con el monitor de voz encendido, la siguiente conciliación del número echará el freno number_is_messaging (el lado seguro). Para volver a un número dedicado: «bash $0 fase 2 set TWILIO_VOICE_FROM=… ELEVENLABS_AGENT_PHONE_NUMBER_ID=…»"
+    if [ "$APAGA_SALIENTES" = 1 ]; then
+      echo "   AVISO (B-1): las salientes estaban encendidas y quedan APAGADAS en esta misma escritura (lo de «salientes off»). Esta orden no cuelga una llamada en curso: sudo -u $WWW php artisan voice:hangup --all --confirm. Volver a encenderlas es otra vez «salientes on», con todo lo que exige"
+      echo "   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice"
+    fi ;;
 esac
 echo "   vuelta atrás exacta (el fichero de antes): $VUELTA"
 [ -z "$VUELTA_FUNCIONAL" ] || echo "   vuelta atrás funcional: $VUELTA_FUNCIONAL"
@@ -1029,7 +1222,7 @@ if [ -n "$SECRETOS_FICHERO" ] && [ "$DESVIOS" = 0 ]; then
   echo "   $SECRETOS_FICHERO destruido (los secretos solo quedan en el fichero de entorno y en la copia previa, las dos 600)"
 fi
 if [ "$DESVIOS" = 0 ]; then
-  echo "MANDO $ORDEN APLICADO (copia previa: $COPIA)"
+  echo "MANDO $ORDEN APLICADO (copia previa: $COPIA${AUTORIZACION:+; autorización citada: «$AUTORIZACION»})"
 else
   echo "MANDO $ORDEN ESCRITO CON $DESVIOS DESVÍOS: no seguir hasta aclararlos (copia previa: $COPIA; vuelta: $VUELTA)"
   exit 1

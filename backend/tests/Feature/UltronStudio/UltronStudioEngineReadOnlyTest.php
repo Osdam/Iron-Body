@@ -109,6 +109,9 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
         'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        // PT-14 (cambio de requisito del propietario; diseño `plans/informes-cierre/diseno-arq-pt14.md` D15): la
+        // publicación de la voz LEE el texto comercial de los planes (`Plan`), y nada más del motor. Ver abajo.
+        'StudioVoicePublications.php', 'StudioVoicePublishing.php',
     ];
 
     /**
@@ -117,6 +120,13 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      * una fachada que escriba, ni configuración.
      */
     private const LAB_ENGINE_READERS = ['StudioLabEngineCheck.php', 'StudioLabEngineContext.php'];
+
+    /**
+     * PT-14: lo único de `Plan` que nombra la publicación de la voz, todo de
+     * LECTURA: la captura del catálogo (con sus autores), su huella, su
+     * formato y la lectura estricta del publicado.
+     */
+    private const VOICE_PLAN_READS = '/^Plan::(?:(?:commercialCatalogSnapshot|commercialCatalog|commercialCatalogHash|readCommercialCatalog)\(|COMMERCIAL_CATALOG_FORMAT\b)/';
 
     /** Enmienda M-1 (M1-6): lo único del motor que el Studio importa para los prompts. */
     private const PROMPT_COMPILER_CLASSES = [
@@ -259,6 +269,52 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             }
         }
         $this->assertSame([], $this->configWrites($publicacion));
+
+        // PT-14 (D15): la publicación de la voz nombra del motor SOLO `Plan`, y
+        // de él solo lo que LEE el texto comercial (VOICE_PLAN_READS). Ninguna
+        // sentencia que lo nombre escribe.
+        foreach (['StudioVoicePublishing.php', 'StudioVoicePublications.php'] as $fichero) {
+            $ruta = app_path('Services/UltronStudio/'.$fichero);
+            $this->assertSame(['App\\Models\\Plan'], array_values(array_unique($this->engineReferences($ruta))), "{$fichero} solo nombra del motor Plan.");
+            $tokens = $this->tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                if ($t[0] === T_STRING && $t[1] === 'Plan') {
+                    $uso = 'Plan'.($tokens[$i + 1][1] ?? '').($tokens[$i + 2][1] ?? '').($tokens[$i + 3][1] ?? '');
+                    $this->assertMatchesRegularExpression(self::VOICE_PLAN_READS, $uso, "{$fichero} usa de Plan algo que no es leer el catálogo: {$uso}");
+                }
+            }
+            foreach ($this->statementsNaming($ruta, 'Plan') as $sentencia) {
+                foreach (self::WRITE_CALLS as $metodo) {
+                    $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "{$fichero} escribe con Plan: {$sentencia}");
+                }
+            }
+
+            // N-3 de la revisión de security: lo que la comprobación de los
+            // tokens `Plan` no ve. Sin alias de `Plan` ni de su espacio de
+            // nombres (`use App\Models\Plan as …`, `use App\Models\{Plan as …}`,
+            // `use App\Models as …`); ningún otro nombre cualificado que acabe
+            // en `\Plan` más que el `use` (un solo `App\Models\Plan`); ninguna
+            // cadena que nombre la clase (`app('App\Models\Plan')`); y ninguna
+            // consulta a la tabla `plans` por el constructor de consultas
+            // (`DB::table('plans')`, `->from('plans')`) ni SQL que la escriba.
+            $codigo = $this->codeOf($ruta);
+            $this->assertDoesNotMatchRegularExpression('/\buse\s+\\\\?App\\\\Models(?:\\\\Plan)?\s+as\b|\buse\s+\\\\?App\\\\Models\\\\\{[^}]*\bPlan\s+as\b/i', $codigo,
+                "{$fichero} importa Plan (o su espacio de nombres) con un alias.");
+            $cualificados = [];
+            foreach ($tokens as $t) {
+                if (in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true) && preg_match('/(^|\\\\)Plan$/i', $t[1]) === 1) {
+                    $cualificados[] = ltrim($t[1], '\\');
+                }
+                if (in_array($t[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                    $cadena = str_replace('\\\\', '\\', $t[1]);
+                    $this->assertDoesNotMatchRegularExpression('/App\\\\+Models\\\\+Plan\b/i', $cadena, "{$fichero} nombra la clase Plan en una cadena: {$t[1]}");
+                    $this->assertDoesNotMatchRegularExpression('/\b(update|insert\s+into|delete\s+from|truncate(\s+table)?)\s+("?public"?\s*\.\s*)?"?plans"?\b/i', $cadena,
+                        "{$fichero} escribe la tabla plans con SQL: {$t[1]}");
+                }
+            }
+            $this->assertSame(['App\\Models\\Plan'], $cualificados, "{$fichero} nombra Plan de otra forma que con su `use`.");
+            $this->assertDoesNotMatchRegularExpression('/\b(table|from)\s*\(\s*[\'"]\s*(public\.)?plans\b/i', $codigo, "{$fichero} consulta la tabla plans sin pasar por Plan.");
+        }
 
         // Los recuentos del canario: ni una escritura, la única fachada es el
         // acta (`Artisan::call` del comando de lectura), y nada de configuración.
@@ -782,7 +838,9 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->walk('POST', "voice/profiles/{$otro}/reject", $root, ['note' => 'Rechazado en el recorrido'])->assertOk();
         // La versión del recorrido cambia parámetros que la voz no compila: 200 o el 422 del compilador, sin red.
         $this->walk('POST', 'voice/compile-preview', $ana, ['versionUuid' => $version, 'profileUuid' => $perfil]);
-        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64)])
+        // PT-14 (cambio de requisito del propietario, diseño §5 B): publicar lleva también la huella del catálogo que se vio.
+        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64),
+            'expectedCatalogHash' => str_repeat('0', 64)])
             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
         $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64), 'expectedSpecHash' => str_repeat('0', 64)])
             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');

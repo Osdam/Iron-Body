@@ -168,6 +168,7 @@ if (require.main === module) {
     estado.tokens = new Set();
     estado.numero = { sid: P.TW_VOICE_NUMBER_SID, phone: P.VOICE_NUMBER, voiceUrl: 'https://api.elevenlabs.invalid/twilio/inbound_call', updates: 0, tipo: 'comprado', bundle: null, address: 'none', smsLaravel: false };
     estado.cuentaMadre = false; // OPS8-c: /__numero?cuenta=madre → la cuenta de voz se presenta como cuenta MADRE
+    estado.compartido = false; // OPS8-f: /__numero?compartido=1 → el escenario declara la identidad compartida (enmienda 20)
     estado.maestro = { primario: P.TW_MASTER_TOKEN, secundario: null, promociones: 0 }; // OPS8-e: la rotación del OTP
   }
   sembrar();
@@ -338,8 +339,12 @@ if (require.main === module) {
       const to = f.get('To') ?? '';
       const from = f.get('From') ?? '';
       if (!C.E164.test(to)) return errorTwilio(400, 21211, "Invalid 'To' Phone Number");
-      if (from === P.WHATSAPP_NUMBER && P.WHATSAPP_NUMBER) ctx.v.push('from_is_whatsapp_number');
-      else if (from !== P.VOICE_NUMBER) ctx.v.push('from_not_voice_number');
+      // OPS8-f (enmienda 20): el número de WhatsApp como From es violación SALVO en el escenario que declara la identidad
+      // compartida con ese número como caller ID verificado de la cuenta (/__numero?numero=whatsapp&tipo=caller_id&compartido=1).
+      const voz = estado.numero.phone;
+      const compartido = estado.compartido && voz === P.WHATSAPP_NUMBER && estado.numero.tipo === 'caller_id';
+      if (from === P.WHATSAPP_NUMBER && P.WHATSAPP_NUMBER && !compartido) ctx.v.push('from_is_whatsapp_number');
+      else if (from !== voz) ctx.v.push('from_not_voice_number');
       if (/^true$/i.test(f.get('Record') ?? '')) ctx.v.push('record_enabled');
       if (!f.get('Twiml') && !f.get('Url') && !f.get('ApplicationSid')) return errorTwilio(400, 21205, 'Url parameter is required');
       const c = nuevaLlamada({ direction: 'outbound-api', from, to, origen: ctx.cred });
@@ -619,8 +624,14 @@ if (require.main === module) {
       case '/__numero': {
         // OPS8-c: el escenario del número de voz para h8-twilio-check.sh. tipo=comprado|caller_id, bundle=none|aprobado|
         // pendiente, voice_url=elevenlabs|otra|vacia, address=none|local, sms_laravel=0|1 (una key de la voz mal hecha),
-        // cuenta=madre|subcuenta (owner_account_sid de la ficha: la propia o la del OTP).
+        // cuenta=madre|subcuenta (owner_account_sid de la ficha: la propia o la del OTP). OPS8-f (enmienda 20): numero=voz|whatsapp
+        // (el número de la cuenta es VOICE_NUMBER o el de WhatsApp de las piezas) y compartido=0|1 (la identidad compartida).
         const n = estado.numero;
+        if (q.has('numero')) {
+          if (!['voz', 'whatsapp'].includes(q.get('numero')) || (q.get('numero') === 'whatsapp' && !P.WHATSAPP_NUMBER)) return mal(res, 'numero = voz|whatsapp (whatsapp exige WHATSAPP_NUMBER en las piezas)');
+          n.phone = q.get('numero') === 'whatsapp' ? P.WHATSAPP_NUMBER : P.VOICE_NUMBER;
+        }
+        if (q.has('compartido')) estado.compartido = q.get('compartido') === '1';
         if (q.has('tipo')) { if (!['comprado', 'caller_id'].includes(q.get('tipo'))) return mal(res, 'tipo = comprado|caller_id'); n.tipo = q.get('tipo'); }
         if (q.has('bundle')) {
           const b = q.get('bundle');
@@ -635,7 +646,7 @@ if (require.main === module) {
         if (q.has('address')) { if (!['none', 'local'].includes(q.get('address'))) return mal(res, 'address = none|local'); n.address = q.get('address'); }
         if (q.has('sms_laravel')) n.smsLaravel = q.get('sms_laravel') === '1';
         if (q.has('cuenta')) { if (!['madre', 'subcuenta'].includes(q.get('cuenta'))) return mal(res, 'cuenta = madre|subcuenta'); estado.cuentaMadre = q.get('cuenta') === 'madre'; }
-        return ok(res, { ok: true, cuenta: estado.cuentaMadre ? 'madre' : 'subcuenta', tipo: n.tipo, bundle: n.bundle ? n.bundle.status : null, voiceUrl: n.voiceUrl ? new URL(n.voiceUrl).host : null, address: n.address, smsLaravel: n.smsLaravel });
+        return ok(res, { ok: true, cuenta: estado.cuentaMadre ? 'madre' : 'subcuenta', tipo: n.tipo, bundle: n.bundle ? n.bundle.status : null, voiceUrl: n.voiceUrl ? new URL(n.voiceUrl).host : null, address: n.address, smsLaravel: n.smsLaravel, numero: n.phone === P.WHATSAPP_NUMBER ? 'whatsapp' : 'voz', compartido: estado.compartido });
       }
       default:
         return C.json(res, 404, { ok: false, error: 'control desconocido' });

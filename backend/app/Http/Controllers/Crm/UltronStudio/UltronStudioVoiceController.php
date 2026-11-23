@@ -237,10 +237,12 @@ class UltronStudioVoiceController extends Controller
     }
 
     /**
-     * POST voice/publish   {clientRequestId, versionUuid, profileUuid, expectedSpecHash, note?≤500}
+     * POST voice/publish   {clientRequestId, versionUuid, profileUuid, expectedSpecHash, expectedCatalogHash, note?≤500}
      *
      * `expectedSpecHash` es la `specHash` que se VIO en `compile-preview`
      * (S8-c, E5-6): si la compilación da otra, 409 `spec_changed` sin desplegar.
+     * `expectedCatalogHash` (PT-14, obligatoria) es la `catalog.hash` que se VIO
+     * ahí: si el catálogo de planes de ahora da otra, 409 `catalog_changed`.
      */
     public function publish(Request $request, StudioVoicePublishing $publishing): JsonResponse
     {
@@ -250,10 +252,12 @@ class UltronStudioVoiceController extends Controller
             'versionUuid' => ['required', 'uuid'],
             'profileUuid' => ['required', 'uuid'],
             'expectedSpecHash' => ['required', 'string', 'regex:'.self::SHA256],
+            'expectedCatalogHash' => ['required', 'string', 'regex:'.self::SHA256],
             'note' => self::noteRules(),
         ]);
 
-        return self::written($publishing->publish($access, $request, strtolower($data['clientRequestId']), $data['versionUuid'], $data['profileUuid'], $data['expectedSpecHash'], $data['note'] ?? null));
+        return self::written($publishing->publish($access, $request, strtolower($data['clientRequestId']), $data['versionUuid'], $data['profileUuid'], $data['expectedSpecHash'],
+            $data['expectedCatalogHash'], $data['note'] ?? null));
     }
 
     /**

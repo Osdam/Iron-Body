@@ -9,7 +9,8 @@
     "D8-9 (publication_moved)",
     "D8-12 (job tries = 1; ambiguous no se reintenta)",
     "D8-20 (corte de las dialing y active)",
-    "Contratos de datos (voice_calls, voice_call_events)"
+    "Contratos de datos (voice_calls, voice_call_events)",
+    "E19-3 (22-11-2026, enmienda de DF-S3: una ambiguous que no llegó a iniciarse pasa a failed_to_start; migración 2026_11_22_100002)"
   ],
   "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
   "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
@@ -147,7 +148,7 @@
   "decisions": {
     "DF-S1": "Una actualización que no cambia status no es una transición: vale en cualquier estado, también en los finales (coste real, sello posterior), salvo las columnas inmutables (DF-S5).",
     "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final).",
-    "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled ni failed_to_start (ya se intentó).",
+    "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled (ya se intentó). Desde E19-3 (contrato, 22-11-2026), también failed_to_start si no llegó a iniciarse: esa fila es del contrato, no de esta decisión.",
     "DF-S4": "active → failed para el «otro fallo final» de una entrante o de una saliente ya active (E1-1).",
     "DF-S5": "El sello y la identidad se escriben al insertar y no cambian nunca (sealColumns e identityColumns).",
     "DF-S6": "Las columnas posteriores (afterColumns) pasan de null a un valor una sola vez; cambiarlas después se rechaza.",
@@ -156,13 +157,13 @@
     "DF-S9": "Lista cerrada: toda transición que no está en allowed se rechaza, también las que el contrato no menciona (p. ej. dialing → canceled o requested → hung_up: el corte de una pedida es canceled)."
   },
   "counts": {
-    "allowed": 25,
+    "allowed": 26,
     "matrix": 288,
     "insert": 24,
-    "sequences": 19,
+    "sequences": 21,
     "columns": 25,
     "eventDedupe": 5,
-    "total": 386
+    "total": 389
   },
   "allowed": [
     {
@@ -339,6 +340,19 @@
       "to": "failed",
       "direction": "outbound",
       "trigger": "la conciliación prueba que no hubo llamada, o Twilio canceled/failed",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "allowed · outbound · ambiguous → failed_to_start",
+      "kind": "outbound",
+      "contractRef": "D8-13, E19-3",
+      "basis": "contrato",
+      "from": "ambiguous",
+      "to": "failed_to_start",
+      "direction": "outbound",
+      "trigger": "E19-3: no llegó a iniciarse (la conciliación con una pasada completa del operador, o voice:resolve-ambiguous); la reserva se libera",
       "expected": {
         "allowed": true
       }
@@ -1004,15 +1018,13 @@
     {
       "name": "matrix · outbound · outbound: ambiguous → failed_to_start",
       "kind": "outbound",
-      "contractRef": "D8-13",
-      "basis": "decision-fixture",
-      "decision": "DF-S9",
+      "contractRef": "D8-13, E19-3",
+      "basis": "contrato",
       "from": "ambiguous",
       "to": "failed_to_start",
       "direction": "outbound",
       "expected": {
-        "allowed": false,
-        "why": "no es una transición hacia delante prevista"
+        "allowed": true
       }
     },
     {
@@ -4884,6 +4896,70 @@
           }
         ],
         "finalStatus": "ambiguous"
+      }
+    },
+    {
+      "name": "sequences · outbound · una ambigua no se cancela: requested → ambiguous y canceled rechazado (ya se intentó)",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S3",
+      "direction": "outbound",
+      "steps": [
+        "requested",
+        "ambiguous",
+        "canceled"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "requested",
+            "accepted": true
+          },
+          {
+            "to": "ambiguous",
+            "accepted": true
+          },
+          {
+            "to": "canceled",
+            "accepted": false
+          }
+        ],
+        "finalStatus": "ambiguous"
+      }
+    },
+    {
+      "name": "sequences · outbound · ambigua que no salió: requested → ambiguous → failed_to_start, y su post-llamada no la resucita (completed rechazado)",
+      "kind": "outbound",
+      "contractRef": "D8-13, E19-3",
+      "basis": "contrato",
+      "direction": "outbound",
+      "steps": [
+        "requested",
+        "ambiguous",
+        "failed_to_start",
+        "completed"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "requested",
+            "accepted": true
+          },
+          {
+            "to": "ambiguous",
+            "accepted": true
+          },
+          {
+            "to": "failed_to_start",
+            "accepted": true
+          },
+          {
+            "to": "completed",
+            "accepted": false
+          }
+        ],
+        "finalStatus": "failed_to_start"
       }
     },
     {

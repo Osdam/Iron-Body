@@ -22,8 +22,14 @@ interface VoiceAgentDeployer
      */
     public function createAgent(VoiceAgentPayload $payload): VoiceDeployResult;
 
-    /** Solo GET: la proyección observada, para compararla con la compilada (deriva). */
-    public function describeAgent(string $agentId): VoiceAgentObservation;
+    /**
+     * Solo GET: la proyección observada, para compararla con la compilada
+     * (deriva). Con `$withinSeconds` (E19-2, H-2), un plazo TOTAL para todas
+     * sus peticiones: ninguna espera más de lo que queda y ninguna empieza
+     * con menos de un mínimo por delante (entonces `unreachable`, motivo
+     * `deadline`, sin esa petición). Sin él, el plazo de siempre por petición.
+     */
+    public function describeAgent(string $agentId, ?float $withinSeconds = null): VoiceAgentObservation;
 
     /**
      * Asigna el número importado al agente que atiende las entrantes; null lo
