@@ -116,6 +116,8 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php',
         // Enmienda M-1 del H5 (plans/STUDIO_MOTORES_PLAN.md §B.4): `uspub_engine_contract_chk` admite /1 y /2.
         'database/migrations/2026_11_16_100001_allow_engine_config_v2_in_ultron_studio_publications.php',
+        // Apartado 5 del cierre (decisión 4 del lead, 22-11-2026): la columna `engine` de los casos del laboratorio.
+        'database/migrations/2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases.php',
     ];
 
     /**

@@ -1,0 +1,4 @@
+# Unidad 7 (PT-15) · --rutas: la diferencia de route:list es VACÍA (ninguna ruta nueva ni quitada: POST
+# api/internal/marketing/ai/check pasa a su propio grupo, con el mismo secreto y otro limitador). Va --rutas porque el diff
+# trae routes/marketing.php: route:cache, la diferencia exacta (ninguna) y auth:coverage --unmapped vacío. El guion compara
+# «MÉTODO uri» y NO ve el limitador: el «Después» de la ficha lo mira con route:list -v (throttle:internal-marketing-ai-check).

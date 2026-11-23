@@ -39,7 +39,7 @@ use Throwable;
  * no cumple el esquema. Nunca se devuelve el cuerpo del proveedor: solo la
  * clase, el estado HTTP y el `usage`.
  */
-final class StudioLabOpenAiClient implements StudioLabModelClient
+final class StudioLabOpenAiClient implements StudioLabEngineModelClient, StudioLabModelClient
 {
     /** La única URL en producción. */
     public const PRODUCTION_BASE_URL = 'https://api.openai.com';
@@ -112,6 +112,63 @@ final class StudioLabOpenAiClient implements StudioLabModelClient
         }
 
         $clasificado = self::classify($respuesta->status(), $respuesta->json(), $schema);
+
+        return [
+            'status' => $clasificado['class'] === null ? self::STATUS_OK : self::STATUS_ERROR,
+            'output' => $clasificado['output'],
+            'usage' => $clasificado['usage'],
+            'class' => $clasificado['class'],
+            'http' => $respuesta->status(),
+            'latencyMs' => self::since($inicio),
+            'exception' => null,
+        ];
+    }
+
+    /**
+     * Un nodo de OpenAI del flujo S2 ({@see StudioLabEngineModelClient}): el
+     * cuerpo que envía n8n, con la clave, la URL, los tiempos y la
+     * clasificación de siempre. El modelo es el del nodo: quien crea la
+     * ejecución exige que sea el configurado (los precios son los suyos).
+     */
+    public function completeEngine(string $node, string $system, string $user, int $timeoutSeconds): array
+    {
+        $spec = StudioLabEngineFlow::NODES[$node] ?? throw new InvalidArgumentException('Nodo de OpenAI desconocido.');
+        $config = StudioLabConfig::current();
+        if (! $config->isOpenAi() || ! $config->configured() || $config->model !== $spec['model']) {
+            return self::result(self::CLASS_NOT_CONFIGURED);
+        }
+        $esquema = StudioLabEngineFlow::schemaOf($node);
+        $cuerpo = [
+            'model' => $spec['model'],
+            'input' => [
+                ['role' => 'user', 'content' => [['type' => 'input_text', 'text' => $system]]],
+                ['role' => 'user', 'content' => [['type' => 'input_text', 'text' => $user]]],
+            ],
+            'temperature' => $spec['temperature'],
+            'max_output_tokens' => $spec['maxTokens'],
+            'store' => $spec['store'],
+            'text' => ['format' => ['type' => 'json_schema', 'name' => $spec['schemaName'], 'schema' => $esquema]],
+        ];
+
+        $inicio = hrtime(true);
+        try {
+            $respuesta = Http::withToken(trim((string) config('ultron_studio.lab.openai.api_key')))
+                ->acceptJson()
+                ->asJson()
+                ->withoutRedirecting()
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+                ->timeout(max(1, min($config->timeoutSeconds, $timeoutSeconds)))
+                ->post(self::url(), $cuerpo);
+        } catch (StrayRequestException $e) {
+            throw $e;
+        } catch (ConnectionException $e) {
+            return self::result(self::connectionClass($e), latencyMs: self::since($inicio), exception: class_basename($e));
+        } catch (Throwable $e) {
+            // Como en complete(): no se sabe si llegó y se cobró; cuenta como timeout.
+            return self::result(self::CLASS_TIMEOUT, latencyMs: self::since($inicio), exception: class_basename($e));
+        }
+
+        $clasificado = self::classify($respuesta->status(), $respuesta->json(), $esquema);
 
         return [
             'status' => $clasificado['class'] === null ? self::STATUS_OK : self::STATUS_ERROR,

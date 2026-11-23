@@ -1,0 +1,7 @@
+# PT-19 · --marcador (va con --bootstrap=<la huella de la ficha>): la prueba, sin credenciales, de que el servidor sirve el
+# bootstrap/app.php nuevo (la puerta del secreto interno corre ANTES que el limitador). Ninguna caché lo contiene: solo
+# se ve en la respuesta. Sin credenciales el doctor del asesor da 401 con los dos códigos; con el previo el limitador
+# corre primero y el 401 lleva X-RateLimit-Limit (evidencia-h9/2026-11-22/10-puertas-internas-cupo-sin-secreto.txt, [3]:
+# 401 con x-ratelimit-limit: 120); con el nuevo, no (informe-apisec-pt19.md, §2 b). El guion solo mira el código y si la
+# cabecera está, nunca su valor. Cada lectura con el previo gasta 1 de los 120 por minuto del asesor; con el nuevo, nada.
+GET api/internal/marketing/ai/doctor 401 x-ratelimit-limit presente ausente

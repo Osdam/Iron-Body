@@ -1,0 +1,4 @@
+# Unidad 7 (PT-15) · --config (config/automation.php): el cubo propio de ai/check. Sin la variable
+# MARKETING_AI_CHECK_RATE_LIMIT_PER_MINUTE en el entorno, (int) env(…, 60) da 60. Si el entorno de producción ya la
+# tuviera, el paso 4 vería otro número y volvería atrás: el paso 0 dice «ausente» (la clave no existe en la caché de hoy).
+automation.rate_limits.marketing_ai_check=60

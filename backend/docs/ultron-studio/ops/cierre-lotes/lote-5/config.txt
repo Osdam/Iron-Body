@@ -2,3 +2,12 @@
 # la pasa a «engine» el propietario, después de publicar la versión aprobada. La puerta sigue en «required».
 ultron_studio.publishing.lab_source=texto:simulation
 ultron_studio.publishing.lab_gate=texto:required
+# Unidad 2b (orden del cierre operativo, DEPLOY_CIERRE_LOTES.md §5 bis «2b»): el modelo del laboratorio que escribe
+# entorno-lab.sh ANTES de este despliegue. Las claves ya existen en el código de producción; la caché las recoge en el
+# paso M (ironbody-migrate) y en el K (config:cache como www-data). El guion normaliza los números (0.40 → 0.4, 1.60 →
+# 1.6); «vacia» es la variable escrita sin valor (el laboratorio no la envía). Si 2b no se aplica, estas cuatro no
+# cuadran y el paso 4 vuelve atrás: para el lote 5 solo, config-sin-2b.txt.
+ultron_studio.lab.openai.model=texto:gpt-4.1-mini
+ultron_studio.lab.openai.reasoning_effort=vacia
+ultron_studio.lab.price_input_usd_per_mtok=0.4
+ultron_studio.lab.price_output_usd_per_mtok=1.6

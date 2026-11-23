@@ -23,7 +23,9 @@ use Throwable;
  *
  *  - `$tries = 1`: un reintento de la cola podría pagar dos veces la misma
  *    llamada. Un paso que falla lo liquida {@see failed()}.
- *  - `$timeout = 150` y `$failOnTimeout = true`: dos llamadas de 60 s caben.
+ *  - `$timeout = 150` y `$failOnTimeout = true`: dos llamadas de 60 s caben, y
+ *    un caso del recorrido del motor entero, con su juez, se corta antes, en
+ *    {@see StudioLabEngineCase::CASE_BUDGET_SECONDS} (NB4).
  *    `retry_after` del carril (300) es mayor que el timeout: un paso lento no
  *    lo toma otro worker mientras sigue vivo.
  *

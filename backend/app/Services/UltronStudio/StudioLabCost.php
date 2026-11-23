@@ -38,6 +38,13 @@ final class StudioLabCost
     /** La respuesta del actor, al estimar el juez, cuenta 4 bytes por cada token de su máximo. */
     public const REPLY_BYTES_PER_TOKEN = 4;
 
+    /**
+     * Recorrido del motor (apartado 5 del cierre): lo que se suma a la entrada
+     * de cada nodo por lo que traen los nodos anteriores (un borrador y una
+     * nota del tamaño máximo del redactor, 600 tokens cada uno).
+     */
+    public const ENGINE_CARRIED_BYTES = 2 * 600 * self::REPLY_BYTES_PER_TOKEN;
+
     /** Un decimal con hasta 6 cifras (`^\d+(\.\d{1,6})?$`). */
     public const USD_PATTERN = '/^\d+(\.\d{1,6})?$/';
 
@@ -189,6 +196,19 @@ final class StudioLabCost
      * @param  array{inputTokens:int,outputTokens:int}  $usage
      * @param  array{input:int,output:int}  $prices
      */
+    /**
+     * Lo que puede costar una llamada de un nodo del motor: su prompt, su
+     * segundo mensaje, su esquema y lo que traen los anteriores, con el
+     * `maxTokens` del nodo.
+     *
+     * @param  array{input:int,output:int}  $prices
+     * @return array{expectedMicros:int,maxMicros:int}
+     */
+    public static function engineCallEstimate(string $system, string $user, string $schema, int $maxTokens, array $prices): array
+    {
+        return self::callEstimate(self::estimatedInputTokens(strlen($system) + strlen($user) + strlen($schema) + self::ENGINE_CARRIED_BYTES), $maxTokens, $prices);
+    }
+
     public static function actualMicros(array $usage, array $prices): int
     {
         return self::tokensMicros($usage['inputTokens'], $prices['input']) + self::tokensMicros($usage['outputTokens'], $prices['output']);

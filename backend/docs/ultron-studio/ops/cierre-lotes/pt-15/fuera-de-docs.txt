@@ -1,0 +1,11 @@
+# Unidad 7 del orden del cierre (pt-15): los ficheros del diff P..N FUERA de backend/docs/, exactos (git diff --name-only
+# --no-renames, ordenados con LC_ALL=C). Banco de la cadena del 23-11-2026. La documentación puede variar con lo que lleve main; esto, no.
+backend/app/Providers/AppServiceProvider.php
+backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+backend/config/automation.php
+backend/routes/marketing.php
+backend/tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php
+backend/tests/Feature/Marketing/LimitadoresInternosTest.php
+backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php
+backend/tests/fixtures/ultron-a4/legacy-c1.json

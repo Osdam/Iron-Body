@@ -11,7 +11,9 @@ use App\Models\MarketingLead;
 use App\Models\Plan;
 use App\Models\UltronAbort;
 use App\Services\Marketing\MarketingAgentSwitch;
+use App\Services\Marketing\SalesAiConfig;
 use App\Services\UltronStudio\StudioLabPrompts;
+use App\Services\UltronStudio\StudioLabStepJob;
 use App\Support\Access\AuthorizationMap;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,6 +66,13 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
     use StudioFixtures;
 
     private const OPENAI_URL = 'https://api.openai.com/v1/responses';
+
+    /**
+     * El precio del plan sembrado (98 765) como viaja en la respuesta del
+     * servidor («$98.765») o sin separador, y nunca como parte de un número
+     * más largo ni como decimales (los microsegundos de una hora: «.987654»).
+     */
+    private const PRICE_AS_SENT = '/(?<![\d.])98\.?765(?!\d)/';
 
     /** @var list<array{table:string,sql:string}> */
     private array $writes = [];
@@ -192,6 +201,149 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         foreach ($this->logs as $linea) {
             $this->assertStringNotContainsString('CENTINELA', $linea);
             $this->assertStringNotContainsString('Incorrect API key', $linea, 'el cuerpo del proveedor llegó al log');
+        }
+    }
+
+    /**
+     * T8 DEL APARTADO 5: EL RECORRIDO DEL MOTOR TAMPOCO TOCA EL MOTOR. Con los
+     * mismos datos del motor sembrados y su clasificador configurado en
+     * `openai` con la clave del MOTOR (si el laboratorio lo usara, saldría a la
+     * red con esa clave y esto caería), una ejecución en modo motor con el
+     * CLIENTE REAL contra `Http::fake`, de punta a punta: no escribe fuera de
+     * `ultron_studio_lab_*`, no crea conversación, mensaje, acción de IA ni
+     * evento comercial (la huella del motor no cambia), no encola nada más que
+     * su paso, no sale a la red salvo la Responses API con la clave del
+     * laboratorio, y no envía la persona ni la conversación reales.
+     *
+     * EL PRECIO (NB1 de la revisión de seguridad; lo acepta el propietario):
+     * para una intención de precio, la respuesta determinista del servidor,
+     * con el precio del catálogo, viaja al estratega dentro de
+     * `base_decision`, IGUAL que en el motor real (paridad). Fuera de ahí, no.
+     * Se busca como viaja («$98.765», con el separador de miles) y también sin
+     * él, sin dígitos ni punto delante ni dígitos detrás: los microsegundos de
+     * la hora (`business_time`) y un decimal no dan un falso positivo.
+     */
+    public function test_el_recorrido_del_motor_no_cambia_nada_del_motor_y_no_suelta_la_clave(): void
+    {
+        $this->seedEngine();
+        $this->importBaseline();
+        $this->importLabScenarios();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana Pérez');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root Laboratorio');
+        $this->as($ana);
+        $this->as($root);
+        $version = (string) $this->createVersion($ana, 'Versión con etiqueta secreta')->assertCreated()->json('data.uuid');
+        $this->labOpenAi(['ultron_studio.lab.openai.model' => 'gpt-4.1-mini', 'ultron_studio.lab.run_budget_usd' => '2']);
+        // El cerebro del motor, como en producción con proveedor: el laboratorio no puede usarlo.
+        config(['marketing.ai.enabled' => true, 'marketing.ai.driver' => 'openai', 'marketing.ai.openai.enabled' => true, 'marketing.ai.openai.model' => 'gpt-motor-pruebas']);
+        $this->assertSame('openai', SalesAiConfig::effectiveDriver(), 'el cerebro del motor está listo para salir a la red');
+
+        Mail::fake();
+        Notification::fake();
+        Queue::fake();
+        Http::preventStrayRequests();
+        // Toda petición se registra: el responder del motor se degrada solo si falla, y una petición perdida no se vería.
+        Http::fake([self::OPENAI_URL => fn (HttpRequest $r) => $this->answerEngine($r), '*' => function (HttpRequest $r) {
+            $this->sent[] = $r;
+
+            return Http::response(['error' => 'fuera del laboratorio'], 500);
+        }]);
+        Event::listen(MessageLogged::class, function (MessageLogged $m): void {
+            $this->logs[] = $m->message.' '.json_encode($m->context);
+        });
+        $antes = $this->fingerprint();
+        DB::listen(function (QueryExecuted $q): void {
+            if (preg_match('/^\s*(?:insert\s+(?:or\s+\w+\s+)?into|update(?:\s+or\s+\w+)?|delete\s+from|replace\s+into|truncate(?:\s+table)?)\s+(?:only\s+)?((?:"?\w+"?\.)?"?\w+"?)/is', $q->sql, $m) === 1) {
+                $this->writes[] = ['table' => strtolower((string) preg_replace('/^.*\./', '', str_replace('"', '', $m[1]))), 'sql' => $q->sql];
+            } elseif (preg_match('/^\s*(?:create|alter|drop|rename|comment\s+on|grant|revoke)\b/i', $q->sql) === 1) {
+                $this->writes[] = ['table' => '(ddl)', 'sql' => $q->sql];
+            }
+        });
+
+        $uuids = [$this->scenarioUuid('C-01'), $this->scenarioUuid('C-02')];
+        $cuerpo = ['target' => self::versionTarget($version), 'scenarioUuids' => $uuids, 'fidelity' => 'engine'];
+        $estimacion = $this->keep($this->lab('POST', 'estimate', $root, $cuerpo))->assertOk()->json('data');
+        $this->assertTrue($estimacion['allowed']);
+        $uuid = (string) $this->keep($this->lab('POST', 'runs', $root, $cuerpo + ['acceptedMaxCostMicros' => $estimacion['estimate']['maxMicros'], 'clientRequestId' => (string) Str::uuid()]))
+            ->assertCreated()->json('data.uuid');
+        $run = $this->drain($uuid);
+        $detalle = $this->keep($this->lab('GET', "runs/{$uuid}", $root))->assertOk()->json('data');
+        $this->assertSame(['completed', 'engine', 2], [$run->status, $detalle['fidelityMode'], count($detalle['cases'])]);
+        foreach ($detalle['cases'] as $caso) {
+            $this->assertSame('done', $caso['status']);
+            $this->assertSame('strategist', $caso['engine']['path'][0]);
+        }
+
+        // 1) Ninguna escritura fuera del laboratorio (la sesión, la cola y la caché aparte).
+        $ajenas = array_values(array_filter($this->writes, static fn (array $e): bool => ! str_starts_with($e['table'], 'ultron_studio_lab_')
+            && ! in_array($e['table'], ['admin_sessions', 'jobs', 'cache', 'cache_locks'], true)));
+        $this->assertSame([], $ajenas, 'El recorrido del motor escribió fuera de las tablas del laboratorio.');
+        $this->assertContains('ultron_studio_lab_run_cases', array_column($this->writes, 'table'), 'el oído no vio la liquidación');
+
+        // 2) La huella del motor (conversaciones, mensajes, acciones de IA, eventos, planes…) y su configuración, idénticas.
+        $despues = $this->fingerprint();
+        foreach (['marketing_conversations', 'marketing_messages', 'marketing_ai_actions', 'marketing_automation_events', 'marketing_leads'] as $clave) {
+            $this->assertArrayHasKey($clave, $despues['tables']);
+        }
+        foreach ($antes['tables'] as $tabla => $filas) {
+            $this->assertSame($filas, $despues['tables'][$tabla], "El recorrido del motor cambió {$tabla}.");
+        }
+        $this->assertSame($antes['marketing'], $despues['marketing']);
+
+        // 3) Nada encolado salvo su propio paso; ni correo ni notificaciones.
+        $this->assertSame([StudioLabStepJob::class], array_values(array_unique(array_keys(Queue::pushedJobs()))));
+        Mail::assertNothingSent();
+        Notification::assertNothingSent();
+
+        // 4) HTTP: solo la Responses API, con la clave del laboratorio y la forma del nodo de n8n.
+        $delMotor = array_values(array_filter($this->sent, static fn (HttpRequest $p): bool => str_starts_with((string) ($p->data()['text']['format']['name'] ?? ''), 'ultron_') && ! str_starts_with((string) $p->data()['text']['format']['name'], 'ultron_lab_')));
+        $this->assertGreaterThanOrEqual(6, count($delMotor), 'dos casos, al menos estratega, redactor y revisor en cada uno');
+        $conPrecio = [];
+        foreach ($this->sent as $peticion) {
+            $this->assertSame(self::OPENAI_URL, $peticion->url());
+            $this->assertSame('Bearer '.self::SENTINEL_KEY, $peticion->header('Authorization')[0] ?? null);
+            $c = $peticion->data();
+            $this->assertSame(['gpt-4.1-mini', false], [$c['model'], $c['store']]);
+            foreach (['user', 'safety_identifier', 'metadata'] as $prohibida) {
+                $this->assertArrayNotHasKey($prohibida, $c);
+            }
+            $crudo = (string) json_encode($c, JSON_UNESCAPED_UNICODE);
+            // Ni la persona, ni la conversación reales, ni el personal, ni la etiqueta, ni la clave del motor.
+            foreach (['3001234567', 'Prospecto', 'Hola, quiero información', 'Ana Pérez', 'Root Laboratorio', '@ironbody.test', 'Versión con etiqueta secreta', $version, self::ENGINE_KEY] as $nunca) {
+                $this->assertStringNotContainsString($nunca, $crudo, "Viajó al proveedor: {$nunca}");
+            }
+            // El precio, solo en la `base_decision` del estratega (NB1, ver arriba): se quita y se mira el resto. Se
+            // cuenta por petición: el doble de `Http::fake` pasa dos veces por cada una (el mismo objeto).
+            $segundo = json_decode((string) ($c['input'][1]['content'][0]['text'] ?? 'null'), true);
+            if (is_array($segundo) && array_key_exists('base_decision', $segundo)) {
+                $conPrecio[spl_object_id($peticion)] = preg_match(self::PRICE_AS_SENT, (string) json_encode($segundo['base_decision'], JSON_UNESCAPED_UNICODE));
+                unset($segundo['base_decision']);
+                $c['input'][1]['content'][0]['text'] = json_encode($segundo, JSON_UNESCAPED_UNICODE);
+            }
+            $this->assertDoesNotMatchRegularExpression(self::PRICE_AS_SENT, (string) json_encode($c, JSON_UNESCAPED_UNICODE), 'El precio viajó fuera de base_decision.');
+        }
+        $this->assertSame(1, array_sum($conPrecio), 'el precio viaja, formateado, en la base_decision del estratega de C-02 (intención de precio), y solo ahí');
+        foreach ($delMotor as $peticion) {
+            $c = $peticion->data();
+            $this->assertSame(['user', 'user'], array_column($c['input'], 'role'));
+            $this->assertSame('input_text', $c['input'][1]['content'][0]['type']);
+            $this->assertArrayNotHasKey('instructions', $c);
+            $this->assertArrayHasKey('temperature', $c);
+        }
+        // El contexto de NEGOCIO sí viaja (enmienda 9 de H4): los planes (en `plans`, sin precio) y la base de conocimiento.
+        $todo = (string) json_encode(array_map(static fn (HttpRequest $p): array => $p->data(), $delMotor), JSON_UNESCAPED_UNICODE);
+        $this->assertStringContainsString('Mensualidad', $todo);
+        $this->assertStringContainsString('Cercano y claro', $todo);
+
+        // 5) La clave centinela no está en ninguna respuesta, fila ni línea de log.
+        foreach ($this->responses as $r) {
+            $this->assertStringNotContainsString('CENTINELA', (string) $r->getContent());
+        }
+        foreach (['ultron_studio_lab_runs', 'ultron_studio_lab_run_cases', 'ultron_studio_lab_events'] as $tabla) {
+            $this->assertStringNotContainsString('CENTINELA', (string) json_encode(DB::table($tabla)->get()), "La clave quedó en {$tabla}.");
+        }
+        foreach ($this->logs as $linea) {
+            $this->assertStringNotContainsString('CENTINELA', $linea);
         }
     }
 
@@ -384,6 +536,40 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
                 ['type' => 'message', 'id' => 'msg_1', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => json_encode($salida, JSON_UNESCAPED_UNICODE)]]],
             ],
             'usage' => ['input_tokens' => 900, 'output_tokens' => 60, 'output_tokens_details' => ['reasoning_tokens' => 20], 'total_tokens' => 960],
+        ]);
+    }
+
+    /** El simulador de la Responses API para los nodos del motor (por el nombre del esquema) y el juez del laboratorio. */
+    private function answerEngine(HttpRequest $r): mixed
+    {
+        $this->sent[] = $r;
+        $cuerpo = $r->data();
+        $salida = match ($cuerpo['text']['format']['name'] ?? null) {
+            'ultron_strategy' => [
+                'strategy_goal' => 'recibir', 'next_state' => 'NEW_LEAD', 'intent' => 'greeting', 'recommended_plan_id' => null, 'main_barrier' => null,
+                'next_best_action' => 'answer', 'confidence' => 0.9, 'tools_requested' => [], 'staff_review_reason' => null, 'reason' => 'Simulador.',
+                'human_handoff_requested' => false, 'human_handoff_reason' => null, 'human_handoff_evidence' => null, 'conversation_goal' => 'understand',
+                'information_needed' => [], 'question_needed' => false, 'response_goal' => 'recibir', 'buying_signal' => 'none', 'closing_opportunity' => false,
+                'payment_opportunity' => false, 'app_support_opportunity' => false, 'recommendation_goal' => 'none',
+            ],
+            'ultron_reply' => ['reply_draft' => 'Buenas tardes, ¿en qué le puedo ayudar?', 'uses_price_placeholder' => false, 'questions_asked' => 1, 'plans_mentioned' => 0],
+            'ultron_critic' => ['verdict' => 'pass', 'score' => 0.9, 'issues' => [], 'notes' => '', 'hard_fail' => null],
+            default => (function () use ($cuerpo): array {
+                $objetivos = StudioLabPrompts::judgeTargets((string) ($cuerpo['input'][0]['content'] ?? ''));
+
+                return [
+                    'criteria' => array_map(static fn (string $id): array => ['id' => $id, 'verdict' => 'pass', 'evidence' => '', 'reason' => 'Simulador.'], $objetivos['criteria'] ?? []),
+                    'rules' => array_map(static fn (string $c): array => ['code' => $c, 'verdict' => 'not_applicable', 'reason' => ''], $objetivos['rules'] ?? []),
+                    'risks' => [],
+                    'summary' => 'Simulador del proveedor.',
+                ];
+            })(),
+        };
+
+        return Http::response([
+            'id' => 'resp_'.Str::random(8), 'object' => 'response', 'status' => 'completed',
+            'output' => [['type' => 'message', 'id' => 'msg_1', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => json_encode($salida, JSON_UNESCAPED_UNICODE)]]]],
+            'usage' => ['input_tokens' => 1200, 'output_tokens' => 80, 'total_tokens' => 1280],
         ]);
     }
 

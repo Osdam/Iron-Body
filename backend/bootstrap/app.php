@@ -66,6 +66,22 @@ return Application::configure(basePath: dirname(__DIR__))
             'trainer.feature' => EnsureTrainerFeature::class,
         ]);
 
+        // LA PUERTA DEL SECRETO INTERNO CORRE ANTES QUE EL LIMITADOR (PT-19 de
+        // ULTRON STUDIO, 22-11-2026). Las rutas internas declaran
+        // `['automation.internal', 'throttle:…']`, pero Laravel reordena por su
+        // lista de prioridad, donde está `ThrottleRequests` y no esta puerta: el
+        // limitador corría primero y una petición SIN secreto, con su 401,
+        // descontaba del cubo global de n8n. Con 120 por minuto desde internet,
+        // `decide` y `commit` recibían 429 y el asesor de WhatsApp se quedaba
+        // mudo; con 600, las notificaciones a los socios. Ahora quien no trae
+        // el secreto recibe su 401 sin contar y sin ver el contador, y el tope
+        // del tráfico legítimo no cambia. Lo fija, sobre TODAS las rutas
+        // internas, {@see \Tests\Feature\Marketing\PuertasInternasSecretoAntesDelCupoTest}.
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            prepend: VerifyInternalAutomationSignature::class,
+        );
+
         // Blindaje global: TODAS las rutas /api/admin/* y los pagos legacy
         // (/api/payments) exigen el secreto administrativo. Se monta a nivel del
         // grupo `api` para no depender de envolver a mano ~22 bloques dispersos

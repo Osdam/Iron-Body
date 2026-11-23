@@ -108,16 +108,20 @@ class UltronStudioPublicationConfigTest extends TestCase
         $sinNada = $this->configWith([
             'ULTRON_STUDIO_PUBLISH_LAB_GATE' => null, 'ULTRON_STUDIO_CANARY_MIN_HOURS' => null,
             'ULTRON_STUDIO_CANARY_MIN_TURNS' => null, 'ULTRON_STUDIO_PUBLISH_WINDOW' => null,
+            'ULTRON_STUDIO_PUBLISH_LAB_SOURCE' => null,
         ]);
-        $this->assertSame(['lab_gate' => 'required', 'canary_min_hours' => 24, 'canary_min_turns' => 3, 'window' => '07:00-19:00'], $sinNada);
+        // Apartado 5 del cierre: `lab_source` nace en `simulation` (la puerta, como siempre).
+        $this->assertSame(['lab_gate' => 'required', 'lab_source' => 'simulation', 'canary_min_hours' => 24, 'canary_min_turns' => 3, 'window' => '07:00-19:00'], $sinNada);
 
         // Vacías: la ventana deja de existir (lo dice el contrato); los umbrales y la puerta, su defecto.
-        $vacias = $this->configWith(['ULTRON_STUDIO_PUBLISH_LAB_GATE' => '', 'ULTRON_STUDIO_CANARY_MIN_HOURS' => '', 'ULTRON_STUDIO_CANARY_MIN_TURNS' => '', 'ULTRON_STUDIO_PUBLISH_WINDOW' => '']);
-        $this->assertSame(['lab_gate' => 'required', 'canary_min_hours' => 24, 'canary_min_turns' => 3, 'window' => ''], $vacias);
+        $vacias = $this->configWith(['ULTRON_STUDIO_PUBLISH_LAB_GATE' => '', 'ULTRON_STUDIO_CANARY_MIN_HOURS' => '', 'ULTRON_STUDIO_CANARY_MIN_TURNS' => '', 'ULTRON_STUDIO_PUBLISH_WINDOW' => '', 'ULTRON_STUDIO_PUBLISH_LAB_SOURCE' => '']);
+        $this->assertSame(['lab_gate' => 'required', 'lab_source' => 'simulation', 'canary_min_hours' => 24, 'canary_min_turns' => 3, 'window' => ''], $vacias);
 
         // Fuera de rango, se recorta; mal escritas, el defecto.
-        $raras = $this->configWith(['ULTRON_STUDIO_PUBLISH_LAB_GATE' => ' WAIVED ', 'ULTRON_STUDIO_CANARY_MIN_HOURS' => '500', 'ULTRON_STUDIO_CANARY_MIN_TURNS' => '0', 'ULTRON_STUDIO_PUBLISH_WINDOW' => '08:30-17:15']);
-        $this->assertSame(['lab_gate' => 'waived', 'canary_min_hours' => 168, 'canary_min_turns' => 1, 'window' => '08:30-17:15'], $raras);
+        $raras = $this->configWith(['ULTRON_STUDIO_PUBLISH_LAB_GATE' => ' WAIVED ', 'ULTRON_STUDIO_CANARY_MIN_HOURS' => '500', 'ULTRON_STUDIO_CANARY_MIN_TURNS' => '0', 'ULTRON_STUDIO_PUBLISH_WINDOW' => '08:30-17:15', 'ULTRON_STUDIO_PUBLISH_LAB_SOURCE' => ' ENGINE ']);
+        $this->assertSame(['lab_gate' => 'waived', 'lab_source' => 'engine', 'canary_min_hours' => 168, 'canary_min_turns' => 1, 'window' => '08:30-17:15'], $raras);
+        // Cualquier otra cosa, `simulation`.
+        $this->assertSame('simulation', $this->configWith(['ULTRON_STUDIO_PUBLISH_LAB_SOURCE' => 'motor'])['lab_source']);
         foreach (['siete a siete', '19:00-07:00', '07:00-07:00', '7:00-19:00', '24:00-25:00', 'false'] as $ventana) {
             $this->assertSame('07:00-19:00', $this->configWith(['ULTRON_STUDIO_PUBLISH_WINDOW' => $ventana])['window'], $ventana);
         }

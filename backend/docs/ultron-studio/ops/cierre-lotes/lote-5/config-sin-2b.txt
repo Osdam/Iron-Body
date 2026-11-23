@@ -1,0 +1,6 @@
+# Lote 5 SIN la unidad 2b (solo si el propietario retirase el cambio del modelo del laboratorio): las dos líneas de
+# siempre. Con 2b, config.txt.
+# Lote 5 · --config (config/ultron_studio.php). La llave nueva de la puerta de publicar nace en «simulation» (como hoy):
+# la pasa a «engine» el propietario, después de publicar la versión aprobada. La puerta sigue en «required».
+ultron_studio.publishing.lab_source=texto:simulation
+ultron_studio.publishing.lab_gate=texto:required

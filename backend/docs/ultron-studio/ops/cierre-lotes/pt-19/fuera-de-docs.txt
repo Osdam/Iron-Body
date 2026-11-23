@@ -1,0 +1,4 @@
+# Unidad 1 del orden del cierre (pt-19): los ficheros del diff P..N FUERA de backend/docs/, exactos (git diff --name-only
+# --no-renames, ordenados con LC_ALL=C). Banco de la cadena del 23-11-2026. La documentación puede variar con lo que lleve main; esto, no.
+backend/bootstrap/app.php
+backend/tests/Feature/Marketing/PuertasInternasSecretoAntesDelCupoTest.php

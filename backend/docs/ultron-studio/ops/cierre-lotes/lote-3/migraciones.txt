@@ -1,7 +1,16 @@
-# LOTE 3 · NO SE DESPLIEGA SIN LA AUTORIZACIÓN ESPECÍFICA DEL PROPIETARIO (voz y telefonía), dada en la conversación.
-# --migraciones (integracion/voz = cierre/voz + cierre/telefonia; ensayada en 67988eb6): nombre tipo tabla objeto marca
-# privilegios vuelta. ORDEN DEMOSTRADO: primero la migración y después el código (--orden=migracion-primero); al volver,
-# primero el código y después el disparador. Rehace vc_status_forward (DB8) con la transición ambiguous → failed_to_start;
-# ningún CHECK cambia. CREATE OR REPLACE TRIGGER toma SHARE ROW EXCLUSIVE sobre voice_calls (frena a quien escribe, no a
-# quien lee). La vuelta atrás del guion pone la definición del respaldo (el disparador no revisa filas: se puede deshacer).
+# UNIDAD 6 DEL ORDEN DEL CIERRE = LOTE 3 + PT-14 · NO SE DESPLIEGA SIN LA AUTORIZACIÓN ESPECÍFICA DEL PROPIETARIO (voz y
+# telefonía, y lo que dice la voz de los planes), dada en la conversación.
+# --migraciones: nombre tipo tabla objeto marca privilegios vuelta. ORDEN DEMOSTRADO: primero las migraciones y después
+# el código (--orden=migracion-primero); al volver, primero el código y después el esquema (en orden inverso).
+# 1) Lote 3 (integracion/voz = cierre/voz + cierre/telefonia): rehace vc_status_forward (DB8) con la transición
+#    ambiguous → failed_to_start; ningún CHECK cambia. CREATE OR REPLACE TRIGGER toma SHARE ROW EXCLUSIVE sobre voice_calls
+#    (frena a quien escribe, no a quien lee). La vuelta atrás pone la definición del respaldo (no revisa filas: se deshace).
 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start transicion voice_calls vc_status_forward ambiguous>failed_to_start - deshacer
+# 2) PT-14 (cierre/voz-catalogo): DOS columnas en plans, commercial_text_by y commercial_sale_by, bigint NULAS y sin
+#    defecto, cada una con su llave foránea a admins (ON DELETE SET NULL), en UNA migración y en UNA transacción (con
+#    lock_timeout 5 s). El tipo «columna» del guion declara UNA columna por migración y no mira llaves: se declara la que
+#    se añade la última; la otra y las dos llaves las comprueba a mano el «Después» de la ficha (§4, consulta de solo
+#    lectura). Toma ACCESS EXCLUSIVE sobre plans (la tabla no se reescribe) y SHARE ROW EXCLUSIVE sobre admins (las llaves;
+#    plans tiene pocas filas: la validación es instantánea). VUELTA: CONSERVAR (el código previo no ve las columnas; una
+#    cuenta que se borre deja null).
+2026_11_23_100001_add_commercial_text_author_to_plans_table columna plans commercial_sale_by bigint - conservar
