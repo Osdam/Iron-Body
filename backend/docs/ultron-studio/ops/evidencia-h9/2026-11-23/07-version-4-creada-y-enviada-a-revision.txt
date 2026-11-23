@@ -1,0 +1,209 @@
+VERSIÓN 4 DEL STUDIO · CREADA Y ENVIADA A REVISIÓN CON LA CUENTA TÉCNICA, Y CUATRO COPIAS DEL ESCENARIO E-001
+23-11-2026, 05:55 a 05:58 UTC (12:55 a 12:58 a. m. en Bogotá) · lead
+
+TIPO: tres ESCRITURAS REALES en datos de producción (tablas del Studio), con la autorización específica del propietario,
+hechas por la API pública del CRM con la sesión de la cuenta técnica (id 32). No es un despliegue: el código de producción
+no cambia (API cabc4138, CRM 744dfc2). Ningún secreto ni dato de personas en este fichero (de las cuentas, solo su id
+interno y su rol; los escenarios son sintéticos).
+
+RESULTADO: HECHAS LAS TRES, Y NADA MÁS.
+  1. Versión 4 creada: «Prueba de aceptación 4 · profesional 200», 640421de-6484-4ffa-9ae5-7799068f2f29, desde la revisión 6
+     del borrador de la cuenta técnica. Su huella de contenido es LA MISMA que la de la versión 3
+     (24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122); el guion se habría detenido si no lo fuera.
+     Con el compilador 5 firmaría el paquete de prompts 2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0.
+  2. Enviada a revisión: estado REVIEW_REQUIRED («Con avisos · espera revisión»), con los dos avisos de siempre
+     (opcional-E14 y opcional-E16: los enlaces de pago y su resultado, apagados en producción).
+  3. Cuatro copias de E-001: E-002, E-003, E-004 y E-005, con los mismos turnos, hechos y criterios (el título lleva
+     «(copia N)»; el recorrido del motor solo lee los turnos y los hechos del escenario).
+  · CUATRO OJOS, INTACTOS: el servidor dice a la cuenta que la creó que no puede aprobarla, rechazarla ni publicarla. No
+    se ha aprobado nada, no se ha dado ningún veredicto y no se ha publicado nada: revisiones 4 → 4, veredictos 3 → 3,
+    publicaciones 5 → 5.
+  · PERMISOS, INTACTOS: las huellas de cuentas (id:rol:estado), de permisos por rol y de roles son idénticas antes y
+    después. La cuenta técnica estuvo activa menos de un minuto (de las 05:56:40 a las 05:57:36 UTC) y volvió a su
+    reposo: inactiva y sin sesiones.
+  · SIN GASTO Y SIN ENVÍOS: 0 ejecuciones del laboratorio hoy (US$ 0); la conversación canaria sigue en Legacy
+    (`compiler_changed`) y los clientes reales con el asesor anterior; 0 errores; en el estado general de producción solo
+    cambian los cuatro recuentos esperados (versiones, escenarios y sus dos trazas).
+  · TRAZA: la nota de la versión nombra la autorización; la auditoría del Studio y la del laboratorio registran las seis
+    escrituras con la cuenta 32 ([6]).
+
+[0] LA AUTORIZACIÓN (el propietario, en la conversación; 23-11-2026 hacia las 05:50 UTC, 12:50 a. m. en Bogotá; literal)
+    «Autorizo la opción A: crear la versión 4 de ULTRON Studio con la cuenta técnica.
+    Autorizo exclusivamente estas tres operaciones:
+    1. Crear la versión 4 con el mismo contenido aprobado de la versión 3.
+    2. Enviarla a revisión.
+    3. Crear las cuatro copias del escenario E-001 necesarias para obtener las 20 muestras del laboratorio.
+    Conserva la trazabilidad y los controles de cuatro ojos. No simules aprobaciones independientes ni cambies los permisos.
+    No publiques todavía la versión 4, no envíes WhatsApp y no despliegues las unidades 4 a 7.
+    Cuando esté preparada, guíame paso a paso desde el CRM para revisarla y ejecutar las cinco pruebas previstas,
+    respetando los límites de coste y frecuencia.»
+
+[1] 05:55 UTC · ANTES, EN SOLO LECTURA
+    hora: 2026-11-23 05:55:02 UTC
+    guion de la cuenta técnica (sha256): 78a09664db39c946e625885a4d949d2a70ba61014f25d35f0759b520661815ee
+    fichero de sesión en el servidor: no existe
+    cierres automáticos pendientes (procesos «sleep 1500»): 0
+    API que sirve producción: cabc4138
+    (el guion de la cuenta técnica es el del repositorio: ops/h8-lab-real/lab-tecnica-cuenta.sh, misma huella)
+
+    HORA: 2026-11-23 05:55:04 UTC
+    CUENTA TÉCNICA (32): Super Admin · inactive · sesiones vivas: 0
+    CUENTAS (id:rol:estado), huella: 3602f3da16ab340d188caabce1256102 · 15 cuentas
+    PERMISOS POR ROL, huella: da9c34829ece6f8033a191d04ec7b679 · 142 filas
+    ROLES, huella: 863e7450920c6620e5c12a295e2c97b3 · 10 roles
+    VERSIÓN · ad1f1562 · «ULTRON Studio - Canario V1 - Pruebas» · APPROVED · contenido d2361ab5 · borrador rev 1 · creada por la cuenta 27 (Super Admin) el 2026-11-09 18:53:17 UTC · enviada a revisión: 2026-11-09 18:53:50 UTC
+    VERSIÓN · 4017639c · «Prueba de aceptación · profesional 200» · ROLLED_BACK · contenido 24b29173 · borrador rev 6 · creada por la cuenta 32 (Super Admin) el 2026-11-11 19:17:22 UTC · enviada a revisión: 2026-11-11 19:17:29 UTC
+    VERSIÓN · 2e243853 · «Prueba de aceptación 2 · profesional 200» · ROLLED_BACK · contenido 24b29173 · borrador rev 6 · creada por la cuenta 32 (Super Admin) el 2026-11-13 16:52:18 UTC · enviada a revisión: 2026-11-13 16:52:27 UTC
+    VERSIÓN · 39cfae9f · «Prueba de aceptación 3 · profesional 200» · CANARY · contenido 24b29173 · borrador rev 6 · creada por la cuenta 32 (Super Admin) el 2026-11-22 03:35:15 UTC · enviada a revisión: 2026-11-22 03:35:33 UTC
+    REVISIONES DE VERSIONES: 4
+    VEREDICTOS DEL LABORATORIO: 3
+    PUBLICACIONES: 5 · cabeza: entrada 5
+    BORRADOR · cuenta 32 · revisión 6 · guardado 2026-11-11 19:17 UTC · huella del borrador 5920439b
+    BORRADOR · cuenta 27 · revisión 1 · guardado 2026-11-09 18:52 UTC · huella del borrador c1d5fff5
+    ESCENARIOS · catalog/active: 11
+    ESCENARIOS · studio/active: 1
+    ESCENARIO DEL PERSONAL · E-001 · rev 1 · active · precio · «Pregunta por los planes y la mensualidad» · huella 8bcc4729 · creado por la cuenta 27 el 2026-11-23 03:11:55 UTC
+    LABORATORIO · ejecuciones en total: 31 · del día 23-11 de Bogotá: 0 · gastado ese día US$ 0
+    FIN DE LA LECTURA (auditoría y eventos: solo los posteriores a las 05:50 UTC del 23-11)
+
+    Lo que saldría del borrador de la cuenta técnica (ops/comprobacion-produccion/sonda-borrador-y-versiones.php):
+        borrador de la cuenta 32 · revisión 6 · guardado 2026-11-11 19:17 UTC · huella de contenido que saldría: 24b29173 (IGUAL a la de la versión en canario) · paquete de prompts con el compilador de hoy: 2eb9be6f (IGUAL al de la versión en canario)
+    [3] reglas vivas del Studio: 12 · catálogo: 2026-10-19.1
+    transacción de solo lectura deshecha; no se ha escrito nada
+
+[2] 05:56:42 UTC · SE ABRE LA SESIÓN DE LA CUENTA TÉCNICA (ops/comprobacion-produccion/sesion-tecnica.sh abrir)
+    cuenta 32 activa como Super Admin
+    cierre automático programado en 25 min (pid 740420)
+    sesión guardada (600, sin imprimir) · cuenta 32 · Super Admin · 122 permisos · voice_lab_run · ultron.view
+    copia local de la sesión: -rw------- 2764 bytes (no se imprime) · 05:56:42 UTC
+
+[3] 05:57:03 UTC · CONDICIONES PREVIAS CON ESA SESIÓN (ops/version-4/preparar-version-4.cjs … leer; solo lectura)
+    Un primer intento, a las 05:56:42, se detuvo solo ANTES de escribir nada: el lector esperaba la lista de versiones
+    como una lista y el servidor la devuelve paginada. Corregido el lector (exige además que el total declarado quepa en
+    la página, para poder asegurar que la etiqueta estaba libre) y repetido:
+    ── LEER · 2026-11-23T05:57:03.423Z ──
+    [borrador de la cuenta técnica] existe: true · revisión 6 · guardado 2026-11-11T19:17:22+00:00 · catálogo 2026-10-19.1 · validación: {"publishable":true,"warnings":["opcional-E14","opcional-E16"]}
+    [versiones] 4 leídas · total que declara el servidor: 4
+    [versión] 39cfae9f · «Prueba de aceptación 3 · profesional 200» · CANARY · contenido 24b29173
+    [versión] 2e243853 · «Prueba de aceptación 2 · profesional 200» · ROLLED_BACK · contenido 24b29173
+    [versión] 4017639c · «Prueba de aceptación · profesional 200» · ROLLED_BACK · contenido 24b29173
+    [versión] ad1f1562 · «ULTRON Studio - Canario V1 - Pruebas» · APPROVED · contenido d2361ab5
+    [versión 3] «Prueba de aceptación 3 · profesional 200» · CANARY · contenido 24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122 · íntegra: true
+    [escenarios] 12 en total · del catálogo 11 · del personal 1
+    [E-001] 26e780ca-5757-4ca4-9726-1504e2d0c18c · rev 1 · active · precio · «Pregunta por los planes y la mensualidad» · huella 8bcc4729
+        descripción: null · hechos: {"paymentState":"none","handoffRequested":false}
+        turno (prospect): ¿Qué planes tienen y cuánto cuesta la mensualidad?
+        criterio (must; reglas []): Presentar la lista de planes con el precio de cada uno.
+    CONDICIONES PREVIAS: OK · se crearía «Prueba de aceptación 4 · profesional 200» desde la revisión 6 del borrador y 4 copias de E-001
+
+[4] 05:57:11 → 05:57:15 UTC · LAS TRES OPERACIONES (… escribir; salida entera, con las líneas largas cortadas)
+    ── ESCRIBIR · 2026-11-23T05:57:11.702Z ──
+    [1] CREADA → HTTP 201 · 640421de-6484-4ffa-9ae5-7799068f2f29 · «Prueba de aceptación 4 · profesional 200» · DRAFT · contenido 24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122 · íntegra: true
+        MISMO CONTENIDO QUE LA VERSIÓN 3: sí (24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122)
+    [2] ENVIADA A REVISIÓN → HTTP 200 · estado REVIEW_REQUIRED · avisos: ["opcional-E14","opcional-E16"]
+    [3] COPIA 2 → HTTP 201 · E-002 · c9158ed7-ac57-4d90-8412-69c1e030f273 · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 2)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [3] COPIA 3 → HTTP 201 · E-003 · ea6781d0-6e07-4b29-8588-fe1f4133226e · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 3)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [3] COPIA 4 → HTTP 201 · E-004 · 9b9c047e-71b9-4727-8869-f71a875e6d48 · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 4)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [3] COPIA 5 → HTTP 201 · E-005 · afaa092a-6b37-4164-b297-8ca5c2b0f7ed · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 5)» · mismos turnos, hechos y criterios que E-001: SÍ
+    ── LAS TRES OPERACIONES, HECHAS · relectura ──
+    [versión 4, releída] 640421de-6484-4ffa-9ae5-7799068f2f29 · «Prueba de aceptación 4 · profesional 200» · REVIEW_REQUIRED · contenido 24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122 · íntegra: true · avisos de su validación: ["opcional-E14","opcional-E16"]
+        lo que ESTA cuenta (la que la creó) puede hacer con ella: {"submit":{"allowed":false,"code":"invalid_transition","message":"Solo se envía una versión recién creada."},"approve":{"allowed":false,"code":"four_eyes","message":"Nadie aprueba ni rechaza lo que creó: tiene que revisarla otra persona."},"reject":{"allowed":false,"code":"four_eyes","message":"Nadie aprueba ni rechaza lo que creó: tiene que revisarla otra persona."},"publish":{"allowed":false,"code":"four_eyes_required","message":"Nadie publica lo que creó: tiene que publicarla otra persona."},"promote":{"allowed":false,"code":"four_eyes_required","me…
+    [vista previa de publicar la versión 4, vista por la cuenta que la creó] publicable: false
+        requisito status           → FALTA  · La versión está en «Con avisos · espera revisión»: solo se publica una aprobada.
+        requisito fourEyes         → FALTA  · Nadie publica lo que creó: tiene que publicarla otra persona.
+        requisito integrity        → cumple · {"ok":true}
+        requisito revalidation     → cumple · {"ok":true}
+        requisito labGate          → FALTA  · Sin veredicto del laboratorio sobre esta huella.
+        requisito engineCanary     → cumple · {"ok":true}
+        requisito brake            → cumple · {"ok":true}
+        requisito canaryFree       → FALTA  · Otra versión está en canario.
+        requisito window           → FALTA  · Fuera de la ventana de publicación (07:00–19:00, hora de Bogotá).
+        requisito keys             → FALTA  · {"studio":true,"engine":"canary"}
+        prompts que firmaría: {"key":"canary","base":"n8n-29de5119","compiler":5,"legacyBundleHash":"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902","bundleHash":"2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0","shortHash":"2eb9be6f","baseline":false,"bytes":120097,"changes":[{"param":"persona.tone","value":"profesional","roles":["composer","critic","composer_retry","critic_retry"],"patches":[{"role":"composer","operation":"insert_after_line","anchor":"COMO SUENAS:","text":"REGISTRO PUBLIC…
+        puerta del laboratorio: undefined
+    [escenario del personal] E-001 · 26e780ca-5757-4ca4-9726-1504e2d0c18c · rev 1 · active · «Pregunta por los planes y la mensualidad» · mismos turnos, hechos y criterios que E-001: SÍ
+    [escenario del personal] E-002 · c9158ed7-ac57-4d90-8412-69c1e030f273 · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 2)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [escenario del personal] E-003 · ea6781d0-6e07-4b29-8588-fe1f4133226e · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 3)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [escenario del personal] E-004 · 9b9c047e-71b9-4727-8869-f71a875e6d48 · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 4)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [escenario del personal] E-005 · afaa092a-6b37-4164-b297-8ca5c2b0f7ed · rev 1 · active · «Pregunta por los planes y la mensualidad (copia 5)» · mismos turnos, hechos y criterios que E-001: SÍ
+    [estimación · recorrido del motor · 5 casos de planes] {"mode":"openai","model":"gpt-4.1-mini","promptVersion":"motor-S2-c5-2026-11-22.1","cases":5,"estimate":{"expectedMicros":311604,"maxMicros":332804},"budget":{"day":"2026-11-23","dailyCapMicros":2000000,"committedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20},"allowed":true,"refusal":null,"excludedRules":[],"fidelityMode":"engine","fidelity":"Recorrido del motor: los cinco prompts compilados de la versión, el modelo y los parámetros de los nodos del flujo S2 de n8n, la comprobación del servidor y hasta dos reescrit…
+    [estimación · simulación del Studio · 11 escenarios del catálogo] {"mode":"openai","model":"gpt-4.1-mini","promptVersion":"2026-11-12.6","cases":11,"estimate":{"expectedMicros":48309,"maxMicros":69429},"budget":{"day":"2026-11-23","dailyCapMicros":2000000,"committedMicros":0,"remainingMicros":2000000,"runCapMicros":500000,"runsToday":0,"maxRunsPerDay":20},"allowed":true,"refusal":null,"excludedRules":[]}
+    [laboratorio] HTTP 200 · {"enabled":true,"mode":"openai","configured":true,"reasons":[],"model":"gpt-4.1-mini","promptVersion":"2026-11-12.6","catalog":{"version":"2026-10-20.1","scenariosImported":11},"fidelity":"Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.","budget":{"timezone":"America/Bogota","day":"2026-…
+
+    Notas de lectura:
+    · «requisito keys → FALTA» es un artefacto del lector: esa entrada no trae un sí o un no, solo informa de que la llave
+      del Studio está encendida y el alcance del motor es `canary`. Lo que de verdad le falta a la versión 4 para poder
+      publicarse es lo esperado: estar aprobada, que publique otra persona, el veredicto del laboratorio, que la versión 3
+      deje el canario y la ventana de 07:00 a 19:00 de Bogotá.
+    · Las dos estimaciones son las que verá el propietario al pulsar «Estimar el coste» (no escriben ni gastan):
+      recorrido del motor con los 5 casos de planes, US$ 0,3116 esperados y US$ 0,3328 como mucho; simulación con los
+      11 escenarios del catálogo, US$ 0,0483 esperados y US$ 0,0694 como mucho. Cuatro del motor y una simulación:
+      US$ 1,4006 como mucho, dentro de los US$ 2,00 del día; cada una, dentro de los US$ 0,50 por ejecución.
+
+[5] 05:57:36 UTC · SE CIERRA LA SESIÓN (… sesion-tecnica.sh cerrar)
+    cuenta 32 en reposo: inactiva, sesiones borradas: 1
+    la sesión ya no vale → 403
+    fichero de sesión borrado
+    copia local borrada: sí · 05:57:36 UTC
+    hora: 2026-11-23 05:57:37 UTC
+    guion de la cuenta técnica (sha256): 78a09664db39c946e625885a4d949d2a70ba61014f25d35f0759b520661815ee
+    fichero de sesión en el servidor: no existe
+    cierres automáticos pendientes (procesos «sleep 1500»): 1
+        pid 740422 · padre 1 · 57 s en marcha
+    API que sirve producción: cabc4138
+    Ese «sleep 1500» era el resto del cierre automático (su proceso padre ya había terminado: no habría hecho nada).
+    Se comprobó que era exactamente eso (padre 1, orden «sleep 1500») y se retiró; después, ninguno.
+
+[6] 05:57:58 UTC · DESPUÉS: LO ÚNICO QUE CAMBIA FRENTE A [1] (misma lectura; todo lo demás, idéntico)
+    DESPUÉS VERSIÓN · 640421de · «Prueba de aceptación 4 · profesional 200» · REVIEW_REQUIRED · contenido 24b29173 · borrador rev 6 · creada por la cuenta 32 (Super Admin) el 2026-11-23 05:57:13 UTC · enviada a revisión: 2026-11-23 05:57:13 UTC
+    ANTES   ESCENARIOS · studio/active: 1
+    DESPUÉS ESCENARIOS · studio/active: 5
+    DESPUÉS ESCENARIO DEL PERSONAL · E-002 · rev 1 · active · precio · «Pregunta por los planes y la mensualidad (copia 2)» · huella 8265d1e1 · creado por la cuenta 32 el 2026-11-23 05:57:13 UTC
+    DESPUÉS ESCENARIO DEL PERSONAL · E-003 · rev 1 · active · precio · «Pregunta por los planes y la mensualidad (copia 3)» · huella 671a8a00 · creado por la cuenta 32 el 2026-11-23 05:57:13 UTC
+    DESPUÉS ESCENARIO DEL PERSONAL · E-004 · rev 1 · active · precio · «Pregunta por los planes y la mensualidad (copia 4)» · huella 43b9ebd1 · creado por la cuenta 32 el 2026-11-23 05:57:13 UTC
+    DESPUÉS ESCENARIO DEL PERSONAL · E-005 · rev 1 · active · precio · «Pregunta por los planes y la mensualidad (copia 5)» · huella caae6974 · creado por la cuenta 32 el 2026-11-23 05:57:14 UTC
+    DESPUÉS AUDITORÍA DEL STUDIO · 2026-11-23 05:57:13 UTC · version.created · version 640421de · cuenta 32 (Super Admin) · - → DRAFT · contenido 24b29173
+    DESPUÉS AUDITORÍA DEL STUDIO · 2026-11-23 05:57:13 UTC · version.submitted · version 640421de · cuenta 32 (Super Admin) · DRAFT → REVIEW_REQUIRED · contenido 24b29173
+    DESPUÉS EVENTO DEL LABORATORIO · 2026-11-23 05:57:13 UTC · scenario.created · scenario c9158ed7 · cuenta 32 (Super Admin) · - → active
+    DESPUÉS EVENTO DEL LABORATORIO · 2026-11-23 05:57:13 UTC · scenario.created · scenario ea6781d0 · cuenta 32 (Super Admin) · - → active
+    DESPUÉS EVENTO DEL LABORATORIO · 2026-11-23 05:57:13 UTC · scenario.created · scenario 9b9c047e · cuenta 32 (Super Admin) · - → active
+    DESPUÉS EVENTO DEL LABORATORIO · 2026-11-23 05:57:14 UTC · scenario.created · scenario afaa092a · cuenta 32 (Super Admin) · - → active
+
+    Sin cambios (literal del después):
+    CUENTA TÉCNICA (32): Super Admin · inactive · sesiones vivas: 0
+    CUENTAS (id:rol:estado), huella: 3602f3da16ab340d188caabce1256102 · 15 cuentas
+    PERMISOS POR ROL, huella: da9c34829ece6f8033a191d04ec7b679 · 142 filas
+    ROLES, huella: 863e7450920c6620e5c12a295e2c97b3 · 10 roles
+    REVISIONES DE VERSIONES: 4
+    VEREDICTOS DEL LABORATORIO: 3
+    PUBLICACIONES: 5 · cabeza: entrada 5
+    LABORATORIO · ejecuciones en total: 31 · del día 23-11 de Bogotá: 0 · gastado ese día US$ 0
+
+[7] 05:58 UTC · EL MOTOR Y PRODUCCIÓN, DESPUÉS (solo lectura)
+    [1] compilador desplegado: 5 · versión «Prueba de aceptación 3 · profesional 200» (CANARY) · huella del paquete que compila hoy: 2eb9be6f5d3e6b50
+    [2] llave de prompts: canary · lo que decide ofrecería ahora:
+        a la conversación CANARIA .................. legacy · versión - · huella - · motivo compiler_changed
+        a un cliente real (la conversación con actividad más reciente que no es la canaria) ... legacy · versión - · huella - · motivo out_of_scope
+        a una conversación que no existe ........... legacy · versión - · huella - · motivo out_of_scope
+    [3] publicaciones del Studio: 5 · cabeza: entrada 5 (publish, 2026-11-22 13:58:15 UTC)
+        versiones por estado: APPROVED=1 · CANARY=1 · REVIEW_REQUIRED=1 · ROLLED_BACK=2
+    transacción de solo lectura deshecha; no se ha escrito nada
+      sirve: cabc4138f13cc398651b110d20a63ca42f17249a · cambios con seguimiento: 0 · sin seguimiento: 89
+      workers por estado:  14 RUNNING
+      production.ERROR desde 2026-11-23 05:17:07 UTC: 0 · 5xx: 0 · 429: 0
+      failed_jobs desde 2026-11-23 05:17:07 UTC: 0 · en total: 2
+      trabajos en espera por cola: ninguno
+      ultron-studio:publication-check → salida 0
+    Frente a la lectura anterior a la operación, en el estado general solo cambian cuatro recuentos:
+      ultron_studio_versions 4 → 5 · ultron_studio_lab_scenarios 12 → 16 · ultron_studio_audit_events 58 → 60 ·
+      ultron_studio_lab_events 78 → 82.
+
+[8] LO QUE NO SE HIZO (y sigue siendo de una persona distinta de la cuenta que la creó)
+    · Aprobar la versión 4, dar el veredicto del laboratorio y publicarla: del propietario (o de otra persona con la
+      llave), nunca de la cuenta técnica.
+    · Lanzar ejecuciones del laboratorio: las cinco previstas las lanza el propietario desde el CRM.
+    · Publicar, revertir la versión 3, enviar WhatsApp, desplegar las unidades 4 a 7: nada de eso.
+
+[9] CÓMO SE DESHACE
+    Una versión en revisión no gobierna nada: basta con no aprobarla (o rechazarla desde el CRM). Las copias de un
+    escenario se archivan desde «Laboratorio» → «Escenarios». No hay nada que revertir en el servidor.
