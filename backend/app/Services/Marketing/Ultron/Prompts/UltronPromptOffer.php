@@ -95,7 +95,7 @@ final class UltronPromptOffer
      * La oferta para esta conversación: lo que va en la respuesta de `decide`
      * (`studio_prompts`) y lo que va firmado en el token (`x.sp`). Nunca lanza.
      *
-     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int,t?:string,o?:int}}
+     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int,t?:string,o?:int,k?:int}}
      */
     public function forConversation(int $conversationId): array
     {
@@ -221,8 +221,21 @@ final class UltronPromptOffer
          * `{{PLAN_k}}`. Una versión con todos los valores por defecto no lo lleva
          * (sigue como hoy). Solo aquí, en `sp`: la respuesta a n8n no cambia.
          */
+        /*
+         * Y EL COMPILADOR DEL PAQUETE, FIRMADO PARA EL COMMIT (Enmienda A4-6
+         * del H5, PT-17b; regla «tope de lista» del propietario), con la misma
+         * pauta: `k` = la versión del compilador con la que se compiló lo que
+         * se ofrece (la firmada al publicar, que el paso 5 exige igual a la del
+         * código), solo si lleva el parche del motor (sin él no hay lista). El
+         * tope de la lista de planes
+         * ({@see \App\Services\Marketing\Ultron\UltronReplyFitter::plansListCap()})
+         * solo vale con `k` ≥ 6: un token de antes del despliegue no lo trae y
+         * su turno se mide como hoy. Solo aquí, en `sp`: la respuesta a n8n no
+         * cambia.
+         */
         if (in_array(UltronPromptCompiler::ENGINE, array_column($paquete['patches'], 'parameter'), true)) {
             $sp['o'] = 1;
+            $sp['k'] = UltronPromptCompiler::VERSION;
         }
 
         return ['response' => $respuesta, 'sp' => $sp];
@@ -269,8 +282,9 @@ final class UltronPromptOffer
      * Lo que viaja firmado en el token (`x.sp`), con claves cortas: modo,
      * motivo, huella del paquete, versión, huella de contenido, entrada y seq.
      * En `studio`, `offer()` añade `n` (el tope publicado) y `t` (el tono
-     * publicado) si no son los de la línea base, y `o` (= 1) si el paquete
-     * lleva el parche del motor de la lista de planes; Legacy nunca los lleva.
+     * publicado) si no son los de la línea base, `o` (= 1) si el paquete
+     * lleva el parche del motor de la lista de planes y, con él, `k` (la
+     * versión del compilador, desde el 6); Legacy nunca los lleva.
      *
      * @param  array<string,mixed>  $respuesta
      * @return array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int}

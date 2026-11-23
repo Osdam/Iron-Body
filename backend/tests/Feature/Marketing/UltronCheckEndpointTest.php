@@ -103,7 +103,13 @@ class UltronCheckEndpointTest extends TestCase
     /** La lista de usted, larga: sin expandir cabe en 200; expandida, no. */
     private const LARGO = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad. ¿Cuál le interesa más?';
 
-    private const LARGO_EXPANDIDO = 'Claro. Tenemos Plan Valera ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad. ¿Cuál le interesa más?';
+    /**
+     * PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): con la lista, el tope aplicable es 320.
+     * Esta lista, sin expandir, cabe en 320 (298); expandida, no (339).
+     */
+    private const LARGO_320 = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad, sin prisa y con toda la información que necesite antes de decidir, para que empiece con buen pie. ¿Cuál le interesa más?';
+
+    private const LARGO_320_EXPANDIDO = 'Claro. Tenemos Plan Valera ($65.000 COP), Plan Mensual ($80.000 COP) y Élite ($180.000 COP), todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad, sin prisa y con toda la información que necesite antes de decidir, para que empiece con buen pie. ¿Cuál le interesa más?';
 
     /** La respuesta de la puerta, en su orden (§4.1): la lista blanca de claves. */
     private const CLAVES = ['ok', 'contract', 'mode', 'attempt', 'pass', 'defects', 'issues', 'notes', 'may_rewrite', 'rewrite', 'budget'];
@@ -130,7 +136,10 @@ class UltronCheckEndpointTest extends TestCase
 
     private const N_R_TE = 'REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia.';
 
-    private const N_L = 'DEMASIADO LARGO: mide %d caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.';
+    /** PT-17b: las mismas notas con las cifras del tope de la lista (320 y su objetivo, 250; quedan 250 − 71 = 179). */
+    private const N_P2_LISTA = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 179 de 250.';
+
+    private const N_L_LISTA = 'DEMASIADO LARGO: mide %d caracteres y el limite publicado es 320. Reescribelo en unos 250: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 179. Si no caben, dos planes; una pregunta corta o ninguna.';
 
     private const N_B = 'BENEFICIO DE OTRO PLAN: el borrador atribuye a PLAN_1 un beneficio que en active_plans es de otro plan ("Entrenador personal dedicado"). A cada plan, solo los benefits de su plan_id.';
 
@@ -192,13 +201,18 @@ class UltronCheckEndpointTest extends TestCase
 
     public function test_un_borrador_que_tutea_y_se_pasa_pide_reescritura_con_sus_notas(): void
     {
+        // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba tuteo + longitud con la lista de 241 contra 200; esa lista cabe en el tope aplicable (320) y ahora solo da el tuteo, y tuteo + longitud se afirman con una lista de 339.
         [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
         Carbon::setTestNow(Carbon::parse('2026-11-18 22:47:09', 'UTC'));
-        $borrador = str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO);
+        $cabe = $this->check($m, $token, str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO))->assertOk();
+        $this->assertSame([['code' => 'register_tuteo', 'detail' => null, 'issue' => 'naturalness']], $cabe->json('defects'));
+        $this->assertSame([self::N_R_TE, true], [$cabe->json('notes'), $cabe->json('rewrite')]);
+
+        $borrador = str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO_320);
 
         $r = $this->check($m, $token, $borrador)->assertOk();
 
-        $largo = UltronReplyFitter::measure(str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO_EXPANDIDO));
+        $largo = UltronReplyFitter::measure(str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO_320_EXPANDIDO));
         $this->assertSame([
             'ok' => true,
             'contract' => 'ultron-regen/1',
@@ -210,12 +224,12 @@ class UltronCheckEndpointTest extends TestCase
                 ['code' => 'length_over_cap', 'detail' => null, 'issue' => 'progressive_disclosure'],
             ],
             'issues' => ['naturalness', 'progressive_disclosure'],
-            'notes' => self::N_R_TE.' '.sprintf(self::N_L, $largo),
+            'notes' => self::N_R_TE.' '.sprintf(self::N_L_LISTA, $largo),
             'may_rewrite' => true,
             'rewrite' => true,
             'budget' => ['max_drafts' => 3, 'elapsed_s' => 9, 'reason' => null],
         ], $r->json());
-        $this->assertGreaterThan(200, $largo);
+        $this->assertGreaterThan(320, $largo);
     }
 
     public function test_el_tercer_borrador_no_tiene_presupuesto(): void
@@ -355,7 +369,8 @@ class UltronCheckEndpointTest extends TestCase
         return [
             'tuteo' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, self::TRES_DE_TU, null, [['register_tuteo', null, 'naturalness']], self::N_R_TE],
             'falta la lista' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [['plans_overview', 'missing', 'relevance']], self::N_P1],
-            'mezcla' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde {{PLAN_PRICE}}. ¿Cuál le interesa?', 3, [['plans_overview', 'mixed', 'relevance']], self::N_P2],
+            // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba «quedan 89 de 160»; con dos marcadores de la lista, las cifras del tope de lista («quedan 179 de 250»).
+            'mezcla' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde {{PLAN_PRICE}}. ¿Cuál le interesa?', 3, [['plans_overview', 'mixed', 'relevance']], self::N_P2_LISTA],
             'repetido' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y otra vez {{PLAN_1}}. ¿Cuál le interesa?', null, [['plans_overview', 'mixed', 'relevance']], self::N_P2],
             'nombre a mano' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos el Plan Valera {{PLAN_1}} y {{PLAN_2}}. ¿Cuál le interesa?', null, [['plans_overview', 'name_written', 'relevance']], self::N_P3],
             'marcador inexistente' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [['plans_overview', 'unknown_marker', 'relevance']], self::N_P4_K3],
@@ -381,13 +396,14 @@ class UltronCheckEndpointTest extends TestCase
 
     public function test_la_longitud_se_mide_expandida_con_su_nota_literal(): void
     {
+        // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba length_over_cap para la lista de 228 contra 200; con la lista el tope aplicable es 320, así que el borrador es uno que sin expandir cabe en 320 y expandido no, con la nota de 320.
         [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
-        $this->assertLessThanOrEqual(200, mb_strlen(self::LARGO), 'sin expandir cabría');
+        $this->assertLessThanOrEqual(320, mb_strlen(self::LARGO_320), 'sin expandir cabría');
 
-        $r = $this->check($m, $token, self::LARGO)->assertOk();
+        $r = $this->check($m, $token, self::LARGO_320)->assertOk();
 
         $this->assertSame([['code' => 'length_over_cap', 'detail' => null, 'issue' => 'progressive_disclosure']], $r->json('defects'));
-        $this->assertSame(sprintf(self::N_L, UltronReplyFitter::measure(self::LARGO_EXPANDIDO)), $r->json('notes'));
+        $this->assertSame(sprintf(self::N_L_LISTA, UltronReplyFitter::measure(self::LARGO_320_EXPANDIDO)), $r->json('notes'));
     }
 
     public function test_el_beneficio_de_otro_plan_con_su_nota_literal(): void

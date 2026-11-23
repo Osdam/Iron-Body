@@ -275,7 +275,8 @@ final class StudioPromptBundle
      *    regla que `UltronPromptOffer::offer()` (pasos 8 y siguientes): modo
      *    `studio`, sin motivo, la huella, la versión y su huella de contenido;
      *    `n` y `t` solo si no son los de la línea base, y `o = 1` si el paquete
-     *    lleva el parche del motor de la lista de planes. `e` y `s` (la
+     *    lleva el parche del motor de la lista de planes, con `k`, la versión
+     *    del compilador (Enmienda A4-6). `e` y `s` (la
      *    entrada y el `seq` de la cadena) van null: lo que se prueba aún no
      *    está publicado.
      *
@@ -315,6 +316,8 @@ final class StudioPromptBundle
         }
         if (in_array(UltronPromptCompiler::ENGINE, array_column($c['patches'], 'parameter'), true)) {
             $sp['o'] = 1;
+            // Y el compilador del paquete (Enmienda A4-6): con él, el tope de la lista de planes, como en la oferta.
+            $sp['k'] = $c['compiler'];
         }
 
         return ['roles' => $c['roles'], 'bundleHash' => $c['bundleHash'], 'sp' => $sp];

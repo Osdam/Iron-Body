@@ -24,15 +24,25 @@ use PHPUnit\Framework\TestCase;
  * «Compilador 5»): el parche del motor pasa de cuatro entradas a once (la
  * inserción y la sustitución del Strategist, el texto nuevo del redactor tras
  * `FORMA:`, tres sustituciones en Composer y dos en su reintento, y los dos
- * Critic como en el 4). Lo que se fija abajo es ya el del 5.
+ * Critic como en el 4).
+ *
+ * COMPILADOR 6 (Enmienda A4-6 del H5; PT-17b, `diseno-arq-pt17b-planes-c6.md`
+ * con el anexo del propietario; §B.3, «Compilador 6»): quince entradas. En los
+ * redactores, la sustitución de la frase de `suggested_question`, la del
+ * precio con texto nuevo y la GUÍA de la lista tras su ÚLTIMA línea (queda la
+ * última del prompt), con la L y la W de su tope ({@see self::guia()}); en los
+ * Critic, dos inserciones tras su última línea: la frase de lo que comprueba
+ * el backend y el bloque de la lista, la última. Lo que se fija abajo es ya el
+ * del 6.
  *
  * Lo que se fija:
  *  1. La línea base: sin parches y con la huella Legacy, escrita a mano.
  *  2. Con CUALQUIER valor no base (los 305 de la rejilla y con frases): los
- *     once parches del motor, los últimos, con sus textos de §B.3 («Compilador
- *     5») copiados a mano, en anclas únicas; las inserciones pegadas a su
- *     ancla y las sustituciones en lugar de su frase; ≤ 1 200 B; cada rol
- *     ≤ 40 960 y el paquete ≤ 163 840.
+ *     quince parches del motor, los últimos, con sus textos de §B.3
+ *     («Compilador 5» y «Compilador 6») copiados a mano, en anclas únicas; las
+ *     inserciones pegadas a su ancla (las del redactor y el revisor, al final
+ *     del prompt) y las sustituciones en lugar de su frase; ≤ 1 200 B; cada
+ *     rol ≤ 40 960 y el paquete ≤ 163 840.
  *  3. El peor caso (tono, sin emojis, tope, objetivo y 12 frases de 60
  *     caracteres de 2 bytes) cabe, con sus bytes al byte.
  *  4. La vista previa del Studio NO enseña el parche del motor (no es un
@@ -40,36 +50,55 @@ use PHPUnit\Framework\TestCase;
  */
 class UltronPromptEnginePatchTest extends TestCase
 {
-    /** §B.3, «Compilador 5» (§Textos del diseño de PT-17), copiados a mano. El del redactor sustituye al de §7.1. */
+    /** §B.3, «Compilador 5» (el Strategist, el marcador y «Elige el plan…») y «Compilador 6» (los demás), copiados a mano. */
     private const PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
 
     private const PLANS_STRATEGIST_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
-    private const PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. En ese turno esto manda sobre todo este prompt (las reglas de precios y marcadores, recomendar un solo plan con su PORQUE, resolved_reference y suggested_question) y sobre la estrategia si habla de un solo plan: la respuesta es esa lista, en una frase. Nombra los planes en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales, seguido de dos o tres palabras de uno de los benefits que trae ese marcador en plans_overview.plans. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Fuera de los marcadores, unas 15 palabras en todo el mensaje: un arranque corto, los beneficios y, como mucho, una pregunta corta para elegir (sobre cual amplio la informacion); nunca su experiencia ni su objetivo. Con un tope publicado de menos de 200 caracteres, solo PLAN_1 y PLAN_2. Si plans_overview no viene, nada de esto aplica.';
+    private const PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de {L} caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas {W} palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.';
+
+    private const PLANS_SUGERIDA = 'Si vas a preguntar, usa suggested_question cuando venga, nunca si commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND):';
 
     private const PLANS_MARCADOR = 'Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
 
     private const PLANS_ELIGE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).';
 
-    private const PLANS_PRECIO = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, el de cada plan de esa lista con su marcador.';
+    private const PLANS_PRECIO = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: los pone el marcador de cada plan (LISTA DE PLANES DEL BACKEND).';
 
-    private const PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.';
+    private const PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.';
+
+    private const PLANS_CRITIC_COMPRUEBA = 'REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.';
 
     /** La huella Legacy, escrita a mano (la de `UltronPromptBase::LEGACY_BUNDLE_HASH`). */
     private const LEGACY = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902';
 
-    /** Las anclas de las inserciones del parche del motor (`grep -c` en la base: una vez en cada rol) y el texto que queda pegado a cada una. */
-    private const ANCLAS = ['strategist' => ['QUE PLAN SE COTIZA', self::PLANS_STRATEGIST], 'composer' => ['FORMA:', self::PLANS_COMPOSER], 'composer_retry' => ['FORMA:', self::PLANS_COMPOSER], 'critic' => ['progressive_disclosure:', self::PLANS_CRITIC], 'critic_retry' => ['progressive_disclosure:', self::PLANS_CRITIC]];
+    /**
+     * Las anclas de las inserciones del parche del motor (`grep -c` en la base: una vez en cada rol) y lo que
+     * queda pegado a cada una, en orden. Compilador 6: las del redactor y el revisor son su ÚLTIMA línea, así
+     * que lo pegado es lo último del prompt; la del redactor, la guía con el tope de cada caso (`{L}`/`{W}`).
+     */
+    private const ANCLAS = ['strategist' => ['QUE PLAN SE COTIZA', [self::PLANS_STRATEGIST]], 'composer' => ['price_verification true significa', [self::PLANS_COMPOSER]], 'composer_retry' => ['price_verification true significa', [self::PLANS_COMPOSER]], 'critic' => ['Si el borrador explica POR QUE la persona vio otro precio', [self::PLANS_CRITIC_COMPRUEBA, self::PLANS_CRITIC]], 'critic_retry' => ['Si el borrador explica POR QUE la persona vio otro precio', [self::PLANS_CRITIC_COMPRUEBA, self::PLANS_CRITIC]]];
+
+    /** Las quince anclas del compilador 6 (ningún texto de parche contiene ninguna). */
+    private const TODAS_LAS_ANCLAS = ['COMO SUENAS:', 'FORMA:', 'Emoji opcional y raro, nunca en temas sensibles.', 'naturalness:', 'progressive_disclosure:', 'mas de ~900 caracteres', 'PRINCIPIO:', 'QUE PLAN SE COTIZA', 'Presentalo con dos o tres beneficios reales, nunca con adjetivos.', 'Cualquier otro marcador hace que el mensaje se rechace.', 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues.', 'el precio solo del que se cotiza.', 'Si vas a preguntar, usa suggested_question cuando venga:', 'price_verification true significa', 'Si el borrador explica POR QUE la persona vio otro precio'];
 
     /** Las sustituciones del parche del motor: rol → [frase de la base, su sustituto]. */
     private const SUSTITUCIONES = [
         'strategist' => [['Presentalo con dos o tres beneficios reales, nunca con adjetivos.', self::PLANS_STRATEGIST_PRESENTALO]],
-        'composer' => [['Cualquier otro marcador hace que el mensaje se rechace.', self::PLANS_MARCADOR], ['Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues.', self::PLANS_ELIGE], ['el precio solo del que se cotiza.', self::PLANS_PRECIO]],
-        'composer_retry' => [['Cualquier otro marcador hace que el mensaje se rechace.', self::PLANS_MARCADOR], ['el precio solo del que se cotiza.', self::PLANS_PRECIO]],
+        'composer' => [['Si vas a preguntar, usa suggested_question cuando venga:', self::PLANS_SUGERIDA], ['Cualquier otro marcador hace que el mensaje se rechace.', self::PLANS_MARCADOR], ['Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues.', self::PLANS_ELIGE], ['el precio solo del que se cotiza.', self::PLANS_PRECIO]],
+        'composer_retry' => [['Si vas a preguntar, usa suggested_question cuando venga:', self::PLANS_SUGERIDA], ['Cualquier otro marcador hace que el mensaje se rechace.', self::PLANS_MARCADOR], ['el precio solo del que se cotiza.', self::PLANS_PRECIO]],
     ];
 
-    /** Las once entradas del parche del motor, en su orden, como las enumera `patches()`. */
-    private static function motor(): array
+    /** La guía del redactor con el tope de la lista de N, con las fórmulas de §B.3 («Compilador 6») a mano: L = max(N, 320), W = intdiv(L − 110, 30) · 5. */
+    private static function guia(int $n): string
+    {
+        $l = max($n, 320);
+
+        return str_replace(['{L}', '{W}'], [(string) $l, (string) (intdiv($l - 110, 30) * 5)], self::PLANS_COMPOSER);
+    }
+
+    /** Las quince entradas del parche del motor para un tope N, en su orden, como las enumera `patches()`. */
+    private static function motor(int $n): array
     {
         $m = static fn (string $rol, string $op, string $ancla, string $texto): array => ['parameter' => C::ENGINE, 'value' => true, 'role' => $rol, 'operation' => $op, 'anchor' => $ancla, 'text' => $texto];
         $s = self::SUSTITUCIONES;
@@ -77,15 +106,19 @@ class UltronPromptEnginePatchTest extends TestCase
         return [
             $m('strategist', C::INSERT_AFTER_LINE, 'QUE PLAN SE COTIZA', self::PLANS_STRATEGIST),
             $m('strategist', C::REPLACE, $s['strategist'][0][0], $s['strategist'][0][1]),
-            $m('composer', C::INSERT_AFTER_LINE, 'FORMA:', self::PLANS_COMPOSER),
             $m('composer', C::REPLACE, $s['composer'][0][0], $s['composer'][0][1]),
             $m('composer', C::REPLACE, $s['composer'][1][0], $s['composer'][1][1]),
             $m('composer', C::REPLACE, $s['composer'][2][0], $s['composer'][2][1]),
-            $m('composer_retry', C::INSERT_AFTER_LINE, 'FORMA:', self::PLANS_COMPOSER),
+            $m('composer', C::REPLACE, $s['composer'][3][0], $s['composer'][3][1]),
+            $m('composer', C::INSERT_AFTER_LINE, 'price_verification true significa', self::guia($n)),
             $m('composer_retry', C::REPLACE, $s['composer_retry'][0][0], $s['composer_retry'][0][1]),
             $m('composer_retry', C::REPLACE, $s['composer_retry'][1][0], $s['composer_retry'][1][1]),
-            $m('critic', C::INSERT_AFTER_LINE, 'progressive_disclosure:', self::PLANS_CRITIC),
-            $m('critic_retry', C::INSERT_AFTER_LINE, 'progressive_disclosure:', self::PLANS_CRITIC),
+            $m('composer_retry', C::REPLACE, $s['composer_retry'][2][0], $s['composer_retry'][2][1]),
+            $m('composer_retry', C::INSERT_AFTER_LINE, 'price_verification true significa', self::guia($n)),
+            $m('critic', C::INSERT_AFTER_LINE, 'Si el borrador explica POR QUE la persona vio otro precio', self::PLANS_CRITIC),
+            $m('critic', C::INSERT_AFTER_LINE, 'Si el borrador explica POR QUE la persona vio otro precio', self::PLANS_CRITIC_COMPRUEBA),
+            $m('critic_retry', C::INSERT_AFTER_LINE, 'Si el borrador explica POR QUE la persona vio otro precio', self::PLANS_CRITIC),
+            $m('critic_retry', C::INSERT_AFTER_LINE, 'Si el borrador explica POR QUE la persona vio otro precio', self::PLANS_CRITIC_COMPRUEBA),
         ];
     }
 
@@ -118,12 +151,12 @@ class UltronPromptEnginePatchTest extends TestCase
         $this->assertSame([], C::patches(C::BASELINE));
         $this->assertSame([], C::changedRoles(C::BASELINE));
         $this->assertTrue(C::isBaseline(C::BASELINE));
-        $this->assertSame(5, C::VERSION, 'el 4 llegó a la v3 publicada: cambiar el parche del motor obliga a subirla (Enmienda A4-5)');
+        $this->assertSame(6, C::VERSION, 'el 4 llegó a la v3 publicada: cambiar el parche del motor obliga a subirla (Enmienda A4-5 y, otra vez, A4-6)');
         $this->assertSame('engine.plansOverview', C::ENGINE);
         $this->assertNotContains(C::ENGINE, C::PARAMETERS, 'el del motor no es un parámetro gobernado');
     }
 
-    public function test_con_cualquier_valor_no_base_los_once_parches_del_motor_al_final(): void
+    public function test_con_cualquier_valor_no_base_los_quince_parches_del_motor_al_final(): void
     {
         $casos = self::noBase();
         $this->assertCount(305, $casos);
@@ -134,20 +167,27 @@ class UltronPromptEnginePatchTest extends TestCase
         foreach ($casos as $g) {
             $p = C::patches($g);
             $nombre = json_encode($g);
-            $this->assertSame(self::motor(), array_slice($p, -11), $nombre);
-            $this->assertCount(11, array_filter($p, fn (array $x) => $x['parameter'] === C::ENGINE), 'las once, una vez: '.$nombre);
-            $this->assertNotSame([], array_filter(array_slice($p, 0, -11), fn (array $x) => in_array($x['parameter'], C::PARAMETERS, true)), 'hay algún parche gobernado delante');
+            $this->assertSame(self::motor($g[C::MAX_CHARS]), array_slice($p, -15), $nombre);
+            $this->assertCount(15, array_filter($p, fn (array $x) => $x['parameter'] === C::ENGINE), 'las quince, una vez: '.$nombre);
+            $this->assertNotSame([], array_filter(array_slice($p, 0, -15), fn (array $x) => in_array($x['parameter'], C::PARAMETERS, true)), 'hay algún parche gobernado delante');
 
             $c = C::compile($g);
             $this->assertSame($p, $c['patches']);
-            foreach (self::ANCLAS as $rol => [$ancla, $texto]) {
+            foreach (self::ANCLAS as $rol => [$ancla, $textos]) {
+                $textos = array_map(fn (string $t): string => $t === self::PLANS_COMPOSER ? self::guia($g[C::MAX_CHARS]) : $t, $textos);
                 $this->assertSame(1, substr_count($base[$rol], $ancla), "{$rol}: el ancla, una vez en la base");
                 $this->assertSame(1, substr_count($c['roles'][$rol], $ancla), "{$rol}: y una vez en lo compilado");
-                // Aplicado el último de su ancla, queda pegado a ella: la línea siguiente a la del ancla.
+                // Aplicados los últimos de su ancla, quedan pegados a ella, en su orden: las líneas siguientes a la del ancla.
                 $lineas = explode("\n", $c['roles'][$rol]);
                 $i = array_key_first(array_filter($lineas, fn (string $l) => str_contains($l, $ancla)));
-                $this->assertSame($texto, $lineas[$i + 1], "{$rol}: {$nombre}");
-                $this->assertSame(1, substr_count($c['roles'][$rol], $texto), "{$rol}: una vez");
+                $this->assertSame($textos, array_slice($lineas, $i + 1, count($textos)), "{$rol}: {$nombre}");
+                if ($rol !== 'strategist') {
+                    // Compilador 6: el ancla es la última línea de la base, así que lo del motor es lo último del prompt.
+                    $this->assertSame(count($lineas) - 1 - count($textos), $i, "{$rol}: el motor, al final del prompt · {$nombre}");
+                }
+                foreach ($textos as $texto) {
+                    $this->assertSame(1, substr_count($c['roles'][$rol], $texto), "{$rol}: una vez");
+                }
                 $this->assertLessThanOrEqual(C::MAX_ROLE_BYTES, strlen($c['roles'][$rol]));
             }
             // Las sustituidas: una vez en la base, ninguna en lo compilado, y su sustituto una vez.
@@ -157,42 +197,46 @@ class UltronPromptEnginePatchTest extends TestCase
                 }
             }
             $this->assertLessThanOrEqual(C::MAX_BUNDLE_BYTES, $c['bytes']);
-            $this->assertSame(Base::ROLES, C::changedRoles($g), 'compilador 5: el motor toca los cinco roles');
+            $this->assertSame(Base::ROLES, C::changedRoles($g), 'desde el compilador 5: el motor toca los cinco roles');
             $this->assertFalse(C::isBaseline($g));
         }
     }
 
     public function test_los_textos_del_motor_al_byte_y_en_su_forma(): void
     {
-        $this->assertSame([784, 158, 1165, 165, 220, 135, 451], array_map('strlen', [self::PLANS_STRATEGIST, self::PLANS_STRATEGIST_PRESENTALO, self::PLANS_COMPOSER, self::PLANS_MARCADOR, self::PLANS_ELIGE, self::PLANS_PRECIO, self::PLANS_CRITIC]));
-        foreach ([self::PLANS_STRATEGIST, self::PLANS_STRATEGIST_PRESENTALO, self::PLANS_COMPOSER, self::PLANS_MARCADOR, self::PLANS_ELIGE, self::PLANS_PRECIO, self::PLANS_CRITIC] as $t) {
+        $textos = [self::PLANS_STRATEGIST, self::PLANS_STRATEGIST_PRESENTALO, self::PLANS_SUGERIDA, self::guia(200), self::PLANS_MARCADOR, self::PLANS_ELIGE, self::PLANS_PRECIO, self::PLANS_CRITIC, self::PLANS_CRITIC_COMPRUEBA];
+        $this->assertSame([784, 158, 146, 1127, 165, 220, 184, 1119, 265], array_map('strlen', $textos));
+        $this->assertSame(1127, strlen(self::guia(480)), 'la guía mide lo mismo con cualquier tope (L, tres cifras; W, dos)');
+        foreach ([...$textos, self::guia(480)] as $t) {
             $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($t));
             $this->assertMatchesRegularExpression('/\A[\x20-\x7E]+\z/', $t, 'ASCII imprimible, una línea, como el resto');
             $this->assertStringNotContainsString('{', $t, 'sin llaves: no forma un marcador ni un hueco');
             $this->assertStringNotContainsString('}', $t);
-            foreach (['COMO SUENAS:', 'FORMA:', 'Emoji opcional y raro, nunca en temas sensibles.', 'naturalness:', 'progressive_disclosure:', 'mas de ~900 caracteres', 'PRINCIPIO:', 'QUE PLAN SE COTIZA', 'Presentalo con dos o tres beneficios reales, nunca con adjetivos.', 'Cualquier otro marcador hace que el mensaje se rechace.', 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues.', 'el precio solo del que se cotiza.'] as $ancla) {
+            foreach (self::TODAS_LAS_ANCLAS as $ancla) {
                 $this->assertStringNotContainsString($ancla, $t, 'ningún texto de parche contiene un ancla');
             }
         }
-        // Un solo caso: los textos compilados son los de §B.3 («Compilador 5») y no hay otros del motor.
+        // Un solo caso: los textos compilados son los de §B.3 («Compilador 6») y no hay otros del motor.
         $p = C::patches(array_replace(C::BASELINE, [C::GOAL => 'venta']));
-        $this->assertSame(['strategy.goal', ...array_fill(0, 11, C::ENGINE)], array_column($p, 'parameter'), 'un cambio solo del estratega también lleva el del motor');
-        $this->assertSame(self::motor(), array_slice($p, 1));
+        $this->assertSame(['strategy.goal', ...array_fill(0, 15, C::ENGINE)], array_column($p, 'parameter'), 'un cambio solo del estratega también lleva el del motor');
+        $this->assertSame(self::motor(320), array_slice($p, 1));
     }
 
     public function test_el_orden_tras_la_misma_ancla_con_el_tope_y_las_frases(): void
     {
         $c = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::EMOJIS => false, C::MAX_CHARS => 200, C::PHRASES => ['gratis']]));
+        // Compilador 6: bajo FORMA: quedan las frases (la última aplicada de esa ancla) y el tope; la guía del motor, al final.
         $composer = explode("\n", $c['roles']['composer']);
         $i = array_key_first(array_filter($composer, fn (string $l) => str_contains($l, 'FORMA:')));
-        $this->assertStringStartsWith('LISTA DE PLANES DEL BACKEND:', $composer[$i + 1]);
-        $this->assertStringStartsWith('FRASES PROHIBIDAS PUBLICADAS:', $composer[$i + 2]);
-        $this->assertStringStartsWith('TOPE DE LONGITUD PUBLICADO:', $composer[$i + 3]);
+        $this->assertStringStartsWith('FRASES PROHIBIDAS PUBLICADAS:', $composer[$i + 1]);
+        $this->assertStringStartsWith('TOPE DE LONGITUD PUBLICADO:', $composer[$i + 2]);
+        $this->assertSame(self::guia(200), end($composer));
 
+        // Y en el revisor, bajo progressive_disclosure: el tope; las dos del motor, las dos últimas.
         $critic = explode("\n", $c['roles']['critic_retry']);
         $j = array_key_first(array_filter($critic, fn (string $l) => str_starts_with($l, 'progressive_disclosure:')));
-        $this->assertStringStartsWith('LISTA DE PLANES DEL BACKEND:', $critic[$j + 1]);
-        $this->assertStringStartsWith('TOPE PUBLICADO:', $critic[$j + 2]);
+        $this->assertStringStartsWith('TOPE PUBLICADO:', $critic[$j + 1]);
+        $this->assertSame([self::PLANS_CRITIC_COMPRUEBA, self::PLANS_CRITIC], array_slice($critic, -2));
     }
 
     /**
@@ -207,13 +251,14 @@ class UltronPromptEnginePatchTest extends TestCase
         $peor = [C::TONE => 'profesional', C::EMOJIS => false, C::MAX_CHARS => 480, C::GOAL => 'venta', C::PHRASES => $frases];
         $c = C::compile($peor);
 
-        $this->assertCount(4 + 4 + 6 + 1 + 4 + 11, $c['patches'], 'tono 4, emojis 4, tope 6, objetivo 1, frases 4 y motor 11');
+        $this->assertCount(4 + 4 + 6 + 1 + 4 + 15, $c['patches'], 'tono 4, emojis 4, tope 6, objetivo 1, frases 4 y motor 15');
         $this->assertSame([1887, 1887, 1932, 1932], array_map(static fn (array $x): int => strlen($x['text']), array_values(array_filter($c['patches'], fn (array $x) => $x['parameter'] === C::PHRASES))));
-        // Calculado al margen del PHP (Node: la base, `parches-m1.cjs` del compilador 5 y los textos fijos de las frases de §B.3).
-        // Con el compilador 4 eran 29 570, 30 876, 18 519, 28 767 y 18 171 (125 903): 2 351 más, todo en Strategist y redactores.
+        // Calculado al margen del PHP (Node: la base, `parches-m1.cjs` del compilador 6 y los textos fijos de las frases de §B.3).
+        // Con el compilador 4 eran 29 570, 30 876, 18 519, 28 767 y 18 171 (125 903); con el 5, 30 448, 31 669, 18 519, 29 447
+        // y 18 171 (128 254); con el 6, 2 070 más: Composer y Reintento 101 cada uno y Critic y Critic 2 934 cada uno.
         $bytes = array_map('strlen', $c['roles']);
-        $this->assertSame(['strategist' => 30448, 'composer' => 31669, 'critic' => 18519, 'composer_retry' => 29447, 'critic_retry' => 18171], $bytes);
-        $this->assertSame(128254, $c['bytes']);
+        $this->assertSame(['strategist' => 30448, 'composer' => 31770, 'critic' => 19453, 'composer_retry' => 29548, 'critic_retry' => 19105], $bytes);
+        $this->assertSame(130324, $c['bytes']);
         $this->assertLessThanOrEqual(C::MAX_ROLE_BYTES, max($bytes));
         $this->assertLessThanOrEqual(C::MAX_BUNDLE_BYTES, $c['bytes']);
     }
@@ -225,7 +270,7 @@ class UltronPromptEnginePatchTest extends TestCase
         $c = C::compile($g);
 
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($vista['changes'], 'param'), 'solo lo gobernado');
-        $this->assertSame(count($c['patches']) - 11, array_sum(array_map(fn (array $x) => count($x['patches']), $vista['changes'])));
+        $this->assertSame(count($c['patches']) - 15, array_sum(array_map(fn (array $x) => count($x['patches']), $vista['changes'])));
         $this->assertStringNotContainsString('LISTA DE PLANES DEL BACKEND', json_encode($vista['changes'], JSON_UNESCAPED_UNICODE));
         $this->assertSame($c['bundleHash'], $vista['prompts']['bundleHash'], 'pero la huella que se firma es la del paquete entero, con el del motor');
         $this->assertSame($c['bytes'], $vista['bytes']);

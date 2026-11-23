@@ -51,7 +51,10 @@ use Illuminate\Validation\Rule;
  * o un defecto que queda en el último borrador y que el commit no arregla
  * recortando (la longitud que no cabe quitando la pregunta final, el tuteo
  * fuera de esa pregunta o sin bloque de Laravel, la lista de planes, el
- * beneficio de otro plan y las seis reglas de política). Es una PREDICCIÓN:
+ * beneficio de otro plan y las seis reglas de política). Desde el compilador
+ * 6, un borrador con la lista del turno se mide contra el tope de la lista y
+ * no se recorta ({@see UltronReplyFitter::plansListCap()}); `cap` dice el
+ * tope que se le aplicó. Es una PREDICCIÓN:
  * siguen valiendo las once excepciones de `UltronCheckCommitParityTest` (el
  * commit pega o retira texto antes de medir). El texto del respaldo no se
  * genera.
@@ -167,15 +170,17 @@ final class StudioLabEngineCheck
             'tools_requested' => array_values((array) ($strategy['tools_requested'] ?? [])),
         ];
         $expandido = $this->expanded($turn, $draft);
-        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+        // Con la lista del turno en el borrador (compilador 6), el tope de la lista, como el commit; si no, el publicado.
+        $topeDeLista = UltronReplyFitter::plansListCap($sp, $this->turnList($turn, $draft['intent'], $draft['tools_requested']), $draft['reply_draft']);
+        $tope = $topeDeLista ?? UltronReplyFitter::cap($sp['n'] ?? null);
         $tono = is_string($sp['t'] ?? null) ? $sp['t'] : null;
 
-        // El commit, en su orden: la longitud (F1 quita la pregunta final si así cabe) y después el registro.
+        // El commit, en su orden: la longitud (F1 quita la pregunta final si así cabe; con la lista, no) y después el registro.
         $texto = $expandido;
         $recortado = false;
         $descartado = false;
         if ($tope !== null) {
-            $recorte = UltronReplyFitter::draft($texto, $tope);
+            $recorte = $topeDeLista !== null ? UltronReplyFitter::plansListDraft($texto, $tope) : UltronReplyFitter::draft($texto, $tope);
             $descartado = $recorte === null;
             if ($recorte !== null && $recorte['dropped'] > 0) {
                 $texto = $recorte['text'];
@@ -295,7 +300,7 @@ final class StudioLabEngineCheck
 
         return array_slice([
             ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound'], $textosDeLaLista),
-            ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy'])),
+            ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy']), UltronReplyFitter::plansListCap($turn['sp'], $po, $raw)),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
     }
 

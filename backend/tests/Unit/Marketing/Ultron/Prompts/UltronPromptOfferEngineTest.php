@@ -54,8 +54,9 @@ class UltronPromptOfferEngineTest extends TestCase
 
         $this->assertSame('studio', $o['response']['mode']);
         $this->assertStringContainsString('LISTA DE PLANES DEL BACKEND:', $o['response']['roles']['composer']);
-        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1]));
-        $this->assertSame(['m', 'r', 'h', 'v', 'c', 'e', 's', 'n', 't', 'o'], array_keys($o['sp']), 'la última, tras n y t');
+        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 6], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]));
+        // Enmienda A4-6 (PT-17b): con el parche del motor va también `k`, el compilador, tras `o`.
+        $this->assertSame(['m', 'r', 'h', 'v', 'c', 'e', 's', 'n', 't', 'o', 'k'], array_keys($o['sp']), 'o tras n y t, y k la última');
         $this->assertArrayNotHasKey('o', $o['response'], 'la respuesta a n8n no cambia: solo la firma');
     }
 
@@ -66,6 +67,7 @@ class UltronPromptOfferEngineTest extends TestCase
 
         $this->assertSame('studio', $o['response']['mode']);
         $this->assertSame(1, $o['sp']['o'] ?? null);
+        $this->assertSame(UltronPromptCompiler::VERSION, $o['sp']['k'] ?? null, 'y el compilador, con el parche del motor');
         $this->assertArrayNotHasKey('n', $o['sp']);
         $this->assertArrayNotHasKey('t', $o['sp']);
     }
@@ -88,6 +90,7 @@ class UltronPromptOfferEngineTest extends TestCase
         config()->set('marketing.ultron.studio_prompts', 'off');
         $this->assertSame(['m' => 'legacy', 'r' => 'prompts_off'], array_intersect_key($this->oferta()['sp'], ['m' => 1, 'r' => 1]));
         $this->assertArrayNotHasKey('o', $this->oferta()['sp']);
+        $this->assertArrayNotHasKey('k', $this->oferta()['sp']);
 
         config()->set('marketing.ultron.studio_prompts', UltronPromptOffer::KEY_CANARY);
         config()->set('marketing.ultron.canary_conversation_id', $this->canario + 1);

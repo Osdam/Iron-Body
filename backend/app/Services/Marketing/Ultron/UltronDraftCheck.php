@@ -217,7 +217,8 @@ final class UltronDraftCheck
                 $inbound,
                 $textosDeLaLista,
             ),
-            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces)),
+            // Con la lista del turno en el borrador (compilador 6), el tope de la lista y sin recortar la pregunta final, como el commit.
+            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces, UltronReplyFitter::plansListCap($sp, $poDelTurno, $raw))),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
 
         return ['defects' => $defectos, 'length' => UltronReplyFitter::measure($expandido)];

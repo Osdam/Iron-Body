@@ -78,6 +78,9 @@ class StudioLabEngineCheckParityTest extends TestCase
 
     private const LARGO = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad. ¿Cuál le interesa más?';
 
+    /** PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): una lista que pasa del tope aplicable (320) con y sin su pregunta (379; 356 sin ella). */
+    private const LARGO_360 = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad, sin prisa y con toda la información que necesite antes de decidir, para que empiece con buen pie y resuelva cualquier duda con el equipo. ¿Cuál le interesa más?';
+
     private MarketingConversation $conversation;
 
     private int $mundo = 0;
@@ -242,9 +245,14 @@ class StudioLabEngineCheckParityTest extends TestCase
         return [
             'pasa: del modelo' => [self::PANORAMA, $p, self::TRES, null, [], 'pass'],
             'tutea: respaldo' => [self::PANORAMA, $p, self::TRES_DE_TU, null, [], 'pass'],
-            'se pasa y cabe sin la pregunta: del modelo, recortado' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes y con acceso total al gimnasio y a las zonas de pesas. Le explico lo que incluye cada uno. ¿Cuál le interesa más de los dos?', null, [], 'pass'],
-            'se pasa y ni sin la pregunta cabe: respaldo' => [self::PANORAMA, $p, self::LARGO, null, [], 'pass'],
-            'se pasa y no cabe: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio, con duchas, lockers, zona de cardio, zona de pesas y clases grupales de lunes a sábado. Le explico con calma lo que incluye cada uno.', null, [], 'pass'],
+            // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): estos tres usaban listas de 200 a 320, que ahora caben en el tope
+            // aplicable y salen enteras; el recorte se prueba con un horario (sin lista) y los dos respaldos con listas de más de 320.
+            'se pasa y cabe sin la pregunta: del modelo, recortado' => [self::HORARIO, $h, 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados, domingos y festivos de 8:00 a. m. a 2:00 p. m. ¿Le gustaría que le cuente también cómo funciona la inscripción y qué necesita para empezar a entrenar con nosotros?', null, [], 'pass'],
+            'se pasa y ni sin la pregunta cabe: respaldo' => [self::PANORAMA, $p, self::LARGO_360, null, [], 'pass'],
+            'se pasa y no cabe: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio, con duchas, lockers, zona de cardio, zona de pesas y clases grupales de lunes a sábado. Le explico con calma lo que incluye cada uno, para que compare con tranquilidad y elija el que mejor le encaje.', null, [], 'pass'],
+            // Y las listas de antes, con lo que da ahora la regla: del modelo, enteras (sin recortar), medidas contra 320.
+            'lista de dos que pasa de 200 y cabe en el tope de lista: del modelo, entera' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes y con acceso total al gimnasio y a las zonas de pesas. Le explico lo que incluye cada uno. ¿Cuál le interesa más de los dos?', null, [], 'pass'],
+            'lista de tres que pasa de 200 y cabe en el tope de lista: del modelo, entera' => [self::PANORAMA, $p, self::LARGO, null, [], 'pass'],
             'falta la lista: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [], 'pass'],
             'marcador inexistente: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [], 'pass'],
             'beneficio de otro plan: respaldo' => [self::PANORAMA, $p, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál le interesa?', null, [], 'pass'],
@@ -299,6 +307,10 @@ class StudioLabEngineCheckParityTest extends TestCase
         if (str_contains((string) $this->dataName(), 'recortado')) {
             $this->assertTrue($prediccion['trimmed']);
             $this->assertTrue($prediccion['withinCap']);
+        }
+        // PT-17b (regla «tope de lista»): la lista que cabe en el tope aplicable sale sin recortar, medida contra 320.
+        if (str_contains((string) $this->dataName(), 'entera')) {
+            $this->assertSame([false, true, 320], [$prediccion['trimmed'], $prediccion['withinCap'], $prediccion['cap']]);
         }
         if ($veredicto === 'fail') {
             $this->assertSame(StudioLabEngineCheck::CAUSE_CRITIC, $prediccion['cause']);

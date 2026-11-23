@@ -170,6 +170,9 @@ class UltronCheckCommitParityTest extends TestCase
 
     private const LARGO = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad. ¿Cuál le interesa más?';
 
+    /** PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): con la lista el tope aplicable es 320; esta, sin expandir, cabe (298) y expandida, no (339). */
+    private const LARGO_320 = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio. Le explico con calma lo que incluye cada uno para que elija con tranquilidad, sin prisa y con toda la información que necesite antes de decidir, para que empiece con buen pie. ¿Cuál le interesa más?';
+
     private const HORARIO_LARGO = 'El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados, domingos y festivos de 8:00 a. m. a 2:00 p. m. Es el horario de apertura del gimnasio, no el de las clases, así que puede entrenar cuando más le convenga. ¿Le gustaría venir esta semana?';
 
     /** Las causas en un orden fijo, el de los códigos (con las seis de la política detrás, ola 4b). */
@@ -239,8 +242,12 @@ class UltronCheckCommitParityTest extends TestCase
             // El panorama con precio, con la lista firmada (Valera, Mensual, Élite).
             'lista de usted' => [self::PANORAMA, $precio, self::TRES, null, [], false, []],
             'lista que tutea' => [self::PANORAMA, $precio, str_replace('le interesa', 'te interesa', self::TRES), null, [], false, ['register_tuteo']],
-            'lista que solo se pasa expandida' => [self::PANORAMA, $precio, self::LARGO, null, [], false, ['length_over_cap']],
-            'lista que tutea y se pasa' => [self::PANORAMA, $precio, str_replace(['Le explico', 'le interesa'], ['Te explico', 'te interesa'], self::LARGO), null, [], false, ['register_tuteo', 'length_over_cap']],
+            // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): estas dos usaban la lista de 228, que ya cabe en el tope aplicable (320); ahora usan una de 339 y conservan sus causas.
+            'lista que solo se pasa expandida' => [self::PANORAMA, $precio, self::LARGO_320, null, [], false, ['length_over_cap']],
+            'lista que tutea y se pasa' => [self::PANORAMA, $precio, str_replace(['Le explico', 'le interesa'], ['Te explico', 'te interesa'], self::LARGO_320), null, [], false, ['register_tuteo', 'length_over_cap']],
+            // Y la de 228 (más de 200, dentro de 320), con lo que da ahora la regla: ni la comprobación ni el commit la marcan por la longitud.
+            'lista que pasa de 200 y cabe en el tope de lista' => [self::PANORAMA, $precio, self::LARGO, null, [], false, []],
+            'lista que tutea y cabe en el tope de lista' => [self::PANORAMA, $precio, str_replace(['Le explico', 'le interesa'], ['Te explico', 'te interesa'], self::LARGO), null, [], false, ['register_tuteo']],
             'falta la lista' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [], false, ['plans_overview']],
             'mezcla con el precio' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde {{PLAN_PRICE}}. ¿Cuál le interesa?', 3, [], false, ['plans_overview']],
             'marcador repetido' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}} y otra vez {{PLAN_1}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
@@ -504,7 +511,9 @@ class UltronCheckCommitParityTest extends TestCase
         if (($fila['register']['action'] ?? 'ok') !== 'ok') {
             $causas[] = UltronRegenerationNotes::REGISTER_TUTEO;
         }
-        if (isset($fila['length']['from'], $fila['length']['cap']) && $fila['length']['from'] > $fila['length']['cap']) {
+        // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): comparaba con `cap` (el publicado); ahora con el tope aplicado (`list_cap` si la regla se aplicó; si no, `cap`, como antes). Con la línea base, `cap` va null y `list_cap` no (B1).
+        $topeAplicado = $fila['length']['list_cap'] ?? $fila['length']['cap'] ?? null;
+        if (isset($fila['length']['from']) && $topeAplicado !== null && $fila['length']['from'] > $topeAplicado) {
             $causas[] = UltronRegenerationNotes::LENGTH_OVER_CAP;
         }
         if (in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $violaciones, true)) {

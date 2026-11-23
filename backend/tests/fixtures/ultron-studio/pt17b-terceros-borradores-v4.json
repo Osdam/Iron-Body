@@ -1,0 +1,260 @@
+{
+  "_source": "Medicion de la version 4 (profesional 200) en el laboratorio frente al motor con el compilador 5 (prompt_version motor-S2-c5-2026-11-22.1, ejecuciones 32, 34, 35, 36 y 37 del 23-11-2026): el TERCER borrador (composer_retry_2, engine.drafts[2]) de los 24 casos con detalle. labChars es lo que midio el laboratorio ya expandido con el catalogo de produccion (Plan Valera, Plan Mensual y Elite). Solo texto del modelo: sin datos personales.",
+  "scenario": "¿Qué planes tienen y cuánto cuesta la mensualidad?",
+  "po": [
+    3,
+    4,
+    8
+  ],
+  "cases": [
+    {
+      "case": "32/133/E-001",
+      "text": "Claro, tenemos el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado al gimnasio y asesoría básica, y el {{PLAN_3}} que ofrece acceso total, rutinas personalizadas y seguimiento completo. ¿Ha entrenado antes?",
+      "labChars": 246,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "32/134/E-002",
+      "text": "Por lo que me pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que ofrece acceso total y guía nutricional. ¿Entrena actualmente o busca algo específico?",
+      "labChars": 216,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "32/135/E-003",
+      "text": "Por lo que pregunta, tenemos estos planes: {{PLAN_1}} acceso básico, {{PLAN_2}} mensual con asesoría, y {{PLAN_3}} acceso total y guía avanzada. ¿Ha entrenado antes en un gimnasio?",
+      "labChars": 221,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "32/136/E-004",
+      "text": "Por lo que me pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, el {{PLAN_2}} similar pero con beneficios adicionales, y el {{PLAN_3}} que es el ideal para entrenamiento intensivo y nutrición avanzada. ¿Ha entrenado antes en un gimnasio?",
+      "labChars": 300,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "32/137/E-005",
+      "text": "Claro, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que ofrece acceso total, entrenamientos guiados y guía nutricional. ¿Qué objetivo busca con su entrenamiento?",
+      "labChars": 219,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "34/149/E-001",
+      "text": "Le comento que tenemos el {{PLAN_1}} con acceso total y app completa, el {{PLAN_2}} con beneficios similares y el {{PLAN_3}} con entrenamientos y nutrición avanzada. ¿Ha entrenado antes en gimnasio?",
+      "labChars": 239,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "34/150/E-002",
+      "text": "Le cuento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que incluye acceso total, sesiones funcionales y guía nutricional. ¿Qué experiencia tiene entrenando o qué busca lograr?",
+      "labChars": 237,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "34/151/E-003",
+      "text": "Por lo que me pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que incluye acceso total y entrenamiento personalizado. ¿Ha entrenado antes o busca algo especial?",
+      "labChars": 225,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "34/152/E-004",
+      "text": "Claro, tenemos tres planes principales: {{PLAN_1}} para acceso básico de un mes, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que incluye acceso total y sesiones funcionales. ¿Ha entrenado antes o busca algo específico?",
+      "labChars": 264,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "34/153/E-005",
+      "text": "Claro, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, el {{PLAN_2}} que es similar, y el {{PLAN_3}} con acceso total y seguimiento avanzado. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 236,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "35/154/E-001",
+      "text": "Por lo que pregunta, tenemos {{PLAN_1}} con acceso ilimitado, {{PLAN_2}} con beneficios similares, y {{PLAN_3}} con acceso total y entrenamiento guiado. ¿Ha entrenado antes en gimnasio?",
+      "labChars": 226,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "35/155/E-002",
+      "text": "Le cuento que tenemos el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado, asesoría y app básica, y el {{PLAN_3}} que ofrece acceso total, entrenadores y guía nutricional. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 251,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "35/156/E-003",
+      "text": "Tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} con acceso total, entrenamiento guiado y nutrición avanzada. ¿Ya tiene experiencia en gimnasio para orientarle mejor?",
+      "labChars": 220,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "35/157/E-004",
+      "text": "Le cuento que tenemos dos planes destacados: {{PLAN_1}}, con acceso total y entrenamiento intensivo; y {{PLAN_2}}, con acceso ilimitado y asesoría básica. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 225,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2"
+      ]
+    },
+    {
+      "case": "35/158/E-005",
+      "text": "Por lo que me pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que incluye acceso total, sesiones funcionales y guía nutricional avanzada. ¿Qué meta tiene con su entrenamiento?",
+      "labChars": 240,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "36/159/E-001",
+      "text": "Claro, tenemos tres planes principales: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada, y {{PLAN_3}} que ofrece entrenamiento intensivo y nutrición avanzada. ¿Ha entrenado antes en un gimnasio?",
+      "labChars": 261,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "36/161/E-003",
+      "text": "Por lo que pregunta, lo que mejor le encaja es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales, guía nutricional y seguimiento completo. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 200,
+      "labCap": 200,
+      "markers": [
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "36/162/E-004",
+      "text": "Claro, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría semi personalizada, y el {{PLAN_3}} que incluye acceso total, guía nutricional y seguimiento completo. ¿Ha entrenado antes en un gimnasio?",
+      "labChars": 224,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "36/163/E-005",
+      "text": "Por lo que me pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que incluye acceso total, sesiones funcionales y seguimiento completo. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 237,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "37/164/E-001",
+      "text": "Por lo que pregunta, tenemos el {{PLAN_1}} con acceso completo y seguimiento básico, y el {{PLAN_3}} que incluye acceso total, entrenadores y guía nutricional. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 224,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "37/165/E-002",
+      "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado, el {{PLAN_2}} similar y el {{PLAN_3}} con acceso total y seguimiento completo. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 218,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "37/166/E-003",
+      "text": "Por lo que pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que ofrece acceso total, entrenamiento intensivo y guía nutricional. ¿Ha entrenado antes?",
+      "labChars": 213,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "37/167/E-004",
+      "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría semi personalizada, y el {{PLAN_3}} con acceso total y entrenamiento intensivo. ¿Qué experiencia tiene entrenando?",
+      "labChars": 208,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "37/168/E-005",
+      "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría semi personalizada, y el {{PLAN_3}} que incluye acceso total, entrenamientos guiados y nutrición avanzada. ¿Ha entrenado antes?",
+      "labChars": 221,
+      "labCap": 200,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    }
+  ]
+}

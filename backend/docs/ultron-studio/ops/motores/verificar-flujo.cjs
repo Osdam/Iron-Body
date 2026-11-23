@@ -313,10 +313,11 @@ if (typeof pSel.jsCode === 'string') {
       const lineas = r => fx.studio_prompts.roles[r].split('\n').filter(l => l.startsWith('FRASES PROHIBIDAS PUBLICADAS: '));
       check('fixture PHP con frases: una línea de frases en Composer, Reintento y los dos Critic, ninguna en el Strategist',
         ['composer', 'composer_retry', 'critic', 'critic_retry'].every(r => lineas(r).length === 1) && lineas('strategist').length === 0);
-      // Compilador 4, parche del motor («regenerar antes de sustituir»): va el último, así que en los Composer
-      // queda pegado a FORMA: y la línea de frases justo detrás; en los Critic va tras progressive_disclosure:.
-      check('fixture PHP con frases: va pegada a su ancla (FORMA: y la lista de planes del motor en los Composer, naturalness: en los Critic)',
-        ['composer', 'composer_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('FORMA:')); return i >= 0 && l[i + 1].startsWith('LISTA DE PLANES DEL BACKEND: ') && l[i + 2].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); })
+      // Compilador 6 (PT-17b, plan de motores §B.3 «Compilador 6»): el texto del motor de los Composer ya no va tras
+      // FORMA: (compiladores 4 y 5), sino tras su ÚLTIMA línea; así que la línea de frases queda pegada a FORMA: y la
+      // lista de planes del motor es la última del prompt. En los Critic, las frases siguen tras naturalness:.
+      check('fixture PHP con frases: va pegada a su ancla (FORMA: en los Composer, con la lista de planes del motor la última; naturalness: en los Critic)',
+        ['composer', 'composer_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('FORMA:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: ') && l[l.length - 1].startsWith('LISTA DE PLANES DEL BACKEND: ') && l.filter(x => x.startsWith('LISTA DE PLANES DEL BACKEND: ')).length === 1; })
         && ['critic', 'critic_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('naturalness:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); }));
       check('fixture PHP con frases: los demás bytes son los de la oferta sin frases (profesional + 200)', fs.existsSync(fixtureStudio)
         && ROLES.every(r => fx.studio_prompts.roles[r].split('\n').filter(l => !l.startsWith('FRASES PROHIBIDAS PUBLICADAS: ')).join('\n') === leerJson(fixtureStudio).studio_prompts.roles[r]));

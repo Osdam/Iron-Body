@@ -37,7 +37,10 @@ use InvalidArgumentException;
  *      con el tono firmado `profesional` (`sp.t`).
  *  (c) `length_over_cap`: la medida del texto expandido por encima del tope
  *      firmado (`sp.n`), cualquier exceso (también si al commit le bastaría
- *      quitar la pregunta final: §4.4).
+ *      quitar la pregunta final: §4.4). Desde el compilador 6, si el borrador
+ *      trae la lista que ofreció el servidor, contra el tope de la lista
+ *      ({@see UltronReplyFitter::plansListCap()}; también con el tope de la
+ *      línea base, sin `sp.n`), y su nota y la de la lista van con esa cifra.
  *  (d) `benefit_misattributed`: {@see UltronBenefitAttribution} sobre el texto
  *      expandido.
  * Con la lista y el tope firmados, la nota de (a) cuando falta la lista o va
@@ -91,7 +94,8 @@ final class UltronDraftDefects
         $raw = (string) ($draft['reply_draft'] ?? '');
         $po = array_values(array_map('intval', $po));
         $defectos = [];
-        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+        // El tope de ESTE borrador: el de la lista si la trae (compilador 6, {@see UltronReplyFitter::plansListCap()}); si no, el publicado.
+        $tope = UltronReplyFitter::plansListCap($sp, $po, $raw) ?? UltronReplyFitter::cap($sp['n'] ?? null);
 
         /*
          * EL PRESUPUESTO DE LA LISTA (corrección (1) del turno 2 de la tercera
@@ -177,15 +181,22 @@ final class UltronDraftDefects
      * de la app; `$laravelBlock`), se mira sin ella. Si la longitud lo
      * descartaría, no hay recorte por registro (como en el commit).
      *
+     * Con la lista de planes (compilador 6, `$plansListCap` de
+     * {@see UltronReplyFitter::plansListCap()} con el borrador sin expandir y
+     * la lista del turno), la longitud se mide contra ese tope y SIN quitar
+     * la pregunta final ({@see UltronReplyFitter::plansListDraft()}), como en
+     * el commit. Sin él (null), la regla de siempre.
+     *
      * @param  string  $expanded  el borrador expandido (lo que mediría el commit)
      * @param  array<string,mixed>  $sp  el `sp` firmado en el token
      * @param  array<string,mixed>  $policy  la política del turno ({@see CommercialTurnPolicy::decide()}, como en el commit)
      * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
      * @param  list<string>  $facts  los hechos del gimnasio ({@see CommercialTurnPolicy::knownFacts()}); vacío si la política no los exige
      * @param  bool  $laravelBlock  el texto lleva los enlaces de la app que pega Laravel
+     * @param  int|null  $plansListCap  el tope de la lista de este borrador, o null
      * @return list<array{code:string,detail:null,issue:string,note:string}>
      */
-    public static function ofPolicy(string $expanded, array $sp, array $policy, array $catalog, array $facts, bool $laravelBlock = false): array
+    public static function ofPolicy(string $expanded, array $sp, array $policy, array $catalog, array $facts, bool $laravelBlock = false, ?int $plansListCap = null): array
     {
         if (($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO) {
             return [];
@@ -194,11 +205,11 @@ final class UltronDraftDefects
         $tono = is_string($sp['t'] ?? null) && in_array($sp['t'], UltronPromptCompiler::TONES, true) ? $sp['t'] : null;
         $texto = $expanded;
 
-        // (1) La longitud: la regla F1 quita la pregunta final si así cabe.
+        // (1) La longitud: la regla F1 quita la pregunta final si así cabe; con la lista, no se recorta.
         $descartado = false;
-        $tope = UltronReplyFitter::cap($sp['n'] ?? null);
+        $tope = $plansListCap ?? UltronReplyFitter::cap($sp['n'] ?? null);
         if ($tope !== null) {
-            $recorte = UltronReplyFitter::draft($texto, $tope);
+            $recorte = $plansListCap !== null ? UltronReplyFitter::plansListDraft($texto, $tope) : UltronReplyFitter::draft($texto, $tope);
             $descartado = $recorte === null;
             if ($recorte !== null && $recorte['dropped'] > 0) {
                 $texto = $recorte['text'];

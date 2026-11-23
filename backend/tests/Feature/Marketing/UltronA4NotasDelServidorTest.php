@@ -85,8 +85,18 @@ class UltronA4NotasDelServidorTest extends TestCase
     /** El borrador 3 de la prueba real, sin expandir (200 caracteres): repite `{{PLAN_3}}`. */
     private const BORRADOR_3 = 'Le comento que tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. Por ejemplo, el {{PLAN_3}} incluye acceso ilimitado, asesoría y seguimiento con entrenador. ¿Qué busca lograr con su entrenamiento?';
 
-    /** Lo que el servidor le dice al redactor de ese borrador: las dos notas con el presupuesto, unidas por un espacio (462 caracteres; 469 en el peor caso). */
-    private const NOTAS_DEL_BORRADOR_3 = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. DEMASIADO LARGO: mide 251 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.';
+    /**
+     * PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): lo que el servidor le dice ahora al redactor
+     * de ese borrador. Afirmaba `mixed` + `length_over_cap` con sus dos notas (251 contra 200); con dos marcadores de la
+     * lista el tope aplicable es 320, así que solo queda `mixed`, con las cifras del tope de la lista (179 de 250).
+     */
+    private const NOTA_DEL_BORRADOR_3 = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 179 de 250.';
+
+    /** El borrador 3 alargado por encima del tope de la lista (293 sin expandir, 344 expandido): conserva `mixed` + exceso. */
+    private const BORRADOR_3_LARGO = 'Le comento que tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. Por ejemplo, el {{PLAN_3}} incluye acceso ilimitado, asesoría y seguimiento con entrenador. Los tres le dan acceso total al gimnasio y el acompañamiento del equipo desde el primer día. ¿Qué busca lograr con su entrenamiento?';
+
+    /** Lo que el servidor le dice de ese: las dos notas con el presupuesto del tope de la lista, unidas por un espacio (464 caracteres). */
+    private const NOTAS_DEL_BORRADOR_3_LARGO = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 179 de 250. DEMASIADO LARGO: mide 344 caracteres y el limite publicado es 320. Reescribelo en unos 250: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 179. Si no caben, dos planes; una pregunta corta o ninguna.';
 
     /** La lista fija de hoy con el tope de la canaria (la de `UltronA4ListaDelModeloTest`): la que le llegó a la persona en la prueba. */
     private const PRECIOS_200 = 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?';
@@ -177,13 +187,17 @@ class UltronA4NotasDelServidorTest extends TestCase
         $decide = $this->decide($m);
         $this->assertSame(self::PO, (self::cargaDelToken($decide['decide_token'])['x'] ?? [])['po'] ?? null);
 
-        // Lo que el servidor le dice al redactor del borrador 3 de la prueba: las dos notas, con el presupuesto, enteras.
+        // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba `mixed` + `length_over_cap` para el borrador 3 (251); ahora solo `mixed`, con las cifras del tope de la lista, y `mixed` + exceso se afirma con el borrador 3 alargado (344).
         $r = $this->check($m, $decide['decide_token'], self::BORRADOR_3, 2)->assertOk();
+        $this->assertSame([['code' => 'plans_overview', 'detail' => 'mixed', 'issue' => 'relevance']], $r->json('defects'));
+        $this->assertSame(self::NOTA_DEL_BORRADOR_3, $r->json('notes'));
+        $this->assertTrue($r->json('rewrite'));
+        $r = $this->check($m, $decide['decide_token'], self::BORRADOR_3_LARGO, 2)->assertOk();
         $this->assertSame([
             ['code' => 'plans_overview', 'detail' => 'mixed', 'issue' => 'relevance'],
             ['code' => 'length_over_cap', 'detail' => null, 'issue' => 'progressive_disclosure'],
         ], $r->json('defects'));
-        $this->assertSame(self::NOTAS_DEL_BORRADOR_3, $r->json('notes'));
+        $this->assertSame(self::NOTAS_DEL_BORRADOR_3_LARGO, $r->json('notes'));
         $this->assertTrue($r->json('rewrite'));
 
         // El borrador que sigue el esqueleto: sin códigos, y cabe en lo que la nota dice que queda (89 de 160 tras los 71).
@@ -228,7 +242,8 @@ class UltronA4NotasDelServidorTest extends TestCase
         $aprobado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3, null), self::APROBADO))->assertOk()->json();
         $filaAprobada = $this->ultimaAccion();
         $this->assertSame(self::PRECIOS_200, $aprobado['reply_final']);
-        $this->assertSame(['policy_length_exceeded', 'policy_plans_overview'], $filaAprobada->metadata['policy_violations']);
+        // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba `policy_length_exceeded` + `policy_plans_overview` y `mixed` + `length_over_cap` en el rechazo; con 251 dentro del tope aplicable (320), solo la lista. El exceso lo conserva la prueba del borrador 3 alargado, abajo.
+        $this->assertSame(['policy_plans_overview'], $filaAprobada->metadata['policy_violations']);
         $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'mixed'], $filaAprobada->metadata['plans_overview']);
         $this->assertSame(251, $filaAprobada->metadata['length']['from']);
         $this->assertArrayNotHasKey('discarded_draft_check', $filaAprobada->metadata, 'solo en el rechazo del revisor');
@@ -245,11 +260,39 @@ class UltronA4NotasDelServidorTest extends TestCase
         $this->assertSame($aprobado['reply_final'], $this->ultimoSaliente()?->body);
         $this->assertSame('SAFE_CURATED_REPLY', $fila->metadata['fallback_mode']);
         $this->assertSame([3, 'fail'], [$fila->metadata['critic']['attempt'], $fila->metadata['critic']['verdict']]);
-        $this->assertMismaTraza(['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 251], $fila->metadata['discarded_draft_check'] ?? null);
+        $this->assertMismaTraza(['pass' => false, 'codes' => ['plans_overview/mixed'], 'length' => 251], $fila->metadata['discarded_draft_check'] ?? null);
 
         $origen = UltronReplyOrigin::classify($fila->metadata);
-        $this->assertSame([UltronReplyOrigin::FALLBACK, UltronReplyOrigin::REASON_CRITIC, UltronReplyOrigin::SERVER_WOULD_REJECT, ['plans_overview/mixed', 'length_over_cap']],
+        $this->assertSame([UltronReplyOrigin::FALLBACK, UltronReplyOrigin::REASON_CRITIC, UltronReplyOrigin::SERVER_WOULD_REJECT, ['plans_overview/mixed']],
             [$origen['origin'], $origen['fallback_reason'], $origen['server_verdict'], $origen['server_codes']]);
+    }
+
+    /**
+     * PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): lo que la prueba de arriba afirmaba del
+     * exceso (las dos causas en la fila y en el rechazo), con el borrador 3 alargado por encima del tope aplicable (344).
+     * No se recorta: se descarta por las dos causas y sale el mismo texto fijo, con el tope aplicado en la traza.
+     */
+    public function test_el_borrador_3_alargado_por_encima_del_tope_de_lista_conserva_las_dos_causas(): void
+    {
+        $this->publica('profesional', 200);
+
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        $aprobado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3_LARGO, null), self::APROBADO))->assertOk()->json();
+        $filaAprobada = $this->ultimaAccion();
+        $this->assertSame(self::PRECIOS_200, $aprobado['reply_final']);
+        $this->assertSame(['policy_length_exceeded', 'policy_plans_overview'], $filaAprobada->metadata['policy_violations']);
+        $this->assertSame([344, 320], [$filaAprobada->metadata['length']['from'], $filaAprobada->metadata['length']['list_cap']]);
+
+        $this->nuevaConversacion();
+        $this->publica('profesional', 200);
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        $rechazado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3_LARGO, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
+        $fila = $this->ultimaAccion();
+        $this->assertSame(self::PRECIOS_200, $rechazado['reply_final']);
+        $this->assertMismaTraza(['pass' => false, 'codes' => ['plans_overview/mixed', 'length_over_cap'], 'length' => 344], $fila->metadata['discarded_draft_check'] ?? null);
+        $this->assertSame(['plans_overview/mixed', 'length_over_cap'], UltronReplyOrigin::classify($fila->metadata)['server_codes']);
     }
 
     /** El revisor rechaza un borrador que el servidor sí aceptaba: la fila lo dice; sin versión del Studio, la fila no lleva la clave (como hoy). */

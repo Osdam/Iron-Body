@@ -194,7 +194,7 @@ class UltronDecidePromptsTest extends TestCase
         // `regeneration`, detrás de la oferta; en Legacy, ni la clave (n8n no pregunta al servidor).
         $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', ...($motivo === 'studio' ? ['regeneration'] : []), 'superseded'], array_keys($res->json()));
         $this->assertSame($motivo === 'studio' ? ['contract' => 'ultron-regen/1', 'max_drafts' => 3] : null, $res->json('regeneration'));
-        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 5], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 5 (Enmienda A4-5)');
+        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 6], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 6 (Enmienda A4-6)');
 
         if ($motivo === 'studio') {
             $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, $gobernados));
@@ -221,7 +221,8 @@ class UltronDecidePromptsTest extends TestCase
         // Apartado 4 del cierre V2 (D-2): en `studio` con un tope distinto de la línea base, `n` (aquí 200); Legacy, sin la clave.
         // Y H4-9 (T-1): con un tono distinto de la línea base, `t` (aquí «profesional»); Legacy, sin la clave.
         // Y «regenerar antes de sustituir» (P-3): con el parche del motor de la lista de planes, `o` = 1; Legacy, sin la clave.
-        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional', 'o' => 1] : []), $sp);
+        // Y PT-17b (Enmienda A4-6): en `studio`, `k` = la versión del compilador (el tope de la lista de planes); Legacy, sin la clave.
+        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 6] : []), $sp);
 
         // Una sentencia sobre la cadena solo si se llegó a leerla (paso 4), y de lectura.
         $leeLaCadena = $prompts === 'canary' && $config !== 'off' && $conversacion === 'canaria';

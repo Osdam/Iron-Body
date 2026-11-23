@@ -4,21 +4,29 @@ Generado por `UltronRegenerarTextosFijosTest::test_los_textos_fijos_de_regenerar
 
 Todo esto existe solo con la versión del Studio aplicada; sin ella (Legacy) no sale ninguno de estos textos. Las instrucciones y las notas son para el modelo (sin tildes, como el resto de los prompts) y la persona no las lee; lo único que lee la persona es la expansión de la lista (§3). Las notas no llevan nada de lo que escribió la persona: solo marcas de una lista cerrada, números y textos del catálogo saneados.
 
-## 1. Las dos instrucciones del parche del motor
+## 1. Las instrucciones del parche del motor
 
 Salen en el paquete de prompts de toda versión del Studio que gobierna algún parámetro (con la línea base no hay parches y no salen), al final de los parches. Le enseñan al redactor a escribir la lista de planes con los marcadores, y al revisor a no tumbarla por «no lleva el marcador de precio». La lista solo viene cuando la persona pide los planes o los precios en general.
 
+Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista) y <W> = (L − 110) / 6 palabras, de cinco en cinco por abajo: con un tope de 200, 320 y 35.
+
 ### Al redactor (`T_PLANS_COMPOSER`)
 
-Va en `composer` y en `composer_retry`, en la línea siguiente a `FORMA:`.
+Va en `composer` y en `composer_retry`, en la línea siguiente a la última de la base (`price_verification true significa…`): la última del prompt.
 
-> LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. En ese turno esto manda sobre todo este prompt (las reglas de precios y marcadores, recomendar un solo plan con su PORQUE, resolved_reference y suggested_question) y sobre la estrategia si habla de un solo plan: la respuesta es esa lista, en una frase. Nombra los planes en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales, seguido de dos o tres palabras de uno de los benefits que trae ese marcador en plans_overview.plans. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Fuera de los marcadores, unas 15 palabras en todo el mensaje: un arranque corto, los beneficios y, como mucho, una pregunta corta para elegir (sobre cual amplio la informacion); nunca su experiencia ni su objetivo. Con un tope publicado de menos de 200 caracteres, solo PLAN_1 y PLAN_2. Si plans_overview no viene, nada de esto aplica.
+> LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de <L> caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas <W> palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.
 
 ### Al revisor (`T_PLANS_CRITIC`)
 
-Va en `critic` y en `critic_retry`, en la línea siguiente a `progressive_disclosure:`.
+Va en `critic` y en `critic_retry`, la última línea del prompt (tras `Si el borrador explica POR QUE la persona vio otro precio…` y la de abajo).
 
-> LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.
+> LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.
+
+### Al revisor, lo que ya comprueba el backend (`T_PLANS_CRITIC_CHECKED`)
+
+Va en `critic` y en `critic_retry`, en la línea siguiente a la última de la base (`Si el borrador explica POR QUE la persona vio otro precio…`), justo antes de la de arriba.
+
+> REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.
 
 ## 2. Las notas de reescritura
 

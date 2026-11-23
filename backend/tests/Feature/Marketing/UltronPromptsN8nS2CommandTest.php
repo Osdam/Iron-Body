@@ -65,16 +65,17 @@ class UltronPromptsN8nS2CommandTest extends TestCase
      * regenerado con `php artisan ultron:prompts-n8n`, cambian `LEEME.md` (la
      * línea del compilador), los tres fixtures (lo compilado y `compiler`),
      * `flujo-s1.json` (solo `_generado.compiler`) y `huellas.json` (`compiler`);
-     * el selector, las operaciones y «Preparar Commit», no.
+     * el selector, las operaciones y «Preparar Commit», no. Compilador 6
+     * (Enmienda A4-6, PT-17b): igual, los mismos cinco ficheros.
      */
     private const S1_ANTES = [
-        'LEEME.md' => '609f7e6a73af833c1fa5f4d1dffa0fac33565b526e03220edb7afa262fc8acfa',
+        'LEEME.md' => 'dae71c949e01814f0d4a5b874e71ed909a41bd70694abb64c74b8c47bac39f38',
         'elegir-prompts.js' => 'fec89513389e0272a9ab664eccea9ca7b514620ab3fc35a9183635dec9997d10',
-        'fixtures/decide-legacy.json' => 'c7495e624035ad42fe2ec46764f7743063633b583ac4b984298ecf1a1294bb94',
-        'fixtures/decide-studio-frases.json' => '2af9ac2b529c05f31d7e9a4b9c74eb61f01f8b064283833caac6495c49990266',
-        'fixtures/decide-studio.json' => '8136437d94e6b27f5d3f65d8c92c454418e987bffb6c9e800cdc1739389ee3c5',
-        'flujo-s1.json' => '73a0c1bfd6c9da045f305dbbd2900b3b5d3693a7fe1aa6bcfec46ce1a9e0340f',
-        'huellas.json' => 'fb3f66e299e522d80a82e1d977e654c5efa1088e5ccaeee049bbcb46e1f901ca',
+        'fixtures/decide-legacy.json' => '4885e4ca6c6b4cb1f289aa669c8fac0ab8decca6027304f561abe87b995ff9af',
+        'fixtures/decide-studio-frases.json' => 'd6ce3e7b768433b484802f3399139e776985bbb046659d2ef26700b515637d07',
+        'fixtures/decide-studio.json' => 'a342bc32f88c312f8367a44a3e0f1bb8e80db1233f540a6a04c9dba9058059c5',
+        'flujo-s1.json' => 'e2b0cc361869daf0a131140784e01719c36a7bd076e4b928f6b2298c9e1b9a68',
+        'huellas.json' => '390a892da9be6ab08f54c5a3276f9aea6713109a46462ebd48d1341694737241',
         'operaciones-mcp.json' => '1e1aca5a7523d17e2cd07192aa70415348aa5996cf9f952899ee4fd2bb491cdc',
         'preparar-commit.js' => '876a3f6a8c50447526a321c7d7ff391c447e09e3a22dc442f7c008e520ac8b45',
     ];

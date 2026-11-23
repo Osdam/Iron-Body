@@ -4,6 +4,7 @@ namespace App\Services\Marketing\Ultron;
 
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
 
 /**
  * EL TOPE DE LONGITUD DE LA VERSIÓN PUBLICADA, MEDIDO Y CUMPLIDO EN LARAVEL
@@ -43,6 +44,9 @@ final class UltronReplyFitter
     public const MIN_CAP = UltronPromptCompiler::MAX_CHARS_MIN;
 
     public const MAX_CAP = UltronPromptCompiler::MAX_CHARS_MAX;
+
+    /** Desde qué compilador (`sp.k`) vale el tope de la lista de planes ({@see self::plansListCap()}). */
+    public const PLANS_LIST_SINCE_COMPILER = 6;
 
     /** Las direcciones que escribe Laravel (los enlaces de la app, el checkout): no cuentan (D-3). */
     private const URL = '#https?://\S+#u';
@@ -119,6 +123,73 @@ final class UltronReplyFitter
     public static function cap(mixed $n): ?int
     {
         return is_int($n) && $n >= self::MIN_CAP && $n <= self::MAX_CAP ? $n : null;
+    }
+
+    // ── El tope de la lista de planes (compilador 6; regla del propietario) ─
+
+    /**
+     * EL TOPE DE UNA RESPUESTA CON LA LISTA DE PLANES DEL SERVIDOR (Enmienda
+     * A4-6 del H5, PT-17b; decisión B del propietario, 23-11-2026), o null.
+     *
+     * Medido en el laboratorio: con la lista de tres planes ya expandida
+     * (unos 71 caracteres de nombres y precios oficiales) y un tope publicado
+     * de 200, 23 de los 24 terceros borradores se pasaban y el commit les
+     * quitaba la pregunta final. El texto del redactor del compilador 6 le da
+     * al modelo ESTA cifra ({@see UltronPromptCompiler::plansListChars()}).
+     *
+     * El tope de lista es max(tope publicado, 320) y SOLO si se cumple todo:
+     *  - el turno lo gobierna el Studio (`sp.m` = `studio`) y lo compiló el
+     *    compilador 6 o posterior (`sp.k`, que firma `decide` desde el 6: un
+     *    token del 5 o de antes del despliegue no lo trae);
+     *  - el tope publicado es el firmado (`sp.n`, válido según
+     *    {@see self::cap()}) o, SIN `sp.n`, el de la línea base del
+     *    compilador (320): `decide` y el laboratorio solo firman `n` si se
+     *    aparta de ella, y «profesional · 320» también se mide (bloqueante B1
+     *    de la revisión del 23-11-2026: sin esto, una lista de 450 salía sin
+     *    medir). Un `sp.n` firmado que no vale no da tope de lista;
+     *  - el servidor ofreció la lista en ese turno (`$po`, la lista del turno:
+     *    la firmada, y vacía en un turno de cobro);
+     *  - la respuesta lleva al menos DOS marcadores de esa lista
+     *    ({@see UltronPlansOverview::MIN_MARKERS}), distintos, con la misma
+     *    lectura que la expansión ({@see UltronPlansOverview::expand()}).
+     * En cualquier otro caso, null: quien llama usa el tope publicado, como
+     * hoy, y Legacy (sin `studio`) no entra nunca. Se mide igual, sobre el
+     * texto expandido; a una respuesta con lista no se le quita la pregunta
+     * final ({@see self::plansListDraft()}).
+     *
+     * @param  array<string,mixed>  $sp  el `sp` firmado en el token
+     * @param  list<int>  $po  la lista del turno
+     * @param  string  $rawDraft  el borrador SIN expandir
+     */
+    public static function plansListCap(array $sp, array $po, string $rawDraft): ?int
+    {
+        // Sin `n`, el publicado es el de la línea base (320); con un `n` que no vale, ninguno.
+        $tope = array_key_exists('n', $sp)
+            ? self::cap($sp['n'])
+            : UltronPromptCompiler::BASELINE[UltronPromptCompiler::MAX_CHARS];
+        $compilador = $sp['k'] ?? null;
+        if ($tope === null || ($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO
+            || ! is_int($compilador) || $compilador < self::PLANS_LIST_SINCE_COMPILER || $po === []) {
+            return null;
+        }
+        $po = array_values(array_map('intval', $po));
+        $marcadores = UltronPlansOverview::expand($rawDraft, array_fill_keys($po, ''), $po)['used'];
+
+        return count($marcadores) >= UltronPlansOverview::MIN_MARKERS ? UltronPromptCompiler::plansListChars($tope) : null;
+    }
+
+    /**
+     * La respuesta con la lista contra su tope ({@see self::plansListCap()}):
+     * cabe entera o null. NO se le quita la pregunta final (decisión B.3 del
+     * propietario): si se pasa, en `ai/check` es `length_over_cap` y el
+     * modelo reescribe dentro de los intentos de siempre, y en el commit se
+     * descarta (`policy_length_exceeded`) y sale el respaldo de hoy.
+     *
+     * @return array{text:string, dropped:int}|null
+     */
+    public static function plansListDraft(string $text, int $cap): ?array
+    {
+        return self::fits($text, $cap) ? ['text' => $text, 'dropped' => 0] : null;
     }
 
     /**

@@ -114,12 +114,15 @@ class UltronRegenerarTextosFijosTest extends TestCase
         $md .= "Las notas no llevan nada de lo que escribió la persona: solo marcas de una lista cerrada, números y textos del catálogo saneados.\n\n";
 
         // 1. El parche del motor.
-        $md .= "## 1. Las dos instrucciones del parche del motor\n\n";
+        $md .= "## 1. Las instrucciones del parche del motor\n\n";
         $md .= 'Salen en el paquete de prompts de toda versión del Studio que gobierna algún parámetro (con la línea base no hay parches y no salen), al final de los parches. ';
         $md .= "Le enseñan al redactor a escribir la lista de planes con los marcadores, y al revisor a no tumbarla por «no lleva el marcador de precio». La lista solo viene cuando la persona pide los planes o los precios en general.\n\n";
+        // Compilador 6 (Enmienda A4-6): van al FINAL de cada prompt (tras su última línea); <L> y <W> los pone el compilador con el tope publicado.
+        $md .= "Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista) y <W> = (L − 110) / 6 palabras, de cinco en cinco por abajo: con un tope de 200, 320 y 35.\n\n";
         foreach ([
-            ['Al redactor (`T_PLANS_COMPOSER`)', 'en `composer` y en `composer_retry`, en la línea siguiente a `'.self::constante('A_FORMA').'`', self::constante('T_PLANS_COMPOSER')],
-            ['Al revisor (`T_PLANS_CRITIC`)', 'en `critic` y en `critic_retry`, en la línea siguiente a `'.self::constante('A_PROGRESSIVE').'`', self::constante('T_PLANS_CRITIC')],
+            ['Al redactor (`T_PLANS_COMPOSER`)', 'en `composer` y en `composer_retry`, en la línea siguiente a la última de la base (`'.self::constante('A_FIN_COMPOSER').'…`): la última del prompt', self::constante('T_PLANS_COMPOSER')],
+            ['Al revisor (`T_PLANS_CRITIC`)', 'en `critic` y en `critic_retry`, la última línea del prompt (tras `'.self::constante('A_FIN_CRITIC').'…` y la de abajo)', self::constante('T_PLANS_CRITIC')],
+            ['Al revisor, lo que ya comprueba el backend (`T_PLANS_CRITIC_CHECKED`)', 'en `critic` y en `critic_retry`, en la línea siguiente a la última de la base (`'.self::constante('A_FIN_CRITIC').'…`), justo antes de la de arriba', self::constante('T_PLANS_CRITIC_CHECKED')],
         ] as [$titulo, $donde, $texto]) {
             $this->assertMatchesRegularExpression('/^[\x20-\x7E]+$/', $texto, 'ASCII imprimible, sin tildes ni llaves');
             $this->assertDoesNotMatchRegularExpression('/[{}]/', $texto);

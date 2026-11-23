@@ -149,7 +149,7 @@ class StudioLabEngineFlowParityTest extends TestCase
         $f = self::flujo();
         $this->assertSame([F::FLOW_REV, F::BASE, F::COMPILER, F::CHECK_CONTRACT], [$f['_generado']['flowRev'], $f['_generado']['base'], $f['_generado']['compiler'], $f['_generado']['contract']]);
         $this->assertSame([UltronPromptCompiler::BASE, UltronPromptCompiler::VERSION], [F::BASE, F::COMPILER], 'el flujo es el del compilador de hoy');
-        $this->assertSame('motor-S2-c5-'.F::VERSION, F::promptVersion());
+        $this->assertSame('motor-S2-c6-'.F::VERSION, F::promptVersion());
         $this->assertLessThanOrEqual(32, strlen(F::promptVersion()), 'cabe en la columna');
         $this->assertTrue(F::isEnginePromptVersion(F::promptVersion()));
         $this->assertFalse(F::isEnginePromptVersion('2026-11-12.6'));

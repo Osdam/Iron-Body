@@ -43,7 +43,7 @@ use InvalidArgumentException;
  *
  * VERSIÓN. Cambiar un nodo, una arista o un port obliga a subir
  * {@see VERSION}: va en el `prompt_version` de las ejecuciones del motor
- * (`motor-S2-c5-<VERSION>`), así que nunca se comparan dos recorridos
+ * (`motor-S2-c6-<VERSION>`), así que nunca se comparan dos recorridos
  * distintos con el mismo nombre.
  */
 final class StudioLabEngineFlow
@@ -56,7 +56,7 @@ final class StudioLabEngineFlow
     /** La base y el compilador con los que se generó ese flujo (`_generado`). */
     public const BASE = 'n8n-29de5119';
 
-    public const COMPILER = 5;
+    public const COMPILER = 6;
 
     /** El contrato de la comprobación del servidor (`ultron-regen/1`). */
     public const CHECK_CONTRACT = 'ultron-regen/1';

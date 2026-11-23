@@ -677,6 +677,18 @@ class UltronCommitService
          * registro, guardas) ve el texto que va a salir.
          */
         $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida);
+        /*
+         * EL TOPE DE LA LISTA (Enmienda A4-6 del H5, PT-17b; decisión B del
+         * propietario). Con el compilador 6 (`sp.k`), un tope publicado (el
+         * firmado o, sin `sp.n`, el de la línea base) y al menos dos marcadores
+         * de la lista del turno en el borrador SIN expandir, la respuesta se
+         * mide contra max(tope publicado, 320) y no
+         * se le quita la pregunta final ({@see UltronReplyFitter::plansListCap()},
+         * la misma regla que `ai/check` y el laboratorio). Null en cualquier
+         * otro caso: el tope publicado, como hoy; Legacy nunca llega aquí con
+         * lista.
+         */
+        $topeDeLista = $lista === null ? null : UltronReplyFitter::plansListCap(is_array($token['extra']['sp'] ?? null) ? $token['extra']['sp'] : [], $listaDelTurno, $sanitized['reply']);
         if ($lista !== null) {
             $sanitized['reply'] = $lista['text'];
         }
@@ -1659,14 +1671,25 @@ class UltronCommitService
          * registrada sin su día ni su hora (I-2): ninguna guarda vuelve a
          * mirar el texto recortado. Va aquí, antes de `violations()`, para
          * que la política, la memoria y la traza vean el texto que va a salir.
+         *
+         * Con la lista de planes (`$topeDeLista`, compilador 6), contra el tope
+         * de la lista y SIN quitar la pregunta final: si no cabe, se descarta
+         * igual (`policy_length_exceeded`) y sale el respaldo de hoy, medido
+         * con el tope publicado. La traza lleva el tope aplicado (`list_cap`).
+         * También sin tope publicado firmado (la línea base, 320: `decide` no
+         * firma `n`), porque el tope de la lista sí existe (B1 de la revisión
+         * del 23-11-2026); sin lista, la línea base sigue sin medirse.
          */
         $longitud = null;
-        if ($turno['tope'] !== null) {
+        if ($turno['tope'] !== null || $topeDeLista !== null) {
             $desde = UltronReplyFitter::measure($replyFinal);
-            $recorte = UltronReplyFitter::draft($replyFinal, $turno['tope']);
-            $longitud = $recorte === null
+            $recorte = $topeDeLista !== null
+                ? UltronReplyFitter::plansListDraft($replyFinal, $topeDeLista)
+                : UltronReplyFitter::draft($replyFinal, $turno['tope']);
+            $longitud = ($recorte === null
                 ? ['action' => 'discarded', 'from' => $desde, 'dropped' => 0]
-                : ['action' => $recorte['dropped'] > 0 ? 'trimmed' : 'fit', 'from' => $desde, 'dropped' => $recorte['dropped']];
+                : ['action' => $recorte['dropped'] > 0 ? 'trimmed' : 'fit', 'from' => $desde, 'dropped' => $recorte['dropped']])
+                + ($topeDeLista !== null ? ['list_cap' => $topeDeLista] : []);
             if ($recorte !== null && $recorte['dropped'] > 0) {
                 ChannelLog::info('ultron.commit.draft_trimmed_to_cap', [
                     'conversation_id' => (int) $conversation->id, 'cap' => $turno['tope'], 'from' => $desde, 'dropped' => $recorte['dropped'],
@@ -1959,9 +1982,11 @@ class UltronCommitService
              * la traen: el de la longitud (solo existe con tope) y el del
              * registro (H4-9, decisión de `backend`: un borrador que tutea pero
              * acompaña a una cortesía ya registrada), con tope o sin él. Con
-             * tope, el acta se ajusta con la regla de los curados.
+             * tope, el acta se ajusta con la regla de los curados. La de la
+             * longitud también existe con el tope de la lista (compilador 6),
+             * aunque el publicado sea el de la línea base.
              */
-            if ((($turno['tope'] !== null && in_array(self::VIOLACION_LONGITUD, $incumple, true)) || in_array(self::VIOLACION_REGISTRO, $incumple, true))
+            if (((($turno['tope'] !== null || $topeDeLista !== null) && in_array(self::VIOLACION_LONGITUD, $incumple, true)) || in_array(self::VIOLACION_REGISTRO, $incumple, true))
                 && ($cita = $this->citaDelTurno($executed)) !== null) {
                 $acta = UltronFormalReplies::segun($turno['tono'], $this->courtesy->actaDeLaFila($cita));
                 $acta = $acta === null || $turno['tope'] === null ? $acta : UltronReplyFitter::curated($acta, $turno['tope']);
@@ -1981,7 +2006,8 @@ class UltronCommitService
                 $sustituidoPorLaPolitica = $alternativa !== $replyFinal;
                 // m-3: la traza dice que el texto se SUSTITUYÓ, con la medida del borrador (la de lo que sale la pone el punto de control).
                 if ($longitud !== null && $alternativa !== $replyFinal) {
-                    $longitud = ['action' => 'replaced', 'from' => $longitud['from'], 'dropped' => 0];
+                    // Con el tope de la lista que se le aplicó al borrador, si lo hubo (compilador 6).
+                    $longitud = ['action' => 'replaced', 'from' => $longitud['from'], 'dropped' => 0] + array_intersect_key($longitud, ['list_cap' => true]);
                 }
                 $replyFinal = $alternativa;
                 // Lo que colgaba del texto del modelo (los enlaces de la app ya pegados) no salió con él.
@@ -2001,6 +2027,9 @@ class UltronCommitService
             }
         }
 
+        // La respuesta con la lista que pasó su tope (compilador 6) se controla con ese tope (aquí y antes de enviar); un respaldo, con el publicado.
+        $topeDelTexto = $topeDeLista !== null && in_array($longitud['action'] ?? null, ['fit', 'trimmed'], true) ? $topeDeLista : null;
+
         /*
          * 13.ter) RETOMAR LO QUE SE ESTABA HACIENDO.
          *
@@ -2011,14 +2040,15 @@ class UltronCommitService
          */
         if (($policy['resume_goal_after_answer'] ?? false) === true && ! CommercialTurnPolicy::mentionsVisit($replyFinal)) {
             $cola = UltronFormalReplies::segun($turno['tono'], CommercialTurnPolicy::courtesyResumption($policy));
-            // Con tope, la frase que retoma la visita solo se añade si cabe (D-4).
+            // Con tope, la frase que retoma la visita solo se añade si cabe (D-4). Sin publicado (línea base), la respuesta con la lista mide contra el suyo.
+            $topeDeLaCola = $turno['tope'] ?? $topeDelTexto;
             $conCola = $cola === null ? null
-                : ($turno['tope'] === null ? rtrim($replyFinal).' '.$cola : UltronReplyFitter::append($replyFinal, $cola, $turno['tope'], false)['text'] ?? null);
+                : ($topeDeLaCola === null ? rtrim($replyFinal).' '.$cola : UltronReplyFitter::append($replyFinal, $cola, $topeDeLaCola, false)['text'] ?? null);
             if ($conCola !== null) {
                 ChannelLog::info('ultron.commit.goal_resumed', ['conversation_id' => (int) $conversation->id]);
                 $replyFinal = $conCola;
             } elseif ($cola !== null) {
-                ChannelLog::info('ultron.commit.goal_resumption_skipped_cap', ['conversation_id' => (int) $conversation->id, 'cap' => $turno['tope']]);
+                ChannelLog::info('ultron.commit.goal_resumption_skipped_cap', ['conversation_id' => (int) $conversation->id, 'cap' => $topeDeLaCola]);
             }
         }
 
@@ -2089,7 +2119,7 @@ class UltronCommitService
         // La conversación va explícita: la respuesta pertenece al hilo del
         // turno, no al primero que encuentre el despachador.
         $antesDelControl = $replyFinal;
-        $replyFinal = $this->antesDeEnviar($conversation, $action, $replyFinal, (string) $sanitized['intent'], $turno, $longitud);
+        $replyFinal = $this->antesDeEnviar($conversation, $action, $replyFinal, (string) $sanitized['intent'], $turno, $longitud, $topeDelTexto);
         $send = $this->dispatcher->dispatchWhatsapp(
             $lead->fresh(),
             $conversation->channel,
@@ -5623,10 +5653,22 @@ class UltronCommitService
      * que callar. Va primero, para que el registro y la longitud miren lo que de
      * verdad sale. Sin versión del Studio no mira nada: Legacy, igual.
      *
+     * EL TOPE DE LA LISTA (compilador 6, Enmienda A4-6). `$topeDelTexto` lo
+     * pasa el camino normal cuando lo que llega es la respuesta con la lista
+     * de planes que ya pasó su tope ({@see UltronReplyFitter::plansListCap()}):
+     * se controla con ese tope. Los últimos recursos se eligen SIEMPRE con el
+     * publicado, y si el texto se sustituye aquí, el sustituto se mide con él.
+     * La traza (`metadata.length`) añade `list_cap` cuando se le aplicó al
+     * borrador; `cap` sigue siendo el tope publicado. Sin tope publicado
+     * firmado (la línea base, 320) también corre si se le aplicó el de la
+     * lista (B1 de la revisión del 23-11-2026): `cap` va null, el sustituto
+     * no se mide (como hoy en la línea base) y la traza se escribe igual.
+     *
      * @param  array{studio:bool,tope:?int,tono:?string}  $turno
-     * @param  array{action:string,from:int,dropped:int}|null  $longitud  lo que hizo el camino con el texto
+     * @param  array{action:string,from:int,dropped:int,list_cap?:int}|null  $longitud  lo que hizo el camino con el texto
+     * @param  int|null  $topeDelTexto  el tope de la lista, si el texto es la respuesta con la lista que lo pasó
      */
-    private function antesDeEnviar(MarketingConversation $conversation, MarketingAiAction $action, string $texto, string $intent, array $turno, ?array $longitud): string
+    private function antesDeEnviar(MarketingConversation $conversation, MarketingAiAction $action, string $texto, string $intent, array $turno, ?array $longitud, ?int $topeDelTexto = null): string
     {
         $tope = $turno['tope'];
         if (($turno['studio'] ?? false) && UltronDraftPlaceholders::looksLikeMarker($texto)) {
@@ -5637,7 +5679,9 @@ class UltronCommitService
             $desde = UltronReplyFitter::measure($texto);
             $texto = $alternativa !== null && ! UltronDraftPlaceholders::looksLikeMarker($alternativa) ? $alternativa : UltronDraftPlaceholders::withoutMarkers($texto);
             // La traza de la longitud dice que el texto se SUSTITUYÓ, con la medida del que no salió (como la rama de la política).
-            $longitud = ['action' => 'replaced', 'from' => $longitud['from'] ?? $desde, 'dropped' => 0];
+            $longitud = ['action' => 'replaced', 'from' => $longitud['from'] ?? $desde, 'dropped' => 0] + array_intersect_key($longitud ?? [], ['list_cap' => true]);
+            // El sustituto ya no es la respuesta con la lista: se mide con el tope publicado.
+            $topeDelTexto = null;
             $this->anotarTextoDelServidor($action, UltronReplyOrigin::SERVER_MARKER_LEAK);
         }
         $marcas = UltronFormalReplies::aplica($turno['tono'] ?? null) ? UltronRegisterDetector::tuteo($texto, $this->knowledge->activePlans()) : [];
@@ -5649,22 +5693,28 @@ class UltronCommitService
             $meta['register'] = array_merge((array) ($meta['register'] ?? ['expected' => 'usted']), ['fallback_mismatch' => $marcas]);
             $action->forceFill(['metadata' => $meta])->save();
         }
-        if ($tope === null) {
+        // Sin tope publicado no se mira nada (Legacy y la línea base, como hoy), salvo que al borrador se le aplicara el de la lista.
+        if ($tope === null && ! isset($longitud['list_cap'])) {
             return $texto;
         }
         $longitud ??= ['action' => 'fit', 'from' => UltronReplyFitter::measure($texto), 'dropped' => 0];
 
-        if (! UltronReplyFitter::fits($texto, $tope)) {
+        $topeDeControl = $topeDelTexto ?? $tope;
+        if ($topeDeControl !== null && ! UltronReplyFitter::fits($texto, $topeDeControl)) {
             ChannelLog::error('ultron.commit.length_cap_overflow', [
                 'conversation_id' => (int) $conversation->id, 'ai_action_id' => (int) $action->id,
-                'cap' => $tope, 'length' => UltronReplyFitter::measure($texto), 'intent' => $intent,
+                'cap' => $topeDeControl, 'length' => UltronReplyFitter::measure($texto), 'intent' => $intent,
             ]);
             $texto = $this->ultimoRecurso($conversation, $intent, $tope, $turno['tono'] ?? null) ?? $texto;
             $longitud['overflow'] = true;
         }
 
         $meta = is_array($action->metadata) ? $action->metadata : [];
-        $meta['length'] = array_merge(['cap' => $tope, 'action' => $longitud['action'], 'from' => $longitud['from'], 'to' => UltronReplyFitter::measure($texto), 'dropped' => $longitud['dropped']], isset($longitud['overflow']) ? ['overflow' => true] : []);
+        $meta['length'] = array_merge(
+            ['cap' => $tope, 'action' => $longitud['action'], 'from' => $longitud['from'], 'to' => UltronReplyFitter::measure($texto), 'dropped' => $longitud['dropped']],
+            isset($longitud['list_cap']) ? ['list_cap' => $longitud['list_cap']] : [],
+            isset($longitud['overflow']) ? ['overflow' => true] : [],
+        );
         $action->forceFill(['metadata' => $meta])->save();
 
         return $texto;
