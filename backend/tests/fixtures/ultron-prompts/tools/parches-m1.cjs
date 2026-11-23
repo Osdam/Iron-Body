@@ -60,6 +60,15 @@
  * escritas tal cual en él. Los cinco textos que cambian o se suman tienen que
  * estar escritos tal cual DENTRO del apartado «Compilador 6»; los del 5 que
  * siguen, dentro del apartado «Compilador 5».
+ *
+ * Compilador 7 (Enmienda A4-7 del H5, 23-11-2026; PT-17c,
+ * `plans/informes-motores/diseno-pt17c-estratega-c7.md`, y §B.3, apartado
+ * «Compilador 7»): solo cambia el texto de la entrada 1, la lista del
+ * Strategist tras `QUE PLAN SE COTIZA` (`engine.plansOverview.strategist`),
+ * que sustituye al del 5 y el 6 y tiene que estar escrito tal cual DENTRO del
+ * apartado «Compilador 7». Las quince entradas, sus anclas, sus operaciones y
+ * su orden, y todos los textos de los redactores y los revisores, igual que
+ * en el 6.
  */
 const fs = require('fs');
 const path = require('path');
@@ -84,8 +93,8 @@ const CONTRACT = 'ultron-prompts/1';
  * no vacías se prueban en PHP (`UltronPromptCompilerPhrasesTest`).
  */
 const PHRASES = 'rules.forbiddenPhrases';
-/** Compilador 3: cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»); el 4, los dos de `tone = profesional` (§B.3, «Compilador 4»); el 5 y el 6, el parche del motor (§B.3, «Compilador 5» y «Compilador 6»). */
-const COMPILER = 6;
+/** Compilador 3: cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»); el 4, los dos de `tone = profesional` (§B.3, «Compilador 4»); el 5, el 6 y el 7, el parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador 7»). */
+const COMPILER = 7;
 
 /** §B.3 / C3: la línea base («como hoy», M1-4), con la lista de frases vacía. */
 const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
@@ -144,7 +153,8 @@ const T = {
   'goal.venta.strategist': 'OBJETIVO COMERCIAL PUBLICADO: cerrar membresia. Con senales claras de compra (buying_signal strong, hot_lead_fast_path o READY) prioriza recommend y close sobre ofrecer la visita; el dia de cortesia queda para quien desconfia o quiere conocer antes. Nada de esto autoriza presion, descuentos ni salirse de allowed_transitions.',
   'goal.informar.strategist': 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.',
   // Compilador 5, el parche del motor (§B.3, «Compilador 5»): el del redactor sustituye al del 4, que sigue en «Compilador 4» como histórico.
-  'engine.plansOverview.strategist': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.',
+  // Compilador 7 (§B.3, «Compilador 7»): la lista del Strategist sustituye a la del 5 y el 6, que sigue en «Compilador 5» como histórica.
+  'engine.plansOverview.strategist': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.',
   'engine.plansOverview.strategist.present': 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.',
   // Compilador 6 (§B.3, «Compilador 6»): el del redactor (al final del prompt; una guía sin frase fija, con `{L}` y `{W}` del tope de la lista) y el del precio sustituyen a los del 5, que siguen en «Compilador 5» como históricos; se suma el de suggested_question.
   'engine.plansOverview.composer.ask': 'Si vas a preguntar, usa suggested_question cuando venga, nunca si commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND):',
@@ -189,9 +199,11 @@ function sustituir(texto, n) {
 /** Compilador 4: los textos que tienen que estar escritos DENTRO del apartado «Compilador 4» de §B.3 (el del revisor del motor ya no: lo sustituye el del 6). */
 const DEL_COMPILADOR_4 = ['tone.profesional.composer', 'tone.profesional.critic'];
 /** Compilador 5: los textos del parche del motor del 5 que siguen en el 6, escritos DENTRO del apartado «Compilador 5» de §B.3. */
-const DEL_COMPILADOR_5 = ['engine.plansOverview.strategist', 'engine.plansOverview.strategist.present', 'engine.plansOverview.composer.marker', 'engine.plansOverview.composer.choose'];
+const DEL_COMPILADOR_5 = ['engine.plansOverview.strategist.present', 'engine.plansOverview.composer.marker', 'engine.plansOverview.composer.choose'];
 /** Compilador 6: los cinco textos que cambian o se suman, escritos DENTRO del apartado «Compilador 6» de §B.3. */
 const DEL_COMPILADOR_6 = ['engine.plansOverview.composer.ask', 'engine.plansOverview.composer.price', 'engine.plansOverview.composer', 'engine.plansOverview.critic', 'engine.plansOverview.critic.checked'];
+/** Compilador 7: el único texto que cambia (la lista del Strategist), escrito DENTRO del apartado «Compilador 7» de §B.3. */
+const DEL_COMPILADOR_7 = ['engine.plansOverview.strategist'];
 
 /** Cómo aparece cada texto en el plan (para la comprobación de transcripción): cada marcador, con su letra. */
 const CON_LETRAS = (texto) => texto.split('{N}').join('N').split('{M}').join('M').split('{P}').join('P').split('{F}').join('F').split('{L}').join('L').split('{W}').join('W');
@@ -228,11 +240,17 @@ function comprobarTextosContraElPlan() {
   }
   // Compilador 6: su apartado, la versión vigente y sus cinco textos dentro de él.
   const c6 = b3.indexOf('#### Compilador 6');
-  if (c6 < 0 || !b3.slice(c6).includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  if (c6 < 0 || !b3.slice(c6).includes('`UltronPromptCompiler::VERSION = 6`')) throw new Error('§B.3 no tiene el apartado del compilador 6');
   for (const clave of DEL_COMPILADOR_6) {
     if (!b3.slice(c6).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 6» de §B.3: transcripción equivocada`);
   }
-  for (const f of FORMULAS) if (!b3.includes(f)) throw new Error(`La fórmula ${f} no aparece en §B.3: no es la que este guion implementa`);
+  // Compilador 7: su apartado, la versión vigente y su texto dentro de él.
+  const c7 = b3.indexOf('#### Compilador 7');
+  if (c7 < 0 || !b3.slice(c7).includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  for (const clave of DEL_COMPILADOR_7) {
+    if (!b3.slice(c7).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 7» de §B.3: transcripción equivocada`);
+  }
+  for (const f of FORMULAS)if (!b3.includes(f)) throw new Error(`La fórmula ${f} no aparece en §B.3: no es la que este guion implementa`);
   // Compilador 6: las fórmulas del tope de la lista y su tabla, dentro de su apartado.
   for (const f of FORMULAS_LISTA) if (!b3.slice(c6).includes(f)) throw new Error(`La fórmula ${f} no aparece en el apartado «Compilador 6» de §B.3`);
   for (const n of MAX_CHARS) {

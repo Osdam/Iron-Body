@@ -59,6 +59,10 @@ use ReflectionMethod;
  *     backend y el bloque de la lista, la última. Tras `FORMA:` y tras
  *     `progressive_disclosure:` vuelven a quedar pegados el tope y las frases.
  *     Las anclas son quince (las tres nuevas del 6).
+ * 12. Compilador 7 (Enmienda A4-7 del H5; PT-17c; §B.3, «Compilador 7»): solo
+ *     cambia el texto de la lista del Strategist; las quince entradas, sus
+ *     anclas, sus operaciones y su orden, y los redactores y los revisores,
+ *     como en el 6.
  */
 class UltronPromptCompilerTest extends TestCase
 {
@@ -108,12 +112,13 @@ class UltronPromptCompilerTest extends TestCase
     private const INFORMAR = 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.';
 
     /**
-     * El parche del motor (§B.3, «Compilador 5» y «Compilador 6»), a mano. El
-     * Strategist, el marcador y «Elige el plan…» son los del 5; el del
+     * El parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador
+     * 7»), a mano. La lista del Strategist es la del 7; la sustitución de
+     * «Presentalo…», el marcador y «Elige el plan…» son los del 5; el del
      * redactor (una guía con `{L}` y `{W}`), el del precio y los dos del
      * revisor son los del 6, y se suma la frase de `suggested_question`.
      */
-    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
+    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const MOTOR_STRATEGIST_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
@@ -225,13 +230,13 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
         $this->assertSame([], $paquete['patches']);
         $this->assertSame(112216, $paquete['bytes']);
-        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 6], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
+        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 7], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
         $this->assertSame(self::BASE, $paquete['governed']);
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(6, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista');
-        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3, ni el 4, ni el 5, ni el 6 la mueven');
+        $this->assertSame(7, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista; la 7, la lista del estratega coherente con la del servidor');
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3, ni el 4, ni el 5, ni el 6, ni el 7 la mueven');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
     }
@@ -495,34 +500,37 @@ class UltronPromptCompilerTest extends TestCase
      * Antes del parche del motor, el compilador 4 solo movía las huellas de
      * `profesional` (c001 y c304 seguían con las del 3). Con el parche del
      * motor se mueven TODAS las no base; Legacy, no. El compilador 5 las vuelve
-     * a mover todas (el parche del motor cambia), y el 6 otra vez. Las de
+     * a mover todas (el parche del motor cambia), y el 6 y el 7 otra vez. Las de
      * ahora, escritas a mano desde `compile-cases.json` regenerado (derivado
      * en Node, sin PHP).
      */
-    public function test_las_huellas_del_compilador_6_con_el_parche_del_motor(): void
+    public function test_las_huellas_del_compilador_7_con_el_parche_del_motor(): void
     {
         $huella = static fn (array $cambios): string => C::compile(self::con($cambios))['bundleHash'];
 
         $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy: no se mueve');
         $c001 = $huella(['persona.maxChars' => 160]);
-        $this->assertSame('9f30f7969378eb340f586d0fc8de234228170f483ea1a89198333578c2258ec2', $c001, 'cercano · 160');
+        $this->assertSame('02f7f7f1aba4c7c7aa83355f1e80f063f618c94c6aea546badc46a0d3cd8f12d', $c001, 'cercano · 160');
+        $this->assertNotSame('9f30f7969378eb340f586d0fc8de234228170f483ea1a89198333578c2258ec2', $c001, 'la del compilador 6');
         $this->assertNotSame('7b3327dc70fd81246c0ab251347b81d10221194035392336575e2c7274951aba', $c001, 'la del compilador 5');
         $this->assertNotSame('028bc1eda8fa852ff9cd0a268cd30e7be1529088d993259215fe77bfd8b4e585', $c001, 'la del compilador 4 con su motor');
         $this->assertNotSame('bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294', $c001, 'la del compilador 3 y del 4 sin el motor');
         $c304 = $huella(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']);
-        $this->assertSame('69af9fd2569200376592fde3f27f787fdc1924c2ea144a3bf2cdcc6988de2d5c', $c304, 'entusiasta · sin emojis · 480 · venta');
+        $this->assertSame('13ae735dc4599d1d501f791d1c01866e81b97dce444004b062e58295bc535be6', $c304, 'entusiasta · sin emojis · 480 · venta');
+        $this->assertNotSame('69af9fd2569200376592fde3f27f787fdc1924c2ea144a3bf2cdcc6988de2d5c', $c304, 'la del compilador 6');
         $this->assertNotSame('c3d77437f10772a4356b338836bb703e44f6dfed52546af370457807d110d1ad', $c304, 'la del compilador 5');
         $this->assertNotSame('10417eaa561c9efcad29a2d96d9e6d7daf42dcbf77e803454d3a2521cdf4a21e', $c304, 'la del compilador 4 con su motor');
         $this->assertNotSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $c304);
         // «profesional + 200» (c074).
         $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
-        $this->assertSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $g8['bundleHash'], 'profesional · 200, compilador 6 (la v4, medida con el 5, ya no la da)');
+        $this->assertSame('200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631', $g8['bundleHash'], 'profesional · 200, compilador 7 (la v4, firmada con el 6, ya no la da)');
+        $this->assertNotSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $g8['bundleHash'], 'la del compilador 6: la que firmó la v4');
         $this->assertNotSame('2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0', $g8['bundleHash'], 'la del compilador 5: la que midió el laboratorio');
         $this->assertNotSame('26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075', $g8['bundleHash'], 'la del compilador 4 con su motor: la que firmó la v3');
         $this->assertNotSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'la del 4 sin el motor');
         $this->assertNotSame('af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51', $g8['bundleHash'], 'la del compilador 3');
-        $this->assertSame(122167, $g8['bytes'], '115 446 sin el motor; 117 746 con el del 4 (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); 120 097 con el del 5 (2 351 más); con el del 6, 2 070 más que con el 5');
-        $this->assertSame([120149, 121276], [C::compile(self::con(['persona.maxChars' => 160]))['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']))['bytes']], 'c001 y c304, con 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope)');
+        $this->assertSame(122578, $g8['bytes'], '115 446 sin el motor; 117 746 con el del 4 (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); 120 097 con el del 5 (2 351 más); 122 167 con el del 6 (2 070 más); con el del 7, 411 más (la lista del Strategist)');
+        $this->assertSame([120560, 121687], [C::compile(self::con(['persona.maxChars' => 160]))['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']))['bytes']], 'c001 y c304: con el 6, 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope); con el 7, 411 más (la lista del Strategist)');
     }
 
     // ── 4 · Anclas únicas; la matriz entera compila ───────────────────────────

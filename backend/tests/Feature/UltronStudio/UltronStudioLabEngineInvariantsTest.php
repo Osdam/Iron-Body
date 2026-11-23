@@ -83,8 +83,8 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
 
     public function test_el_compilador_la_base_y_la_huella_legacy_solo_se_leen(): void
     {
-        // El compilador es el 6 desde la Enmienda A4-6 del H5 (PT-17b, el turno de planes a la primera): lo sube el motor, no el laboratorio.
-        $this->assertSame(6, UltronPromptCompiler::VERSION);
+        // El compilador es el 7 desde la Enmienda A4-7 del H5 (PT-17c, la estrategia del turno de planes): lo sube el motor, no el laboratorio.
+        $this->assertSame(7, UltronPromptCompiler::VERSION);
         $this->assertSame('n8n-29de5119', UltronPromptCompiler::BASE);
         $this->assertSame('n8n-29de5119', UltronPromptBase::ID);
         $this->assertSame(['strategist', 'composer', 'critic', 'composer_retry', 'critic_retry'], UltronPromptBase::ROLES);

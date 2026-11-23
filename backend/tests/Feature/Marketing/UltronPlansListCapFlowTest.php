@@ -160,7 +160,7 @@ class UltronPlansListCapFlowTest extends TestCase
         $decide = $this->decide($this->entrante(self::PANORAMA), true);
         $sp = self::cargaDelToken($decide['decide_token'])['x']['sp'];
         $this->assertSame(['studio', 200, 'profesional', 1, UltronPromptCompiler::VERSION], [$sp['m'], $sp['n'], $sp['t'], $sp['o'], $sp['k']]);
-        $this->assertSame(6, $sp['k']);
+        $this->assertSame(7, $sp['k'], 'el compilador 7 (Enmienda A4-7): la regla del tope de lista sigue (k ≥ 6)');
         $this->assertSame(['contract', 'mode', 'reason', 'base', 'compiler', 'bundle_hash', 'version', 'content_hash', 'entry', 'seq', 'roles'], array_keys($decide['studio_prompts']), 'la respuesta a n8n, con su forma de siempre');
         $this->assertSame(self::PO, self::cargaDelToken($decide['decide_token'])['x']['po']);
 

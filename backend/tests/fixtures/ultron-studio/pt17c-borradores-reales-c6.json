@@ -1,0 +1,590 @@
+{
+  "_source": "Medicion de la version 4 (profesional 200) en el laboratorio frente al motor con el compilador 6 en produccion (prompt_version motor-S2-c6-2026-11-22.1, paquete 962902ab, gpt-4.1-mini; ejecuciones 38 a 42 del 23-11-2026, 25 casos: 20 del turno de planes E-001 a E-005 y 5 de la consulta combinada E-006). firstDrafts: el PRIMER borrador de los 25 (engine.drafts[0]) con los codigos que le dio ai/check (codigo/detalle). finalModel: los 14 textos finales que escribio el modelo (engine.final.origin model) del turno de planes. combinedSecond: el SEGUNDO borrador de los 5 de E-006, los que ai/check dio por buenos y el revisor rechazo. labChars y labCap: lo que midio el laboratorio ya expandido con el catalogo de produccion (Plan Valera, Plan Mensual y Elite). Solo texto del modelo: sin datos personales.",
+  "scenarios": {
+    "E-001": "¿Qué planes tienen y cuánto cuesta la mensualidad?",
+    "E-006": "¿Qué planes tienen y abren los domingos?"
+  },
+  "po": [
+    3,
+    4,
+    8
+  ],
+  "firstDrafts": [
+    {
+      "case": "38/169/E-001",
+      "text": "Por lo que me pregunta, le cuento que tenemos tres planes activos que pueden interesarle: {{PLAN_1}} con acceso ilimitado al gimnasio y asesoría básica, {{PLAN_2}} similar pero con beneficios adicionales, y {{PLAN_3}} que es el ideal para un entrenamiento completo y seguimiento avanzado. ¿Qué objetivo tiene para entrenar y así orientarle mejor?",
+      "labChars": 387,
+      "labCap": 320,
+      "codes": [
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "38/170/E-002",
+      "text": "Le explico los planes activos y sus precios: el Plan Valera ofrece asesoría semi personalizada y acceso básico a la app por {{PLAN_1}}; el Plan Mensual tiene beneficios similares por {{PLAN_2}}; y el Plan Élite, ideal para quienes buscan un entrenamiento intensivo con guía completa y nutrición avanzada, cuesta {{PLAN_3}}. Para orientar mejor, ¿qué experiencia tiene entrenando?",
+      "labChars": 420,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "38/171/E-003",
+      "text": "Le explico, tenemos tres opciones principales: el Plan Valera con acceso ilimitado al gimnasio y asesoría semi personalizada, el Plan Mensual con beneficios similares, y el Plan Élite, que incluye acceso total al gimnasio y entrenamientos personalizados. ¿Podría contarme si ya ha entrenado antes o qué busca lograr?",
+      "labChars": 316,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "38/172/E-004",
+      "text": "Le comento que tenemos varios planes activos: el Plan Valera con acceso ilimitado y asesoría básica, el Plan Mensual similar y el Élite con acceso total y entrenamientos guiados. El Élite cuesta {{PLAN_PRICE}}. ¿Me cuenta cuál es su objetivo para recomendarle mejor?",
+      "labChars": 263,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "38/173/E-005",
+      "text": "Le comento que el Plan Valera ofrece acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y seguimiento en ejercicios por {{PLAN_PRICE}} al mes. Para recomendarle mejor, ¿tiene experiencia entrenando?",
+      "labChars": 217,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "38/174/E-006",
+      "text": "Le informo que en Iron Body Neiva abrimos los domingos de 8:00 a.m. a 2:00 p.m. Por lo que me cuenta, para una experiencia completa, lo que mejor le encaja es el Plan Élite: acceso total al gimnasio y a todas las sesiones funcionales por agenda, más acompañamiento continuo. ¿Me cuenta un poco sobre su experiencia entrenando o qué busca lograr?",
+      "labChars": 345,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "39/175/E-001",
+      "text": "Le comento que tenemos tres planes principales: el Plan Valera con acceso ilimitado y asesoría semi personalizada; el Plan Mensual con beneficios similares; y el plan Élite, que es el más completo con acceso total y seguimiento intensivo. ¿Qué objetivo tiene para su entrenamiento?",
+      "labChars": 281,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "39/176/E-002",
+      "text": "Le explico los tres planes principales que tenemos: el Plan Valera {{PLAN_1}} con acceso ilimitado al gimnasio y asesoría semi personalizada; el Plan Mensual {{PLAN_2}} que incluye lo mismo; y el Élite {{PLAN_3}}, que ofrece acceso total, rutinas guiadas y seguimiento completo. Para recomendarle el ideal, ¿qué desea lograr con su entrenamiento?",
+      "labChars": 387,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/177/E-003",
+      "text": "Le explico los planes que tenemos: el Plan Valera incluye acceso ilimitado al gimnasio, asesoría y seguimiento básico con entrenador; el Plan Mensual es similar; y el Plan Élite ofrece acceso total, sesiones funcionales y guía nutricional por {{PLAN_3}}. ¿Ha entrenado antes o busca algo específico?",
+      "labChars": 309,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/178/E-004",
+      "text": "Le explico: tenemos el Plan Valera con asesoría y seguimiento por {{PLAN_1}}, el Plan Mensual con beneficios similares por {{PLAN_2}}, y el plan Élite, el ideal para usted si busca un entrenamiento intensivo y completo, por {{PLAN_3}}. ¿Qué busca lograr con el entrenamiento?",
+      "labChars": 316,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/179/E-005",
+      "text": "Le explico: tenemos tres planes activos destacados. El Plan Valera ofrece acceso ilimitado y asesoría básica por {{PLAN_1}}. El Plan Mensual es similar con beneficios adicionales por {{PLAN_2}}. Y el plan Élite, muy completo, incluye acceso total y guía nutricional por {{PLAN_3}}. Para recomendarle mejor, ¿qué experiencia tiene o qué busca lograr en el gimnasio?",
+      "labChars": 405,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/180/E-006",
+      "text": "Le respondo que abrimos domingos de 8 a. m. a 2 p. m. Sobre planes, el Élite ofrece acceso total al gimnasio y sesiones funcionales por agenda, ideal si quiere un entrenamiento intensivo y dinámico. ¿Qué experiencia tiene entrenando?",
+      "labChars": 233,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "40/181/E-001",
+      "text": "Le cuento que tenemos varios planes, por ejemplo el Plan Valera con acceso ilimitado y asesoría semi personalizada; o el Plan Mensual con beneficios similares; y el Élite, que ofrece acceso total y acompañamiento completo. Por lo que me dice, ¿qué busca lograr con su entrenamiento?",
+      "labChars": 282,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "40/182/E-002",
+      "text": "Le comento que tenemos varios planes: el Plan Valera con {{PLAN_1}}, el Plan Mensual con {{PLAN_2}}, y el Élite con {{PLAN_3}}. Para recomendarle el ideal, ¿me cuenta qué busca lograr con su entrenamiento?",
+      "labChars": 246,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "40/183/E-003",
+      "text": "Le informo que en Iron Body Neiva tenemos el Plan Valera con acceso ilimitado y asesoría básica, el Plan Mensual con beneficios similares, y el Plan Élite con acceso total y seguimiento completo. El precio mensual del Plan Élite es {{PLAN_PRICE}}. Para recomendarle mejor, ¿qué experiencia tiene entrenando o qué busca lograr?",
+      "labChars": 323,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "40/184/E-004",
+      "text": "Por lo que me pregunta, le cuento que tenemos el Plan Valera con acceso ilimitado, asesoría y seguimiento básico, y el Plan Élite con acceso total, entrenamientos guiados y nutrición avanzada. La mensualidad del Plan Élite es {{PLAN_3}}. ¿Ha entrenado antes o qué busca lograr?",
+      "labChars": 287,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "40/185/E-005",
+      "text": "Le cuento que tenemos varios planes: el Plan Valera con asesoría y acceso básico a la app {{PLAN_1}}, el Plan Mensual con acceso similar {{PLAN_2}}, y el Élite, que es el más completo con acceso total y guía nutricional {{PLAN_3}}. Para orientarle mejor, ¿qué busca lograr con su entrenamiento?",
+      "labChars": 335,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "40/186/E-006",
+      "text": "Le informo que en Iron Body Neiva abrimos domingos de 8:00 a.m. a 2:00 p.m. Tenemos el Plan Valera, con asesoría y acceso completo al gimnasio, y el Plan Élite, que incluye además sesiones funcionales y guía nutricional. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+      "labChars": 278,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "41/187/E-001",
+      "text": "Le explico los planes que tenemos: Plan Valera con acceso ilimitado y asesoría semi personalizada, Plan Mensual con beneficios similares y el plan Élite, que incluye acceso total y guía nutricional avanzada. La mensualidad del plan Élite es {{PLAN_PRICE}}. ¿Me cuenta qué busca lograr con el entrenamiento?",
+      "labChars": 303,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "41/188/E-002",
+      "text": "Le cuento que tenemos tres planes principales: el Plan Valera con acceso ilimitado y asesoría básica, el Plan Mensual con beneficios similares, y el plan Élite que ofrece acceso total, entrenamientos guiados y nutrición avanzada. ¿Me puede contar si ya tiene experiencia entrenando para recomendarle el ideal?",
+      "labChars": 309,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "41/189/E-003",
+      "text": "Le explico los planes y costos: el Plan Valera tiene acceso ilimitado y asesoría semi personalizada con entrenador por {{PLAN_1}}. El Plan Mensual ofrece beneficios similares por {{PLAN_2}}. El ideal para un entrenamiento completo es Élite, con acceso total y guía nutricional por {{PLAN_3}}. ¿Entrena actualmente o es nuevo en gimnasio?",
+      "labChars": 378,
+      "labCap": 320,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/190/E-004",
+      "text": "Le cuento que tenemos varios planes. Por lo que me pregunta, le recomiendo el Élite: acceso total, app completa, sesiones funcionales y seguimiento continuo, por {{PLAN_PRICE}}. ¿Ha entrenado antes en gimnasio?",
+      "labChars": 207,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "41/191/E-005",
+      "text": "Le cuento que tenemos varios planes: el Plan Valera con acceso ilimitado y asesoría semi personalizada, el Plan Mensual con beneficios similares, y el Plan Élite que incluye acceso total y entrenamientos guiados. La mensualidad del Plan Valera es {{PLAN_1}}, ¿me cuenta si ya ha entrenado antes para orientarle mejor?",
+      "labChars": 332,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/name_written",
+        "length_over_cap"
+      ],
+      "markers": [
+        "PLAN_1"
+      ]
+    },
+    {
+      "case": "41/192/E-006",
+      "text": "Le comento que el gimnasio abre domingos de 8:00 a. m. a 2:00 p. m. Por lo que me dice, el plan Élite le puede interesar: acceso total, sesiones funcionales y guía nutricional avanzada. ¿Qué experiencia tiene entrenando?",
+      "labChars": 220,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    },
+    {
+      "case": "42/193/E-006",
+      "text": "Le comento que el gimnasio abre domingos de 8:00 a.m. a 2:00 p.m. Tenemos varios planes, como el Plan Valera, que ofrece asesoría y acceso completo a la app, y el Élite, que incluye sesiones funcionales y guía nutricional. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 262,
+      "labCap": 200,
+      "codes": [
+        "plans_overview/missing",
+        "length_over_cap"
+      ],
+      "markers": []
+    }
+  ],
+  "finalModel": [
+    {
+      "case": "38/171/E-003",
+      "draft": 2,
+      "text": "Claro, nuestros planes son: {{PLAN_1}} para acceso básico, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que incluye acceso total y entrenamiento personalizado. ¿Ha entrenado antes o qué busca lograr?",
+      "labChars": 244,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "38/172/E-004",
+      "draft": 2,
+      "text": "Le comento que tenemos estos planes activos: {{PLAN_1}} para acceso básico mensual, {{PLAN_2}} con asesoría y seguimiento, y {{PLAN_3}} con acceso total y entrenamientos guiados. ¿Cuál es su objetivo principal al entrenar?",
+      "labChars": 263,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "38/173/E-005",
+      "draft": 2,
+      "text": "Ofrecemos tres planes: {{PLAN_1}}, ideal para acceso básico; {{PLAN_2}}, con asesoría y seguimiento; y {{PLAN_3}}, para entrenamiento completo con app avanzada. ¿Ha entrenado antes?",
+      "labChars": 222,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/176/E-002",
+      "draft": 3,
+      "text": "Le comento que tenemos el {{PLAN_1}} con beneficios básicos y el {{PLAN_3}} que ofrece acceso total y acompañamiento completo. Para recomendarle el ideal, ¿qué busca lograr con su entrenamiento?",
+      "labChars": 219,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/177/E-003",
+      "draft": 2,
+      "text": "Le explico: tenemos {{PLAN_1}} y {{PLAN_2}} con acceso ilimitado y asesoría básica. Por lo que me cuenta, lo que mejor le encaja es {{PLAN_3}}: acceso total, sesiones funcionales y guía nutricional. ¿Ha entrenado antes o busca algo específico?",
+      "labChars": 284,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/178/E-004",
+      "draft": 3,
+      "text": "Le cuento que tenemos el plan de 30 días con acceso básico y seguimiento por {{PLAN_1}}, otro mensual similar por {{PLAN_2}} y el plan más completo con acceso total y nutrición avanzada por {{PLAN_3}}. Para orientarle mejor, ¿qué busca lograr con su entrenamiento?",
+      "labChars": 305,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "39/179/E-005",
+      "draft": 2,
+      "text": "Le informo que tenemos estos planes activos: {{PLAN_1}} con acceso ilimitado y asesoría básica, {{PLAN_2}} con beneficios similares, y {{PLAN_3}} que incluye acceso total y guía nutricional. Para orientarle mejor, ¿qué experiencia tiene o qué busca lograr entrenando?",
+      "labChars": 308,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "40/182/E-002",
+      "draft": 3,
+      "text": "Le comento que tenemos tres planes destacados: el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. Cada uno ofrece beneficios distintos según sus necesidades. ¿Me cuenta qué busca lograr con su entrenamiento para recomendarle el plan ideal?",
+      "labChars": 275,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "40/184/E-004",
+      "draft": 2,
+      "text": "Le cuento que tenemos estos planes activos y su mensualidad: {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}. Para orientarle mejor, ¿ha entrenado antes o busca algo específico?",
+      "labChars": 206,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/187/E-001",
+      "draft": 3,
+      "text": "Le cuento que tenemos estos planes activos: {{PLAN_1}} con acceso ilimitado al gimnasio, {{PLAN_2}} con beneficios similares y {{PLAN_3}} con acceso total y acompañamiento completo. Para orientarle mejor, ¿qué objetivo tiene con su entrenamiento?",
+      "labChars": 287,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/188/E-002",
+      "draft": 2,
+      "text": "Tenemos tres planes principales: {{PLAN_1}}, para acceso ilimitado y asesoría básica; {{PLAN_2}}, similar pero con beneficios complementarios; y {{PLAN_3}}, que incluye acceso total, entrenamientos guiados y nutrición avanzada. ¿Me cuenta si ya tiene experiencia entrenando?",
+      "labChars": 315,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/189/E-003",
+      "draft": 2,
+      "text": "Le explico: tenemos {{PLAN_1}}, con acceso ilimitado y asesoría semi personalizada; y {{PLAN_3}}, que incluye acceso total, sesiones funcionales y guía nutricional. ¿Entrena actualmente o busca comenzar?",
+      "labChars": 228,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/190/E-004",
+      "draft": 2,
+      "text": "Le cuento que tenemos tres planes principales: {{PLAN_1}} para acceso básico, {{PLAN_2}} con servicios similares y {{PLAN_3}} que incluye acceso total y sesiones funcionales. ¿Ha entrenado antes en gimnasio?",
+      "labChars": 248,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    },
+    {
+      "case": "41/191/E-005",
+      "draft": 3,
+      "text": "Le comento que contamos con tres planes activos: el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado al gimnasio y asesoría, y el {{PLAN_3}} que ofrece acceso total y entrenamiento guiado. Para orientarle mejor, ¿me puede contar si tiene experiencia entrenando?",
+      "labChars": 301,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ]
+    }
+  ],
+  "combinedSecond": [
+    {
+      "case": "38/174/E-006",
+      "text": "Le informo que abrimos domingos de 8 a.m. a 2 p.m. Tenemos tres planes: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada y {{PLAN_3}} que incluye acceso total y entrenamientos guiados. ¿Me cuenta qué busca lograr con su entrenamiento?",
+      "labChars": 300,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ],
+      "critic": {
+        "verdict": "fail",
+        "issues": [
+          "naturalness",
+          "question_discipline",
+          "progressive_disclosure"
+        ]
+      }
+    },
+    {
+      "case": "39/180/E-006",
+      "text": "Abrimos domingos de 8 a. m. a 2 p. m. Tenemos {{PLAN_1}}, acceso ilimitado básico; {{PLAN_2}}, similar con algunos extras; y {{PLAN_3}}, ideal para entrenamiento intensivo y acompañamiento. ¿Qué experiencia tiene entrenando?",
+      "labChars": 265,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ],
+      "critic": {
+        "verdict": "fail",
+        "issues": [
+          "naturalness",
+          "question_discipline",
+          "progressive_disclosure"
+        ]
+      }
+    },
+    {
+      "case": "40/186/E-006",
+      "text": "Le confirmo que abrimos domingos de 8 a.m. a 2 p.m. Los planes disponibles son {{PLAN_1}} para acceso básico diario, {{PLAN_2}} para una semana y {{PLAN_3}} con entrenamiento y nutrición completa. ¿Qué experiencia tiene entrenando?",
+      "labChars": 272,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ],
+      "critic": {
+        "verdict": "fail",
+        "issues": [
+          "naturalness",
+          "sales_judgment",
+          "question_discipline",
+          "progressive_disclosure"
+        ]
+      }
+    },
+    {
+      "case": "41/192/E-006",
+      "text": "El gimnasio abre domingos de 8 a.m. a 2 p.m. Tenemos estos planes: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada, y {{PLAN_3}} con acceso total y entrenamiento intensivo. ¿Qué experiencia tiene entrenando?",
+      "labChars": 274,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ],
+      "critic": {
+        "verdict": "fail",
+        "issues": [
+          "naturalness",
+          "question_discipline",
+          "progressive_disclosure"
+        ]
+      }
+    },
+    {
+      "case": "42/193/E-006",
+      "text": "Le confirmo que abrimos domingos de 8 a.m. a 2 p.m. Los planes que tenemos son: {{PLAN_1}} para acceso básico por 30 días, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que incluye acceso total y entrenadores. ¿Qué busca lograr con su entrenamiento?",
+      "labChars": 293,
+      "labCap": 320,
+      "markers": [
+        "PLAN_1",
+        "PLAN_2",
+        "PLAN_3"
+      ],
+      "critic": {
+        "verdict": "fail",
+        "issues": [
+          "naturalness",
+          "progressive_disclosure",
+          "question_discipline"
+        ]
+      }
+    }
+  ]
+}

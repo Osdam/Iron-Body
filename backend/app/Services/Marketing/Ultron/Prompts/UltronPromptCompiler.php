@@ -114,6 +114,19 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * frases, la base y la huella Legacy no cambian. Las tres anclas nuevas van a
  * {@see self::ANCHORS}.
  *
+ * VERSIÓN 7 (Enmienda A4-7 del H5; PT-17c, nota de diseño
+ * `plans/informes-motores/diseno-pt17c-estratega-c7.md`): solo un texto, el
+ * de la lista del estratega ({@see self::T_PLANS_STRATEGIST}, sustituye al del
+ * 5 y el 6; misma ancla y misma operación). En la medición de la v4 con el 6,
+ * ese texto pedía `next_best_action recommend_plan` y un `recommended_plan_id`
+ * «nunca null» junto a la lista, y el revisor, que no recibe `plans_overview`,
+ * juzgaba la lista contra una estrategia de un solo plan. Ahora la estrategia
+ * es coherente con la lista que decidió el servidor (`answer`, de
+ * `allowed_next_actions`; el plan, solo referencia del contrato; `PLAN_k` =
+ * la posición k; la lista, siempre entera: una recomendación, solo si se
+ * pidió y después de la lista). Los redactores, los revisores, las anclas, el orden, el
+ * tope de la lista, la base y la huella Legacy no cambian.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -190,9 +203,15 @@ final class UltronPromptCompiler
      * final, y los revisores, con dos inserciones al final); el texto de la
      * lista lleva el tope de la lista, la cifra con la que Laravel mide desde
      * este compilador (`sp.k`) el mensaje que la trae. Con el 5 no se publicó
-     * nada; lo que se firme con él caería igual a `compiler_changed`.
+     * nada; lo que se firme con él caería igual a `compiler_changed`. La 7
+     * (Enmienda A4-7 del H5, PT-17c) cambia SOLO el texto de la lista del
+     * estratega ({@see self::T_PLANS_STRATEGIST}): mismas quince entradas,
+     * mismas anclas; los redactores y los revisores, byte a byte los del 6.
+     * Lo firmado con el 6 (la v4 en canario) cae a Legacy
+     * (`compiler_changed`) hasta publicar una versión nueva; la regla «tope
+     * de lista» sigue valiendo (`sp.k` ≥ 6).
      */
-    public const VERSION = 6;
+    public const VERSION = 7;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -435,7 +454,24 @@ final class UltronPromptCompiler
     //    Aprobados por el propietario (23-11-2026). Ninguno lleva una cifra del
     //    catálogo (el 25 es lo que ocupa un marcador expandido, de media). ──
 
-    private const T_PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
+    //    Compilador 7 (Enmienda A4-7; PT-17c,
+    //    `plans/informes-motores/diseno-pt17c-estratega-c7.md`): solo el
+    //    texto de la lista del estratega SUSTITUYE al del 5 y el 6 (que queda
+    //    escrito como histórico en §B.3, «Compilador 5»). La estrategia deja de
+    //    pedir «recomendar un plan» cuando el servidor ya decidió la lista:
+    //    la lista va siempre entera y una recomendación nunca la sustituye
+    //    (solo si la persona la pidió, y después de la lista);
+    //    `next_best_action answer` (está en `allowed_next_actions` de la
+    //    política en todo turno con lista), `recommended_plan_id` solo como
+    //    referencia del contrato (el que se destaca si se pidió la
+    //    recomendación), `PLAN_k` = la posición k de la lista, y el
+    //    `response_goal` dicho por el estratega (cada plan con su marcador y un
+    //    beneficio fiel a sus `benefits`, lo demás que preguntó y una pregunta
+    //    breve opcional), sin frase fija. Los textos del redactor y del
+    //    revisor, igual que en el 6, byte a byte. Ninguna cifra del catálogo
+    //    (el 160 es el tope de `response_goal` del commit).
+
+    private const T_PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const T_PLANS_STRATEGIST_PRESENT = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
@@ -847,7 +883,8 @@ final class UltronPromptCompiler
     /**
      * Los parches del motor ({@see self::ENGINE}), en el orden de la tabla de
      * §2 del diseño de PT-17b (compilador 6): el estratega, como en el 5
-     * (inserción tras `QUE PLAN SE COTIZA` y sustitución de «Presentalo…»);
+     * (inserción tras `QUE PLAN SE COTIZA`, con el texto del 7, y sustitución
+     * de «Presentalo…»);
      * el redactor (sustituciones de la frase de `suggested_question`, de
      * «Cualquier otro marcador…», de «Elige el plan…» y de «el precio solo del
      * que se cotiza.», y la inserción tras su última línea, que deja el texto

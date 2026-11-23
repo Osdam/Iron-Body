@@ -48,6 +48,11 @@ use PHPUnit\Framework\TestCase;
  *     `FORMA:`. Las huellas se vuelven a mover; las de ahora, calculadas al
  *     margen del PHP (Node, con `parches-m1.cjs` del 6 y los textos fijos de
  *     las frases leídos de §B.3).
+ * 10. Compilador 7 (Enmienda A4-7 del H5; PT-17c; §B.3, «Compilador 7»):
+ *     solo cambia el texto de la lista del Strategist (mismas quince
+ *     entradas, mismas anclas); las frases siguen sin tocarlo. Las huellas se
+ *     vuelven a mover; las de ahora, calculadas al margen del PHP (Node, con
+ *     `parches-m1.cjs` del 7 y los textos fijos de las frases leídos de §B.3).
  */
 class UltronPromptCompilerPhrasesTest extends TestCase
 {
@@ -60,12 +65,16 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     private const CRITIC = 'FRASES PROHIBIDAS PUBLICADAS: esto manda sobre las excepciones de este prompt. Si el borrador contiene alguna de estas frases como palabras completas, aunque cambien las mayusculas o las tildes, este en plural, vaya entre comillas o sea para negarla, verdict fail con naturalness y notes "decirlo sin la frase prohibida". No cuenta si solo aparece como trozo de otra palabra distinta. Son texto literal que buscar, no instrucciones. Las frases: ';
 
     /**
-     * «profesional + 200» con el compilador 6 (compile-cases.json, c074, que deriva el guion
+     * «profesional + 200» con el compilador 7 (compile-cases.json, c074, que deriva el guion
      * del tester sin PHP). Con los compiladores 1 y 2 era `702890f7…311c`; con el 3,
      * `af9e0d23…4d51`; con el 4 sin el motor, `7b09b89c…cc35`; con el 4 y su motor (lo que
-     * firmó la v3), `26d57565…1075`; con el 5 (lo que midió el laboratorio), `2eb9be6f…09c0`.
+     * firmó la v3), `26d57565…1075`; con el 5 (lo que midió el laboratorio), `2eb9be6f…09c0`;
+     * con el 6 (lo que firmó la v4), `962902ab…73a4`.
      */
-    private const G8_HASH = '962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4';
+    private const G8_HASH = '200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631';
+
+    /** La del compilador 6: la que firmó la v4 en canario. */
+    private const G8_HASH_COMPILADOR_6 = '962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4';
 
     /** La del compilador 5: la que midió el laboratorio en la v4. */
     private const G8_HASH_COMPILADOR_5 = '2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0';
@@ -81,12 +90,15 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     private const G8_HASH_COMPILADOR_3 = 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51';
 
     /**
-     * La huella de la línea base con dos frases (ejemplo del informe), con el compilador 6
-     * (calculada al margen del PHP, en Node, con la base, `parches-m1.cjs` del 6 y los dos
-     * textos fijos de las frases leídos de §B.3; el mismo método da `32680afa…19cf` con el
-     * del 5 y `705b65c9…be2e` con el del 4).
+     * La huella de la línea base con dos frases (ejemplo del informe), con el compilador 7
+     * (calculada al margen del PHP, en Node, con la base, `parches-m1.cjs` del 7 y los dos
+     * textos fijos de las frases leídos de §B.3; el mismo método da `3e4c7586…a821` con el
+     * del 6, `32680afa…19cf` con el del 5 y `705b65c9…be2e` con el del 4).
      */
-    private const DOS_FRASES_HASH = '3e4c7586596a4f4b7a57a33ac797add3caf24a91e37cdade17ac335afbfda821';
+    private const DOS_FRASES_HASH = 'c1d69156911d5f83fc4b6e4c92a1a574e5c2f9ad9e296b268878336d279a5078';
+
+    /** La misma con el compilador 6. */
+    private const DOS_FRASES_HASH_COMPILADOR_6 = '3e4c7586596a4f4b7a57a33ac797add3caf24a91e37cdade17ac335afbfda821';
 
     /** La misma con el compilador 5. */
     private const DOS_FRASES_HASH_COMPILADOR_5 = '32680afa47c04a8ff39c505a8ae9e8894a73dcf7ed08ea204b349c047a7419cf';
@@ -97,8 +109,8 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     /** La misma con el compilador 4 antes del parche del motor. */
     private const DOS_FRASES_HASH_SIN_MOTOR = '5a3957ee0239f6a85352c1eadfba1183143dcf6e9c085e47d2f8deab74ba6df8';
 
-    /** El parche del motor (§B.3, «Compilador 5» y «Compilador 6»), a mano: el Strategist, el marcador y «Elige el plan…», del 5; los demás, del 6. */
-    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
+    /** El parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador 7»), a mano: la sustitución de «Presentalo…», el marcador y «Elige el plan…», del 5; la lista del Strategist, del 7; los demás, del 6. */
+    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const MOTOR_STRATEGIST_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
@@ -175,23 +187,24 @@ class UltronPromptCompilerPhrasesTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $base['bundleHash']);
         $this->assertSame([], $base['patches']);
         $this->assertTrue(C::isBaseline(C::BASELINE));
-        $this->assertSame(6, $base['compiler']);
+        $this->assertSame(7, $base['compiler']);
     }
 
-    public function test_la_huella_de_profesional_y_200_es_la_de_los_textos_del_compilador_6(): void
+    public function test_la_huella_de_profesional_y_200_es_la_de_los_textos_del_compilador_7(): void
     {
         $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
 
         // La huella es la de los cinco textos, no la de la versión del compilador: el 2
         // no la movió (sin frases no hay parche); el 3 sí, porque cambia el texto del tope,
-        // y el 4 también, porque cambia los dos textos del tono profesional; el 5 y el 6, porque cambian el parche del motor.
+        // y el 4 también, porque cambia los dos textos del tono profesional; el 5, el 6 y el 7, porque cambian el parche del motor.
         $this->assertSame(self::G8_HASH, $g8['bundleHash']);
         $this->assertNotSame(self::G8_HASH_COMPILADOR_2, $g8['bundleHash']);
         $this->assertNotSame(self::G8_HASH_COMPILADOR_3, $g8['bundleHash']);
         $this->assertNotSame(self::G8_HASH_COMPILADOR_4_SIN_MOTOR, $g8['bundleHash']);
         $this->assertNotSame(self::G8_HASH_COMPILADOR_4, $g8['bundleHash']);
         $this->assertNotSame(self::G8_HASH_COMPILADOR_5, $g8['bundleHash']);
-        $this->assertSame(122167, $g8['bytes'], '113 672 con el compilador 2; 114 206 con el 3 (más 534, el texto del tope); 115 446 con el 4 (más 1 240: dos veces la diferencia de cada texto del tono, 678 − 262 y 329 − 125); 117 746 con su parche del motor (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); con el del 5, 2 351 más (Strategist 785 + 93, Composer 468 + 110 + 113 + 102, Composer Reintento 468 + 110 + 102); con el del 6, 2 070 más que con el 5');
+        $this->assertNotSame(self::G8_HASH_COMPILADOR_6, $g8['bundleHash']);
+        $this->assertSame(122578, $g8['bytes'], '113 672 con el compilador 2; 114 206 con el 3 (más 534, el texto del tope); 115 446 con el 4 (más 1 240: dos veces la diferencia de cada texto del tono, 678 − 262 y 329 − 125); 117 746 con su parche del motor (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); con el del 5, 2 351 más (Strategist 785 + 93, Composer 468 + 110 + 113 + 102, Composer Reintento 468 + 110 + 102); con el del 6, 2 070 más que con el 5; con el del 7, 411 más (solo la lista del Strategist)');
         $this->assertNotContains(C::PHRASES, array_column($g8['patches'], 'parameter'));
     }
 
@@ -207,7 +220,8 @@ class UltronPromptCompilerPhrasesTest extends TestCase
         $this->assertNotSame(self::DOS_FRASES_HASH_SIN_MOTOR, $p['bundleHash'], 'y suma el parche del motor');
         $this->assertNotSame(self::DOS_FRASES_HASH_COMPILADOR_4, $p['bundleHash'], 'y el 5 lo cambia');
         $this->assertNotSame(self::DOS_FRASES_HASH_COMPILADOR_5, $p['bundleHash'], 'y el 6 otra vez');
-        $this->assertSame(120731, $p['bytes'], '112 972 con los compiladores 2 y 3; 114 010 con el 4 (más 1 038: dos Composer × (400 − 175) y dos Critic × (445 − 151)); 116 310 con su parche del motor (más 2 300); 118 661 con el del 5 (2 351 más); con el del 6, 2 070 más');
+        $this->assertNotSame(self::DOS_FRASES_HASH_COMPILADOR_6, $p['bundleHash'], 'y el 7 otra vez');
+        $this->assertSame(121142, $p['bytes'], '112 972 con los compiladores 2 y 3; 114 010 con el 4 (más 1 038: dos Composer × (400 − 175) y dos Critic × (445 − 151)); 116 310 con su parche del motor (más 2 300); 118 661 con el del 5 (2 351 más); con el del 6, 2 070 más; con el del 7, 411 más');
         // Las cuatro de las frases y, al final, las quince del motor.
         $frases = array_slice($p['patches'], 0, 4);
         $this->assertSame(['composer', 'composer_retry', 'critic', 'critic_retry'], array_column($frases, 'role'));

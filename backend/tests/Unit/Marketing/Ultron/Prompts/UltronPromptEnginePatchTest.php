@@ -32,14 +32,17 @@ use PHPUnit\Framework\TestCase;
  * precio con texto nuevo y la GUÍA de la lista tras su ÚLTIMA línea (queda la
  * última del prompt), con la L y la W de su tope ({@see self::guia()}); en los
  * Critic, dos inserciones tras su última línea: la frase de lo que comprueba
- * el backend y el bloque de la lista, la última. Lo que se fija abajo es ya el
- * del 6.
+ * el backend y el bloque de la lista, la última.
+ *
+ * COMPILADOR 7 (Enmienda A4-7 del H5; PT-17c; §B.3, «Compilador 7»): solo
+ * cambia el texto de la lista del Strategist; las quince entradas, sus anclas
+ * y su orden, como en el 6. Lo que se fija abajo es ya el del 7.
  *
  * Lo que se fija:
  *  1. La línea base: sin parches y con la huella Legacy, escrita a mano.
  *  2. Con CUALQUIER valor no base (los 305 de la rejilla y con frases): los
  *     quince parches del motor, los últimos, con sus textos de §B.3
- *     («Compilador 5» y «Compilador 6») copiados a mano, en anclas únicas; las
+ *     («Compilador 5», «Compilador 6» y «Compilador 7») copiados a mano, en anclas únicas; las
  *     inserciones pegadas a su ancla (las del redactor y el revisor, al final
  *     del prompt) y las sustituciones en lugar de su frase; ≤ 1 200 B; cada
  *     rol ≤ 40 960 y el paquete ≤ 163 840.
@@ -50,8 +53,8 @@ use PHPUnit\Framework\TestCase;
  */
 class UltronPromptEnginePatchTest extends TestCase
 {
-    /** §B.3, «Compilador 5» (el Strategist, el marcador y «Elige el plan…») y «Compilador 6» (los demás), copiados a mano. */
-    private const PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
+    /** §B.3, «Compilador 7» (la lista del Strategist), «Compilador 5» («Presentalo…», el marcador y «Elige el plan…») y «Compilador 6» (los demás), copiados a mano. */
+    private const PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const PLANS_STRATEGIST_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
@@ -151,7 +154,7 @@ class UltronPromptEnginePatchTest extends TestCase
         $this->assertSame([], C::patches(C::BASELINE));
         $this->assertSame([], C::changedRoles(C::BASELINE));
         $this->assertTrue(C::isBaseline(C::BASELINE));
-        $this->assertSame(6, C::VERSION, 'el 4 llegó a la v3 publicada: cambiar el parche del motor obliga a subirla (Enmienda A4-5 y, otra vez, A4-6)');
+        $this->assertSame(7, C::VERSION, 'el 4 llegó a la v3 publicada y el 6 a la v4: cambiar el parche del motor obliga a subirla (Enmienda A4-5 y, otra vez, A4-6 y A4-7)');
         $this->assertSame('engine.plansOverview', C::ENGINE);
         $this->assertNotContains(C::ENGINE, C::PARAMETERS, 'el del motor no es un parámetro gobernado');
     }
@@ -205,7 +208,7 @@ class UltronPromptEnginePatchTest extends TestCase
     public function test_los_textos_del_motor_al_byte_y_en_su_forma(): void
     {
         $textos = [self::PLANS_STRATEGIST, self::PLANS_STRATEGIST_PRESENTALO, self::PLANS_SUGERIDA, self::guia(200), self::PLANS_MARCADOR, self::PLANS_ELIGE, self::PLANS_PRECIO, self::PLANS_CRITIC, self::PLANS_CRITIC_COMPRUEBA];
-        $this->assertSame([784, 158, 146, 1127, 165, 220, 184, 1119, 265], array_map('strlen', $textos));
+        $this->assertSame([1195, 158, 146, 1127, 165, 220, 184, 1119, 265], array_map('strlen', $textos), 'la lista del Strategist, 784 con el 5 y el 6; 1 195 con el 7');
         $this->assertSame(1127, strlen(self::guia(480)), 'la guía mide lo mismo con cualquier tope (L, tres cifras; W, dos)');
         foreach ([...$textos, self::guia(480)] as $t) {
             $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($t));
@@ -216,7 +219,7 @@ class UltronPromptEnginePatchTest extends TestCase
                 $this->assertStringNotContainsString($ancla, $t, 'ningún texto de parche contiene un ancla');
             }
         }
-        // Un solo caso: los textos compilados son los de §B.3 («Compilador 6») y no hay otros del motor.
+        // Un solo caso: los textos compilados son los de §B.3 («Compilador 6» y «Compilador 7») y no hay otros del motor.
         $p = C::patches(array_replace(C::BASELINE, [C::GOAL => 'venta']));
         $this->assertSame(['strategy.goal', ...array_fill(0, 15, C::ENGINE)], array_column($p, 'parameter'), 'un cambio solo del estratega también lleva el del motor');
         $this->assertSame(self::motor(320), array_slice($p, 1));
@@ -253,12 +256,13 @@ class UltronPromptEnginePatchTest extends TestCase
 
         $this->assertCount(4 + 4 + 6 + 1 + 4 + 15, $c['patches'], 'tono 4, emojis 4, tope 6, objetivo 1, frases 4 y motor 15');
         $this->assertSame([1887, 1887, 1932, 1932], array_map(static fn (array $x): int => strlen($x['text']), array_values(array_filter($c['patches'], fn (array $x) => $x['parameter'] === C::PHRASES))));
-        // Calculado al margen del PHP (Node: la base, `parches-m1.cjs` del compilador 6 y los textos fijos de las frases de §B.3).
+        // Calculado al margen del PHP (Node: la base, `parches-m1.cjs` del compilador 7 y los textos fijos de las frases de §B.3).
         // Con el compilador 4 eran 29 570, 30 876, 18 519, 28 767 y 18 171 (125 903); con el 5, 30 448, 31 669, 18 519, 29 447
-        // y 18 171 (128 254); con el 6, 2 070 más: Composer y Reintento 101 cada uno y Critic y Critic 2 934 cada uno.
+        // y 18 171 (128 254); con el 6, 2 070 más: Composer y Reintento 101 cada uno y Critic y Critic 2 934 cada uno (130 324);
+        // con el 7, 411 más, todos en el Strategist (la lista); los otros cuatro, los del 6.
         $bytes = array_map('strlen', $c['roles']);
-        $this->assertSame(['strategist' => 30448, 'composer' => 31770, 'critic' => 19453, 'composer_retry' => 29548, 'critic_retry' => 19105], $bytes);
-        $this->assertSame(130324, $c['bytes']);
+        $this->assertSame(['strategist' => 30859, 'composer' => 31770, 'critic' => 19453, 'composer_retry' => 29548, 'critic_retry' => 19105], $bytes);
+        $this->assertSame(130735, $c['bytes']);
         $this->assertLessThanOrEqual(C::MAX_ROLE_BYTES, max($bytes));
         $this->assertLessThanOrEqual(C::MAX_BUNDLE_BYTES, $c['bytes']);
     }

@@ -66,16 +66,18 @@ class UltronPromptsN8nS2CommandTest extends TestCase
      * línea del compilador), los tres fixtures (lo compilado y `compiler`),
      * `flujo-s1.json` (solo `_generado.compiler`) y `huellas.json` (`compiler`);
      * el selector, las operaciones y «Preparar Commit», no. Compilador 6
-     * (Enmienda A4-6, PT-17b): igual, los mismos cinco ficheros.
+     * (Enmienda A4-6, PT-17b): igual, los mismos cinco ficheros. Compilador 7
+     * (Enmienda A4-7, PT-17c, solo el texto del estratega): igual, los mismos
+     * cinco ficheros.
      */
     private const S1_ANTES = [
-        'LEEME.md' => 'dae71c949e01814f0d4a5b874e71ed909a41bd70694abb64c74b8c47bac39f38',
+        'LEEME.md' => 'c8210b8b91376a9bfa83b2f28f65e0526959b0e5fa68334f7e169c3e3c60a694',
         'elegir-prompts.js' => 'fec89513389e0272a9ab664eccea9ca7b514620ab3fc35a9183635dec9997d10',
-        'fixtures/decide-legacy.json' => '4885e4ca6c6b4cb1f289aa669c8fac0ab8decca6027304f561abe87b995ff9af',
-        'fixtures/decide-studio-frases.json' => 'd6ce3e7b768433b484802f3399139e776985bbb046659d2ef26700b515637d07',
-        'fixtures/decide-studio.json' => 'a342bc32f88c312f8367a44a3e0f1bb8e80db1233f540a6a04c9dba9058059c5',
-        'flujo-s1.json' => 'e2b0cc361869daf0a131140784e01719c36a7bd076e4b928f6b2298c9e1b9a68',
-        'huellas.json' => '390a892da9be6ab08f54c5a3276f9aea6713109a46462ebd48d1341694737241',
+        'fixtures/decide-legacy.json' => '59770ca3c87c6c087adfd33459c5665dd36ddad51b0807b2727d6d5d610f1e8b',
+        'fixtures/decide-studio-frases.json' => '9ebc88765d7e6cbfe1c893809d5d70b8a3900713bd7fd398eae097a097634b71',
+        'fixtures/decide-studio.json' => '0b06919f8deca27144a617cd7cde765506f964ca417d762edbfa110ad1f57d01',
+        'flujo-s1.json' => '69ae49b0e2b5c9871c8e40541ebc4f8002fd8ca67e2440d28f0d668c5e454a68',
+        'huellas.json' => 'd5188efae112d3463c441b5499e51464aa0e530dc9a17684a2838782997d4ba2',
         'operaciones-mcp.json' => '1e1aca5a7523d17e2cd07192aa70415348aa5996cf9f952899ee4fd2bb491cdc',
         'preparar-commit.js' => '876a3f6a8c50447526a321c7d7ff391c447e09e3a22dc442f7c008e520ac8b45',
     ];

@@ -119,7 +119,7 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertTrue($formas['examples']['preview']['publishable']);
         $this->assertSame(['declaration', null], [$formas['examples']['preview']['effect'], $formas['examples']['preview']['prompts']]);
         $this->assertSame('prompts', $formas['examples']['previewPrompts']['effect']);
-        $this->assertSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $formas['examples']['previewPrompts']['prompts']['bundleHash'], 'el cambio de aceptación (G8), con la huella real del compilador 6 (con el 1 y el 2, 702890f7…; con el 3, af9e0d23…; con el 4 sin el motor, 7b09b89c…; con el 4 y su motor, 26d57565…; con el 5, 2eb9be6f…)');
+        $this->assertSame('200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631', $formas['examples']['previewPrompts']['prompts']['bundleHash'], 'el cambio de aceptación (G8), con la huella real del compilador 7 (con el 1 y el 2, 702890f7…; con el 3, af9e0d23…; con el 4 sin el motor, 7b09b89c…; con el 4 y su motor, 26d57565…; con el 5, 2eb9be6f…; con el 6, 962902ab…)');
         $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'current', 'lastTurns'], array_keys($formas['examples']['engine']['prompts']));
         $this->assertSame('prompts_off', $formas['examples']['engine']['prompts']['current']['reason']);
         $this->assertSame('studio', $formas['examples']['enginePrompts']['prompts']['current']['mode']);
