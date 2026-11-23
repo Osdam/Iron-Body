@@ -1,0 +1,296 @@
+LÍNEA BASE DEL TURNO DE PLANES EN EL LABORATORIO FRENTE AL MOTOR · VERSIÓN 3 (COMPILADOR 4) · PRODUCCIÓN
+23-11-2026 (UTC; 22-11 por la noche en Bogotá) · las lanzó el propietario desde ULTRON Studio · las lee el lead
+
+TIPO DE PRUEBA: 20 ejecuciones REALES del laboratorio en producción (modo «Recorrido del motor (prompts compilados)»),
+con llamadas reales al modelo del asesor (gpt-4.1-mini) y la persona sintética. NO es una conversación de WhatsApp: no se
+envió nada a nadie y no equivale a una prueba real con un cliente. La lectura es de SOLO LECTURA (psql con
+default_transaction_read_only=on). Los textos que aparecen son borradores sintéticos del modelo, sin datos de personas.
+
+RESULTADO: LA LÍNEA BASE ES VÁLIDA Y REPRODUCE EL FALLO.
+  · Válidas escritas por el modelo (saldría su texto y su lista pasa la comprobación del servidor): 1 de 20.
+  · Al respaldo fijo del servidor: 18 de 20, las 18 por la misma causa que la cuarta prueba real: el revisor rechazó el
+    tercer borrador (critic_failed).
+  · Sin resultado: 1 de 20 (la n.º 13: un fallo de conexión con el proveedor del modelo en una llamada). Aun contándola como
+    válida serían 2: el umbral (como mucho 6 de 20) se cumple en cualquier lectura.
+  · Nada invalida la medición: las 20 son de la misma versión, huella, compilador, modelo, escenario y frase; el estratega
+    leyó «pregunta de precio» en las 19 medidas y la comprobación de la lista se aplicó en todas.
+
+[0] EL MENSAJE DEL PROPIETARIO (en la conversación; 23-11-2026 hacia las 04:29 UTC, 11:29 p. m. del 22-11 en Bogotá; literal)
+    «LÍNEA BASE DEL LABORATORIO COMPLETADA — UNIDAD 2.
+    He terminado las 20 de 20 ejecuciones del escenario E-001 «Pregunta por los planes y la mensualidad», usando la versión 3,
+    gpt-4.1-mini y el modo «Recorrido del motor». Gasto total visible: US$ 0,6235.
+    No registré veredictos humanos ni envié mensajes de WhatsApp.
+    Consulta las 20 ejecuciones en el servidor, en solo lectura, y determina: - Cuántas habrían sido respuestas válidas
+    escritas por el LLM. - Cuántas habrían terminado en el respaldo fijo. - Si la línea base reproduce el fallo según el
+    umbral establecido (máximo 6 respuestas válidas de 20). - Si existen errores o resultados que invaliden la medición.
+    Si la línea base es válida, presenta el HUMAN GATE de la unidad 3, incluidos los seis textos del compilador 5 para mi
+    revisión. No despliegues la unidad 3 sin mi autorización específica.»
+
+[1] CÓMO SE LEYÓ
+    ops/comprobacion-produccion/laboratorio-lectura-del-dia.sql (una línea JSON por caso, sin el nombre de quien lanzó ni el
+    contenido de la versión) y ops/comprobacion-produccion/laboratorio-recuento.py y laboratorio-detalle.py (solo cuentan).
+    «Válida escrita por el modelo» = final.origin es «model» (la regla del commit: el revisor aprueba y no queda ningún
+    defecto que el commit no arregle recortando) Y el texto final no tiene defecto de la lista (plans_overview). Es la
+    definición del diseño de PT-17 (§5 b). «Respaldo» = final.origin es «fallback».
+
+[2] LAS 20, UNA POR UNA (hora de Bogotá; s = segundos del recorrido; borr. = borradores escritos)
+    EJECUCIONES LEÍDAS: 20 · casos: 20
+
+     n.º  ejec.    hora(Bog)  s    borr.  1.er borrador                      revisor(es)        saldría        causa / códigos finales              car./tope  coste US$
+       1  b0ff060b  22:15:17  13   3      no pasa: plans_overview/mixed,leng 3:fail             respaldo       critic_failed / plans_overview,lengt 252/200   0.0314
+       2  9c677446  22:17:37  12   3      no pasa: plans_overview/missing,le 3:fail             respaldo       critic_failed / length_over_cap      259/200   0.0313
+       3  ec077463  22:19:37  10   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed / length_over_cap      268/200   0.0315
+       4  27a847f6  22:20:42  11   3      no pasa: plans_overview/missing,le 3:pass             EL MODELO      - /                                  134/200   0.0313
+       5  7db0a236  22:21:19   9   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      180/200   0.0313
+       6  54c7b233  22:22:07  11   3      no pasa: plans_overview/mixed,leng 3:fail             respaldo       critic_failed / plans_overview,lengt 297/200   0.0314
+       7  f7d4a598  22:22:39  10   3      no pasa: length_over_cap           3:fail             respaldo       critic_failed / length_over_cap      289/200   0.0313
+       8  ad8bd75e  22:23:08   9   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      175/200   0.0313
+       9  36593ed4  22:23:41  11   3      no pasa: plans_overview/missing,le 3:fail             respaldo       critic_failed / length_over_cap      284/200   0.0314
+      10  48fadb62  22:24:11  13   3      no pasa: plans_overview/mixed,leng 3:fail             respaldo       critic_failed /                      177/200   0.0313
+      11  6adb52b1  23:24:13  16   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      193/200   0.0314
+      12  12cc6cd3  23:24:40   9   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      187/200   0.0314
+      13  c758c455  23:25:08   -    -      (sin detalle del motor: caso error; error timeout; sin detalle del motor)
+      14  b1d5c2f8  23:25:31   9   3      no pasa: plans_overview/missing,le 3:fail             respaldo       critic_failed / plans_overview       183/200   0.0312
+      15  5b9445af  23:26:00  10   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      158/200   0.0312
+      16  1c682a80  23:26:22  10   3      no pasa: plans_overview/missing,le 3:fail             respaldo       critic_failed / length_over_cap      252/200   0.0313
+      17  e94f78f8  23:26:50  10   3      no pasa: plans_overview/missing,le 3:fail             respaldo       critic_failed / length_over_cap      268/200   0.0312
+      18  ac05ddcb  23:27:16  10   3      no pasa: length_over_cap           3:fail             respaldo       critic_failed / length_over_cap      318/200   0.0313
+      19  da8821b3  23:27:39  12   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed / length_over_cap      270/200   0.0314
+      20  6a1e6ef1  23:28:06  12   3      no pasa: plans_overview/name_writt 3:fail             respaldo       critic_failed /                      178/200   0.0316
+
+    RESUMEN (20 ejecuciones)
+      saldría el texto del MODELO: 1 · saldría el RESPALDO fijo del servidor: 18 · sin detalle: 1
+      VÁLIDAS ESCRITAS POR EL MODELO (saldría su texto y la lista pasa la comprobación del servidor): 1 de 20  [4]
+      causa del respaldo: {'critic_failed': 18, None: 1}
+      lista válida al PRIMER borrador (drafts[0].check.pass): 0 de 20
+      borradores por caso: {3: 19} · veredictos del revisor (todos los borradores revisados): {'fail': 18, 'pass': 1} · fallos graves del revisor: ninguno
+      defectos del primer borrador: {'length_over_cap': 18, 'plans_overview/name_written': 8, 'plans_overview/missing': 6, 'plans_overview/mixed': 3}
+      defectos en todos los borradores comprobados: {'length_over_cap': 37, 'plans_overview/name_written': 9, 'plans_overview/missing': 7, 'plans_overview/mixed': 6}
+      defectos que quedarían en el texto final: {'length_over_cap': 10, 'plans_overview': 3}
+      price_written: 0 · unknown_marker: 0
+      intención que leyó el estratega: {'pricing_question': 19} · resultado del laboratorio (pass/review/fail): {'fail': 19, None: 1} · juez, criterio «Debe presentar la lista…»: {'fail': 19}
+      coste total: US$ 0.6234 · tokens: 1453950 de entrada y 20469 de salida · primera: 22:15:17 · última: 23:28:26 (hora de Bogotá) · día de presupuesto: ['2026-11-22']
+      lanzadas por: ['Super Admin'] · cuentas distintas: 1
+
+    LO QUE INVALIDARÍA LA MEDICIÓN:
+      · ejecución 13 c758c455 → caso error; error timeout; sin detalle del motor
+
+    UMBRAL: la línea base reproduce el fallo si hay como mucho 6 válidas de 20 → hay 1: REPRODUCE EL FALLO
+
+    El gasto que suma el servidor es US$ 0,6235 (el recuento local redondea a 0,6234): el que vio el propietario.
+
+[3] LA QUE NO DIO RESULTADO (n.º 13)
+    === LA EJECUCIÓN CON ERROR
+      n.º 13 · c758c455 · ejecución completed · caso error · error timeout · outcome None · parada None
+      creada 2026-11-23T04:25:08 · empezó 2026-11-23T04:25:10 · terminó 2026-11-23T04:25:18 · coste 0.0279 · reservado 0.0662 · sobrecoste 0
+      engine: null
+      llamadas: [{"role": "strategist", "class": null, "inputTokens": 15595, "outputTokens": 165, "costMicros": 6502, "latencyMs": 2535}, {"role": "composer", "class": null, "inputTokens": 15259, "outputTokens": 83, "costMicros": 6237, "latencyMs": 2037}, {"role": "composer_retry", "class": null, "inputTokens": 14898, "outputTokens": 75, "costMicros": 6080, "latencyMs": 2082}, {"role": "composer_retry_2", "class": "timeout", "inputTokens": null, "outputTokens": null, "costMicros": 9034, "latencyMs": 1095}]
+      resumen de la ejecución: {"progress": {"done": 0, "error": 1, "skipped": 0, "pending": 0}, "outcomes": {"pass": 0, "review": 0, "fail": 0}, "costMicros": 27853, "overrunMicros": 0, "inputTokens": 45752, "outputTokens": 323}
+      hallazgos: null
+    El aviso del servidor (el único de su tipo en todo el registro): [2026-11-23 04:25:18] production.WARNING:
+    ultron_studio.lab.provider_call … "role":"composer_retry_2","class":"timeout","http":null,"exception":"ConnectionException".
+    Es un corte de conexión con el proveedor en la cuarta llamada, al cabo de 1,1 s; el laboratorio lo anota como «timeout» y
+    cobra la reserva de esa llamada (no subestima el gasto). Las otras 79 llamadas al modelo respondieron.
+    === LATENCIAS DE LAS LLAMADAS AL MODELO (ms), por papel, en las 19 con detalle
+      strategist         n=20 · mediana  2645 · máxima   6300
+      composer           n=20 · mediana  2013 · máxima   3442
+      composer_retry     n=20 · mediana  1772 · máxima   2821
+      composer_retry_2   n=20 · mediana  1732 · máxima   3868
+      critic_3           n=19 · mediana  2078 · máxima   3049
+      judge              n=19 · mediana  4779 · máxima   7140
+
+[4] LA ÚNICA QUE ESCRIBIRÍA EL MODELO (n.º 4)
+    === LA ÚNICA QUE ESCRIBIRÍA EL MODELO
+      n.º 4 · 27a847f6 · texto final (134 de 200 caracteres):
+        Le comento que tenemos planes como {{PLAN_1}} y {{PLAN_3}}, que incluyen acceso completo y asesoría avanzada. Para recomendarle lo ideal, ¿qué busca lograr con su entrenamiento?
+        borrador 1 (composer, 303 car., pedido por None): comprobación False ['plans_overview/missing', 'length_over_cap'] · revisor None None
+            Le explico los planes que tenemos y sus precios. Por lo que me cuenta, lo que mejor le encaja es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales por agenda, rutinas personalizadas, seguimiento continuo y guía nutricional avanzada. ¿Qué objetivo busca lograr con el entrenamiento?
+        borrador 2 (composer_retry, 246 car., pedido por server): comprobación False ['length_over_cap'] · revisor None None
+            Tenemos tres planes principales: {{PLAN_1}} para acceso básico mensual, {{PLAN_2}} que incluye servicios similares y {{PLAN_3}} con acceso total y funciones premium. ¿Qué busca lograr con su entrenamiento?
+        borrador 3 (composer_retry_2, 202 car., pedido por server): comprobación None None · revisor pass ['sales_judgment', 'next_step']
+            Le comento que tenemos planes como {{PLAN_1}} y {{PLAN_3}}, que incluyen acceso completo y asesoría avanzada. Para recomendarle lo ideal, ¿qué busca lograr con su entrenamiento?
+        juez del laboratorio, criterio: fail · La respuesta menciona dos planes con marcares pero no presenta ni lista completa ni precios de los planes, por lo que no cumple el criterio de presentar la lista con precio.
+        juez, resumen: La respuesta no cumple el criterio fundamental de mostrar una lista de planes con sus precios, indicando solo dos planes con marcadores sin precios. Sin embargo, no incumple reglas de manejo de información ni de tono. Invita a conocer objetivos, lo cual es positivo para agendar valoración. No hay pr…
+
+    Reserva: nombra dos de los tres planes. Para el servidor es una lista válida (al menos dos marcadores, cada uno una vez;
+    el marcador pone el nombre y el precio) y el revisor la aprobó. El juez del laboratorio marcó «no cumple» el criterio
+    del escenario porque lee los marcadores sin expandir y no ve precios: su «no cumple» sobre el precio NO cuenta para
+    esta medición (dio «no cumple» en las 19).
+
+[5] POR QUÉ FUERON AL RESPALDO LAS OTRAS 18
+    === POR QUÉ RECHAZÓ EL REVISOR (el último borrador de las 18 que irían al respaldo)
+      n.º  1 · 252/200 · defectos del servidor en ese texto: ['plans_overview', 'length_over_cap'] · revisor: ['naturalness', 'question_discipline', 'progressive_disclosure']
+            texto: Le comento que tenemos el {{PLAN_1}} con acceso ilimitado al gimnasio y asesoría básica, y el {{PLAN_3}} que incluye acceso total, sesiones funcionales y guía nutricional por {{PLAN_PRICE}}. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla el trato de usted con '¿Qué busca lograr con su entrenamiento?' que es tuteo; debe usar usted consistentemente. Además, hace dos preguntas implícitas (¿Qué busca lograr? y la implícita de elegir plan), debe limitarse a una. El mensaje es algo largo y presenta dos planes con detalle
+      n.º  2 · 259/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'sales_judgment', 'question_discipline', 'progressive_disclosure']
+            texto: Tenemos tres planes principales: {{PLAN_1}} con acceso ilimitado y asesoría; {{PLAN_2}} similar con beneficios adicionales; y {{PLAN_3}} para acceso total y seguimiento completo. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla usted y tú (por ejemplo, '¿Qué busca lograr?'), debe usar solo usted para mantener registro profesional. Además, presenta tres planes sin que la persona haya pedido tanto detalle, y pregunta el objetivo sin antes confirmar si quiere información general o específica, lo que puede se
+      n.º  3 · 268/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline']
+            texto: Le comento que tenemos el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado al gimnasio y asesoría semi personalizada, y el {{PLAN_3}} con acceso total y guía nutricional. Para orientarle mejor, ¿qué experiencia tiene entrenando?
+            nota del revisor: El mensaje mezcla tuteo y trato de usted, debe uniformizarse a usted para mantener registro profesional. Además, menciona tres planes con detalle y pregunta experiencia, lo que hace el mensaje largo y con más de una pregunta implícita; conviene reducir a máximo dos planes y hacer solo una pregunta c
+      n.º  5 · 180/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'sales_judgment', 'question_discipline', 'progressive_disclosure']
+            texto: Tenemos tres planes: {{PLAN_1}} para acceso básico, {{PLAN_2}} con acceso y asesoría, y {{PLAN_3}} para entrenamiento intensivo y completo. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla trato de usted con '¿Qué busca lograr?', que es tuteo; debe uniformizar a usted. Además, presenta tres planes completos sin que la persona haya pedido tanto detalle, y hace una pregunta adicional cuando ya se pidió solo información de planes y precio. Se recomienda simplificar la r
+      n.º  6 · 297/200 · defectos del servidor en ese texto: ['plans_overview', 'length_over_cap'] · revisor: ['naturalness', 'sales_judgment', 'progressive_disclosure', 'next_step']
+            texto: Por lo que pregunta, le recomiendo el {{PLAN_1}}: acceso ilimitado al gimnasio y asesoría semi personalizada por {{PLAN_1}}. También está el {{PLAN_3}}, que ofrece acceso total y guía nutricional por {{PLAN_3}}. ¿Ha entrenado antes en un gimnasio?
+            nota del revisor: El mensaje mezcla usted y tú implícito en '¿Ha entrenado antes?', debe usar solo usted para mantener registro profesional. Además, recomienda dos planes cuando la estrategia indica recomendar solo uno (Plan Valera). La pregunta final es válida pero debería ser la única pregunta y más clara para orie
+      n.º  7 · 289/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline']
+            texto: Le comento que tenemos el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado y asesoría. Por lo que me cuenta, el ideal para usted es el {{PLAN_3}}: acceso total, entrenamientos guiados y seguimiento completo. ¿Qué objetivo tiene con su entrenamiento?
+            nota del revisor: El mensaje mezcla tuteo y trato de usted, debe uniformizarse a usted para mantener registro profesional. Además, menciona tres planes sin que la persona haya pedido tantos detalles, lo que excede la progresión recomendada. Finalmente, hace más de una pregunta, lo que no es adecuado; debe limitarse a
+      n.º  8 · 175/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'sales_judgment', 'question_discipline', 'progressive_disclosure']
+            texto: Le cuento, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} que incluye acceso total, entrenamiento y nutrición avanzada. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla el trato de usted con '¿Qué busca lograr?', que es tuteo; debe usar usted consistentemente. Además, presenta dos planes sin antes entender el objetivo del cliente, y hace una pregunta adicional cuando ya se pidió solo una. Para mejorar, presente primero información general o un sol
+      n.º  9 · 284/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'sales_judgment', 'progressive_disclosure', 'question_discipline']
+            texto: Le cuento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, el {{PLAN_2}} similar con beneficios extendidos, y el {{PLAN_3}} que incluye acceso total y entrenamiento intensivo. ¿Qué objetivo busca alcanzar con su entrenamiento?
+            nota del revisor: El mensaje mezcla un registro informal con 'Le cuento' y luego usa usted, debe uniformizar a usted. Además, presenta tres planes sin que la persona haya pedido tanto detalle, lo que es exceso para esta fase. También hace una pregunta adicional sobre el objetivo cuando la estrategia indica solo respo
+      n.º 10 · 177/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'sales_judgment', 'next_step', 'question_discipline']
+            texto: Le comento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, y el {{PLAN_3}} con acceso total, sesiones por agenda y nutrición avanzada. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla el trato de usted con '¿Qué busca lograr?', que es tuteo; debe usar solo usted para mantener registro profesional. Además, recomienda planes antes de conocer el objetivo, y formula una pregunta adicional tras la recomendación, lo que no es adecuado. Se sugiere primero preguntar el
+      n.º 11 · 193/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'sales_judgment', 'question_discipline', 'progressive_disclosure']
+            texto: Le comento que tenemos el {{PLAN_1}} con acceso básico, el {{PLAN_2}} similar y el {{PLAN_3}} para entrenamiento intensivo con acceso completo a la app. ¿Qué experiencia tiene entrenando?
+            nota del revisor: El mensaje mezcla tuteo y usted, lo que baja naturalness; debe usar solo usted. Además, presenta tres planes con precios sin confirmar y pregunta experiencia sin antes entender mejor al cliente, lo que no es adecuado en esta fase. Solo debe hacer una pregunta y no presentar tantos planes sin que se
+      n.º 12 · 187/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline']
+            texto: Le comento que tenemos el {{PLAN_1}} y el {{PLAN_2}} con acceso ilimitado al gimnasio, y el {{PLAN_3}} con acceso total y entrenamiento intensivo. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla registro formal con tuteo en la pregunta final, debe usar 'usted' para mantener coherencia. Además, menciona tres planes con detalle y pregunta el objetivo, lo que es más de una pregunta y genera exceso de información para este turno. Se recomienda reducir a máximo dos planes y hac
+      n.º 14 · 183/200 · defectos del servidor en ese texto: ['plans_overview'] · revisor: ['naturalness', 'next_step', 'question_discipline', 'progressive_disclosure']
+            texto: Por lo que me pregunta, tenemos el {{PLAN_3}}, que ofrece acceso total y entrenamientos guiados, ideal para un proceso completo. ¿Ha entrenado antes o busca algo específico?
+            nota del revisor: El mensaje mezcla 'me pregunta' con un tono impersonal y no usa el trato de usted consistentemente; debe pasar todo a usted. Además, no responde directamente la pregunta sobre planes y precios, solo menciona uno sin precio. Hace una pregunta adicional que no es clara ni única. Falta un paso siguient
+      n.º 15 · 158/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'sales_judgment', 'progressive_disclosure', 'next_step']
+            texto: Le comento que tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}, cada uno con beneficios y mensualidad diferente. Para recomendarle el ideal, ¿me cuenta si ha entrenado antes?
+            nota del revisor: El mensaje mezcla trato de usted y tú, debe pasar todo a usted para mantener registro profesional. Además, presenta tres planes sin que la persona haya pedido detalle, lo que es exceso de información para esta fase. También vende antes de entender el objetivo o experiencia del cliente, y la pregunta
+      n.º 16 · 252/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline', 'sales_judgment']
+            texto: Claro, tenemos el {{PLAN_1}} y el {{PLAN_2}}, ambos con acceso ilimitado y asesoría semi personalizada; y el {{PLAN_3}}, que ofrece acceso total y entrenamiento intensivo. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla tuteo y usted, debe usar solo usted para mantener registro profesional. Además, menciona tres planes con detalle y pregunta el objetivo, pero la persona ya preguntó por planes y precio, por lo que debe recomendar solo el plan más adecuado según la estrategia y no hacer más pregunta
+      n.º 17 · 268/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline']
+            texto: Le comento que tenemos estos planes: {{PLAN_1}} con acceso total y beneficios básicos, {{PLAN_2}} con asesoría y seguimiento, y {{PLAN_3}} que incluye entrenamiento intensivo y nutrición. ¿Qué busca lograr con su entrenamiento?
+            nota del revisor: El mensaje mezcla un registro formal con un tuteo en la pregunta final, debe pasar todo a usted para mantener coherencia. Además, menciona tres planes con detalle y precios, lo que es excesivo para un primer mensaje; mejor presentar solo uno o dos planes y dejar el detalle para después. Finalmente,
+      n.º 18 · 318/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline']
+            texto: Le comento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría básica, el {{PLAN_2}} con beneficios similares y más seguimiento, y el {{PLAN_3}} que ofrece acceso total al gimnasio y guía nutricional avanzada. ¿Qué busca lograr con su entrenamiento para orientarle mejor?
+            nota del revisor: El mensaje mezcla tuteo y trato de usted, debe usar solo usted para mantener registro profesional. Además, hace tres preguntas implícitas al presentar tres planes y luego pregunta el objetivo, lo que excede la pregunta permitida. También es demasiado largo y detalla tres planes sin que la persona lo
+      n.º 19 · 270/200 · defectos del servidor en ese texto: ['length_over_cap'] · revisor: ['naturalness', 'sales_judgment', 'next_step', 'question_discipline', 'progressive_disclosure']
+            texto: Le cuento que tenemos el {{PLAN_1}} con acceso ilimitado al gimnasio y asesoría semi personalizada, y el {{PLAN_3}} que ofrece acceso total, sesiones funcionales y guía nutricional. ¿Qué busca lograr con su entrenamiento para recomendarle mejor?
+            nota del revisor: El mensaje mezcla tuteo y trato de usted, debe usar solo usted para mantener registro profesional. Además, presenta dos planes sin confirmar si la persona quiere conocerlos todos y pregunta el objetivo sin antes responder claramente la pregunta sobre planes y precios. Se recomienda dar información c
+      n.º 20 · 178/200 · defectos del servidor en ese texto: NINGUNO · revisor: ['naturalness', 'progressive_disclosure', 'question_discipline', 'customer_fit']
+            texto: Le comento que el {{PLAN_1}} ofrece acceso ilimitado y asesoría básica, y el {{PLAN_3}} incluye acceso total, entrenamiento intensivo y guía nutricional. ¿Qué experiencia tiene con el entrenamiento o qué busca lograr?
+            nota del revisor: El mensaje mezcla un tuteo ('¿Qué experiencia tiene...?') con un trato de usted, lo que baja naturalness y debe corregirse a usted. Además, menciona dos planes cuando la persona preguntó por mensualidad en general, y el borrador no entrega información clara de precios ni beneficios completos, ni ubi
+
+      motivos del revisor, contados (18 rechazos): {'naturalness': 18, 'progressive_disclosure': 17, 'question_discipline': 16, 'sales_judgment': 10, 'next_step': 5, 'customer_fit': 1}
+      rechazos del revisor sobre un texto SIN ningún defecto para el servidor (lista válida y dentro del tope): 7 → [5, 8, 10, 11, 12, 15, 20]
+
+    estratega (intención, estado siguiente, herramientas) → casos: {"('pricing_question', 'DISCOVERY', ())": 10, "('pricing_question', 'RECOMMENDATION', ())": 8, "('pricing_question', 'NEW_LEAD', ())": 1}
+    primer borrador que recomienda UN plan («lo que mejor le encaja», «le recomiendo»…): 12 de 19
+    segundo borrador que pasa la comprobación del servidor: 0 · casos con algún borrador comprobado que pasa: 0
+    último borrador, pregunta final: {'pregunta el objetivo o la experiencia': 19}
+    último borrador, planes distintos de la lista que nombra: {1: 1, 2: 7, 3: 11}
+
+    Lectura (hechos): (a) el primer borrador nunca trae una lista válida (0 de 19): en 12 de 19 recomienda UN plan, y en 18
+    de 19 pasa de 200 caracteres; (b) las 19 gastaron las dos reescrituras y ningún borrador comprobado pasó; (c) el último
+    borrador pregunta el objetivo o la experiencia en las 19; (d) en 7 de las 18 el último borrador NO tenía ningún defecto
+    para el servidor (lista válida y dentro del tope) y el revisor lo rechazó igual. Los motivos del revisor: naturalidad
+    en las 18 (lee «¿Qué busca lograr…?» como tuteo, y es de usted), «demasiados planes» en 17 (aunque su instrucción
+    firmada dice que nombrar dos o tres no es defecto), «más de una pregunta» en 16 y «criterio de venta» en 10 («la
+    estrategia indica recomendar solo uno»).
+    Hipótesis (no demostrada hasta medir la versión 4): el revisor juzga contra la estrategia del estratega, que con el
+    compilador 4 manda descubrir o recomendar un plan (DISCOVERY 10, RECOMMENDATION 8, NEW_LEAD 1); el compilador 5 cambia
+    esa estrategia y prohíbe al redactor la pregunta por el objetivo, pero NO cambia las instrucciones del revisor.
+
+[6] LAS NOTAS DEL SERVIDOR AL PEDIR LA REESCRITURA (una por tipo de defecto del primer borrador)
+    === LAS NOTAS DEL SERVIDOR AL PEDIR LA REESCRITURA (primer borrador), una por tipo de defecto
+      ['plans_overview/mixed', 'length_over_cap'] (334 car.):
+          borrador: Le explico: tenemos varios planes, pero por lo que pregunta y buscando un plan completo, lo que mejor le encaja es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales, rutinas personalizadas y guía nutricional avanzada, todo por {{PLAN_PRICE}}. Para …
+          nota: MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. DEMASIADO LARGO: mide 334 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.
+      ['plans_overview/missing', 'length_over_cap'] (243 car.):
+          borrador: Le cuento que tenemos varios planes. Por lo que me comenta, lo que mejor le encaja es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales por agenda y seguimiento continuo. ¿Qué objetivo busca alcanzar con su entrenamiento?
+          nota: FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 243 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.
+      ['plans_overview/name_written', 'length_over_cap'] (446 car.):
+          borrador: Le cuento que tenemos varios planes, entre ellos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado al gimnasio y asesoría semi personalizada. Por lo que me cuenta, lo que mejor le encaja es el Élite: acceso total al gimnasio, sesiones funcionales y …
+          nota: NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 446 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.
+      ['length_over_cap'] (336 car.):
+          borrador: Le comento que tenemos varios planes: el {{PLAN_1}} y el {{PLAN_2}}, ambos con acceso ilimitado al gimnasio y asesoría. Por lo que me diga de su disponibilidad y metas, le recomiendo el {{PLAN_3}}: es completo, con acceso total y acompañamiento personalizado. …
+          nota: DEMASIADO LARGO: mide 336 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.
+      ['plans_overview/name_written'] (196 car.):
+          borrador: Le explico: tenemos el Plan Valera {{PLAN_1}}, el Plan Mensual {{PLAN_2}} y el Plan Élite {{PLAN_3}}. ¿Me cuenta si ha entrenado antes o es su primera vez?
+          nota: NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio.
+
+[7] LO QUE RODEA A LA MEDICIÓN (solo lectura; 04:36 UTC)
+    reloj: 23-11-2026 04:36:32 UTC · API sirve 9c2325a1 · workers:  14 RUNNING
+    ejecuciones del laboratorio: 31 en total · creadas desde el despliegue de la unidad 2 (02:40 UTC): 20 · con el día de presupuesto 2026-11-22: 20 · con otro tipo que no sea el recorrido del motor entre las de hoy: 0
+    por estado (las de hoy): completed=20 · casos por estado: done/fail/-=19 · error/-/timeout=1
+    gasto de las de hoy: US$ 0.6235 · reservado sin liquidar: 0
+    veredictos humanos del laboratorio: 3 (antes de la línea base: 3) · sobre ejecuciones de hoy: 0
+    escenarios: 12 (antes: 11) · el nuevo: E-001 · rev 1 · active · studio · precio · «Pregunta por los planes y la mensualidad»
+    publicaciones del Studio: 5 (antes: 5) · versiones: 4 (antes: 4) · eventos del laboratorio: 78 (antes: 37)
+    mensajes de WhatsApp desde las 02:40 UTC (entrantes y salientes): 2 · acciones del asesor desde entonces: 2
+    failed_jobs desde las 02:40 UTC: 0 · trabajos en espera: 0
+    production.ERROR desde las 02:39:19 UTC: 0 · WARNING: 3 · 5xx: 0
+        [2026-11-23 04:25:18] production.WARNING: ultron_studio.lab.provider_call {"run":"c758c455-5372-41b1-b949-ba4e090bb13c","position":1,"role":"composer_retry_2","class":"timeout","http":null,"
+        [2026-11-23 04:30:05] production.WARNING: billing.emission_blocked {"invoice_id":18,"reason":"Emisión rechazada por la barrera de producción: la factura de la solicitud #18 ni fue solicita
+        [2026-11-23 04:30:05] production.WARNING: billing.emission_blocked {"invoice_id":22,"reason":"Emisión rechazada por la barrera de producción: el pago de la solicitud #22 está en estado «
+    publication-check: salida 0 · Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fe
+    traza de prompts (misma lectura que antes y después de la unidad 2; era d9cde934ae13a862): sha256 de917ca4fba21971
+
+    La traza de prompts de la canaria, calculada con el mismo método que antes y después de la unidad 2, es idéntica
+    (sha256 d9cde934ae13a862): la conversación canaria no tuvo ningún turno. Los dos avisos billing.emission_blocked son de
+    facturación, ajenos (salen entre 6 y 10 veces todos los días del mes).
+    mensajes desde las 02:40 UTC (hora UTC · dirección · quién · caracteres · ¿canaria?):
+      03:14:34 · inbound · lead · 4 · otra conversación
+      03:14:37 · inbound · lead · 13 · otra conversación
+    acciones del asesor desde las 02:40 UTC (hora UTC · tipo · estado · ¿canaria? · lo declarado y lo observado del Studio):
+      03:14:34 · inbound_skipped · skipped · otra conversación · - · -
+      03:14:37 · inbound_skipped · skipped · otra conversación · - · -
+    Los dos mensajes entrantes son de otra conversación y el asesor los saltó por su regla de siempre
+    (auto_analyze_disabled: 442 veces en la última semana). Ningún turno del asesor pasó por el motor; ninguna llamada de
+    n8n a decide ni a commit.
+
+[8] CONCLUSIÓN
+    La línea base cumple su papel: el laboratorio frente al motor reproduce en producción el fallo de la cuarta prueba real,
+    con la misma causa (el revisor rechaza el tercer borrador y saldría el respaldo). Su verde sobre la versión 4 valdrá
+    como evidencia antes de la quinta prueba real. Umbrales para la versión 4 (laboratorio-recuento.py --modo=medicion):
+    17 o más de 20 válidas escritas por el modelo, 12 o más válidas al primer borrador, ninguna con price_written ni
+    unknown_marker y ningún fallo grave del revisor sobre una lista válida.
+    Lo que la línea base NO demuestra: que el compilador 5 lo arregle. Eso lo dice la medición de la versión 4.
+
+[9] LOS TEXTOS DEL TURNO DE PLANES: COMPILADOR 4 (PRODUCCIÓN) FRENTE AL COMPILADOR 5 (UNIDAD 3, `cabc4138`), LITERALES
+    Sacados del código de cada commit (`UltronPromptCompiler.php` en `9c2325a1` y en `e5a673c1`). Están en ASCII, sin
+    tildes, porque se insertan en los prompts del motor, que están escritos así. Son los SEIS que aprueba el propietario:
+    cinco nuevos y uno que cambia; el del revisor no cambia.
+    compilador 4: 15 textos · compilador 5: 20 textos
+    NUEVOS en el 5: ['T_PLANS_STRATEGIST', 'T_PLANS_STRATEGIST_PRESENT', 'T_PLANS_COMPOSER_MARKER', 'T_PLANS_COMPOSER_CHOOSE', 'T_PLANS_COMPOSER_PRICE']
+    CAMBIADOS: ['T_PLANS_COMPOSER']
+    QUITADOS: []
+    IGUALES: 14 → ['T_PLANS_CRITIC']
+
+    === T_PLANS_STRATEGIST (NUEVO) · 784 caracteres
+    LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.
+
+    === T_PLANS_STRATEGIST_PRESENT (NUEVO) · 158 caracteres
+    Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.
+
+    === T_PLANS_COMPOSER_MARKER (NUEVO) · 165 caracteres
+    Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).
+
+    === T_PLANS_COMPOSER_CHOOSE (NUEVO) · 220 caracteres
+    Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).
+
+    === T_PLANS_COMPOSER_PRICE (NUEVO) · 135 caracteres
+    el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, el de cada plan de esa lista con su marcador.
+
+    === T_PLANS_COMPOSER (CAMBIADO) · 1165 caracteres
+    --- antes (compilador 4):
+    LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.
+    --- ahora (compilador 5):
+    LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. En ese turno esto manda sobre todo este prompt (las reglas de precios y marcadores, recomendar un solo plan con su PORQUE, resolved_reference y suggested_question) y sobre la estrategia si habla de un solo plan: la respuesta es esa lista, en una frase. Nombra los planes en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales, seguido de dos o tres palabras de uno de los benefits que trae ese marcador en plans_overview.plans. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Fuera de los marcadores, unas 15 palabras en todo el mensaje: un arranque corto, los beneficios y, como mucho, una pregunta corta para elegir (sobre cual amplio la informacion); nunca su experiencia ni su objetivo. Con un tope publicado de menos de 200 caracteres, solo PLAN_1 y PLAN_2. Si plans_overview no viene, nada de esto aplica.
+
+    === T_PLANS_CRITIC (IGUAL en los dos) · 451 caracteres
+    LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.
+
+    Dónde va cada uno (`enginePatches()` del compilador 5; cada ancla aparece una vez en su prompt de la base):
+      estratega ........ T_PLANS_STRATEGIST, en la línea siguiente a «QUE PLAN SE COTIZA»
+                         T_PLANS_STRATEGIST_PRESENT SUSTITUYE a «Presentalo con dos o tres beneficios reales, nunca con adjetivos.»
+      redactor ......... T_PLANS_COMPOSER, en la línea siguiente a «FORMA:»
+                         T_PLANS_COMPOSER_MARKER SUSTITUYE a «Cualquier otro marcador hace que el mensaje se rechace.»
+                         T_PLANS_COMPOSER_CHOOSE SUSTITUYE a «Elige el plan que mejor encaje, di su nombre y su precio con los
+                         marcadores, y si quieres pregunta despues.»
+                         T_PLANS_COMPOSER_PRICE SUSTITUYE a «el precio solo del que se cotiza.»
+      reescrituras ..... los del redactor, salvo T_PLANS_COMPOSER_CHOOSE (su base no tiene esa línea)
+      revisores ........ T_PLANS_CRITIC, en la línea siguiente a «progressive_disclosure:», como en el compilador 4

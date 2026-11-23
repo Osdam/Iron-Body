@@ -54,9 +54,9 @@ BLOQUES_4 = [
 APARTADOS = {
     5: (0.25, [
         ("Diseño del recorrido del motor en el laboratorio", 10, 1.00, "hecho (arq-lab)", "t"),
-        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.70, "desplegado y verificado en producción el 23-11 (unidad 2, 9c2325a1): la migración, las 6 banderas, el modelo del laboratorio alineado con el del asesor (gpt-4.1-mini) y la puerta de publicar idéntica antes y después; falta la primera ejecución real (la línea base, que lanza el propietario)", "c"),
-        ("CRM: lanzar y ver una ejecución del motor", 15, 0.70, "publicada el 23-11 (CRM 744dfc2) y verificada en producción con la sesión técnica: el lanzador con «Recorrido del motor», la estimación permitida y el filtro por tipo; falta ver una ejecución del motor (la línea base)", "c"),
-        ("Una ejecución real del motor con una versión, desplegada", 20, 0.00, "", "o"),
+        ("Backend: prompts compilados, enrutador, comprobación, contexto, ejecución y puerta", 55, 0.70, "desplegado y verificado en producción el 23-11 (unidad 2, 9c2325a1) y usado en real: la línea base (20 ejecuciones) reproduce el fallo de la cuarta prueba con su misma causa. No sube a 1,00: el juez del laboratorio lee los marcadores de la lista sin expandir (da «no cumple» también a una lista válida; la medición se leyó del detalle del motor) y la puerta de publicar con lab_source=engine no se ha ejercitado", "c"),
+        ("CRM: lanzar y ver una ejecución del motor", 15, 1.00, "aceptada en uso real: publicada el 23-11 (CRM 744dfc2), y esa noche el propietario creó el escenario E-001 y lanzó y vio 20 ejecuciones del recorrido del motor desde la pantalla", "c"),
+        ("Una ejecución real del motor con una versión, desplegada", 20, 1.00, "hecha: la línea base de la versión 3, 20 ejecuciones reales en producción lanzadas por el propietario (22-11 por la noche; evidencia 05 del 23-11): 1 válida escrita por el modelo, 18 al respaldo y 1 sin resultado", "o"),
     ]),
     6: (0.50, [
         ("Perfil de voz revisión 3 aprobado por otra cuenta", 10, 0.00, "acción del propietario", "o"),
