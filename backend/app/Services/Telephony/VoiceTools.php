@@ -114,8 +114,12 @@ final class VoiceTools
      */
     public const MAX_PLANS_BODY_BYTES = 6144;
 
-    /** Como mucho estos textos de cada plan se examinan: el trabajo de la guarda (≈ 0,3 ms por texto) no crece con el CRM. */
-    private const MAX_BENEFITS_EXAMINED = 18;
+    /**
+     * Como mucho estos textos de cada plan se examinan: el trabajo de la guarda (≈ 0,3 ms por texto) no crece con el CRM.
+     * Es el mismo tope con el que se captura el catálogo al publicar (PT-14): una sola cifra, la de `Plan`, para que
+     * lo que la voz examina y lo que se aprobó no puedan separarse.
+     */
+    private const MAX_BENEFITS_EXAMINED = Plan::COMMERCIAL_CATALOG_MAX_BENEFITS;
 
     /**
      * Va con los beneficios (cuando hay alguno o alguno se retuvo): son DATOS

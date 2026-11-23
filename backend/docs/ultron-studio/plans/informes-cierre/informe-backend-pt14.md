@@ -263,3 +263,13 @@ En `StudioVoicePublications.php`, m1, m2 y m4 caen igual (los cuatro casos ejecu
 - **La guarda de N-3** sigue siendo un análisis de tokens: una clase que se construya concatenando cadenas, o un `DB::table($variable)`, no los ve. Lo prohibido son las tres formas de las mutaciones de security y sus variantes inmediatas.
 - **No he ejecutado** la batería completa ni nada en producción.
 
+---
+
+## 10. Cierre tras las revisiones (lo añade el lead, 23-11-2026)
+
+- **Seguridad independiente:** primera pasada, NO APTO por B-1; tras la corrección (`90653164`), **APTO CON CONDICIONES y B-1 CERRADO** (`informe-security-pt14.md`, apartado «Recomprobación»). Sus dos condiciones son operativas: la comprobación del runbook antes de la primera publicación y el privilegio de `iron_app` sobre las dos columnas al desplegar (leído en producción el 23-11: DML a nivel de tabla, así que lo heredan).
+- **Revisión final independiente:** servidor **APROBADO CON CONDICIONES** (la única, que la corrección de B-1 pase la revisión de su delta), 0 bloqueantes; con 13 mutaciones propias, las 13 caen (`informe-reviewer-pt14.md`).
+- **Batería completa** sobre `748f17ab`: 19 361 pruebas, 0 regresiones. La del commit corregido, ver la fila PT-14 de `MATRIZ_CIERRE_V2.md`.
+- **Tras la revisión final (NB-S1):** `VoiceTools::MAX_BENEFITS_EXAMINED` deja de ser un 18 propio y toma `Plan::COMMERCIAL_CATALOG_MAX_BENEFITS`: una sola cifra para lo que la voz examina y lo que se aprueba. Sin cambio de comportamiento.
+- **No bloqueantes que no se hacen en este cierre:** en `MATRIZ_CIERRE_V2.md` §11.2 y en el §11 del diseño.
+

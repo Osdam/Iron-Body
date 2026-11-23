@@ -540,7 +540,7 @@ Es un cambio de requisito decidido por el propietario, no un ajuste al fallo: ca
    - no hay `config:cache` que cambiar, porque no hay configuración nueva.
 3. **CRM después del servidor.**
    - Con el servidor nuevo y el CRM viejo: el SA no nota nada. El Administrador recibe el 403 con su mensaje en el editor (que ya enseña `message`), y no puede guardar un plan vendible sin beneficios, por el `defaultBenefits`. Publicar la voz da 422: falla cerrado.
-   - El orden contrario (CRM nuevo con servidor viejo) también aguanta: `commercial_text_locked` ausente se trata como `false`, y el campo de más en `publish` se ignora.
+   - El orden contrario (CRM nuevo con servidor viejo) también aguanta: `commercial_text_locked` ausente se trata como `false`. **Rectificado (revisión final, NB-C3):** con un CRM nuevo y un servidor anterior, la vista previa no trae `catalog` y el CRM NO publica la voz (falla cerrado, con el motivo a la vista): publicar a ciegas contra un servidor que no gobierna el catálogo reabriría B-1.
 4. **Si la voz ya se hubiera publicado antes de PT-14:** después de desplegar, Sofía no dice ningún plan (`missing`) hasta **volver a publicar**.
    - Vuelve a pedir: ventana, bandera, freno suelto y otra persona que no sea autora.
    - **No** pide otro veredicto del laboratorio: el `specHash` no cambia.
@@ -616,3 +616,29 @@ Es un cambio de requisito decidido por el propietario, no un ajuste al fallo: ca
    - Coste: el Administrador ya no enciende planes vendibles; los sigue pudiendo apagar. El propietario le puede dar la llave desde Roles sin tocar código.
 2. **(Security)** El texto anterior a PT-14 no tiene autor registrado. ¿Basta con que lo apruebe quien publica, viéndolo en la vista previa?
    - **Por defecto: sí.** Fallar cerrado obligaría a inventar una acción para «reclamar» el texto.
+
+---
+
+## 11. Rectificación del lead tras la revisión de seguridad (23-11-2026)
+
+La revisión de seguridad independiente (`informe-security-pt14.md`) dio el diseño por NO APTO en un punto y el lead lo rectificó. **Esta sección manda sobre D4, D10 y el §6.2 de arriba.**
+
+**El defecto (B-1).** D4 guardaba en UNA columna a «la última persona que escribió el texto vigente o lo puso a la venta». Poner el plan a la venta sobrescribía, por tanto, a quien había escrito el texto. Quien escribía con el plan apagado podía publicarlo en la voz si otra persona con la llave solo pulsaba «Activar» (el CRM manda `{active: true}` y no enseña los beneficios): un texto que solo revisó quien lo escribió. Incumplía la frase del propietario: «sin … permitir que una misma persona satisfaga las dos aprobaciones».
+
+**La rectificación (implementada en `90653164`).**
+- **D4′ · Dos autorías.** `plans.commercial_text_by` = quien escribió el texto vigente: cambia SOLO cuando cambia el texto (y en el alta, siempre). `plans.commercial_sale_by` = quien puso el plan a la venta: cambia cuando el plan entra en la venta (alta que queda vendible, edición que lo mete en la venta, reactivar). Las dos, en la misma migración, ocultas y sin salir por ninguna respuesta.
+- **D6′ · La instantánea** guarda `authors: [{planId, by, soldBy}]`. La lectura estricta rechaza la forma anterior. El formato sigue siendo `ultron-voice-catalog/1` (no se había publicado nada).
+- **D10′ · Cuatro ojos.** Quien publica o promueve la voz no puede ser NI quien escribió el texto NI quien puso a la venta ningún plan capturado. En la vista previa, `authoredByYou` = eres una de las dos; `authorRecorded` = hay autor del texto. El 403, sus claves y su mensaje no cambian.
+- **A falla cerrado ante un texto ilegible (N-2):** si los beneficios de después no se pueden leer (la lista anidada) y su valor cambió, pide la llave.
+
+**Lo que queda aceptado, documentado y sin otra ronda** (seguridad: APTO CON CONDICIONES tras recomprobar):
+- **R2, «último autor»:** si otra persona con la llave edita OTRO beneficio en el editor, con el texto delante, pasa a ser la autora y la primera puede publicar. Hacen falta dos personas con la llave y la segunda vio el texto.
+- **N-9, «Duplicar» de un clic:** la copia nace con las dos autorías de quien duplica, sin abrir el editor. Para aprovecharlo hay que retirar además el original de la venta, y lo que se diría lleva el nombre «… (copia)». Si el propietario quiere cerrarlo, el alta puede heredar el autor del plan de origen cuando el texto coincide.
+- **N-1, textos anteriores a PT-14 (autor `null`):** no excluyen a nadie. **Condición operativa, en el runbook:** antes de la PRIMERA publicación de la voz se comprueba en `audit_logs`, como evidencia, que quien publica no cambió el nombre ni los beneficios de los planes capturados.
+- **N-4:** la instantánea no entra en la firma de la cadena; solo puede reescribirla el dueño de la tabla, que también puede cambiar `plans`.
+- **N-5:** una orden para el modelo escrita en un beneficio y APROBADA por dos personas sigue pasando la guarda de voz (solo retiene precios y gratuidades): calibrar el léxico sigue pendiente, antes de llamar a clientes reales.
+- **N-6:** `badge` y `restrictions` también son texto libre que lee WhatsApp y quedan fuera de A (el propietario la acotó a «nombres y beneficios»): decisión suya si se amplía.
+- **N-7:** un Super Admin puede crear otra cuenta de Super Admin y cumplir con ella todos los cuatro ojos del sistema; queda auditado. Es anterior y sistémico.
+
+**Lecturas de partida en producción (solo lectura, 23-11-2026, 00:21 UTC):** 26 planes, 12 vendibles; 0 vendibles sin beneficios y 0 con beneficios anidados; `iron_app` tiene SELECT, INSERT y UPDATE sobre `plans` a nivel de TABLA (las dos columnas nuevas los heredan); cuentas activas: 4 Super Admin, 1 Administrativo, 2 Recepción y 2 de QA; ninguna con el rol Administrador; 0 publicaciones de voz. **Consecuencia:** hoy solo los Super Admin editan planes, así que A no le quita nada a nadie el primer día.
+
