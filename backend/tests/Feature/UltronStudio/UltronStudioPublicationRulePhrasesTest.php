@@ -41,8 +41,9 @@ use Tests\TestCase;
  *    escribir nada;
  *  - el ORDEN DE DESPLIEGUE: lo publicado con el compilador 1 cae a Legacy
  *    (`compiler_changed`) hasta revertirlo y publicar otra versión, desde el
- *    compilador 3 (Enmienda A4-1) también lo publicado con el 2 y, desde el 4
- *    (Enmienda A4-2), lo publicado con el 3;
+ *    compilador 3 (Enmienda A4-1) también lo publicado con el 2, desde el 4
+ *    (Enmienda A4-2) lo publicado con el 3 y, desde el 5 (Enmienda A4-5,
+ *    PT-17), lo publicado con el 4 (la v3 en canario);
  *  - LA PARTE DEL RESTO QUE SE ARRASTRA (vuelta 2: B-1 de seguridad y
  *    hallazgo 1 del reviewer): una V0 publicada y promovida por la API con la
  *    llave apagada (cabeza `/1`) se compila ENTERA, frases de sus reglas
@@ -59,8 +60,11 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** «profesional + 200» con el compilador 4 y el parche del motor de la lista de planes (compile-cases.json, c074); sin el motor era `7b09b89c…cc35`. */
-    private const G8_HASH = '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075';
+    /** «profesional + 200» con el compilador 5 (compile-cases.json, c074); con el 4 sin el motor era `7b09b89c…cc35`. */
+    private const G8_HASH = '2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0';
+
+    /** La misma con el compilador 4 y su parche del motor (la de la versión 3 publicada en canario, antes del 5). */
+    private const G8_HASH_COMPILADOR_4 = '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075';
 
     /** La misma con los compiladores 1 y 2 (la que quedó firmada en la cadena antes del 3). */
     private const G8_HASH_COMPILADORES_1_Y_2 = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
@@ -195,7 +199,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
             ['role' => 'critic_retry', 'operation' => 'insert_after_line', 'anchor' => 'naturalness:', 'text' => self::CRITIC.$lista],
         ], $frases['patches']);
         $huella = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200, UltronPromptCompiler::PHRASES => $esperadas]))['bundleHash'];
-        $this->assertSame([$huella, 4, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
+        $this->assertSame([$huella, 5, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
         $this->assertNotSame(self::G8_HASH, $huella);
 
         // Reconocer las reglas que ya entran en los prompts no vale.
@@ -207,11 +211,11 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
 
         $this->publishAs($this->pub, $v->uuid)->assertCreated();
 
-        // Lo firmado: `/2`, compilador 4, la quinta clave con las frases.
+        // Lo firmado: `/2`, compilador 5, la quinta clave con las frases.
         $cabeza = $this->headEntry();
         $this->assertSame([D::CONTRACT_V2, D::CONTRACT_V2], [$cabeza['column'], $cabeza['contract']]);
         $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => $esperadas, 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 4], $cabeza['canary']['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 5], $cabeza['canary']['prompts']);
 
         // Escritor → lector → oferta de `decide`: la huella de la vista previa y las frases en los prompts.
         $this->assertSame(['applied', $v->uuid], [$this->engineStamp(self::CANARY_ID)['state'], $this->engineStamp(self::CANARY_ID)['version']]);
@@ -388,7 +392,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         // (el ejemplo del informe): las frases entran en `bundleHash` y, con
         // ella, en `previewHash`.
         $conFrases = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [UltronPromptCompiler::PHRASES => ['gratis', 'te lo regalo']]))['bundleHash'];
-        $this->assertSame('705b65c9932fa650db57d110669cf29542dbd7003302631c2bc8eda07f3fbe2e', $conFrases, 'con los textos de las frases del compilador 4 y su parche del motor (con los del 2 y el 3, fbd3c91c…; con el 4 sin el motor, 5a3957ee…)');
+        $this->assertSame('32680afa47c04a8ff39c505a8ae9e8894a73dcf7ed08ea204b349c047a7419cf', $conFrases, 'con los textos de las frases del compilador 4 y el parche del motor del 5 (con los del 2 y el 3, fbd3c91c…; con el 4 sin el motor, 5a3957ee…; con el 4 y su motor, 705b65c9…)');
         $this->assertNotSame(UltronPromptBase::LEGACY_BUNDLE_HASH, $conFrases);
         $this->assertSame([
             'versionUuid' => $v0->uuid,
@@ -477,6 +481,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
             'compilador 1 (los cuatro gobernados)' => [1, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADORES_1_Y_2],
             'compilador 2 (los cinco, sin frases)' => [2, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADORES_1_Y_2],
             'compilador 3 (los cinco, sin frases; la versión 2 del canario)' => [3, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADOR_3],
+            'compilador 4 (los cinco, sin frases; la versión 3 del canario)' => [4, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADOR_4],
         ];
     }
 

@@ -1548,7 +1548,7 @@
         "fromVersion": "29de5119-2e5a-4bc8-a479-60f4fe37c5b3",
         "flowRev": "S2",
         "base": "n8n-29de5119",
-        "compiler": 4,
+        "compiler": 5,
         "contract": "ultron-regen/1",
         "nota": "Para el comprobador y para importarlo como copia NUEVA e INACTIVA (id, versionId y sin _generado: ops/motores/n8n-copia-s2/LEEME.md). Nunca encima de un flujo publicado ni como vuelta atrás."
     }

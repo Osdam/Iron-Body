@@ -61,16 +61,20 @@ class UltronPromptsN8nS2CommandTest extends TestCase
      * S1 tal como estaba ANTES de esta ola (HEAD `ab64134a`, árbol limpio):
      * los nueve ficheros, por su sha256. Si una ola posterior cambia S1 a
      * propósito (por ejemplo, el compilador mueve los fixtures), esto cambia
-     * con ella; esta ola no puede moverlo.
+     * con ella; esta ola no puede moverlo. Compilador 5 (Enmienda A4-5, PT-17):
+     * regenerado con `php artisan ultron:prompts-n8n`, cambian `LEEME.md` (la
+     * línea del compilador), los tres fixtures (lo compilado y `compiler`),
+     * `flujo-s1.json` (solo `_generado.compiler`) y `huellas.json` (`compiler`);
+     * el selector, las operaciones y «Preparar Commit», no.
      */
     private const S1_ANTES = [
-        'LEEME.md' => 'cb17115a3885b5f26dbb36eaf9980bc8f3115430b812326c03bf5782d184b98a',
+        'LEEME.md' => '609f7e6a73af833c1fa5f4d1dffa0fac33565b526e03220edb7afa262fc8acfa',
         'elegir-prompts.js' => 'fec89513389e0272a9ab664eccea9ca7b514620ab3fc35a9183635dec9997d10',
-        'fixtures/decide-legacy.json' => '6239e9774e4efd357254e9f095af39dd4e735ca195609a56b92b2cc28e3cdae8',
-        'fixtures/decide-studio-frases.json' => 'a07e669d7fd54fdcf2fd62fc5aa5df9b58a66acf0f500736ffa57808924e8f56',
-        'fixtures/decide-studio.json' => '3bb38774e690042d9cb2c7a1f5ab7649eb8e709b3ecad52c3717f5c893af22ac',
-        'flujo-s1.json' => 'c50f2008d8eb5b5959309545f1e5a09247ea16f592bb6c9a10e0dae567a581c9',
-        'huellas.json' => '48ca5cb80b3f597ec693bb6b9a510dcbb157388bc3fcabaa2df35d84a493f767',
+        'fixtures/decide-legacy.json' => 'c7495e624035ad42fe2ec46764f7743063633b583ac4b984298ecf1a1294bb94',
+        'fixtures/decide-studio-frases.json' => '2af9ac2b529c05f31d7e9a4b9c74eb61f01f8b064283833caac6495c49990266',
+        'fixtures/decide-studio.json' => '8136437d94e6b27f5d3f65d8c92c454418e987bffb6c9e800cdc1739389ee3c5',
+        'flujo-s1.json' => '73a0c1bfd6c9da045f305dbbd2900b3b5d3693a7fe1aa6bcfec46ce1a9e0340f',
+        'huellas.json' => 'fb3f66e299e522d80a82e1d977e654c5efa1088e5ccaeee049bbcb46e1f901ca',
         'operaciones-mcp.json' => '1e1aca5a7523d17e2cd07192aa70415348aa5996cf9f952899ee4fd2bb491cdc',
         'preparar-commit.js' => '876a3f6a8c50447526a321c7d7ff391c447e09e3a22dc442f7c008e520ac8b45',
     ];

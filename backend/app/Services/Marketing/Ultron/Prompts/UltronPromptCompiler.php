@@ -68,6 +68,25 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * lo enseña (agrupa por {@see self::PARAMETERS}); la huella que se firma, sí
  * lo lleva. `UltronPromptOffer` firma `sp.o = 1` cuando el paquete lo trae.
  *
+ * VERSIÓN 5 (Enmienda A4-5 del H5; PT-17, diseño del arquitecto
+ * `plans/informes-motores/diseno-arq-pt17-planes.md`): el parche del motor
+ * pasa de cuatro entradas a once, porque en la cuarta prueba real tres
+ * instrucciones firmadas empujaban contra la lista en el PRIMER borrador (el
+ * estratega, la base del redactor y «escribes dentro del objetivo de la
+ * estrategia»). En el estratega, una inserción tras `QUE PLAN SE COTIZA`
+ * ({@see self::T_PLANS_STRATEGIST}) y una sustitución de «Presentalo con dos o
+ * tres beneficios reales…» ({@see self::T_PLANS_STRATEGIST_PRESENT}); en los
+ * dos redactores, el texto nuevo tras `FORMA:` ({@see self::T_PLANS_COMPOSER},
+ * sustituye al del 4: esqueleto y presupuesto en palabras) y las frases de la
+ * base que lo contradecían, vueltas condicionales EN SU SITIO
+ * ({@see self::T_PLANS_COMPOSER_MARKER}, {@see self::T_PLANS_COMPOSER_PRICE}
+ * y, solo en el redactor, {@see self::T_PLANS_COMPOSER_CHOOSE}). El revisor
+ * no cambia ({@see self::T_PLANS_CRITIC}, byte a byte). Las cinco anclas
+ * nuevas van a {@see self::ANCHORS}; ningún texto contiene un ancla y cada
+ * sustituto cambia el signo final de la frase que sustituye. Sigue yendo al
+ * final y solo si hay algún parche gobernado: la línea base y la huella
+ * Legacy no se mueven; cambian las huellas de TODO paquete no base.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -134,9 +153,13 @@ final class UltronPromptCompiler
      * parche del motor de la lista de planes ({@see self::ENGINE}; «regenerar
      * antes de sustituir»): con él cambian las huellas de TODO paquete no
      * base; la línea base y la huella Legacy, no. No se sube a 5 porque el 4
-     * no ha llegado a producción ni a ninguna publicación.
+     * no ha llegado a producción ni a ninguna publicación. La 5 (Enmienda A4-5
+     * del H5, PT-17) cambia el parche del motor de la lista de planes: once
+     * entradas en vez de cuatro (estratega y redactores; el revisor, igual).
+     * El 4 sí está publicado (la v3 en canario): lo firmado con él cae a
+     * Legacy (`compiler_changed`) hasta publicar una versión nueva.
      */
-    public const VERSION = 4;
+    public const VERSION = 5;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -261,6 +284,20 @@ final class UltronPromptCompiler
 
     private const A_PRINCIPIO = 'PRINCIPIO:';
 
+    // Compilador 5 (Enmienda A4-5; PT-17): las del parche del motor en el
+    // estratega (las dos primeras) y en los redactores (la de «Elige el plan…»,
+    // solo en `composer`). Una vez cada una en su rol de la base.
+
+    private const A_COTIZA = 'QUE PLAN SE COTIZA';
+
+    private const A_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos.';
+
+    private const A_MARCADOR = 'Cualquier otro marcador hace que el mensaje se rechace.';
+
+    private const A_ELIGE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues.';
+
+    private const A_PRECIO = 'el precio solo del que se cotiza.';
+
     // ── Textos aprobados (plan §B.3, M1-3). `{N}` es el valor de persona.maxChars;
     //    `{M}`, `{P}` y `{F}`, su margen para el redactor (compilador 3, §B.3
     //    «Compilador 3»): {@see self::composerTargetChars()},
@@ -326,14 +363,37 @@ final class UltronPromptCompiler
     //    (gate 4-H). El del revisor existe porque, sin él, `critic.txt` («si le
     //    preguntaron el PRECIO y el borrador NO lleva el marcador de precio»)
     //    tumbaría la lista; el revisor no recibe `plans_overview` y su mensaje
-    //    de usuario no se toca. ──
+    //    de usuario no se toca.
+    //    Compilador 5 (Enmienda A4-5; PT-17, `diseno-arq-pt17-planes.md`,
+    //    §Textos, literales): el del redactor SUSTITUYE al del compilador 4
+    //    (que queda escrito como histórico en §B.3, «Compilador 4»), y se suman
+    //    los dos del estratega y las tres sustituciones de los redactores. El
+    //    del revisor no cambia. Pendientes de la aprobación del propietario
+    //    (P1). Ninguno lleva una cifra del catálogo. ──
 
-    private const T_PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.';
+    private const T_PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales se le muestran. En ese turno esto manda sobre las reglas de este apartado, sobre resolved_reference y sobre strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con esa lista; no descubre ni presenta un solo plan. Entonces next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans, information_needed [] (ni experiencia, ni objetivo, ni horario), recommended_plan_id el que digan las reglas de abajo (nunca null) y response_goal: dar esos planes en su orden, con un beneficio corto de cada uno y sin cifras. Si plans_overview no viene, nada de esto aplica.';
+
+    private const T_PLANS_STRATEGIST_PRESENT = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
+
+    private const T_PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. En ese turno esto manda sobre todo este prompt (las reglas de precios y marcadores, recomendar un solo plan con su PORQUE, resolved_reference y suggested_question) y sobre la estrategia si habla de un solo plan: la respuesta es esa lista, en una frase. Nombra los planes en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales, seguido de dos o tres palabras de uno de los benefits que trae ese marcador en plans_overview.plans. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Fuera de los marcadores, unas 15 palabras en todo el mensaje: un arranque corto, los beneficios y, como mucho, una pregunta corta para elegir (sobre cual amplio la informacion); nunca su experiencia ni su objetivo. Con un tope publicado de menos de 200 caracteres, solo PLAN_1 y PLAN_2. Si plans_overview no viene, nada de esto aplica.';
+
+    private const T_PLANS_COMPOSER_MARKER = 'Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
+
+    private const T_PLANS_COMPOSER_CHOOSE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).';
+
+    private const T_PLANS_COMPOSER_PRICE = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, el de cada plan de esa lista con su marcador.';
 
     private const T_PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.';
 
-    /** Las anclas, para rechazar una frase que contenga alguna (la unicidad no puede depender de lo que escriba el personal). */
-    private const ANCHORS = [self::A_COMO_SUENAS, self::A_FORMA, self::A_EMOJI, self::A_NATURALNESS, self::A_PROGRESSIVE, self::A_900, self::A_PRINCIPIO];
+    /**
+     * Las anclas, para rechazar una frase que contenga alguna (la unicidad no
+     * puede depender de lo que escriba el personal). Las cinco del compilador 5
+     * también: una frase va a los redactores ANTES que el parche del motor, y
+     * con un ancla dentro lo dejaría sin ancla única. Dos de ellas
+     * ({@see self::A_PRESENTALO} y {@see self::A_ELIGE}) son más largas que
+     * {@see self::PHRASE_MAX_CHARS}: ninguna frase puede contenerlas.
+     */
+    private const ANCHORS = [self::A_COMO_SUENAS, self::A_FORMA, self::A_EMOJI, self::A_NATURALNESS, self::A_PROGRESSIVE, self::A_900, self::A_PRINCIPIO, self::A_COTIZA, self::A_PRESENTALO, self::A_MARCADOR, self::A_ELIGE, self::A_PRECIO];
 
     /**
      * Compila el paquete de los cinco prompts.
@@ -686,17 +746,29 @@ final class UltronPromptCompiler
     }
 
     /**
-     * Los parches del motor ({@see self::ENGINE}), en su orden: los dos
-     * redactores tras `FORMA:` y los dos revisores tras
-     * `progressive_disclosure:` (cada ancla, una vez en su rol de la base).
+     * Los parches del motor ({@see self::ENGINE}), en el orden de §Textos del
+     * diseño de PT-17 (compilador 5): el estratega (inserción tras
+     * `QUE PLAN SE COTIZA` y sustitución de «Presentalo…»); el redactor
+     * (inserción tras `FORMA:` y las sustituciones de «Cualquier otro
+     * marcador…», «Elige el plan…» y «el precio solo del que se cotiza.»); el
+     * reintento (las mismas salvo «Elige el plan…», que no está en su base); y
+     * los dos revisores tras `progressive_disclosure:`, como en el 4. Cada
+     * ancla, una vez en su rol de la base.
      *
      * @return list<array{0:string,1:string,2:string,3:string}> [rol, operación, ancla, texto]
      */
     private static function enginePatches(): array
     {
         return [
+            ['strategist', self::INSERT_AFTER_LINE, self::A_COTIZA, self::T_PLANS_STRATEGIST],
+            ['strategist', self::REPLACE, self::A_PRESENTALO, self::T_PLANS_STRATEGIST_PRESENT],
             ['composer', self::INSERT_AFTER_LINE, self::A_FORMA, self::T_PLANS_COMPOSER],
+            ['composer', self::REPLACE, self::A_MARCADOR, self::T_PLANS_COMPOSER_MARKER],
+            ['composer', self::REPLACE, self::A_ELIGE, self::T_PLANS_COMPOSER_CHOOSE],
+            ['composer', self::REPLACE, self::A_PRECIO, self::T_PLANS_COMPOSER_PRICE],
             ['composer_retry', self::INSERT_AFTER_LINE, self::A_FORMA, self::T_PLANS_COMPOSER],
+            ['composer_retry', self::REPLACE, self::A_MARCADOR, self::T_PLANS_COMPOSER_MARKER],
+            ['composer_retry', self::REPLACE, self::A_PRECIO, self::T_PLANS_COMPOSER_PRICE],
             ['critic', self::INSERT_AFTER_LINE, self::A_PROGRESSIVE, self::T_PLANS_CRITIC],
             ['critic_retry', self::INSERT_AFTER_LINE, self::A_PROGRESSIVE, self::T_PLANS_CRITIC],
         ];
