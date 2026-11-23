@@ -28,7 +28,8 @@
 #                                    cumplen, un disparador que no mira filas, una tabla vacía) · conservar (no se toca)
 #   --config       «clave.con.puntos=valor» (false · true · null · vacia · un número · texto:<palabra>): lo que tiene que
 #                  valer en la caché de configuración después; el valor nunca se imprime salvo esas formas (una cadena
-#                  sale como «cadena»; con «texto:<palabra>», como «texto:<palabra>» solo si es exactamente esa palabra).
+#                  sale como «cadena»; con «texto:<palabra>», como «texto:<palabra>» solo si es exactamente esa palabra;
+#                  la palabra: minúsculas, cifras, «_», «-» y «.», empezando por letra, hasta 32).
 #   --rutas        la diferencia EXACTA de route:list: «+MÉTODO uri» / «-MÉTODO uri».
 #   --programador  la diferencia EXACTA de schedule:list («+línea» / «-línea», con la forma que imprime el paso 0) y
 #                  «ausente <texto>» / «presente <texto>».
@@ -143,7 +144,9 @@ RE_MARCA_CHECK='^[A-Za-z0-9_:.-]{1,64}$'
 RE_MARCA_TRANS='^[a-z_][a-z0-9_]{0,62}[>][a-z_][a-z0-9_]{0,62}$'
 RE_TIPO_COL='^[a-z][a-z0-9_]{0,30}$'
 RE_PRIV='^(-|r?a?w?d?D?x?t?)$'
-RE_CONFIG='^[a-z0-9_]+([.][a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+([.][0-9]+)?|texto:[a-z][a-z0-9_-]{0,31})$'
+# Orden del cierre (unidad 2b): la palabra de «texto:» admite también «.» (un modelo como gpt-4.1-mini); sigue empezando
+# por letra, sin mayúsculas, espacios, barras ni comillas, y solo sale si la caché la tiene EXACTAMENTE (banderas()).
+RE_CONFIG='^[a-z0-9_]+([.][a-z0-9_]+)+=(false|true|null|vacia|-?[0-9]+([.][0-9]+)?|texto:[a-z][a-z0-9_.-]{0,31})$'
 RE_RUTA='^[+-][A-Z|]+ [^ ]+( @[^ ]+)?$'
 RE_PROG='^([+-].+|(ausente|presente) .+)$'
 RE_SIN_FILAS='^[a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,62} [a-z_][a-z0-9_]{0,30}(,[a-z_][a-z0-9_]{0,30})*$'

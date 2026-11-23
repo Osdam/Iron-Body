@@ -1,0 +1,8 @@
+# Unidad 2b · lo que entorno-lab.sh escribe en el fichero de entorno de producción (CLAVE=valor; «#» es comentario).
+# Decisión del propietario (22-11-2026): el laboratorio en gpt-4.1-mini, sin esfuerzo de razonamiento (gpt-4.1-mini no es
+# de razonamiento: vacía, no se envía), con los precios de la página oficial de OpenAI consultados el 22-11-2026 (US$
+# por millón de tokens). Los presupuestos (…_DAILY_BUDGET_USD, …_RUN_BUDGET_USD) NO se tocan. Ninguna es un secreto.
+ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=
+ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60

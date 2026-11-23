@@ -1,0 +1,33 @@
+# Unidad 3 del orden del cierre (pt-17): los ficheros del diff P..N FUERA de backend/docs/, exactos (git diff --name-only
+# --no-renames, ordenados con LC_ALL=C). Banco de la cadena del 23-11-2026. La documentación puede variar con lo que lleve main; esto, no.
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/UltronStudio/StudioLabEngineFlow.php
+backend/tests/Feature/Marketing/UltronDecidePromptsTest.php
+backend/tests/Feature/Marketing/UltronPromptsN8nS2CommandTest.php
+backend/tests/Feature/Marketing/UltronPromptsTraceCommandTest.php
+backend/tests/Feature/UltronStudio/UltronStudioLabEngineInvariantsTest.php
+backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php
+backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php
+backend/tests/Feature/UltronStudio/UltronStudioPublicationV2Test.php
+backend/tests/Feature/UltronStudio/UltronStudioStatusCatalogTest.php
+backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompiler5Test.php
+backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php
+backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php
+backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptEnginePatchTest.php
+backend/tests/Unit/Marketing/Ultron/Prompts/UltronPublishedConfigPhrasesTest.php
+backend/tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php
+backend/tests/Unit/UltronStudio/StudioLabEngineFlowParityTest.php
+backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php
+backend/tests/fixtures/ultron-prompts/compile-cases.README.md
+backend/tests/fixtures/ultron-prompts/compile-cases.json
+backend/tests/fixtures/ultron-prompts/tools/parches-m1.cjs
+backend/tests/fixtures/ultron-studio/publication-cases-v2.json
+n8n/flujos/ultron-studio-s1/LEEME.md
+n8n/flujos/ultron-studio-s1/fixtures/decide-legacy.json
+n8n/flujos/ultron-studio-s1/fixtures/decide-studio-frases.json
+n8n/flujos/ultron-studio-s1/fixtures/decide-studio.json
+n8n/flujos/ultron-studio-s1/flujo-s1.json
+n8n/flujos/ultron-studio-s1/huellas.json
+n8n/flujos/ultron-studio-s2/fixtures/decide-legacy.json
+n8n/flujos/ultron-studio-s2/fixtures/decide-studio.json
+n8n/flujos/ultron-studio-s2/flujo-s2.json

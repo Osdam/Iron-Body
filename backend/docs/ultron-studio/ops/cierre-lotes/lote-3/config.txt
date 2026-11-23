@@ -1,4 +1,4 @@
-# LOTE 3 · NO SE DESPLIEGA SIN LA AUTORIZACIÓN ESPECÍFICA DEL PROPIETARIO (voz y telefonía), dada en la conversación.
+# UNIDAD 6 DEL ORDEN DEL CIERRE = LOTE 3 + PT-14 · NO SE DESPLIEGA SIN LA AUTORIZACIÓN ESPECÍFICA DEL PROPIETARIO, dada en la conversación.
 # --config (config/voice.php, enmienda 20): la identidad compartida del número, APAGADA. Sin la variable en el entorno,
 # filter_var(env(…, false)) da false. Las llamadas siguen cerradas por VoiceCallPolicy::CALLS_ENABLED_IN_CODE (lo exige
 # el paso 0 en los dos commits).
