@@ -1,0 +1,1960 @@
+ENSAYO DE LA CADENA DE DESPLIEGUES DEL CIERRE OPERATIVO · siete unidades encadenadas · 23-11-2026, 00:45–01:01 UTC
+Autor: devops (ops-orden), árbol _worktrees/cierre-pagos, rama cierre/ops-orden. Ficha: ops/DEPLOY_CIERRE_LOTES.md §5 quater.
+
+ENTORNO: BANCO LOCAL (Mac), NO PRODUCCIÓN. Ni ssh, ni ninguna petición a un host real: la API es artisan serve en
+127.0.0.1:8611 y la base, PostgreSQL 14.24 desechable en 127.0.0.1:55432 (ultron_studio_ops2_orden, BORRADA al terminar:
+sección K). El banco es banco-cierre/ensayar.sh del repo, sin tocar, y un montaje para la cadena (montar-cadena.sh, que es
+banco-cierre/montar.sh con dos cambios: los commits vienen de un clon desechable con la cadena y el fichero de entorno
+sintético lleva además un secreto interno y cuatro valores «previos» del laboratorio, todos sintéticos). Cada unidad se
+lanzó DENTRO DE TMUX, sin --sin-tmux, como en el servidor.
+
+GUION: ops/deploy-cierre-lote.sh del árbol, sha256 db4bc1f5d856da8d945c9f305cded769ba6c9d8c14ebc8a4a8672f0bea78547a (ca03c1b5… + la enmienda de
+la unidad 2b: RE_CONFIG admite «.» en texto:<palabra>; sección A). entorno-lab.sh: sha256 ead139498140316e66038bb070afc1cc273d79aa4d4d800c975876b3e0b75400.
+Cada ejecución lo copia con SOLO sus 15 líneas de cabecera sustituidas (ensayar.sh lo comprueba); entorno-lab.sh, con
+solo sus 4 (se comprueba igual).
+
+LA CADENA (en el clon desechable; los SHA son del banco, en main serán otros; el árbol de producto, el mismo):
+   u0 f1fe6cac = lo que sirve producción
+   u1 a9289647 = merge(cierre/ops-pt19): el guion enmendado
+   u2 66fff950 = merge(cierre/lab): lote 5, el laboratorio frente al motor
+   u3 4b9b7677 = chore(ultron-studio): integración final: el laboratorio frente al motor sigue al compilador 5
+   u4 dc7e7503 = merge(integracion/consent): lote 4, autorizaciones de contacto y quejas
+   u5 ab5440c8 = merge(cierre/pagos-guarda-iva): PT-16, cobro manual con IVA adicional
+   u6 125ec246 = merge(cierre/voz-catalogo): voz, lote 3 y PT-14
+   u7 a55ba5cb = merge(cierre/planes-condiciones): PT-15
+   u1 = origin/main bfe61ba6 + cierre/puertas-internas c78e248e + cierre/ops-pt19 df095ad9 · u2 = u1 + cierre/lab bdb93199 ·
+   u3 = u2 + cierre/planes-c5 e5a673c1 + cherry-pick -x c4323242 · u4 = u3 + integracion/consent ba4b143e ·
+   u5 = u4 + cierre/pagos-guarda-iva e1c2af3c · u6 = u5 + cierre/voz-catalogo e610d035 (choques: resuelve-fusion-pt14.py) ·
+   u7 = u6 + cierre/planes-condiciones a994b050 (choque: resuelve-contrato.py). Los tres ficheros resueltos, byte a byte
+   iguales a integracion/final 4e53f04a. El producto de u7 (backend/app, bootstrap, config, database, routes) = el de
+   4e53f04a: git diff --stat vacío (sección K).
+
+RESUMEN (códigos de salida; «otra vez» = el despliegue que deja el eslabón puesto para la unidad siguiente):
+   1 PT-19         comprobar 0 · desplegar 0 · volver 0 · otra vez 0   (el marcador: presente → ausente → presente → ausente)
+   2 lote 5 + 2b   entorno-lab comprobar 0 · comprobar 0 · entorno-lab aplicar 0 · desplegar 0 · volver 0 · entorno-lab vuelta 0 ·
+                   NEGATIVO (desplegar sin 2b) 4 · entorno-lab aplicar 0 · otra vez 0 · al final, entorno-lab vuelta --regenera 0
+   3 PT-17         comprobar 0 · desplegar 0 · volver 0 · otra vez 0   (ultron:prompt-trace: compiler 4 → 5 → 4 → 5)
+   4 lote 4        comprobar 0 · desplegar 0 · volver 0 · otra vez 0   (1046 → 1052 → 1046 → 1052 rutas)
+   5 PT-16         comprobar 0 · desplegar 0 · volver 0 · otra vez 0
+   6 voz (3+PT-14) comprobar 0 · desplegar 0 · volver 0 · otra vez 0   (las 2 columnas y las 2 llaves, a mano: presentes y se conservan)
+   7 PT-15         comprobar 0 · desplegar 0 · volver 0 · otra vez 0   (route:list -v: throttle:internal-marketing-ai(-check))
+
+ARTEFACTOS DEL BANCO (no son del despliegue): el AVISO «ironbody-migrate … no es la copia versionada» sale en todas las
+unidades con migraciones porque el migrador del banco es la copia con la ruta del banco (como en los ensayos anteriores);
+los «sleep» del banco duran 0,3 s; el usuario de todo es el del Mac (sudo del banco sin cambio de usuario).
+
+SECRETOS: el banco llevaba una clave de aplicación y un secreto interno SINTÉTICOS, nunca impresos: 0 apariciones de
+cualquiera de los dos en este fichero (comprobado al escribirlo, abajo). Ningún valor previo del fichero de entorno sale
+aquí: de las claves del laboratorio, solo «otro valor», «vacía», «ausente» o «= lo decidido», y los precios sintéticos del
+banco (9.99, 19.99) como números, que es lo que el guion imprime de un número. Ninguna credencial real leída ni usada.
+
+
+========================================================================================================================
+A. La enmienda del guion (RE_CONFIG): prueba unitaria y regresión sobre todas las declaraciones del repo
+========================================================================================================================
+guion ca03c1b5 (antes de la enmienda): 24 de 25 líneas de --config del repo aceptadas · rechazada: lote-5/config.txt: ultron_studio.lab.openai.model (texto:gpt-4.1-mini, por el punto)
+guion db4bc1f5 (con la enmienda):      25 de 25 líneas de --config del repo aceptadas (lote-2, lote-3, lote-4, lote-5 con y sin 2b, pt-15)
+RE_CONFIG (3.2.57(1)-release): 28 bien, 0 mal
+
+========================================================================================================================
+B. Montaje del banco (producción en f1fe6cac, origin/main en u1)
+========================================================================================================================
+== 1. origen.git desechable (alternates al repo y al clon de la cadena, solo lectura): main = u1
+   previo f1fe6cac → nuevo a9289647 (43 commits, 50 ficheros)
+== 2. «producción» en el previo, con vendor
+== 3. base ultron_studio_ops2_orden con el modelo de roles del banco del H9
+== 4. fichero de entorno SINTÉTICO (sin credenciales reales) y el del dueño del banco
+== 5. migraciones del previo como h5_owner y cachés (sin red: proxy a un puerto cerrado)
+   350 migraciones registradas · cachés alejodev 600 / alejodev 600
+BANCO MONTADO: <banco> (previo f1fe6cac, nuevo a9289647, base ultron_studio_ops2_orden). Siguiente: bash <S>/herramientas/ensayar.sh <banco> arrancar
+
+========================================================================================================================
+C. Unidad 1 · PT-19
+========================================================================================================================
+################ UNIDAD 1 · previo f1fe6cac → nuevo a9289647 · 50 ficheros · 2026-11-23T00:48:05Z
+   fuera de backend/docs/:
+      backend/bootstrap/app.php
+      backend/tests/Feature/Marketing/PuertasInternasSecretoAntesDelCupoTest.php
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+
+######## unidad 1 · comprobar · 00:48:05 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:48:05Z · modo comprobar · PREVIO=f1fe6cac · NUEVO=a9289647 · lista <banco>/root/u1/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+   declaraciones de PT-19: bootstrap/app.php con huella d8e9cd270b928afe… (--bootstrap) · marcador <banco>/root/u1/marcador.txt: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente en el previo y ausente en el nuevo
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción f1fe6cac limpia · origin/main a9289647 · 43 commit(s) · 50 ficheros = la lista: 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · 48 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   bootstrap/app.php: sha256 en a9289647 = la declarada con --bootstrap (d8e9cd270b928afe…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en f1fe6cac y en a9289647; los dos ficheros sin cambios
+      a9289647 merge(cierre/ops-pt19): el guion enmendado (banco de la cadena)
+      52230004 merge(cierre/puertas-internas): PT-19 (banco de la cadena)
+      df095ad9 ops(ultron-studio): PT-19, una vía de despliegue declarada para bootstrap/app.php, ensayada en el banco
+      c78e248e test(seguridad): PT-19 tras su revisión de seguridad de API: la guarda ampliada y la firma mala
+      de38b119 docs(ultron-studio): la decisión final del propietario (PT-14 con A y B, PT-19 en código, modelo del laborat
+      5cd201eb fix(seguridad): PT-19, la puerta del secreto interno corre antes que el limitador
+      0a8d3c61 docs(ultron-studio): informe completo de cierre técnico entregado al propietario; §0 al día
+      b8f7c2ec docs(ultron-studio): control de cierre, 17 de 18: PT-15 cerrado; PT-19 propuesto (puertas internas), sin abrir
+      e325d93a docs(ultron-studio): control de cierre, 16 de 18: PT-13 y PT-18 cerrados; PT-15 implementado y en revisión
+      02cfc651 docs(ultron-studio): la matriz de aceptación técnica (PT-13): cada función con su estado, dónde vive y su 
+      b3ac3de3 docs(ultron-studio): PT-10, PT-11, PT-12, PT-16 y PT-17 cerrados; PT-18 a falta de la batería del lote 4
+      f00330dd docs(ultron-studio): PT-17 con su revisión de seguridad y su batería; la integración definitiva; PT-12 y PT
+      … y 31 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · tras el código nuevo tiene que dar x-ratelimit-limit ausente antes de 32 s (revalidate_freq + 30 s)
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 1 · desplegar · 00:48:08 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:48:09Z · modo despliegue · PREVIO=f1fe6cac · NUEVO=a9289647 · lista <banco>/root/u1/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+   declaraciones de PT-19: bootstrap/app.php con huella d8e9cd270b928afe… (--bootstrap) · marcador <banco>/root/u1/marcador.txt: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente en el previo y ausente en el nuevo
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción f1fe6cac limpia · origin/main a9289647 · 43 commit(s) · 50 ficheros = la lista: 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · 48 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   bootstrap/app.php: sha256 en a9289647 = la declarada con --bootstrap (d8e9cd270b928afe…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en f1fe6cac y en a9289647; los dos ficheros sin cambios
+      a9289647 merge(cierre/ops-pt19): el guion enmendado (banco de la cadena)
+      52230004 merge(cierre/puertas-internas): PT-19 (banco de la cadena)
+      df095ad9 ops(ultron-studio): PT-19, una vía de despliegue declarada para bootstrap/app.php, ensayada en el banco
+      c78e248e test(seguridad): PT-19 tras su revisión de seguridad de API: la guarda ampliada y la firma mala
+      de38b119 docs(ultron-studio): la decisión final del propietario (PT-14 con A y B, PT-19 en código, modelo del laborat
+      5cd201eb fix(seguridad): PT-19, la puerta del secreto interno corre antes que el limitador
+      0a8d3c61 docs(ultron-studio): informe completo de cierre técnico entregado al propietario; §0 al día
+      b8f7c2ec docs(ultron-studio): control de cierre, 17 de 18: PT-15 cerrado; PT-19 propuesto (puertas internas), sin abrir
+      e325d93a docs(ultron-studio): control de cierre, 16 de 18: PT-13 y PT-18 cerrados; PT-15 implementado y en revisión
+      02cfc651 docs(ultron-studio): la matriz de aceptación técnica (PT-13): cada función con su estado, dónde vive y su 
+      b3ac3de3 docs(ultron-studio): PT-10, PT-11, PT-12, PT-16 y PT-17 cerrados; PT-18 a falta de la batería del lote 4
+      f00330dd docs(ultron-studio): PT-17 con su revisión de seguridad y su batería; la integración definitiva; PT-12 y PT
+      … y 31 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · tras el código nuevo tiene que dar x-ratelimit-limit ausente antes de 32 s (revalidate_freq + 30 s)
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-004810 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (13 ficheros)
+2. código → cachés:
+C. código: HEAD=a9289647 (merge --ff-only, umask 022) · alejodev lee los 50 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401 ausente tras 1 lectura(s) (esperado 401 ausente: el servidor sirve el bootstrap/app.php nuevo)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve a9289647 · respaldo <banco>/backups/cierre-lote-20261123-004810 · registro <banco>/backups/cierre-lote-20261123-004810/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh f1fe6cac a9289647 <banco>/root/u1/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-004810
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD a9289647 · origin/main a9289647 · árbol limpio
+base ultron_studio_ops2_orden: 350 migraciones registradas · reinicios de colas: 1
+
+######## unidad 1 · volver atrás · 00:48:13 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:48:13Z · de a9289647 a f1fe6cac · orden del lote: sin-migraciones · 0 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-004810 · registro <banco>/backups/cierre-lote-20261123-004810/vuelta-atras-20261123-004813.log
+   el lote entró con --bootstrap (sha256 d8e9cd270b928afe…): bootstrap/app.php vuelve con el código y lo comprueba el marcador GET api/internal/marketing/ai/doctor (401, x-ratelimit-limit presente; plazo 32 s)
+   a. cachés y código:
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=f1fe6cac (checkout --detach, umask 022) · alejodev lee los 13 ficheros del diff que existen en f1fe6cac
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+      marcador GET api/internal/marketing/ai/doctor sin token → 401 presente tras 1 lectura(s) (esperado 401 presente: el servidor vuelve a servir el bootstrap/app.php previo)
+VUELTA ATRÁS HECHA: producción en f1fe6cac, con las cachés de antes, las rutas y el programador de antes
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD f1fe6cac · origin/main a9289647 · árbol limpio
+base ultron_studio_ops2_orden: 350 migraciones registradas · reinicios de colas: 2
+
+######## unidad 1 · desplegar otra vez (el eslabón queda puesto) · 00:48:16 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:48:16Z · modo despliegue · PREVIO=f1fe6cac · NUEVO=a9289647 · lista <banco>/root/u1/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+   declaraciones de PT-19: bootstrap/app.php con huella d8e9cd270b928afe… (--bootstrap) · marcador <banco>/root/u1/marcador.txt: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente en el previo y ausente en el nuevo
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción f1fe6cac limpia · origin/main a9289647 · 43 commit(s) · 50 ficheros = la lista: 0 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 1 de bootstrap · 1 de tests · 48 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   bootstrap/app.php: sha256 en a9289647 = la declarada con --bootstrap (d8e9cd270b928afe…): el fichero revisado, byte a byte; sin caché que lo contenga: lo prueba el marcador
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en f1fe6cac y en a9289647; los dos ficheros sin cambios
+      a9289647 merge(cierre/ops-pt19): el guion enmendado (banco de la cadena)
+      52230004 merge(cierre/puertas-internas): PT-19 (banco de la cadena)
+      df095ad9 ops(ultron-studio): PT-19, una vía de despliegue declarada para bootstrap/app.php, ensayada en el banco
+      c78e248e test(seguridad): PT-19 tras su revisión de seguridad de API: la guarda ampliada y la firma mala
+      de38b119 docs(ultron-studio): la decisión final del propietario (PT-14 con A y B, PT-19 en código, modelo del laborat
+      5cd201eb fix(seguridad): PT-19, la puerta del secreto interno corre antes que el limitador
+      0a8d3c61 docs(ultron-studio): informe completo de cierre técnico entregado al propietario; §0 al día
+      b8f7c2ec docs(ultron-studio): control de cierre, 17 de 18: PT-15 cerrado; PT-19 propuesto (puertas internas), sin abrir
+      e325d93a docs(ultron-studio): control de cierre, 16 de 18: PT-13 y PT-18 cerrados; PT-15 implementado y en revisión
+      02cfc651 docs(ultron-studio): la matriz de aceptación técnica (PT-13): cada función con su estado, dónde vive y su 
+      b3ac3de3 docs(ultron-studio): PT-10, PT-11, PT-12, PT-16 y PT-17 cerrados; PT-18 a falta de la batería del lote 4
+      f00330dd docs(ultron-studio): PT-17 con su revisión de seguridad y su batería; la integración definitiva; PT-12 y PT
+      … y 31 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401, x-ratelimit-limit presente (= el previo; 1 lectura(s)) · tras el código nuevo tiene que dar x-ratelimit-limit ausente antes de 32 s (revalidate_freq + 30 s)
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-004817 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (13 ficheros)
+2. código → cachés:
+C. código: HEAD=a9289647 (merge --ff-only, umask 022) · alejodev lee los 50 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   marcador sin credenciales: GET api/internal/marketing/ai/doctor → 401 ausente tras 1 lectura(s) (esperado 401 ausente: el servidor sirve el bootstrap/app.php nuevo)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve a9289647 · respaldo <banco>/backups/cierre-lote-20261123-004817 · registro <banco>/backups/cierre-lote-20261123-004817/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh f1fe6cac a9289647 <banco>/root/u1/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-004817
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD a9289647 · origin/main a9289647 · árbol limpio
+base ultron_studio_ops2_orden: 350 migraciones registradas · reinicios de colas: 3
+
+RESULTADO unidad 1 (f1fe6cac → a9289647): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:48:20 UTC
+
+========================================================================================================================
+D. Unidad 2 · lote 5 + 2b (el modelo del laboratorio)
+========================================================================================================================
+################ UNIDAD 2 · previo a9289647 → nuevo 66fff950 · 46 ficheros · 2026-11-23T00:51:09Z
+   fuera de backend/docs/:
+      backend/.env.example
+      backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioLabController.php
+      backend/app/Models/UltronStudio/StudioLabRunCase.php
+      backend/app/Services/UltronStudio/StudioLabCost.php
+      backend/app/Services/UltronStudio/StudioLabEngineCase.php
+      backend/app/Services/UltronStudio/StudioLabEngineCheck.php
+      backend/app/Services/UltronStudio/StudioLabEngineContext.php
+      backend/app/Services/UltronStudio/StudioLabEngineFlow.php
+      backend/app/Services/UltronStudio/StudioLabEngineModelClient.php
+      backend/app/Services/UltronStudio/StudioLabFakeClient.php
+      backend/app/Services/UltronStudio/StudioLabOpenAiClient.php
+      backend/app/Services/UltronStudio/StudioLabRunner.php
+      backend/app/Services/UltronStudio/StudioLabRuns.php
+      backend/app/Services/UltronStudio/StudioLabStepJob.php
+      backend/app/Services/UltronStudio/StudioLabVerdicts.php
+      backend/app/Services/UltronStudio/StudioPromptBundle.php
+      backend/app/Services/UltronStudio/StudioPublications.php
+      backend/app/Services/UltronStudio/StudioPublishing.php
+      backend/config/ultron_studio.php
+      backend/database/migrations/2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases.php
+      backend/tests/Feature/Marketing/StudioLabEngineCheckParityTest.php
+      backend/tests/Feature/Marketing/StudioLabEngineContextParityTest.php
+      backend/tests/Feature/UltronStudio/E2E/UltronStudioLabEngineE2ETest.php
+      backend/tests/Feature/UltronStudio/PublicationFixtures.php
+      backend/tests/Feature/UltronStudio/ScriptedLabClient.php
+      backend/tests/Feature/UltronStudio/UltronEngineIsolationTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEngineColumnTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEngineInvariantsTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEnginePersonalDataTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEngineRunnerTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEngineTimeBudgetTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabGateEngineBundleTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabNoEngineEffectsTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabRunsFidelityFilterTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioPublicationConfigTest.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/StudioLabEnginePromptsParityTest.php
+      backend/tests/Unit/UltronStudio/StudioLabEngineFlowParityTest.php
+      backend/tests/Unit/UltronStudio/StudioLabIsolationTest.php
+      backend/tests/fixtures/ultron-studio/e2e/mock-openai-lab-motor.cjs
+      backend/tests/fixtures/ultron-studio/e2e/run-lab-motor-e2e.sh
+      backend/tests/fixtures/ultron-studio/tools/recorrer-s2-lab.cjs
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+
+######## unidad 2 · 2b · preparar entorno-lab.sh del banco · 00:51:09 UTC
+   entorno-lab.sh del banco: 4 líneas sustituidas (las 4 de «Lo propio de producción»), sha256 del de la rama ead139498140316e…
+→ [2b · preparar entorno-lab.sh del banco] código 0
+
+######## unidad 2 · 2b · entorno-lab comprobar · 00:51:09 UTC
+== entorno-lab.sh · comprobar · 2026-11-23T00:51:09Z · <banco>/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+   hoy: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   hoy: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+   hoy: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   hoy: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+   el parser de la aplicación (Dotenv, como alejodev) lee el fichero: sí
+COMPROBADO: aplicar cambiaría 4 de 4 clave(s); no se ha tocado nada
+→ [2b · entorno-lab comprobar] código 0
+   formas del laboratorio en la caché: model cadena · reasoning_effort cadena · price_input 9.99 · price_output 19.99
+
+######## unidad 2 · comprobar · 00:51:09 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:51:09Z · modo comprobar · PREVIO=a9289647 · NUEVO=66fff950 · lista <banco>/root/u2/lista.txt
+   declaraciones: migraciones <banco>/root/u2/migraciones.txt (orden migracion-primero) · config <banco>/root/u2/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción a9289647 limpia · origin/main 66fff950 · 30 commit(s) · 46 ficheros = la lista: 17 de backend/app · 1 de config · 0 de routes · 1 migración(es) · 0 de bootstrap · 22 de tests · 4 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en a9289647 y en 66fff950; los dos ficheros sin cambios
+      66fff950 merge(cierre/lab): lote 5, el laboratorio frente al motor (banco de la cadena)
+      bdb93199 fix(ultron-studio): el port de la comprobación del laboratorio sigue a PT-01 (B-1 de la revisión final del l
+      86d4e875 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 5
+      fbd5010f Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      36fb19da docs(ultron-studio): la enmienda 9 y el informe del laboratorio tras seguridad y base de datos
+      c13db1f4 chore(ultron-studio): el docblock de labGateMode() a su sitio y un rol de prueba propio por ejecución (NB6)
+      367df3c0 test(ultron-studio): la regresión de la fuga de la persona sintética, con filas reales y marcas (NB5)
+      a2fbdb39 fix(ultron-studio): down() de la columna engine se niega si perdería evidencia (C-A1)
+      8d040592 fix(ultron-studio): un caso del motor tiene un plazo total que cabe en el job (NB4)
+      bd2da75b test(ultron-studio): T8 y la enmienda 9 dicen la verdad sobre el precio (NB1)
+      67631aed fix(ultron-studio): con la llave en engine, la puerta ata el paquete de prompts (NB2)
+      f859716b fix(ultron-studio): el filtro de datos personales ve todo lo que el modo motor compila (B1)
+      … y 18 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [0 - - -] = antes · vuelta: conservar
+   pendientes frente a origin/main: [2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 66fff950 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 9.99|ultron_studio.lab.price_output_usd_per_mtok 19.99
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 2 · 2b · entorno-lab aplicar · 00:51:11 UTC
+== entorno-lab.sh · aplicar · 2026-11-23T00:51:11Z · <banco>/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+1. respaldo <banco>/backups/entorno-lab-20261123-005112 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+   lo que se va a escribir: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <banco>/root/u2/entorno-lab.sh vuelta=<banco>/backups/entorno-lab-20261123-005112   (con --regenera si la unidad 2 se queda desplegada)
+→ [2b · entorno-lab aplicar] código 0
+
+######## unidad 2 · desplegar · 00:51:12 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:51:12Z · modo despliegue · PREVIO=a9289647 · NUEVO=66fff950 · lista <banco>/root/u2/lista.txt
+   declaraciones: migraciones <banco>/root/u2/migraciones.txt (orden migracion-primero) · config <banco>/root/u2/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción a9289647 limpia · origin/main 66fff950 · 30 commit(s) · 46 ficheros = la lista: 17 de backend/app · 1 de config · 0 de routes · 1 migración(es) · 0 de bootstrap · 22 de tests · 4 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en a9289647 y en 66fff950; los dos ficheros sin cambios
+      66fff950 merge(cierre/lab): lote 5, el laboratorio frente al motor (banco de la cadena)
+      bdb93199 fix(ultron-studio): el port de la comprobación del laboratorio sigue a PT-01 (B-1 de la revisión final del l
+      86d4e875 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 5
+      fbd5010f Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      36fb19da docs(ultron-studio): la enmienda 9 y el informe del laboratorio tras seguridad y base de datos
+      c13db1f4 chore(ultron-studio): el docblock de labGateMode() a su sitio y un rol de prueba propio por ejecución (NB6)
+      367df3c0 test(ultron-studio): la regresión de la fuga de la persona sintética, con filas reales y marcas (NB5)
+      a2fbdb39 fix(ultron-studio): down() de la columna engine se niega si perdería evidencia (C-A1)
+      8d040592 fix(ultron-studio): un caso del motor tiene un plazo total que cabe en el job (NB4)
+      bd2da75b test(ultron-studio): T8 y la enmienda 9 dicen la verdad sobre el precio (NB1)
+      67631aed fix(ultron-studio): con la llave en engine, la puerta ata el paquete de prompts (NB2)
+      f859716b fix(ultron-studio): el filtro de datos personales ve todo lo que el modo motor compila (B1)
+      … y 18 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [0 - - -] = antes · vuelta: conservar
+   pendientes frente a origin/main: [2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 66fff950 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 9.99|ultron_studio.lab.price_output_usd_per_mtok 19.99
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005114 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 1 esquema(s) de tabla, el guion y SHA256SUMS (17 ficheros)
+   sin filas vivas, justo antes del primer cambio: ultron_studio_lab_runs.status en [queued,running]: 0
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases .... 5.79ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: aplicada (intento 1) · esquema [1 json null -] = después · copia <banco>/var-lib/cierre-lote-20261123-005114/0-2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases/2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases.php (9cf192ff0395…)
+   caché de configuración: la regeneró ironbody-migrate y no es byte a byte la del respaldo (se rehace con config:cache en K)
+C. código: HEAD=66fff950 (merge --ff-only, umask 022) · alejodev lee los 46 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: [1 json null -] = despues
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: ultron_studio.publishing.lab_source texto:simulation|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model texto:gpt-4.1-mini|ultron_studio.lab.openai.reasoning_effort vacia|ultron_studio.lab.price_input_usd_per_mtok 0.4|ultron_studio.lab.price_output_usd_per_mtok 1.6
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 66fff950 · respaldo <banco>/backups/cierre-lote-20261123-005114 · registro <banco>/backups/cierre-lote-20261123-005114/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh a9289647 66fff950 <banco>/root/u2/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005114
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD 66fff950 · origin/main 66fff950 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 4
+   formas del laboratorio en la caché: model texto:gpt-4.1-mini · reasoning_effort vacia · price_input 0.4 · price_output 1.6
+
+######## unidad 2 · volver atrás · 00:51:18 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:51:18Z · de 66fff950 a a9289647 · orden del lote: migracion-primero · 1 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005114 · registro <banco>/backups/cierre-lote-20261123-005114/vuelta-atras-20261123-005118.log
+   a. cachés y código (el lote migró ANTES del código: el código vuelve antes que el esquema):
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=a9289647 (checkout --detach, umask 022) · alejodev lee los 22 ficheros del diff que existen en a9289647
+   b. esquema:
+   · 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: SE CONSERVA (el lote lo declara «conservar»)
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+VUELTA ATRÁS HECHA: producción en a9289647, con las cachés de antes, las rutas y el programador de antes; SE CONSERVA el esquema de: 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD a9289647 · origin/main 66fff950 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 5
+   formas del laboratorio en la caché: model cadena · reasoning_effort cadena · price_input 9.99 · price_output 19.99
+
+######## unidad 2 · 2b · entorno-lab vuelta (sin --regenera: la caché ya es la del respaldo del guion) · 00:51:21 UTC
+== entorno-lab.sh · vuelta · 2026-11-23T00:51:21Z · <banco>/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+   lo que se repone: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · no cambia ninguna que no esté decidida: sí
+1. repuesto el del respaldo, byte a byte (atómico, alejodev:wheel 600)
+   ahora: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   ahora: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+   ahora: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   ahora: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+2. la caché de configuración NO se toca (sin --regenera): si la unidad 2 sigue desplegada, la caché aún tiene lo decidido; regenerarla es --regenera
+VUELTA ATRÁS HECHA: el fichero de entorno es el del respaldo <banco>/backups/entorno-lab-20261123-005112
+→ [2b · entorno-lab vuelta (sin --regenera: la caché ya es la del respaldo del guion)] código 0
+   formas del laboratorio en la caché: model cadena · reasoning_effort cadena · price_input 9.99 · price_output 19.99
+
+######## unidad 2 · NEGATIVO 2b · desplegar SIN aplicar 2b (config.txt de 6 líneas): el paso 4 no cuadra → vuelta atrás automática (4) · 00:51:21 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:51:22Z · modo despliegue · PREVIO=a9289647 · NUEVO=66fff950 · lista <banco>/root/u2/lista.txt
+   declaraciones: migraciones <banco>/root/u2/migraciones.txt (orden migracion-primero) · config <banco>/root/u2/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción a9289647 limpia · origin/main 66fff950 · 30 commit(s) · 46 ficheros = la lista: 17 de backend/app · 1 de config · 0 de routes · 1 migración(es) · 0 de bootstrap · 22 de tests · 4 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en a9289647 y en 66fff950; los dos ficheros sin cambios
+      66fff950 merge(cierre/lab): lote 5, el laboratorio frente al motor (banco de la cadena)
+      bdb93199 fix(ultron-studio): el port de la comprobación del laboratorio sigue a PT-01 (B-1 de la revisión final del l
+      86d4e875 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 5
+      fbd5010f Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      36fb19da docs(ultron-studio): la enmienda 9 y el informe del laboratorio tras seguridad y base de datos
+      c13db1f4 chore(ultron-studio): el docblock de labGateMode() a su sitio y un rol de prueba propio por ejecución (NB6)
+      367df3c0 test(ultron-studio): la regresión de la fuga de la persona sintética, con filas reales y marcas (NB5)
+      a2fbdb39 fix(ultron-studio): down() de la columna engine se niega si perdería evidencia (C-A1)
+      8d040592 fix(ultron-studio): un caso del motor tiene un plazo total que cabe en el job (NB4)
+      bd2da75b test(ultron-studio): T8 y la enmienda 9 dicen la verdad sobre el precio (NB1)
+      67631aed fix(ultron-studio): con la llave en engine, la puerta ata el paquete de prompts (NB2)
+      f859716b fix(ultron-studio): el filtro de datos personales ve todo lo que el modo motor compila (B1)
+      … y 18 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [1 json null -] = despues · vuelta: conservar
+   ya registradas (reanudación; no se vuelven a ejecutar): 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases
+   pendientes frente a origin/main: [ninguna] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 66fff950 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 9.99|ultron_studio.lab.price_output_usd_per_mtok 19.99
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005123 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 1 esquema(s) de tabla, el guion y SHA256SUMS (17 ficheros)
+   sin filas vivas, justo antes del primer cambio: ultron_studio_lab_runs.status en [queued,running]: 0
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+   2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: ya registrada (paso 0): no se ejecuta
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=66fff950 (merge --ff-only, umask 022) · alejodev lee los 46 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: [1 json null -] = despues
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: ultron_studio.publishing.lab_source texto:simulation|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 9.99|ultron_studio.lab.price_output_usd_per_mtok 19.99
+   ✗ las banderas no valen lo declarado: +ultron_studio.lab.openai.model cadena +ultron_studio.lab.openai.reasoning_effort cadena +ultron_studio.lab.price_input_usd_per_mtok 9.99 +ultron_studio.lab.price_output_usd_per_mtok 19.99 -ultron_studio.lab.openai.model texto:gpt-4.1-mini -ultron_studio.lab.openai.reasoning_effort vacia -ultron_studio.lab.price_input_usd_per_mtok 0.4 -ultron_studio.lab.price_output_usd_per_mtok 1.6 (- declarado · + en la caché)
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   ✗ comprobaciones posteriores · las banderas no valen lo declarado: +ultron_studio.lab.openai.model cadena +ultron_studio.lab.openai.reasoning_effort cadena +ultron_studio.lab.price_input_usd_per_mtok 9.99 +ultron_studio.lab.price_output_usd_per_mtok 19.99 -ultron_studio.lab.openai.model texto:gpt-4.1-mini -ultron_studio.lab.openai.reasoning_effort vacia -ultron_studio.lab.price_input_usd_per_mtok 0.4 -ultron_studio.lab.price_output_usd_per_mtok 1.6 (- declarado · + en la caché)
+VUELTA ATRÁS AUTOMÁTICA:
+   a. cachés y código (el lote migró ANTES del código: el código vuelve antes que el esquema):
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache)
+   · código: HEAD=a9289647 (checkout --detach, umask 022) · alejodev lee los 22 ficheros del diff que existen en a9289647
+   b. esquema:
+   · 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: ya estaba antes de este despliegue: no se toca
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+VUELTA ATRÁS AUTOMÁTICA HECHA: producción de nuevo en a9289647, con las cachés, las rutas y el programador de antes. Motivo: comprobaciones posteriores · las banderas no valen lo declarado: +ultron_studio.lab.openai.model cadena +ultron_studio.lab.openai.reasoning_effort cadena +ultron_studio.lab.price_input_usd_per_mtok 9.99 +ultron_studio.lab.price_output_usd_per_mtok 19.99 -ultron_studio.lab.openai.model texto:gpt-4.1-mini -ultron_studio.lab.openai.reasoning_effort vacia -ultron_studio.lab.price_input_usd_per_mtok 0.4 -ultron_studio.lab.price_output_usd_per_mtok 1.6 (- declarado · + en la caché). Diagnosticar antes de repetir; el respaldo queda en <banco>/backups/cierre-lote-20261123-005123
+→ código de salida 4
+→ [NEGATIVO 2b · desplegar SIN aplicar 2b (config.txt de 6 líneas): el paso 4 no cuadra → vuelta atrás automática (4)] código 4
+prod: HEAD a9289647 · origin/main 66fff950 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 7
+   formas del laboratorio en la caché: model cadena · reasoning_effort cadena · price_input 9.99 · price_output 19.99
+
+######## unidad 2 · 2b · entorno-lab aplicar (otra vez) · 00:51:29 UTC
+== entorno-lab.sh · aplicar · 2026-11-23T00:51:29Z · <banco>/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+1. respaldo <banco>/backups/entorno-lab-20261123-005129 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+   lo que se va a escribir: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <banco>/root/u2/entorno-lab.sh vuelta=<banco>/backups/entorno-lab-20261123-005129   (con --regenera si la unidad 2 se queda desplegada)
+→ [2b · entorno-lab aplicar (otra vez)] código 0
+
+######## unidad 2 · desplegar otra vez (el eslabón queda puesto) · 00:51:29 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:51:30Z · modo despliegue · PREVIO=a9289647 · NUEVO=66fff950 · lista <banco>/root/u2/lista.txt
+   declaraciones: migraciones <banco>/root/u2/migraciones.txt (orden migracion-primero) · config <banco>/root/u2/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción a9289647 limpia · origin/main 66fff950 · 30 commit(s) · 46 ficheros = la lista: 17 de backend/app · 1 de config · 0 de routes · 1 migración(es) · 0 de bootstrap · 22 de tests · 4 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en a9289647 y en 66fff950; los dos ficheros sin cambios
+      66fff950 merge(cierre/lab): lote 5, el laboratorio frente al motor (banco de la cadena)
+      bdb93199 fix(ultron-studio): el port de la comprobación del laboratorio sigue a PT-01 (B-1 de la revisión final del l
+      86d4e875 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 5
+      fbd5010f Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      36fb19da docs(ultron-studio): la enmienda 9 y el informe del laboratorio tras seguridad y base de datos
+      c13db1f4 chore(ultron-studio): el docblock de labGateMode() a su sitio y un rol de prueba propio por ejecución (NB6)
+      367df3c0 test(ultron-studio): la regresión de la fuga de la persona sintética, con filas reales y marcas (NB5)
+      a2fbdb39 fix(ultron-studio): down() de la columna engine se niega si perdería evidencia (C-A1)
+      8d040592 fix(ultron-studio): un caso del motor tiene un plazo total que cabe en el job (NB4)
+      bd2da75b test(ultron-studio): T8 y la enmienda 9 dicen la verdad sobre el precio (NB1)
+      67631aed fix(ultron-studio): con la llave en engine, la puerta ata el paquete de prompts (NB2)
+      f859716b fix(ultron-studio): el filtro de datos personales ve todo lo que el modo motor compila (B1)
+      … y 18 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases · columna ultron_studio_lab_run_cases engine json · esquema [1 json null -] = despues · vuelta: conservar
+   ya registradas (reanudación; no se vuelven a ejecutar): 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases
+   pendientes frente a origin/main: [ninguna] = las declaradas · cerrojos de otras sesiones sobre ['ultron_studio_lab_run_cases']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 66fff950 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   sin filas vivas (--sin-filas): ultron_studio_lab_runs.status en [queued,running]: 0
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: ultron_studio.publishing.lab_source ausente|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model cadena|ultron_studio.lab.openai.reasoning_effort cadena|ultron_studio.lab.price_input_usd_per_mtok 9.99|ultron_studio.lab.price_output_usd_per_mtok 19.99
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005131 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 1 esquema(s) de tabla, el guion y SHA256SUMS (17 ficheros)
+   sin filas vivas, justo antes del primer cambio: ultron_studio_lab_runs.status en [queued,running]: 0
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+   2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: ya registrada (paso 0): no se ejecuta
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=66fff950 (merge --ff-only, umask 022) · alejodev lee los 46 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases: [1 json null -] = despues
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: ultron_studio.publishing.lab_source texto:simulation|ultron_studio.publishing.lab_gate texto:required|ultron_studio.lab.openai.model texto:gpt-4.1-mini|ultron_studio.lab.openai.reasoning_effort vacia|ultron_studio.lab.price_input_usd_per_mtok 0.4|ultron_studio.lab.price_output_usd_per_mtok 1.6
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 66fff950 · respaldo <banco>/backups/cierre-lote-20261123-005131 · registro <banco>/backups/cierre-lote-20261123-005131/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh a9289647 66fff950 <banco>/root/u2/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005131
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD 66fff950 · origin/main 66fff950 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 8
+   formas del laboratorio en la caché: model texto:gpt-4.1-mini · reasoning_effort vacia · price_input 0.4 · price_output 1.6
+
+RESULTADO unidad 2 (a9289647 → 66fff950): · 2b · preparar entorno-lab.sh del banco 0 · 2b · entorno-lab comprobar 0 · comprobar 0 · 2b · entorno-lab aplicar 0 · desplegar 0 · volver atrás 0 · 2b · entorno-lab vuelta (sin --regenera: la caché ya es la del respaldo del guion) 0 · NEGATIVO 2b · desplegar SIN aplicar 2b (config.txt de 6 líneas): el paso 4 no cuadra → vuelta atrás automática (4) 4 · 2b · entorno-lab aplicar (otra vez) 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:51:35 UTC
+
+========================================================================================================================
+E. Unidad 3 · PT-17 (compilador 5 + el pegamento c4323242)
+========================================================================================================================
+################ UNIDAD 3 · previo 66fff950 → nuevo 4b9b7677 · 35 ficheros · 2026-11-23T00:52:16Z
+   fuera de backend/docs/:
+      backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+      backend/app/Services/UltronStudio/StudioLabEngineFlow.php
+      backend/tests/Feature/Marketing/UltronDecidePromptsTest.php
+      backend/tests/Feature/Marketing/UltronPromptsN8nS2CommandTest.php
+      backend/tests/Feature/Marketing/UltronPromptsTraceCommandTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioLabEngineInvariantsTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioPublicationV2Test.php
+      backend/tests/Feature/UltronStudio/UltronStudioStatusCatalogTest.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompiler5Test.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptEnginePatchTest.php
+      backend/tests/Unit/Marketing/Ultron/Prompts/UltronPublishedConfigPhrasesTest.php
+      backend/tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php
+      backend/tests/Unit/UltronStudio/StudioLabEngineFlowParityTest.php
+      backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php
+      backend/tests/fixtures/ultron-prompts/compile-cases.README.md
+      backend/tests/fixtures/ultron-prompts/compile-cases.json
+      backend/tests/fixtures/ultron-prompts/tools/parches-m1.cjs
+      backend/tests/fixtures/ultron-studio/publication-cases-v2.json
+      n8n/flujos/ultron-studio-s1/LEEME.md
+      n8n/flujos/ultron-studio-s1/fixtures/decide-legacy.json
+      n8n/flujos/ultron-studio-s1/fixtures/decide-studio-frases.json
+      n8n/flujos/ultron-studio-s1/fixtures/decide-studio.json
+      n8n/flujos/ultron-studio-s1/flujo-s1.json
+      n8n/flujos/ultron-studio-s1/huellas.json
+      n8n/flujos/ultron-studio-s2/fixtures/decide-legacy.json
+      n8n/flujos/ultron-studio-s2/fixtures/decide-studio.json
+      n8n/flujos/ultron-studio-s2/flujo-s2.json
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+   ultron:prompt-trace: compiler 4 · current.mode legacy · current.reason prompts_off · canaryConfigured False
+   ultron-studio:publication-check → código 0
+
+######## unidad 3 · comprobar · 00:52:16 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:52:16Z · modo comprobar · PREVIO=66fff950 · NUEVO=4b9b7677 · lista <banco>/root/u3/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 66fff950 limpia · origin/main 4b9b7677 · 9 commit(s) · 35 ficheros = la lista: 2 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 20 de tests · 4 de docs · 9 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 66fff950 y en 4b9b7677; los dos ficheros sin cambios
+      4b9b7677 chore(ultron-studio): integración final: el laboratorio frente al motor sigue al compilador 5
+      eb498ca1 merge(cierre/planes-c5): PT-17, el compilador 5 del turno de planes (banco de la cadena)
+      e5a673c1 docs(ultron-studio): Enmienda A4-5 del H5 (el compilador 5, las instrucciones firmadas del turno de planes) y 
+      56518135 chore(n8n): S1 y S2 regenerados con el compilador 5 (solo metadatos y fixtures)
+      3763d992 test(ultron-studio): las fijaciones del compilador 4 en la oferta, la publicación y el Studio pasan al 5
+      e7755e87 test(ultron-prompts): las fijaciones del compilador 4 pasan al 5, con las huellas del generador
+      25afd240 test(ultron-prompts): compilador 5 en §B.3, en la transcripción de Node y en compile-cases.json
+      4ef5d4cf feat(ultron-prompts): compilador 5, las instrucciones firmadas del turno de planes (PT-17)
+      298ff261 test(ultron-prompts): PT-17, N1 a N4 del compilador 5, en rojo con el compilador 4
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 3 · desplegar · 00:52:18 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:52:18Z · modo despliegue · PREVIO=66fff950 · NUEVO=4b9b7677 · lista <banco>/root/u3/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 66fff950 limpia · origin/main 4b9b7677 · 9 commit(s) · 35 ficheros = la lista: 2 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 20 de tests · 4 de docs · 9 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 66fff950 y en 4b9b7677; los dos ficheros sin cambios
+      4b9b7677 chore(ultron-studio): integración final: el laboratorio frente al motor sigue al compilador 5
+      eb498ca1 merge(cierre/planes-c5): PT-17, el compilador 5 del turno de planes (banco de la cadena)
+      e5a673c1 docs(ultron-studio): Enmienda A4-5 del H5 (el compilador 5, las instrucciones firmadas del turno de planes) y 
+      56518135 chore(n8n): S1 y S2 regenerados con el compilador 5 (solo metadatos y fixtures)
+      3763d992 test(ultron-studio): las fijaciones del compilador 4 en la oferta, la publicación y el Studio pasan al 5
+      e7755e87 test(ultron-prompts): las fijaciones del compilador 4 pasan al 5, con las huellas del generador
+      25afd240 test(ultron-prompts): compilador 5 en §B.3, en la transcripción de Node y en compile-cases.json
+      4ef5d4cf feat(ultron-prompts): compilador 5, las instrucciones firmadas del turno de planes (PT-17)
+      298ff261 test(ultron-prompts): PT-17, N1 a N4 del compilador 5, en rojo con el compilador 4
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005219 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (11 ficheros)
+2. código → cachés:
+C. código: HEAD=4b9b7677 (merge --ff-only, umask 022) · alejodev lee los 35 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 4b9b7677 · respaldo <banco>/backups/cierre-lote-20261123-005219 · registro <banco>/backups/cierre-lote-20261123-005219/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 66fff950 4b9b7677 <banco>/root/u3/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005219
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD 4b9b7677 · origin/main 4b9b7677 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 9
+   ultron:prompt-trace: compiler 5 · current.mode legacy · current.reason prompts_off · canaryConfigured False
+   ultron-studio:publication-check → código 0
+
+######## unidad 3 · volver atrás · 00:52:22 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:52:22Z · de 4b9b7677 a 66fff950 · orden del lote: sin-migraciones · 0 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005219 · registro <banco>/backups/cierre-lote-20261123-005219/vuelta-atras-20261123-005222.log
+   a. cachés y código:
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=66fff950 (checkout --detach, umask 022) · alejodev lee los 33 ficheros del diff que existen en 66fff950
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+VUELTA ATRÁS HECHA: producción en 66fff950, con las cachés de antes, las rutas y el programador de antes
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD 66fff950 · origin/main 4b9b7677 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 10
+   ultron:prompt-trace: compiler 4 · current.mode legacy · current.reason prompts_off · canaryConfigured False
+   ultron-studio:publication-check → código 0
+
+######## unidad 3 · desplegar otra vez (el eslabón queda puesto) · 00:52:25 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:52:25Z · modo despliegue · PREVIO=66fff950 · NUEVO=4b9b7677 · lista <banco>/root/u3/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 66fff950 limpia · origin/main 4b9b7677 · 9 commit(s) · 35 ficheros = la lista: 2 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 20 de tests · 4 de docs · 9 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 66fff950 y en 4b9b7677; los dos ficheros sin cambios
+      4b9b7677 chore(ultron-studio): integración final: el laboratorio frente al motor sigue al compilador 5
+      eb498ca1 merge(cierre/planes-c5): PT-17, el compilador 5 del turno de planes (banco de la cadena)
+      e5a673c1 docs(ultron-studio): Enmienda A4-5 del H5 (el compilador 5, las instrucciones firmadas del turno de planes) y 
+      56518135 chore(n8n): S1 y S2 regenerados con el compilador 5 (solo metadatos y fixtures)
+      3763d992 test(ultron-studio): las fijaciones del compilador 4 en la oferta, la publicación y el Studio pasan al 5
+      e7755e87 test(ultron-prompts): las fijaciones del compilador 4 pasan al 5, con las huellas del generador
+      25afd240 test(ultron-prompts): compilador 5 en §B.3, en la transcripción de Node y en compile-cases.json
+      4ef5d4cf feat(ultron-prompts): compilador 5, las instrucciones firmadas del turno de planes (PT-17)
+      298ff261 test(ultron-prompts): PT-17, N1 a N4 del compilador 5, en rojo con el compilador 4
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005227 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (11 ficheros)
+2. código → cachés:
+C. código: HEAD=4b9b7677 (merge --ff-only, umask 022) · alejodev lee los 35 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 4b9b7677 · respaldo <banco>/backups/cierre-lote-20261123-005227 · registro <banco>/backups/cierre-lote-20261123-005227/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 66fff950 4b9b7677 <banco>/root/u3/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005227
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD 4b9b7677 · origin/main 4b9b7677 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 11
+   ultron:prompt-trace: compiler 5 · current.mode legacy · current.reason prompts_off · canaryConfigured False
+   ultron-studio:publication-check → código 0
+
+RESULTADO unidad 3 (66fff950 → 4b9b7677): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:52:30 UTC
+
+========================================================================================================================
+E'. Unidad 3 · la sonda del motor con las clases de u3 (y, para comparar, u2)
+========================================================================================================================
+   sonda con las clases de 4b9b7677 · PCRE de este PHP: 10.47 2025-10-21
+      PCRE 10.47 2025-10-21 · PHP 8.3.33
+      red de marcadores: 13 de 20 formas no salen (esperado: 13) · mal clasificadas: ninguna
+      clases del commit cargadas: 50
+      expresiones regulares en esas clases: 213 · no compilan: 0
+      avisos de PHP: 0
+      borrador 0                                                                     7a01950b24
+      borrador 1                                                                     7379d63d76
+      borrador 2                                                                     8252a7787e
+      borrador 3                                                                     1ef927e62b
+      borrador 4                                                                     1bf2f151a8
+      borrador 5                                                                     32b931a11e
+      borrador 6                                                                     3898335984
+      borrador 7                                                                     ea1bead3b6
+      borrador 8                                                                     6f06bb21da
+      borrador 9                                                                     4096b99c4d
+      borrador 10                                                                    ed8bc5e27c
+      borrador 11                                                                    1c37c85519
+      borrador 12                                                                    cd9c3aedba
+      entrante · ¿Qué planes tienen?                                              da214e1ce0
+      entrante · ¿Qué planes tienen y cuánto cuestan?                            6962e36611
+      entrante · ¿Qué planes tienen y cuánto cuesta la mensualidad?              6962e36611
+      entrante · ¿Cuáles son los precios?                                         6962e36611
+      entrante · ¿Qué precios manejan?                                            6962e36611
+      entrante · Info de precios                                                    6962e36611
+      entrante · Las tarifas                                                        da214e1ce0
+      entrante · ¿Cuánto valen las membresías?                                   6962e36611
+      entrante · ¿Tienen planes?                                                   da214e1ce0
+      entrante · Precios?                                                           6962e36611
+      entrante · ¿Planes?                                                          da214e1ce0
+      entrante · ¿Y los planes?                                                    da214e1ce0
+      entrante · Hola, precios por favor                                            6962e36611
+      entrante · Buenas tardes, planes y precios                                    6962e36611
+      entrante · Info planes                                                        da214e1ce0
+      entrante · Mándame la lista de planes                                        da214e1ce0
+      entrante · Quiero conocer los planes y sus precios                            6962e36611
+      entrante · ¿Cuánto cuesta el Mensual y qué otros hay?                      6962e36611
+      entrante · ¿Cuánto cuesta el Mensual?                                       418fd736de
+      entrante · ¿Cuánto cuesta la mensualidad?                                   418fd736de
+      entrante · ¿Cuánto cuesta?                                                  418fd736de
+      entrante · Precios del mensual                                                418fd736de
+      entrante · Precio?                                                            418fd736de
+      entrante · ¿Qué planes tienen para estudiantes?                             248f05eca1
+      entrante · ¿Qué planes tienen de un mes?                                    248f05eca1
+      entrante · ¿Qué opciones de pago tienen?                                    248f05eca1
+      entrante · ¿Qué opciones de horario hay?                                    248f05eca1
+      entrante · No me interesan los planes, gracias                                248f05eca1
+      entrante · Quiero hablar con un asesor sobre los planes                       248f05eca1
+      entrante · ¿Cuál de los planes me recomienda para bajar de peso?            248f05eca1
+      entrante · Ya vi los planes, ¿cuál me recomiendas?                          248f05eca1
+      entrante · Tengo una lesión de rodilla, ¿qué planes tienen?                248f05eca1
+      entrante · ¿Cuál es el horario y cuánto cuestan los planes?                418fd736de
+      entrante · Quiero ir el sábado a las 10 de la mañana. ¿Qué planes tienen? 248f05eca1
+      entrante · ¿Qué planes tienen y cómo se paga?                              248f05eca1
+      entrante · ¿Qué clases tienen y qué planes manejan?                        248f05eca1
+      entrante · Ya pagué uno de los planes y no me llega nada                     248f05eca1
+      entrante · Dejen de mandarme los planes                                       248f05eca1
+      entrante · Me gustaron los planes                                             248f05eca1
+      entrante · Los planes que vi ayer                                             248f05eca1
+      entrante · Hola                                                               248f05eca1
+      entrante · Quiero bajar de peso                                               248f05eca1
+      oferta · ¿Quiere que le pase la app para descargarla?                        11fbf144bc
+      oferta · ¿Quiere que le cuente cómo empezar?                                fc9ff8e3e2
+      oferta · ¿Le gustaría que le envíe el enlace de pago?                      125f4397df
+      oferta · ¿Desea agendar una visita de cortesía?                             752ee43496
+      oferta · ¿Sabe qué quiere decir el enlace de pago?                          95cb9b4f84
+      oferta · ¿El equipo desea revisar su caso?                                   95cb9b4f84
+      oferta · ¿Quieres que te pase la app para descargarla?                       2d4f0dedf5
+      oferta · ¿Le parece si le cuento los planes?                                 11fbf144bc
+      laravel 0                                                                      760b1f22d5
+      laravel 1                                                                      83b1982090
+      laravel 2                                                                      2a796ff456
+      laravel 3                                                                      f88cff9069
+      lista 0                                                                        40e6d369b9
+      lista 1                                                                        1ae41f34ea
+      lista 2                                                                        dfbc1a9b17
+      lista 3                                                                        93c8770d21
+      lista 4                                                                        cd015f50f0
+      lista 5                                                                        821ea24a67
+      lista 6                                                                        eef6e17f83
+      lista 7                                                                        22cb49f980
+      lista 8                                                                        cc8fe4c808
+      beneficio 0                                                                    4f53cda18c
+      beneficio 1                                                                    6e6cef71f8
+      beneficio 2                                                                    4f53cda18c
+      beneficio 3                                                                    4f53cda18c
+      beneficio 4                                                                    4f53cda18c
+      beneficio 5                                                                    4f53cda18c
+      marcadores                                                                     bda971129a
+      notas                                                                          184d565b53
+      origen                                                                         5c582dc2ea
+      marcador 0                                                                     369ea20e56
+      marcador 1                                                                     d0b95c644e
+      marcador 2                                                                     674738d02e
+      marcador 3                                                                     da9a565acf
+      marcador 4                                                                     2a9b920178
+      marcador 5                                                                     700d28287c
+      marcador 6                                                                     9e2abafdd4
+      marcador 7                                                                     271eba6524
+      marcador 8                                                                     972e2b8a50
+      marcador 9                                                                     cfb219f0e2
+      marcador 10                                                                    6d172a2e61
+      marcador 11                                                                    e494c11c66
+      marcador 12                                                                    eb3c4ac4ef
+      marcador 13                                                                    1ca0f4b7aa
+      marcador 14                                                                    7139cd8cbc
+      marcador 15                                                                    1d8888a5a2
+      marcador 16                                                                    1b30a1f224
+      marcador 17                                                                    764bd16764
+      marcador 18                                                                    3dbccf2fbb
+      marcador 19                                                                    f1a3b397e9
+      casos: 105 · preg_last_error=0
+      HUELLA ff5042f4fb3910f6
+   → sonda: código 0
+   --- con las clases de u2 (antes de PT-17), solo el resumen:
+   sonda con las clases de 66fff950 · PCRE de este PHP: 10.47 2025-10-21
+      expresiones regulares en esas clases: 213 · no compilan: 0
+      HUELLA ff5042f4fb3910f6
+   → sonda: código 0
+
+========================================================================================================================
+F. Unidad 4 · lote 4 (integracion/consent ba4b143e)
+========================================================================================================================
+################ UNIDAD 4 · previo 4b9b7677 → nuevo dc7e7503 · 80 ficheros · 2026-11-23T00:53:08Z
+   fuera de backend/docs/:
+      backend/.env.example
+      backend/app/Http/Controllers/Api/Admin/MarketingInboxController.php
+      backend/app/Http/Controllers/Api/Admin/SupervisionController.php
+      backend/app/Http/Controllers/Crm/CommercialAutomation/OutreachComplaintController.php
+      backend/app/Http/Controllers/Crm/CommercialAutomation/OutreachConsentController.php
+      backend/app/Http/Middleware/ValidatePostSizeWithStudioCap.php
+      backend/app/Models/OutreachConsent.php
+      backend/app/Observers/Commercial/ComplaintCommercialEmitter.php
+      backend/app/Observers/Commercial/MarketingAiActionCommercialObserver.php
+      backend/app/Services/Commercial/CommercialVocabulary.php
+      backend/app/Services/Marketing/MarketingInboxService.php
+      backend/app/Services/Marketing/MarketingStaffReviewService.php
+      backend/app/Services/Marketing/StaffReviewComplaintException.php
+      backend/app/Services/Outreach/Core/OutreachCatalog.php
+      backend/app/Services/Outreach/Facts/BatchSnapshot.php
+      backend/app/Services/Outreach/Facts/BatchSnapshotBuilder.php
+      backend/app/Services/Outreach/Facts/ContactHistoryFacts.php
+      backend/app/Services/Outreach/Facts/CoreProjection.php
+      backend/app/Services/Outreach/Facts/EngineFacts.php
+      backend/app/Services/Outreach/Facts/FactNames.php
+      backend/app/Services/Outreach/Facts/OutreachConsentFacts.php
+      backend/app/Services/Outreach/Facts/SubjectResolver.php
+      backend/app/Services/Outreach/Run/AssistedQueue.php
+      backend/app/Services/Outreach/Run/Channels/WhatsappTemplateChannel.php
+      backend/app/Services/Outreach/Run/OutreachAccess.php
+      backend/app/Services/Outreach/Run/OutreachConfig.php
+      backend/app/Services/Outreach/Run/OutreachConsentConfig.php
+      backend/app/Services/Outreach/Run/OutreachConsents.php
+      backend/app/Services/UltronStudio/StudioMessageTemplates.php
+      backend/app/Support/Access/AuthorizationMap.php
+      backend/app/Support/Access/CrmPermission.php
+      backend/app/Support/Access/PermissionCatalog.php
+      backend/bootstrap/app.php
+      backend/config/outreach.php
+      backend/config/outreach_consents.php
+      backend/database/migrations/2026_11_22_100001_create_outreach_consents_table.php
+      backend/routes/commercial-automation.php
+      backend/tests/Feature/Commercial/CommercialSuppression1581Test.php
+      backend/tests/Feature/Commercial/SupervisionActivityLabelsTest.php
+      backend/tests/Feature/Outreach/Facts/AgendaEngineHistoryFactsTest.php
+      backend/tests/Feature/Outreach/Facts/FactsReadOnlyTest.php
+      backend/tests/Feature/Outreach/Facts/OutreachConsentFactsTest.php
+      backend/tests/Feature/Outreach/Facts/Support/FactsWorld.php
+      backend/tests/Feature/Outreach/Guards/OutreachRoutesMapGuardTest.php
+      backend/tests/Feature/Outreach/Run/H9AssistedEligibilityTest.php
+      backend/tests/Feature/Outreach/Run/H9ComplaintDismissAuthorityTest.php
+      backend/tests/Feature/Outreach/Run/H9ComplaintDismissalTest.php
+      backend/tests/Feature/Outreach/Run/OutreachComplaintsApiTest.php
+      backend/tests/Feature/Outreach/Run/OutreachConsentsApiTest.php
+      backend/tests/Feature/Outreach/Run/Support/RunWorld.php
+      backend/tests/Feature/Outreach/Schema/OutreachConsentFixtures.php
+      backend/tests/Feature/Outreach/Schema/OutreachConsentSuppression1581Test.php
+      backend/tests/Feature/Outreach/Schema/OutreachConsentsSchemaTest.php
+      backend/tests/Feature/Outreach/Schema/OutreachSchemaTest.php
+      backend/tests/Feature/UltronStudio/MetaTemplates/MetaTemplateContentTest.php
+      backend/tests/Feature/UltronStudio/MetaTemplates/MetaTemplateOptOutTextTest.php
+      backend/tests/Unit/Outreach/Core/OutreachCatalogEmittersTest.php
+      backend/tests/Unit/Outreach/Core/OutreachCatalogTest.php
+      backend/tests/Unit/Outreach/Core/fixtures/trace-text-cases.json
+      backend/tests/Unit/Outreach/FixturesSanityTest.php
+      backend/tests/Unit/Outreach/Run/AssistedQueueLadderParityTest.php
+      backend/tests/Unit/Outreach/Run/AssistedQueueOptedOutTest.php
+      backend/tests/fixtures/outreach/README.md
+      backend/tests/fixtures/outreach/catalog-snapshot.json
+      backend/tests/fixtures/outreach/conditions-cases.json
+      backend/tests/fixtures/outreach/strategy-content-cases.json
+      backend/tests/fixtures/outreach/tools/build/sec_catalog.py
+      backend/tests/fixtures/outreach/tools/build/sec_conditions.py
+      backend/tests/fixtures/outreach/tools/build/sec_strategy.py
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+
+######## unidad 4 · comprobar · 00:53:08 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:53:08Z · modo comprobar · PREVIO=4b9b7677 · NUEVO=dc7e7503 · lista <banco>/root/u4/lista.txt
+   declaraciones: migraciones <banco>/root/u4/migraciones.txt (orden migracion-primero) · config <banco>/root/u4/config.txt · rutas <banco>/root/u4/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 4b9b7677 limpia · origin/main dc7e7503 · 49 commit(s) · 80 ficheros = la lista: 31 de backend/app · 2 de config · 1 de routes · 1 migración(es) · 1 de bootstrap · 32 de tests · 11 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas (fichero nuevo: routes/commercial-automation.php, montado en bootstrap/app.php) · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 4b9b7677 y en dc7e7503; los dos ficheros sin cambios
+      dc7e7503 merge(integracion/consent): lote 4, autorizaciones de contacto y quejas (banco de la cadena)
+      ba4b143e docs(ultron-studio): PT-18: la enmienda del contrato (member es users.id) y el informe de backend
+      4e339852 fix(ultron-studio): PT-18: en autorizaciones y quejas un socio del CRM es su users.id
+      ab0ba0ab test(ultron-studio): PT-18 en rojo: para un socio el CRM manda users.id y las rutas lo leen como members.id
+      323a6118 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 4
+      f7f00fdc Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      0635c4d0 docs(cierre): informe de backend del lote 4, la última tanda (N-B1, §B.3, N-B3, I-1 de la cobranza y B1 en e
+      a48a239b docs(ultron-studio): enmiendas de la última tanda del lote 4 (C-B3 como regla, N-B2 como límite, I-1 de la c
+      37abfbaa fix(marketing): B1 de Q1-8 en profundidad, el servicio también exige la llave de descartar una queja
+      83c48957 fix(outreach): I-1 de la bandeja también para la cobranza por WhatsApp (policy_unknown)
+      3aeefc9e fix(ultron-studio): N-B3, la supresión 1581 toma el cerrojo del libro de autorizaciones antes de leerlo
+      2e4729d3 test(outreach): las tres carreras del libro que faltaban (informe-db-cierre §B.3), con dos conexiones de verd
+      … y 37 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_create_outreach_consents_table · tabla outreach_consents - outreach_consent_ · esquema [ausente - - 0] = antes · vuelta: deshacer
+      privilegios por defecto de h5_owner para h5_app en tablas nuevas: [DELETE,INSERT,SELECT,UPDATE] · después se exige «ra» (uno a uno: r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER)
+   pendientes frente a origin/main: [2026_11_22_100001_create_outreach_consents_table] = las declaradas · cerrojos de otras sesiones sobre ['outreach_consents']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en dc7e7503 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: outreach_consents.legal.commercial.version ausente|outreach_consents.legal.commercial.text ausente|outreach_consents.legal.collections.version ausente|outreach_consents.legal.collections.text ausente|outreach_consents.legal.service.version ausente|outreach_consents.legal.service.text ausente|outreach.complaints.per_account_per_day ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 4 · desplegar · 00:53:10 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:53:10Z · modo despliegue · PREVIO=4b9b7677 · NUEVO=dc7e7503 · lista <banco>/root/u4/lista.txt
+   declaraciones: migraciones <banco>/root/u4/migraciones.txt (orden migracion-primero) · config <banco>/root/u4/config.txt · rutas <banco>/root/u4/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 4b9b7677 limpia · origin/main dc7e7503 · 49 commit(s) · 80 ficheros = la lista: 31 de backend/app · 2 de config · 1 de routes · 1 migración(es) · 1 de bootstrap · 32 de tests · 11 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas (fichero nuevo: routes/commercial-automation.php, montado en bootstrap/app.php) · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 4b9b7677 y en dc7e7503; los dos ficheros sin cambios
+      dc7e7503 merge(integracion/consent): lote 4, autorizaciones de contacto y quejas (banco de la cadena)
+      ba4b143e docs(ultron-studio): PT-18: la enmienda del contrato (member es users.id) y el informe de backend
+      4e339852 fix(ultron-studio): PT-18: en autorizaciones y quejas un socio del CRM es su users.id
+      ab0ba0ab test(ultron-studio): PT-18 en rojo: para un socio el CRM manda users.id y las rutas lo leen como members.id
+      323a6118 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 4
+      f7f00fdc Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      0635c4d0 docs(cierre): informe de backend del lote 4, la última tanda (N-B1, §B.3, N-B3, I-1 de la cobranza y B1 en e
+      a48a239b docs(ultron-studio): enmiendas de la última tanda del lote 4 (C-B3 como regla, N-B2 como límite, I-1 de la c
+      37abfbaa fix(marketing): B1 de Q1-8 en profundidad, el servicio también exige la llave de descartar una queja
+      83c48957 fix(outreach): I-1 de la bandeja también para la cobranza por WhatsApp (policy_unknown)
+      3aeefc9e fix(ultron-studio): N-B3, la supresión 1581 toma el cerrojo del libro de autorizaciones antes de leerlo
+      2e4729d3 test(outreach): las tres carreras del libro que faltaban (informe-db-cierre §B.3), con dos conexiones de verd
+      … y 37 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_create_outreach_consents_table · tabla outreach_consents - outreach_consent_ · esquema [ausente - - 0] = antes · vuelta: deshacer
+      privilegios por defecto de h5_owner para h5_app en tablas nuevas: [DELETE,INSERT,SELECT,UPDATE] · después se exige «ra» (uno a uno: r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER)
+   pendientes frente a origin/main: [2026_11_22_100001_create_outreach_consents_table] = las declaradas · cerrojos de otras sesiones sobre ['outreach_consents']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en dc7e7503 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: outreach_consents.legal.commercial.version ausente|outreach_consents.legal.commercial.text ausente|outreach_consents.legal.collections.version ausente|outreach_consents.legal.collections.text ausente|outreach_consents.legal.service.version ausente|outreach_consents.legal.service.text ausente|outreach.complaints.per_account_per_day ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005312 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (16 ficheros)
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100001_create_outreach_consents_table .............. 60.55ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100001_create_outreach_consents_table: aplicada (intento 1) · esquema [presente h5_owner ra 3] = después · copia <banco>/var-lib/cierre-lote-20261123-005312/0-2026_11_22_100001_create_outreach_consents_table/2026_11_22_100001_create_outreach_consents_table.php (01cb3786b334…)
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=dc7e7503 (merge --ff-only, umask 022) · alejodev lee los 80 ficheros del merge
+K. cachés: config:cache · route:cache (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_create_outreach_consents_table: [presente h5_owner ra 3] = despues
+      h5_app en outreach_consents, uno a uno: SELECT sí · INSERT sí · UPDATE no · DELETE no · TRUNCATE no · REFERENCES no · TRIGGER no · sus secuencias (total · con USAGE): [1 1] (declarado «ra»)
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1052 rutas · diferencia [+GET|HEAD api/admin/commercial-automation/consents|+POST api/admin/commercial-automation/complaints|+POST api/admin/commercial-automation/consents|+POST api/admin/commercial-automation/consents/revoke|+POST api/admin/commercial-automation/consents/{uuid}/confirm|+POST api/admin/commercial-automation/consents/{uuid}/reject] (declarada: 6 línea(s))
+   auth:coverage --unmapped → [vacío]
+   GET api/admin/commercial-automation/consents sin token → 401 (esperado 401: el servidor ve la caché de rutas nueva)
+   banderas en la caché de configuración: outreach_consents.legal.commercial.version null|outreach_consents.legal.commercial.text null|outreach_consents.legal.collections.version null|outreach_consents.legal.collections.text null|outreach_consents.legal.service.version null|outreach_consents.legal.service.text null|outreach.complaints.per_account_per_day null
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve dc7e7503 · respaldo <banco>/backups/cierre-lote-20261123-005312 · registro <banco>/backups/cierre-lote-20261123-005312/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 4b9b7677 dc7e7503 <banco>/root/u4/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005312
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD dc7e7503 · origin/main dc7e7503 · árbol limpio
+base ultron_studio_ops2_orden: 352 migraciones registradas · reinicios de colas: 12
+
+######## unidad 4 · volver atrás · 00:53:17 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:53:17Z · de dc7e7503 a 4b9b7677 · orden del lote: migracion-primero · 1 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005312 · registro <banco>/backups/cierre-lote-20261123-005312/vuelta-atras-20261123-005317.log
+   a. cachés y código (el lote migró ANTES del código: el código vuelve antes que el esquema):
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=4b9b7677 (checkout --detach, umask 022) · alejodev lee los 52 ficheros del diff que existen en 4b9b7677
+   b. esquema:
+   · 2026_11_22_100001_create_outreach_consents_table: DESHECHA (tabla outreach_consents: tabla y funciones borradas; fuera de migrations) · esquema [ausente - - 0]
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+      GET api/admin/commercial-automation/consents sin token → 404 (esperado 404: la ruta nueva ya no existe)
+VUELTA ATRÁS HECHA: producción en 4b9b7677, con las cachés de antes, las rutas y el programador de antes
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD 4b9b7677 · origin/main dc7e7503 · árbol limpio
+base ultron_studio_ops2_orden: 351 migraciones registradas · reinicios de colas: 13
+
+######## unidad 4 · desplegar otra vez (el eslabón queda puesto) · 00:53:20 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:53:20Z · modo despliegue · PREVIO=4b9b7677 · NUEVO=dc7e7503 · lista <banco>/root/u4/lista.txt
+   declaraciones: migraciones <banco>/root/u4/migraciones.txt (orden migracion-primero) · config <banco>/root/u4/config.txt · rutas <banco>/root/u4/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 4b9b7677 limpia · origin/main dc7e7503 · 49 commit(s) · 80 ficheros = la lista: 31 de backend/app · 2 de config · 1 de routes · 1 migración(es) · 1 de bootstrap · 32 de tests · 11 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas (fichero nuevo: routes/commercial-automation.php, montado en bootstrap/app.php) · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 4b9b7677 y en dc7e7503; los dos ficheros sin cambios
+      dc7e7503 merge(integracion/consent): lote 4, autorizaciones de contacto y quejas (banco de la cadena)
+      ba4b143e docs(ultron-studio): PT-18: la enmienda del contrato (member es users.id) y el informe de backend
+      4e339852 fix(ultron-studio): PT-18: en autorizaciones y quejas un socio del CRM es su users.id
+      ab0ba0ab test(ultron-studio): PT-18 en rojo: para un socio el CRM manda users.id y las rutas lo leen como members.id
+      323a6118 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 4
+      f7f00fdc Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      0635c4d0 docs(cierre): informe de backend del lote 4, la última tanda (N-B1, §B.3, N-B3, I-1 de la cobranza y B1 en e
+      a48a239b docs(ultron-studio): enmiendas de la última tanda del lote 4 (C-B3 como regla, N-B2 como límite, I-1 de la c
+      37abfbaa fix(marketing): B1 de Q1-8 en profundidad, el servicio también exige la llave de descartar una queja
+      83c48957 fix(outreach): I-1 de la bandeja también para la cobranza por WhatsApp (policy_unknown)
+      3aeefc9e fix(ultron-studio): N-B3, la supresión 1581 toma el cerrojo del libro de autorizaciones antes de leerlo
+      2e4729d3 test(outreach): las tres carreras del libro que faltaban (informe-db-cierre §B.3), con dos conexiones de verd
+      … y 37 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100001_create_outreach_consents_table · tabla outreach_consents - outreach_consent_ · esquema [ausente - - 0] = antes · vuelta: deshacer
+      privilegios por defecto de h5_owner para h5_app en tablas nuevas: [DELETE,INSERT,SELECT,UPDATE] · después se exige «ra» (uno a uno: r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · x REFERENCES · t TRIGGER)
+   pendientes frente a origin/main: [2026_11_22_100001_create_outreach_consents_table] = las declaradas · cerrojos de otras sesiones sobre ['outreach_consents']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en dc7e7503 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1046 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: outreach_consents.legal.commercial.version ausente|outreach_consents.legal.commercial.text ausente|outreach_consents.legal.collections.version ausente|outreach_consents.legal.collections.text ausente|outreach_consents.legal.service.version ausente|outreach_consents.legal.service.text ausente|outreach.complaints.per_account_per_day ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005322 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 1 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (16 ficheros)
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100001_create_outreach_consents_table .............. 41.25ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100001_create_outreach_consents_table: aplicada (intento 1) · esquema [presente h5_owner ra 3] = después · copia <banco>/var-lib/cierre-lote-20261123-005322/0-2026_11_22_100001_create_outreach_consents_table/2026_11_22_100001_create_outreach_consents_table.php (01cb3786b334…)
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=dc7e7503 (merge --ff-only, umask 022) · alejodev lee los 80 ficheros del merge
+K. cachés: config:cache · route:cache (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 1 de 1
+   esquema de 2026_11_22_100001_create_outreach_consents_table: [presente h5_owner ra 3] = despues
+      h5_app en outreach_consents, uno a uno: SELECT sí · INSERT sí · UPDATE no · DELETE no · TRUNCATE no · REFERENCES no · TRIGGER no · sus secuencias (total · con USAGE): [1 1] (declarado «ra»)
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1046 → 1052 rutas · diferencia [+GET|HEAD api/admin/commercial-automation/consents|+POST api/admin/commercial-automation/complaints|+POST api/admin/commercial-automation/consents|+POST api/admin/commercial-automation/consents/revoke|+POST api/admin/commercial-automation/consents/{uuid}/confirm|+POST api/admin/commercial-automation/consents/{uuid}/reject] (declarada: 6 línea(s))
+   auth:coverage --unmapped → [vacío]
+   GET api/admin/commercial-automation/consents sin token → 401 (esperado 401: el servidor ve la caché de rutas nueva)
+   banderas en la caché de configuración: outreach_consents.legal.commercial.version null|outreach_consents.legal.commercial.text null|outreach_consents.legal.collections.version null|outreach_consents.legal.collections.text null|outreach_consents.legal.service.version null|outreach_consents.legal.service.text null|outreach.complaints.per_account_per_day null
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve dc7e7503 · respaldo <banco>/backups/cierre-lote-20261123-005322 · registro <banco>/backups/cierre-lote-20261123-005322/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 4b9b7677 dc7e7503 <banco>/root/u4/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005322
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD dc7e7503 · origin/main dc7e7503 · árbol limpio
+base ultron_studio_ops2_orden: 352 migraciones registradas · reinicios de colas: 14
+
+RESULTADO unidad 4 (4b9b7677 → dc7e7503): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:53:27 UTC
+
+========================================================================================================================
+G. Unidad 5 · PT-16
+========================================================================================================================
+################ UNIDAD 5 · previo dc7e7503 → nuevo ab5440c8 · 2 ficheros · 2026-11-23T00:53:52Z
+   fuera de backend/docs/:
+      backend/app/Http/Controllers/Api/PaymentController.php
+      backend/tests/baseline-failures.txt
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+   billing.pricing.v2_enabled (config:show):  billing.pricing.v2_enabled . false 
+
+######## unidad 5 · comprobar · 00:53:53 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:53:53Z · modo comprobar · PREVIO=dc7e7503 · NUEVO=ab5440c8 · lista <banco>/root/u5/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción dc7e7503 limpia · origin/main ab5440c8 · 2 commit(s) · 2 ficheros = la lista: 1 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 1 de tests · 0 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en dc7e7503 y en ab5440c8; los dos ficheros sin cambios
+      ab5440c8 merge(cierre/pagos-guarda-iva): PT-16, cobro manual con IVA adicional (banco de la cadena)
+      e1c2af3c fix(pagos): con Pricing V2 encendido, el cobro manual de un plan con IVA adicional ya no choca con la regla de
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 5 · desplegar · 00:53:54 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:53:55Z · modo despliegue · PREVIO=dc7e7503 · NUEVO=ab5440c8 · lista <banco>/root/u5/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción dc7e7503 limpia · origin/main ab5440c8 · 2 commit(s) · 2 ficheros = la lista: 1 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 1 de tests · 0 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en dc7e7503 y en ab5440c8; los dos ficheros sin cambios
+      ab5440c8 merge(cierre/pagos-guarda-iva): PT-16, cobro manual con IVA adicional (banco de la cadena)
+      e1c2af3c fix(pagos): con Pricing V2 encendido, el cobro manual de un plan con IVA adicional ya no choca con la regla de
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005356 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (11 ficheros)
+2. código → cachés:
+C. código: HEAD=ab5440c8 (merge --ff-only, umask 022) · alejodev lee los 2 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve ab5440c8 · respaldo <banco>/backups/cierre-lote-20261123-005356 · registro <banco>/backups/cierre-lote-20261123-005356/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh dc7e7503 ab5440c8 <banco>/root/u5/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005356
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD ab5440c8 · origin/main ab5440c8 · árbol limpio
+base ultron_studio_ops2_orden: 352 migraciones registradas · reinicios de colas: 15
+
+######## unidad 5 · volver atrás · 00:53:59 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:53:59Z · de ab5440c8 a dc7e7503 · orden del lote: sin-migraciones · 0 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005356 · registro <banco>/backups/cierre-lote-20261123-005356/vuelta-atras-20261123-005359.log
+   a. cachés y código:
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=dc7e7503 (checkout --detach, umask 022) · alejodev lee los 2 ficheros del diff que existen en dc7e7503
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+VUELTA ATRÁS HECHA: producción en dc7e7503, con las cachés de antes, las rutas y el programador de antes
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD dc7e7503 · origin/main ab5440c8 · árbol limpio
+base ultron_studio_ops2_orden: 352 migraciones registradas · reinicios de colas: 16
+
+######## unidad 5 · desplegar otra vez (el eslabón queda puesto) · 00:54:01 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:54:01Z · modo despliegue · PREVIO=dc7e7503 · NUEVO=ab5440c8 · lista <banco>/root/u5/lista.txt
+   declaraciones: migraciones — · config — · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción dc7e7503 limpia · origin/main ab5440c8 · 2 commit(s) · 2 ficheros = la lista: 1 de backend/app · 0 de config · 0 de routes · 0 migración(es) · 0 de bootstrap · 1 de tests · 0 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en dc7e7503 y en ab5440c8; los dos ficheros sin cambios
+      ab5440c8 merge(cierre/pagos-guarda-iva): PT-16, cobro manual con IVA adicional (banco de la cadena)
+      e1c2af3c fix(pagos): con Pricing V2 encendido, el cobro manual de un plan con IVA adicional ya no choca con la regla de
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005403 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (11 ficheros)
+2. código → cachés:
+C. código: HEAD=ab5440c8 (merge --ff-only, umask 022) · alejodev lee los 2 ficheros del merge
+K. cachés: configuración sin regenerar · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve ab5440c8 · respaldo <banco>/backups/cierre-lote-20261123-005403 · registro <banco>/backups/cierre-lote-20261123-005403/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh dc7e7503 ab5440c8 <banco>/root/u5/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005403
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD ab5440c8 · origin/main ab5440c8 · árbol limpio
+base ultron_studio_ops2_orden: 352 migraciones registradas · reinicios de colas: 17
+
+RESULTADO unidad 5 (dc7e7503 → ab5440c8): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:54:05 UTC
+
+========================================================================================================================
+H. Unidad 6 · voz: lote 3 + PT-14
+========================================================================================================================
+################ UNIDAD 6 · previo ab5440c8 → nuevo 125ec246 · 304 ficheros · 2026-11-23T00:56:22Z
+   fuera de backend/docs/:
+      backend/.env.example
+      backend/app/Console/Commands/Voice/VoiceDoctorCommand.php
+      backend/app/Console/Commands/Voice/VoiceReconcileCommand.php
+      backend/app/Console/Commands/Voice/VoiceResolveAmbiguousCommand.php
+      backend/app/Exceptions/PlanArchiveException.php
+      backend/app/Http/Controllers/Api/PlanController.php
+      backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php
+      backend/app/Jobs/Voice/PlaceOutboundVoiceCall.php
+      backend/app/Models/Plan.php
+      backend/app/Models/Voice/VoiceCall.php
+      backend/app/Services/Membership/PlanArchive.php
+      backend/app/Services/Outreach/Facts/ContactHistoryFacts.php
+      backend/app/Services/Telephony/OutboundPolicy.php
+      backend/app/Services/Telephony/VoiceAmbiguousResolution.php
+      backend/app/Services/Telephony/VoiceCallFacts.php
+      backend/app/Services/Telephony/VoiceFrequency.php
+      backend/app/Services/Telephony/VoiceNumberGuard.php
+      backend/app/Services/Telephony/VoicePostCall.php
+      backend/app/Services/Telephony/VoicePublishedConfig.php
+      backend/app/Services/Telephony/VoicePublishedPart.php
+      backend/app/Services/Telephony/VoiceReconciler.php
+      backend/app/Services/Telephony/VoiceTelephonyStatus.php
+      backend/app/Services/Telephony/VoiceTools.php
+      backend/app/Services/Telephony/VoiceTranscriptGuard.php
+      backend/app/Services/Telephony/VoiceTranscriptLexicon.php
+      backend/app/Services/Telephony/VoiceTransferDirectory.php
+      backend/app/Services/UltronStudio/StudioVoiceDrift.php
+      backend/app/Services/UltronStudio/StudioVoicePublications.php
+      backend/app/Services/UltronStudio/StudioVoicePublishing.php
+      backend/app/Services/Voice/Dto/VoiceAgentObservation.php
+      backend/app/Services/Voice/Dto/VoiceWebhookVerdict.php
+      backend/app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php
+      backend/app/Services/Voice/ElevenLabs/ElevenLabsEventVerifier.php
+      backend/app/Services/Voice/NullVoiceAgentDeployer.php
+      backend/app/Services/Voice/VoiceAgentDeployer.php
+      backend/app/Support/Access/AuthorizationMap.php
+      backend/app/Support/Access/CrmPermission.php
+      backend/app/Support/Access/PermissionCatalog.php
+      backend/app/Support/Access/PlanCommercialText.php
+      backend/config/voice.php
+      backend/database/migrations/2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start.php
+      backend/database/migrations/2026_11_23_100001_add_commercial_text_author_to_plans_table.php
+      backend/tests/Feature/Audit/AuditChangesTest.php
+      backend/tests/Feature/Outreach/Facts/AgendaEngineHistoryFactsTest.php
+      backend/tests/Feature/Plans/PlanArchiveTest.php
+      backend/tests/Feature/Plans/PlanCommercialTextPermissionTest.php
+      backend/tests/Feature/Telephony/OutboundCanaryTargetTest.php
+      backend/tests/Feature/Telephony/PlaceOutboundVoiceCallDeadlineTest.php
+      backend/tests/Feature/Telephony/Schema/VoiceCallTransitionsTest.php
+      backend/tests/Feature/Telephony/Schema/VoiceSchemaTest.php
+      backend/tests/Feature/Telephony/Schema/VoiceUnstartedAmbiguousMigrationTest.php
+      backend/tests/Feature/Telephony/Support/VoiceFixtures.php
+      backend/tests/Feature/Telephony/TelephonyIsolationTest.php
+      backend/tests/Feature/Telephony/VoiceAmbiguousResolutionTest.php
+      backend/tests/Feature/Telephony/VoiceBrakeRearmTest.php
+      backend/tests/Feature/Telephony/VoiceCommandsTest.php
+      backend/tests/Feature/Telephony/VoiceLabToolsTest.php
+      backend/tests/Feature/Telephony/VoiceNumberSharedIdentityTest.php
+      backend/tests/Feature/Telephony/VoiceReconcileDryRunTest.php
+      backend/tests/Feature/Telephony/VoiceToolsBenefitsTest.php
+      backend/tests/Feature/Telephony/VoiceToolsPublishedCatalogTest.php
+      backend/tests/Feature/Telephony/VoiceToolsTest.php
+      backend/tests/Feature/UltronStudio/FakeVoiceDeployer.php
+      backend/tests/Feature/UltronStudio/StudioVoiceFixtures.php
+      backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioVoiceCatalogTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioVoiceNoNetworkTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioVoiceOutboundOnlyTest.php
+      backend/tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php
+      backend/tests/Feature/Voice/VoiceBoundaryTest.php
+      backend/tests/Unit/Telephony/VoiceNumberSharedVerdictTest.php
+      backend/tests/Unit/Telephony/VoiceTranscriptGuardSpanishTest.php
+      backend/tests/Unit/Voice/ElevenLabsAgentDeployerDeadlineTest.php
+      backend/tests/Unit/Voice/ElevenLabsConfigTest.php
+      backend/tests/Unit/Voice/VoiceDtoTest.php
+      backend/tests/fixtures/voice/state-transitions.json
+      backend/tests/fixtures/voice/tools/build/sec_states.py
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+   (si no sale ninguna línea: ni columnas ni llaves)
+
+######## unidad 6 · comprobar · 00:56:22 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:56:22Z · modo comprobar · PREVIO=ab5440c8 · NUEVO=125ec246 · lista <banco>/root/u6/lista.txt
+   declaraciones: migraciones <banco>/root/u6/migraciones.txt (orden migracion-primero) · config <banco>/root/u6/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción ab5440c8 limpia · origin/main 125ec246 · 48 commit(s) · 304 ficheros = la lista: 38 de backend/app · 1 de config · 0 de routes · 2 migración(es) · 0 de bootstrap · 35 de tests · 227 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en ab5440c8 y en 125ec246; los dos ficheros sin cambios
+      125ec246 merge(cierre/voz-catalogo): voz, lote 3 y PT-14 (banco de la cadena; dos choques resueltos con resuelve-fusion
+      e610d035 docs(voz, planes): PT-14 tras sus revisiones: la rectificación del diseño, la condición del runbook y un to
+      90653164 fix(voz, planes): PT-14, bloqueante B-1 de seguridad: dos autorías separadas, quién escribió y quién puso 
+      748f17ab feat(voz, planes): PT-14, las dos protecciones de lo que Sofía dice de los planes (servidor)
+      c3304671 docs(ultron-studio): PT-14, el diseño del arquitecto (permiso de nombre y beneficios + catálogo publicado co
+      b1f66c32 docs(voice): el runbook de la primera llamada dice cuántas autorizaciones hacen falta: cuatro (A0 a A3)
+      8dd65ce5 docs(cierre): informe de devops de PT-04 (B-1, B-2 y B-3 de la revisión de los mandos de la voz)
+      ed454310 docs(voice): runbook de la primera llamada con B-1, B-2, B-3 y las condiciones del veredicto de security (PT-0
+      0a1e5c28 ops(voice): numero-compartido off apaga las salientes en la misma escritura si están encendidas (B-1, PT-04)
+      b461c205 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 3
+      41fad5a0 Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      67988eb6 docs(ultron-studio): informe del backend de voz (4), los no bloqueantes N-1, N-7 y N-8 cerrados y N-5 devuelto
+      … y 36 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f · transicion voice_calls vc_status_forward ambiguous>failed_to_start · esquema [1 true voice_forbid 6 false] = antes · vuelta: deshacer
+   migración 2026_11_23_100001_add_commercial_text_author_to_plans_table · columna plans commercial_sale_by bigint · esquema [0 - - -] = antes · vuelta: conservar
+   pendientes frente a origin/main: [2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start 2026_11_23_100001_add_commercial_text_author_to_plans_table] = las declaradas · cerrojos de otras sesiones sobre ['voice_calls','plans']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 125ec246 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: voice.number.shared_with_messaging ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 6 · desplegar · 00:56:24 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:56:24Z · modo despliegue · PREVIO=ab5440c8 · NUEVO=125ec246 · lista <banco>/root/u6/lista.txt
+   declaraciones: migraciones <banco>/root/u6/migraciones.txt (orden migracion-primero) · config <banco>/root/u6/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción ab5440c8 limpia · origin/main 125ec246 · 48 commit(s) · 304 ficheros = la lista: 38 de backend/app · 1 de config · 0 de routes · 2 migración(es) · 0 de bootstrap · 35 de tests · 227 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en ab5440c8 y en 125ec246; los dos ficheros sin cambios
+      125ec246 merge(cierre/voz-catalogo): voz, lote 3 y PT-14 (banco de la cadena; dos choques resueltos con resuelve-fusion
+      e610d035 docs(voz, planes): PT-14 tras sus revisiones: la rectificación del diseño, la condición del runbook y un to
+      90653164 fix(voz, planes): PT-14, bloqueante B-1 de seguridad: dos autorías separadas, quién escribió y quién puso 
+      748f17ab feat(voz, planes): PT-14, las dos protecciones de lo que Sofía dice de los planes (servidor)
+      c3304671 docs(ultron-studio): PT-14, el diseño del arquitecto (permiso de nombre y beneficios + catálogo publicado co
+      b1f66c32 docs(voice): el runbook de la primera llamada dice cuántas autorizaciones hacen falta: cuatro (A0 a A3)
+      8dd65ce5 docs(cierre): informe de devops de PT-04 (B-1, B-2 y B-3 de la revisión de los mandos de la voz)
+      ed454310 docs(voice): runbook de la primera llamada con B-1, B-2, B-3 y las condiciones del veredicto de security (PT-0
+      0a1e5c28 ops(voice): numero-compartido off apaga las salientes en la misma escritura si están encendidas (B-1, PT-04)
+      b461c205 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 3
+      41fad5a0 Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      67988eb6 docs(ultron-studio): informe del backend de voz (4), los no bloqueantes N-1, N-7 y N-8 cerrados y N-5 devuelto
+      … y 36 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f · transicion voice_calls vc_status_forward ambiguous>failed_to_start · esquema [1 true voice_forbid 6 false] = antes · vuelta: deshacer
+   migración 2026_11_23_100001_add_commercial_text_author_to_plans_table · columna plans commercial_sale_by bigint · esquema [0 - - -] = antes · vuelta: conservar
+   pendientes frente a origin/main: [2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start 2026_11_23_100001_add_commercial_text_author_to_plans_table] = las declaradas · cerrojos de otras sesiones sobre ['voice_calls','plans']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 125ec246 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: voice.number.shared_with_messaging ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005626 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 2 definición(es) de partida y 2 esquema(s) de tabla, el guion y SHA256SUMS (19 ficheros)
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start  19.54ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f: aplicada (intento 1) · esquema [1 true voice_forbid 6 true] = después · copia <banco>/var-lib/cierre-lote-20261123-005626/0-2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start/2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start.php (9b6ee3460700…)
+      2026_11_23_100001_add_commercial_text_author_to_plans_table ... 23.99ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_23_100001_add_commercial_text_author_to_plans_table: aplicada (intento 1) · esquema [1 bigint null -] = después · copia <banco>/var-lib/cierre-lote-20261123-005626/1-2026_11_23_100001_add_commercial_text_author_to_plans_table/2026_11_23_100001_add_commercial_text_author_to_plans_table.php (07e8f242f0dc…)
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=125ec246 (merge --ff-only, umask 022) · alejodev lee los 304 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 2 de 2
+   esquema de 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f: [1 true voice_forbid 6 true] = despues
+   esquema de 2026_11_23_100001_add_commercial_text_author_to_plans_table: [1 bigint null -] = despues
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: voice.number.shared_with_messaging false
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 125ec246 · respaldo <banco>/backups/cierre-lote-20261123-005626 · registro <banco>/backups/cierre-lote-20261123-005626/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh ab5440c8 125ec246 <banco>/root/u6/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005626
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD 125ec246 · origin/main 125ec246 · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 18
+   plans.commercial_sale_by bigint null - · UPDATE de h5_app: true
+   plans.commercial_text_by bigint null - · UPDATE de h5_app: true
+   llave plans_commercial_sale_by_foreign → admins · ON DELETE n · validada true
+   llave plans_commercial_text_by_foreign → admins · ON DELETE n · validada true
+   (si no sale ninguna línea: ni columnas ni llaves)
+
+######## unidad 6 · volver atrás · 00:56:33 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:56:34Z · de 125ec246 a ab5440c8 · orden del lote: migracion-primero · 2 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005626 · registro <banco>/backups/cierre-lote-20261123-005626/vuelta-atras-20261123-005634.log
+   a. cachés y código (el lote migró ANTES del código: el código vuelve antes que el esquema):
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=ab5440c8 (checkout --detach, umask 022) · alejodev lee los 71 ficheros del diff que existen en ab5440c8
+   b. esquema:
+   · 2026_11_23_100001_add_commercial_text_author_to_plans_table: SE CONSERVA (el lote lo declara «conservar»)
+   · 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f: DESHECHA (transicion voice_calls: la definición del respaldo, equivalente: PostgreSQL reescribe los cast al recrearla; fuera de migrations) · esquema [1 true voice_forbid 6 false]
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+→ código de salida 0
+VUELTA ATRÁS HECHA: producción en ab5440c8, con las cachés de antes, las rutas y el programador de antes; SE CONSERVA el esquema de: 2026_11_23_100001_add_commercial_text_author_to_plans_table
+→ [volver atrás] código 0
+prod: HEAD ab5440c8 · origin/main 125ec246 · árbol limpio
+base ultron_studio_ops2_orden: 353 migraciones registradas · reinicios de colas: 19
+   plans.commercial_sale_by bigint null - · UPDATE de h5_app: true
+   plans.commercial_text_by bigint null - · UPDATE de h5_app: true
+   llave plans_commercial_sale_by_foreign → admins · ON DELETE n · validada true
+   llave plans_commercial_text_by_foreign → admins · ON DELETE n · validada true
+   (si no sale ninguna línea: ni columnas ni llaves)
+
+######## unidad 6 · desplegar otra vez (el eslabón queda puesto) · 00:56:37 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:56:37Z · modo despliegue · PREVIO=ab5440c8 · NUEVO=125ec246 · lista <banco>/root/u6/lista.txt
+   declaraciones: migraciones <banco>/root/u6/migraciones.txt (orden migracion-primero) · config <banco>/root/u6/config.txt · rutas — · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción ab5440c8 limpia · origin/main 125ec246 · 48 commit(s) · 304 ficheros = la lista: 38 de backend/app · 1 de config · 0 de routes · 2 migración(es) · 0 de bootstrap · 35 de tests · 227 de docs · 1 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en ab5440c8 y en 125ec246; los dos ficheros sin cambios
+      125ec246 merge(cierre/voz-catalogo): voz, lote 3 y PT-14 (banco de la cadena; dos choques resueltos con resuelve-fusion
+      e610d035 docs(voz, planes): PT-14 tras sus revisiones: la rectificación del diseño, la condición del runbook y un to
+      90653164 fix(voz, planes): PT-14, bloqueante B-1 de seguridad: dos autorías separadas, quién escribió y quién puso 
+      748f17ab feat(voz, planes): PT-14, las dos protecciones de lo que Sofía dice de los planes (servidor)
+      c3304671 docs(ultron-studio): PT-14, el diseño del arquitecto (permiso de nombre y beneficios + catálogo publicado co
+      b1f66c32 docs(voice): el runbook de la primera llamada dice cuántas autorizaciones hacen falta: cuatro (A0 a A3)
+      8dd65ce5 docs(cierre): informe de devops de PT-04 (B-1, B-2 y B-3 de la revisión de los mandos de la voz)
+      ed454310 docs(voice): runbook de la primera llamada con B-1, B-2, B-3 y las condiciones del veredicto de security (PT-0
+      0a1e5c28 ops(voice): numero-compartido off apaga las salientes en la misma escritura si están encendidas (B-1, PT-04)
+      b461c205 Merge branch cierre/ops-lotes-2: el guion de despliegue por lotes corregido y las declaraciones del lote 3
+      41fad5a0 Merge branch feat/ultron-studio-h9: el lote 2 y la corrección del turno de planes, ya desplegados, entran en 
+      67988eb6 docs(ultron-studio): informe del backend de voz (4), los no bloqueantes N-1, N-7 y N-8 cerrados y N-5 devuelto
+      … y 36 commit(s) más
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   migración 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f · transicion voice_calls vc_status_forward ambiguous>failed_to_start · esquema [1 true voice_forbid 6 false] = antes · vuelta: deshacer
+   migración 2026_11_23_100001_add_commercial_text_author_to_plans_table · columna plans commercial_sale_by bigint · esquema [1 bigint null -] = despues · vuelta: conservar
+   ya registradas (reanudación; no se vuelven a ejecutar): 2026_11_23_100001_add_commercial_text_author_to_plans_table
+   pendientes frente a origin/main: [2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start] = las declaradas · cerrojos de otras sesiones sobre ['voice_calls','plans']: 0 · transacciones de más de 30 s: 0
+   AVISO: <banco>/root/ironbody-migrate (sha256 9ad47fbc063c1076…) no es la copia versionada de iron-ia/ops en 125ec246 (8ecb14798c0c260e…): mirar qué hace antes de desplegar
+   umask de sudo -u alejodev desde un umask 077: 0077 (la caché que rehace ironbody-migrate nace en 600)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: voice.number.shared_with_messaging ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → migraciones → código → cachés (config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005638 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 2 definición(es) de partida y 2 esquema(s) de tabla, el guion y SHA256SUMS (19 ficheros)
+2. migraciones → código → cachés:
+M. migraciones (una a una, con ironbody-migrate --path: el rol dueño, lock_timeout 5 s):
+      2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start  9.89ms DONE
+      config cache regenerada (alejodev:wheel); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart
+   2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f: aplicada (intento 1) · esquema [1 true voice_forbid 6 true] = después · copia <banco>/var-lib/cierre-lote-20261123-005638/0-2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start/2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_fail_to_start.php (9b6ee3460700…)
+   2026_11_23_100001_add_commercial_text_author_to_plans_table: ya registrada (paso 0): no se ejecuta
+   caché de configuración: la regeneró ironbody-migrate y es la misma que la del respaldo
+C. código: HEAD=125ec246 (merge --ff-only, umask 022) · alejodev lee los 304 ficheros del merge
+K. cachés: config:cache · rutas sin regenerar (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 2 de 2
+   esquema de 2026_11_22_100002_allow_unstarted_ambiguous_voice_calls_to_f: [1 true voice_forbid 6 true] = despues
+   esquema de 2026_11_23_100001_add_commercial_text_author_to_plans_table: [1 bigint null -] = despues
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   banderas en la caché de configuración: voice.number.shared_with_messaging false
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve 125ec246 · respaldo <banco>/backups/cierre-lote-20261123-005638 · registro <banco>/backups/cierre-lote-20261123-005638/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh ab5440c8 125ec246 <banco>/root/u6/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005638
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD 125ec246 · origin/main 125ec246 · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 20
+   plans.commercial_sale_by bigint null - · UPDATE de h5_app: true
+   plans.commercial_text_by bigint null - · UPDATE de h5_app: true
+   llave plans_commercial_sale_by_foreign → admins · ON DELETE n · validada true
+   llave plans_commercial_text_by_foreign → admins · ON DELETE n · validada true
+   (si no sale ninguna línea: ni columnas ni llaves)
+
+RESULTADO unidad 6 (ab5440c8 → 125ec246): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:56:45 UTC
+
+========================================================================================================================
+I. Unidad 7 · PT-15
+========================================================================================================================
+################ UNIDAD 7 · previo 125ec246 → nuevo a55ba5cb · 11 ficheros · 2026-11-23T00:58:28Z
+   fuera de backend/docs/:
+      backend/app/Providers/AppServiceProvider.php
+      backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+      backend/config/automation.php
+      backend/routes/marketing.php
+      backend/tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php
+      backend/tests/Feature/Marketing/LimitadoresInternosTest.php
+      backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+      backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php
+      backend/tests/fixtures/ultron-a4/legacy-c1.json
+   guion del árbol: sha256 db4bc1f5d856da8d… · dentro de tmux: sí
+   route:list -v:  POST api/internal/marketing/ai/check generated::f5rhJpv9DIcxEISB › Api\Internal\UltronController@check
+   route:list -v:  ⇂ automation.internal
+   route:list -v:  ⇂ throttle:internal-marketing-ai
+
+######## unidad 7 · comprobar · 00:58:29 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:58:29Z · modo comprobar · PREVIO=125ec246 · NUEVO=a55ba5cb · lista <banco>/root/u7/lista.txt
+   declaraciones: migraciones — · config <banco>/root/u7/config.txt · rutas <banco>/root/u7/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 125ec246 limpia · origin/main a55ba5cb · 4 commit(s) · 11 ficheros = la lista: 2 de backend/app · 1 de config · 1 de routes · 0 migración(es) · 0 de bootstrap · 5 de tests · 2 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 125ec246 y en a55ba5cb; los dos ficheros sin cambios
+      a55ba5cb merge(cierre/planes-condiciones): PT-15 (banco de la cadena; el contrato del H5 con resuelve-contrato.py)
+      a994b050 test(ultron): PT-15 tras sus dos revisiones: el tope propio de la comprobación se mide de verdad; documentos 
+      2f37a2cb fix(ultron): PT-15, condición 2: la comprobación del borrador tiene su propio cupo de peticiones (R-2 de seg
+      084dd977 fix(ultron): PT-15, condición 1: la lista de planes no tapa una pregunta sobre una característica ni un segu
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: automation.rate_limits.marketing_ai_check ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+→ código de salida 0
+→ [comprobar] código 0
+
+######## unidad 7 · desplegar · 00:58:30 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:58:31Z · modo despliegue · PREVIO=125ec246 · NUEVO=a55ba5cb · lista <banco>/root/u7/lista.txt
+   declaraciones: migraciones — · config <banco>/root/u7/config.txt · rutas <banco>/root/u7/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 125ec246 limpia · origin/main a55ba5cb · 4 commit(s) · 11 ficheros = la lista: 2 de backend/app · 1 de config · 1 de routes · 0 migración(es) · 0 de bootstrap · 5 de tests · 2 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 125ec246 y en a55ba5cb; los dos ficheros sin cambios
+      a55ba5cb merge(cierre/planes-condiciones): PT-15 (banco de la cadena; el contrato del H5 con resuelve-contrato.py)
+      a994b050 test(ultron): PT-15 tras sus dos revisiones: el tope propio de la comprobación se mide de verdad; documentos 
+      2f37a2cb fix(ultron): PT-15, condición 2: la comprobación del borrador tiene su propio cupo de peticiones (R-2 de seg
+      084dd977 fix(ultron): PT-15, condición 1: la lista de planes no tapa una pregunta sobre una característica ni un segu
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: automation.rate_limits.marketing_ai_check ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005832 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (13 ficheros)
+2. código → cachés:
+C. código: HEAD=a55ba5cb (merge --ff-only, umask 022) · alejodev lee los 11 ficheros del merge
+K. cachés: config:cache · route:cache (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   auth:coverage --unmapped → [vacío]
+   banderas en la caché de configuración: automation.rate_limits.marketing_ai_check 60
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve a55ba5cb · respaldo <banco>/backups/cierre-lote-20261123-005832 · registro <banco>/backups/cierre-lote-20261123-005832/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 125ec246 a55ba5cb <banco>/root/u7/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005832
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar] código 0
+prod: HEAD a55ba5cb · origin/main a55ba5cb · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 21
+   route:list -v:  POST api/internal/marketing/ai/check generated::BsaIygtxoFbTNBp0 › Api\Internal\UltronController@check
+   route:list -v:  ⇂ automation.internal
+   route:list -v:  ⇂ throttle:internal-marketing-ai-check
+
+######## unidad 7 · volver atrás · 00:58:36 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · VUELTA ATRÁS · 2026-11-23T00:58:36Z · de a55ba5cb a 125ec246 · orden del lote: sin-migraciones · 0 migración(es) declarada(s) · respaldo <banco>/backups/cierre-lote-20261123-005832 · registro <banco>/backups/cierre-lote-20261123-005832/vuelta-atras-20261123-005836.log
+   a. cachés y código:
+   · cachés de rutas y de configuración: las del respaldo, byte a byte (escritas por alejodev; root no escribe en bootstrap/cache); el fichero de entorno no es posterior al respaldo (solo stat)
+   · código: HEAD=125ec246 (checkout --detach, umask 022) · alejodev lee los 9 ficheros del diff que existen en 125ec246
+   c. workers (RUNNING · BACKOFF/FATAL): [14 0] y [14 0] · con pid nuevo 14 de 14
+   d. route:list igual que la de antes · schedule:list igual · admin/voice/status sin token → 401 (esperado 401)
+VUELTA ATRÁS HECHA: producción en 125ec246, con las cachés de antes, las rutas y el programador de antes
+→ código de salida 0
+→ [volver atrás] código 0
+prod: HEAD 125ec246 · origin/main a55ba5cb · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 22
+   route:list -v:  POST api/internal/marketing/ai/check generated::f5rhJpv9DIcxEISB › Api\Internal\UltronController@check
+   route:list -v:  ⇂ automation.internal
+   route:list -v:  ⇂ throttle:internal-marketing-ai
+
+######## unidad 7 · desplegar otra vez (el eslabón queda puesto) · 00:58:39 UTC
+== preparado: <banco>/root/deploy-cierre-lote.sh (15 líneas de cabecera sustituidas, ninguna más) · migrador del banco 6 líneas cambiadas
+== deploy-cierre-lote.sh · 2026-11-23T00:58:39Z · modo despliegue · PREVIO=125ec246 · NUEVO=a55ba5cb · lista <banco>/root/u7/lista.txt
+   declaraciones: migraciones — · config <banco>/root/u7/config.txt · rutas <banco>/root/u7/rutas.txt · programador —
+0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+   producción 125ec246 limpia · origin/main a55ba5cb · 4 commit(s) · 11 ficheros = la lista: 2 de backend/app · 1 de config · 1 de routes · 0 migración(es) · 0 de bootstrap · 5 de tests · 2 de docs · 0 otros
+   ni composer, ni vendor; migraciones solo las declaradas y añadidas; config con --config · rutas HTTP con --rutas · programador sin cambios en routes/console.php
+   constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 125ec246 y en a55ba5cb; los dos ficheros sin cambios
+      a55ba5cb merge(cierre/planes-condiciones): PT-15 (banco de la cadena; el contrato del H5 con resuelve-contrato.py)
+      a994b050 test(ultron): PT-15 tras sus dos revisiones: el tope propio de la comprobación se mide de verdad; documentos 
+      2f37a2cb fix(ultron): PT-15, condición 2: la comprobación del borrador tiene su propio cupo de peticiones (R-2 de seg
+      084dd977 fix(ultron): PT-15, condición 1: la lista de planes no tapa una pregunta sobre una característica ni un segu
+   workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: alejodev 600 · OPcache del FPM: sin líneas (valores por defecto)
+   pendientes frente a origin/main: ninguna (el lote no migra)
+   route:list: 1052 rutas · schedule:list: 27 tareas
+   banderas declaradas, hoy en la caché: automation.rate_limits.marketing_ai_check ausente
+   analizador de errores (C1), autoprueba con el awk de este servidor: bien
+   sin credenciales: admin/voice/status → 401
+   plan: respaldo → código → cachés (config:cache · route:cache) → queue:restart → comprobaciones posteriores
+1. respaldo <banco>/backups/cierre-lote-20261123-005841 (700 de alejodev; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (13 ficheros)
+2. código → cachés:
+C. código: HEAD=a55ba5cb (merge --ff-only, umask 022) · alejodev lee los 11 ficheros del merge
+K. cachés: config:cache · route:cache (como alejodev, umask 077) · alejodev 600 / alejodev 600
+3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+4. sin credenciales: admin/voice/status → 401 (esperado 401)
+   migrate:status --pending (como alejodev): ninguna pendiente · declaradas registradas: 0 de 0
+   schedule:list: 27 → 27 tareas · diferencia [] (declarada [])
+   route:list: 1052 → 1052 rutas · diferencia [] (declarada: 0 línea(s))
+   auth:coverage --unmapped → [vacío]
+   banderas en la caché de configuración: automation.rate_limits.marketing_ai_check 60
+   local.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+   producción sirve a55ba5cb · respaldo <banco>/backups/cierre-lote-20261123-005841 · registro <banco>/backups/cierre-lote-20261123-005841/registro.log
+   VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · local.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+   vuelta atrás: bash <banco>/root/deploy-cierre-lote.sh 125ec246 a55ba5cb <banco>/root/u7/lista.txt --vuelta-atras=<banco>/backups/cierre-lote-20261123-005841
+LOTE DESPLEGADO SIN DESVÍOS
+→ código de salida 0
+→ [desplegar otra vez (el eslabón queda puesto)] código 0
+prod: HEAD a55ba5cb · origin/main a55ba5cb · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 23
+   route:list -v:  POST api/internal/marketing/ai/check generated::kl9zzlCi0AIHYLHK › Api\Internal\UltronController@check
+   route:list -v:  ⇂ automation.internal
+   route:list -v:  ⇂ throttle:internal-marketing-ai-check
+
+RESULTADO unidad 7 (125ec246 → a55ba5cb): · comprobar 0 · desplegar 0 · volver atrás 0 · desplegar otra vez (el eslabón queda puesto) 0 · 00:58:45 UTC
+
+========================================================================================================================
+I'. Unidad 7 · la sonda del motor con las clases de u7
+========================================================================================================================
+   sonda con las clases de a55ba5cb · PCRE de este PHP: 10.47 2025-10-21
+      PCRE 10.47 2025-10-21 · PHP 8.3.33
+      red de marcadores: 13 de 20 formas no salen (esperado: 13) · mal clasificadas: ninguna
+      clases del commit cargadas: 50
+      expresiones regulares en esas clases: 215 · no compilan: 0
+      avisos de PHP: 0
+      borrador 0                                                                     7a01950b24
+      borrador 1                                                                     7379d63d76
+      borrador 2                                                                     8252a7787e
+      borrador 3                                                                     1ef927e62b
+      borrador 4                                                                     1bf2f151a8
+      borrador 5                                                                     32b931a11e
+      borrador 6                                                                     3898335984
+      borrador 7                                                                     ea1bead3b6
+      borrador 8                                                                     6f06bb21da
+      borrador 9                                                                     4096b99c4d
+      borrador 10                                                                    ed8bc5e27c
+      borrador 11                                                                    1c37c85519
+      borrador 12                                                                    cd9c3aedba
+      entrante · ¿Qué planes tienen?                                              da214e1ce0
+      entrante · ¿Qué planes tienen y cuánto cuestan?                            6962e36611
+      entrante · ¿Qué planes tienen y cuánto cuesta la mensualidad?              6962e36611
+      entrante · ¿Cuáles son los precios?                                         6962e36611
+      entrante · ¿Qué precios manejan?                                            6962e36611
+      entrante · Info de precios                                                    6962e36611
+      entrante · Las tarifas                                                        da214e1ce0
+      entrante · ¿Cuánto valen las membresías?                                   6962e36611
+      entrante · ¿Tienen planes?                                                   da214e1ce0
+      entrante · Precios?                                                           6962e36611
+      entrante · ¿Planes?                                                          da214e1ce0
+      entrante · ¿Y los planes?                                                    da214e1ce0
+      entrante · Hola, precios por favor                                            6962e36611
+      entrante · Buenas tardes, planes y precios                                    6962e36611
+      entrante · Info planes                                                        da214e1ce0
+      entrante · Mándame la lista de planes                                        da214e1ce0
+      entrante · Quiero conocer los planes y sus precios                            6962e36611
+      entrante · ¿Cuánto cuesta el Mensual y qué otros hay?                      6962e36611
+      entrante · ¿Cuánto cuesta el Mensual?                                       418fd736de
+      entrante · ¿Cuánto cuesta la mensualidad?                                   418fd736de
+      entrante · ¿Cuánto cuesta?                                                  418fd736de
+      entrante · Precios del mensual                                                418fd736de
+      entrante · Precio?                                                            418fd736de
+      entrante · ¿Qué planes tienen para estudiantes?                             248f05eca1
+      entrante · ¿Qué planes tienen de un mes?                                    248f05eca1
+      entrante · ¿Qué opciones de pago tienen?                                    248f05eca1
+      entrante · ¿Qué opciones de horario hay?                                    248f05eca1
+      entrante · No me interesan los planes, gracias                                248f05eca1
+      entrante · Quiero hablar con un asesor sobre los planes                       248f05eca1
+      entrante · ¿Cuál de los planes me recomienda para bajar de peso?            248f05eca1
+      entrante · Ya vi los planes, ¿cuál me recomiendas?                          248f05eca1
+      entrante · Tengo una lesión de rodilla, ¿qué planes tienen?                248f05eca1
+      entrante · ¿Cuál es el horario y cuánto cuestan los planes?                418fd736de
+      entrante · Quiero ir el sábado a las 10 de la mañana. ¿Qué planes tienen? 248f05eca1
+      entrante · ¿Qué planes tienen y cómo se paga?                              248f05eca1
+      entrante · ¿Qué clases tienen y qué planes manejan?                        248f05eca1
+      entrante · Ya pagué uno de los planes y no me llega nada                     248f05eca1
+      entrante · Dejen de mandarme los planes                                       248f05eca1
+      entrante · Me gustaron los planes                                             248f05eca1
+      entrante · Los planes que vi ayer                                             248f05eca1
+      entrante · Hola                                                               248f05eca1
+      entrante · Quiero bajar de peso                                               248f05eca1
+      oferta · ¿Quiere que le pase la app para descargarla?                        11fbf144bc
+      oferta · ¿Quiere que le cuente cómo empezar?                                fc9ff8e3e2
+      oferta · ¿Le gustaría que le envíe el enlace de pago?                      125f4397df
+      oferta · ¿Desea agendar una visita de cortesía?                             752ee43496
+      oferta · ¿Sabe qué quiere decir el enlace de pago?                          95cb9b4f84
+      oferta · ¿El equipo desea revisar su caso?                                   95cb9b4f84
+      oferta · ¿Quieres que te pase la app para descargarla?                       2d4f0dedf5
+      oferta · ¿Le parece si le cuento los planes?                                 11fbf144bc
+      laravel 0                                                                      760b1f22d5
+      laravel 1                                                                      83b1982090
+      laravel 2                                                                      2a796ff456
+      laravel 3                                                                      f88cff9069
+      lista 0                                                                        40e6d369b9
+      lista 1                                                                        1ae41f34ea
+      lista 2                                                                        dfbc1a9b17
+      lista 3                                                                        93c8770d21
+      lista 4                                                                        cd015f50f0
+      lista 5                                                                        821ea24a67
+      lista 6                                                                        eef6e17f83
+      lista 7                                                                        22cb49f980
+      lista 8                                                                        cc8fe4c808
+      beneficio 0                                                                    4f53cda18c
+      beneficio 1                                                                    6e6cef71f8
+      beneficio 2                                                                    4f53cda18c
+      beneficio 3                                                                    4f53cda18c
+      beneficio 4                                                                    4f53cda18c
+      beneficio 5                                                                    4f53cda18c
+      marcadores                                                                     bda971129a
+      notas                                                                          184d565b53
+      origen                                                                         5c582dc2ea
+      marcador 0                                                                     369ea20e56
+      marcador 1                                                                     d0b95c644e
+      marcador 2                                                                     674738d02e
+      marcador 3                                                                     da9a565acf
+      marcador 4                                                                     2a9b920178
+      marcador 5                                                                     700d28287c
+      marcador 6                                                                     9e2abafdd4
+      marcador 7                                                                     271eba6524
+      marcador 8                                                                     972e2b8a50
+      marcador 9                                                                     cfb219f0e2
+      marcador 10                                                                    6d172a2e61
+      marcador 11                                                                    e494c11c66
+      marcador 12                                                                    eb3c4ac4ef
+      marcador 13                                                                    1ca0f4b7aa
+      marcador 14                                                                    7139cd8cbc
+      marcador 15                                                                    1d8888a5a2
+      marcador 16                                                                    1b30a1f224
+      marcador 17                                                                    764bd16764
+      marcador 18                                                                    3dbccf2fbb
+      marcador 19                                                                    f1a3b397e9
+      casos: 105 · preg_last_error=0
+      HUELLA ff5042f4fb3910f6
+   → sonda: código 0
+
+========================================================================================================================
+J. Casos límite de entorno-lab.sh (un «servidor» de juguete aparte)
+========================================================================================================================
+
+#### L1-ausentes: aplicar
+== entorno-lab.sh · aplicar · 2026-11-23T01:00:19Z · <S>/casos-lab/L1-ausentes/app/backend/.env (alejodev:wheel 600)
+1. respaldo <S>/casos-lab/L1-ausentes/bk/entorno-lab-20261123-010019 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL ausente
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK ausente
+   lo que se va a escribir: 3 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 3 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <S>/casos-lab/L1-ausentes/entorno-lab.sh vuelta=<S>/casos-lab/L1-ausentes/bk/entorno-lab-20261123-010019   (con --regenera si la unidad 2 se queda desplegada)
+→ código 0
+   fichero después: 4 líneas del laboratorio al final · APP_KEY intacta: 1
+
+#### L2-repetida: aplicar
+== entorno-lab.sh · aplicar · 2026-11-23T01:00:20Z · <S>/casos-lab/L2-repetida/app/backend/.env (alejodev:wheel 600)
+ENTORNO-LAB: hay claves repetidas en el fichero de entorno: deduplicarlas a mano antes (no se ha tocado nada)
+→ código 1
+   respaldos creados: 0 (esperado 0: no se ha tocado nada)
+
+#### L3-export-y-sangria: aplicar
+== entorno-lab.sh · aplicar · 2026-11-23T01:00:20Z · <S>/casos-lab/L3-export-y-sangria/app/backend/.env (alejodev:wheel 600)
+1. respaldo <S>/casos-lab/L3-export-y-sangria/bk/entorno-lab-20261123-010020 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK ausente
+   lo que se va a escribir: 5 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 5 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <S>/casos-lab/L3-export-y-sangria/entorno-lab.sh vuelta=<S>/casos-lab/L3-export-y-sangria/bk/entorno-lab-20261123-010020   (con --regenera si la unidad 2 se queda desplegada)
+→ código 0
+   líneas: 0 con export · 1 con la sangría conservada
+
+#### L4-modo-640: aplicar
+== entorno-lab.sh · aplicar · 2026-11-23T01:00:21Z · <S>/casos-lab/L4-modo-640/app/backend/.env (alejodev:wheel 640)
+1. respaldo <S>/casos-lab/L4-modo-640/bk/entorno-lab-20261123-010021 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK ausente
+   lo que se va a escribir: 4 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 640, el dueño y el modo de antes: alejodev:wheel 640) · releído con Dotenv como alejodev: 4 claves antes · 7 después · cambian [ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <S>/casos-lab/L4-modo-640/entorno-lab.sh vuelta=<S>/casos-lab/L4-modo-640/bk/entorno-lab-20261123-010021   (con --regenera si la unidad 2 se queda desplegada)
+→ código 0
+   modo después: 640 (esperado 640)
+
+#### L5-declaracion-secreta: aplicar
+entorno-lab.txt, línea 1: no es CLAVE=valor del laboratorio, o es una clave secreta, o está repetida
+ENTORNO-LAB: la declaración no vale (no se ha tocado nada)
+→ código 1
+
+#### L6-enlace: comprobar --no-vale
+uso: bash <S>/casos-lab/L6-enlace/entorno-lab.sh comprobar | aplicar | vuelta=<respaldo> [--regenera]
+→ código 2
+
+#### L6-enlace (el .env es un enlace): aplicar
+ENTORNO-LAB: <S>/casos-lab/L6-enlace/app/backend/.env no existe o no es un fichero normal (no se ha tocado nada)
+→ código 1
+
+#### L7-respaldo-alterado: vuelta con un respaldo que no cuadra con su SHA256SUMS
+== entorno-lab.sh · vuelta · 2026-11-23T01:00:22Z · <S>/casos-lab/L7-respaldo-alterado/app/backend/.env (alejodev:wheel 600)
+el respaldo no coincide con su SHA256SUMS; no se ha tocado nada
+→ código 2
+
+#### L8-sin-salto-final: aplicar
+== entorno-lab.sh · aplicar · 2026-11-23T01:00:23Z · <S>/casos-lab/L8-sin-salto-final/app/backend/.env (alejodev:wheel 600)
+1. respaldo <S>/casos-lab/L8-sin-salto-final/bk/entorno-lab-20261123-010023 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+   antes: ULTRON_STUDIO_LAB_OPENAI_MODEL ausente
+   antes: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ausente
+   antes: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK ausente
+   lo que se va a escribir: 1 claves antes · 5 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+   después: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   después: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   después: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 1 claves antes · 5 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+   vuelta atrás: bash <S>/casos-lab/L8-sin-salto-final/entorno-lab.sh vuelta=<S>/casos-lab/L8-sin-salto-final/bk/entorno-lab-20261123-010023   (con --regenera si la unidad 2 se queda desplegada)
+→ código 0
+   primera línea intacta: APP_NAME=IronBody · líneas: 5
+
+secretos sintéticos en esta salida: lo comprueba quien la llama
+
+========================================================================================================================
+K. Final de la cadena: 2b con --regenera, estado final y limpieza
+========================================================================================================================
+######## final de la cadena · 2b · entorno-lab vuelta --regenera (la unidad 2 se queda desplegada) · 00:59:39 UTC
+   antes: HEAD a55ba5cb · caché: model texto:gpt-4.1-mini · reasoning_effort vacia · price_input 0.4 · price_output 1.6 · reinicios de colas 23
+== entorno-lab.sh · vuelta · 2026-11-23T00:59:39Z · <S>/banco/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+   lo que se repone: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · no cambia ninguna que no esté decidida: sí
+1. repuesto el del respaldo, byte a byte (atómico, alejodev:wheel 600)
+   ahora: ULTRON_STUDIO_LAB_OPENAI_MODEL otro valor
+   ahora: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT otro valor
+   ahora: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK otro valor
+   ahora: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK otro valor
+2. caché de configuración regenerada (config:cache como alejodev, umask 077; alejodev 600) y queue:restart: los workers leen el entorno repuesto
+VUELTA ATRÁS HECHA: el fichero de entorno es el del respaldo <S>/banco/backups/entorno-lab-20261123-005129
+→ [2b · vuelta --regenera] código 0
+   después: caché: model cadena · reasoning_effort cadena · price_input 9.99 · price_output 19.99 · alejodev 600 · reinicios de colas 24
+
+######## y otra vez aplicar + la regeneración de la ficha (config:cache como www-data y queue:restart), para dejar el banco como producción tras la cadena
+1. respaldo <S>/banco/backups/entorno-lab-20261123-005940 (700 de alejodev): env.antes (600, byte a byte), el estado de las claves sin valores, la declaración y SHA256SUMS
+2. escrito (atómico, alejodev:wheel 600, el dueño y el modo de antes: alejodev:wheel 600) · releído con Dotenv como alejodev: 22 claves antes · 22 después · cambian [ULTRON_STUDIO_LAB_OPENAI_MODEL ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK] · las decididas valen lo decidido y no cambia ninguna otra: sí
+ESCRITO: la caché de configuración NO se ha tocado (la aplicación sigue con la de antes hasta que la regenere deploy-cierre-lote.sh)
+→ [2b · aplicar] código 0 (el registro de este paso se tomó desde zsh, sin PIPESTATUS; «ESCRITO» solo sale por el camino que termina en 0, y el «comprobar» de abajo lo confirma)
+→ [config:cache + queue:restart] código 0
+   caché: model texto:gpt-4.1-mini · reasoning_effort vacia · price_input 0.4 · price_output 1.6 · alejodev 600
+
+######## comprobar (solo lectura) tras volver a aplicar
+== entorno-lab.sh · comprobar · 2026-11-23T00:59:54Z · <S>/banco/prod/backend/.env (alejodev:wheel 600)
+   decidido: ULTRON_STUDIO_LAB_OPENAI_MODEL=gpt-4.1-mini
+   decidido: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT=(vacía)
+   decidido: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK=0.40
+   decidido: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK=1.60
+   hoy: ULTRON_STUDIO_LAB_OPENAI_MODEL = lo decidido
+   hoy: ULTRON_STUDIO_LAB_OPENAI_REASONING_EFFORT = lo decidido
+   hoy: ULTRON_STUDIO_LAB_PRICE_INPUT_USD_PER_MTOK = lo decidido
+   hoy: ULTRON_STUDIO_LAB_PRICE_OUTPUT_USD_PER_MTOK = lo decidido
+   el parser de la aplicación (Dotenv, como alejodev) lee el fichero: sí
+COMPROBADO: aplicar cambiaría 0 de 4 clave(s); no se ha tocado nada
+→ [2b · comprobar] código 0
+######## estado final del banco · 01:01:04 UTC
+prod: HEAD a55ba5cb · origin/main a55ba5cb · árbol limpio
+base ultron_studio_ops2_orden: 354 migraciones registradas · reinicios de colas: 25
+   HEAD del banco = u7 de la cadena: sí
+   producto (app, bootstrap, config, database, routes) del banco frente a integracion/final 4e53f04a: 0 líneas de diferencia (0 = idéntico)
+   fuera de backend/docs y backend/tests: 0 ficheros distintos · en backend/tests: backend/tests/Feature/Marketing/UltronRecorridoWhatsappSimuladoTest.php
+   migrate:status --pending: INFO  No pending migrations.  
+base ultron_studio_ops2_orden borrada; el directorio <banco> queda (scratchpad de la sesión)
+
+Comprobado al escribir este fichero: la clave sintética de la aplicación, el secreto interno sintético y el modelo previo sintético aparecen 0 veces.
