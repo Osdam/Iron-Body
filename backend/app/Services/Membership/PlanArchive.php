@@ -136,11 +136,12 @@ class PlanArchive
                 'archive_reason' => null,
             ]);
             // PT-14: reactivar mete el plan en la venta, y eso pide además
-            // «Nombre y beneficios»; quien lo hace queda como autor del texto que
-            // vuelve a decirse. El throw deshace la transacción.
+            // «Nombre y beneficios»; quien lo hace queda como quien lo puso a la
+            // venta (B-1), no como autor del texto, que no cambia. El throw
+            // deshace la transacción.
             if ($p->isSellable()) {
                 PlanCommercialText::assertAllowed($request, PlanCommercialText::REASON_BECOMES_SELLABLE);
-                $p->forceFill(['commercial_text_by' => AdminActor::id($request)]);
+                $p->forceFill(['commercial_sale_by' => AdminActor::id($request)]);
             }
             $p->save();
 

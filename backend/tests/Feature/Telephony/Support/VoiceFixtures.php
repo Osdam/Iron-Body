@@ -208,16 +208,17 @@ trait VoiceFixtures
      * PT-14 · B: la `evidence` de una publicación con su catálogo de planes
      * (`ultron-voice-catalog/1`), como la escribe el Studio al publicar: el
      * catálogo de AHORA (`Plan::commercialCatalogSnapshot()`) o la lista dada,
-     * con su huella y sus autores.
+     * con su huella y sus autores (quien escribió el texto, `by`, y quien lo
+     * puso a la venta, `soldBy`: B-1 de la revisión de security).
      *
      * @param  list<array{id: int, name: string, benefits: list<string>}>|null  $plans
-     * @return array{catalog: array{format: string, hash: string, plans: list<array<string, mixed>>, authors: list<array{planId: int, by: int|null}>}}
+     * @return array{catalog: array{format: string, hash: string, plans: list<array<string, mixed>>, authors: list<array{planId: int, by: int|null, soldBy: int|null}>}}
      */
     protected function voiceCatalogEvidence(?array $plans = null): array
     {
         $captura = Plan::commercialCatalogSnapshot();
         $planes = $plans ?? $captura['plans'];
-        $autores = $plans === null ? $captura['authors'] : array_map(static fn (array $p): array => ['planId' => $p['id'], 'by' => null], $plans);
+        $autores = $plans === null ? $captura['authors'] : array_map(static fn (array $p): array => ['planId' => $p['id'], 'by' => null, 'soldBy' => null], $plans);
 
         return ['catalog' => ['format' => Plan::COMMERCIAL_CATALOG_FORMAT, 'hash' => Plan::commercialCatalogHash($planes), 'plans' => $planes, 'authors' => $autores]];
     }

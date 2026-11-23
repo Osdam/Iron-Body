@@ -213,16 +213,20 @@ class PlanController extends Controller
         $data = $this->validatedData($request, false);
 
         $plan = DB::transaction(function () use ($request, $data): Plan {
-            // PT-14: un texto nuevo; quien lo escribe queda como autor.
+            // PT-14: un texto nuevo; quien lo escribe queda como autor del texto.
             $plan = new Plan($data);
             $plan->forceFill(['commercial_text_by' => AdminActor::id($request)])->save();
             // ¿Entra en la venta? Lo dice la base con su definición SQL, con los
             // valores por defecto de la columna: un alta que no manda `sellable`
             // (el duplicado del CRM) nace a la venta. Si pide la llave y no se
-            // tiene, el throw deshace el alta.
+            // tiene, el throw deshace el alta. Si entra, quien la crea queda
+            // también como quien la puso a la venta (B-1).
             $vendible = Plan::query()->whereKey($plan->getKey())->sellable()->exists();
             if (($motivo = PlanCommercialText::reasonFor(null, false, $plan->commercialText(), $vendible)) !== null) {
                 PlanCommercialText::assertAllowed($request, $motivo);
+            }
+            if ($vendible) {
+                $plan->forceFill(['commercial_sale_by' => AdminActor::id($request)])->save();
             }
 
             app(AuditTrail::class)->record($request, [
@@ -271,11 +275,17 @@ class PlanController extends Controller
             $plan->fill($data);
             $textoDespues = $plan->commercialText();
             $vendibleDespues = $plan->isSellable();
-            if (($motivo = PlanCommercialText::reasonFor($textoAntes, $vendibleAntes, $textoDespues, $vendibleDespues)) !== null) {
+            // N-2: un texto que no se puede leer y cuyo valor en bruto cambió cuenta como texto cambiado.
+            $ilegible = ! $plan->commercialTextReadable() && $plan->isDirty('benefits');
+            if (($motivo = PlanCommercialText::reasonFor($textoAntes, $vendibleAntes, $textoDespues, $vendibleDespues, $ilegible)) !== null) {
                 PlanCommercialText::assertAllowed($request, $motivo);
             }
-            if (PlanCommercialText::authorChanges($textoAntes, $vendibleAntes, $textoDespues, $vendibleDespues)) {
+            // B-1: dos autorías. El texto, solo si cambió; la venta, solo si entra en ella.
+            if (PlanCommercialText::textChanged($textoAntes, $textoDespues, $ilegible)) {
                 $plan->forceFill(['commercial_text_by' => AdminActor::id($request)]);
+            }
+            if (PlanCommercialText::becomesSellable($vendibleAntes, $vendibleDespues)) {
+                $plan->forceFill(['commercial_sale_by' => AdminActor::id($request)]);
             }
             $plan->save();
 

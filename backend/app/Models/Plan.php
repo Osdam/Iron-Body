@@ -77,18 +77,20 @@ class Plan extends Model
         // asignables en masa: solo los escribe PlanArchive.
         'archived_at' => 'datetime',
         'archived_by' => 'integer',
-        // PT-14: quién escribió el texto comercial vigente o lo puso a la venta.
-        // No es asignable en masa: solo lo escriben PlanController y PlanArchive.
+        // PT-14: quién escribió el texto comercial vigente y quién puso el plan a
+        // la venta (B-1: dos autorías separadas). No son asignables en masa: solo
+        // las escriben PlanController y PlanArchive.
         'commercial_text_by' => 'integer',
+        'commercial_sale_by' => 'integer',
     ];
 
     /**
      * Quién lo archivó y por qué NO salen en `toArray()`: el listado de planes
      * es PÚBLICO (la app lo lee sin sesión). El CRM los recibe aparte, solo con
      * sesión de administrador ({@see \App\Http\Controllers\Api\PlanController}).
-     * El autor del texto comercial (PT-14), tampoco: no sale nunca.
+     * Las autorías del texto comercial (PT-14), tampoco: no salen nunca.
      */
-    protected $hidden = ['archived_by', 'archive_reason', 'archiver', 'commercial_text_by'];
+    protected $hidden = ['archived_by', 'archive_reason', 'archiver', 'commercial_text_by', 'commercial_sale_by'];
 
     /** Segmentos comerciales disponibles para un plan. */
     public const TIERS = ['lite', 'pro', 'premium'];
@@ -311,16 +313,31 @@ class Plan extends Model
      */
     public function commercialText(): array
     {
+        return ['name' => trim((string) $this->name), 'benefits' => $this->readableBenefits() ?? []];
+    }
+
+    /**
+     * ¿Se pueden leer sus beneficios? Una lista ANIDADA no (M-4):
+     * {@see commercialText()} la da como sin beneficios, y por eso el permiso
+     * «Nombre y beneficios» la trata aparte (N-2 de la revisión de security:
+     * falla cerrado si cambia el valor en bruto).
+     */
+    public function commercialTextReadable(): bool
+    {
+        return $this->readableBenefits() !== null;
+    }
+
+    /** @return list<string>|null los beneficios como los lee {@see benefitsArray()}, o null si no se pueden leer */
+    private function readableBenefits(): ?array
+    {
         try {
-            $beneficios = $this->benefitsArray();
+            return $this->benefitsArray();
         } catch (\ErrorException) {
             // Tragado a propósito (M-4): una lista ANIDADA hace que benefitsArray() convierta un array en texto y el
-            // aviso de PHP sube como excepción. Ese texto no se puede decir ni comparar: cuenta como sin beneficios.
-            // `consultar_planes` lo sigue viendo y contando con su propia lectura.
-            $beneficios = [];
+            // aviso de PHP sube como excepción. Ese texto no se puede decir ni comparar: null, y quien pregunta decide
+            // (commercialText() lo cuenta como sin beneficios; `consultar_planes` lo ve y lo cuenta con su propia lectura).
+            return null;
         }
-
-        return ['name' => trim((string) $this->name), 'benefits' => $beneficios];
     }
 
     /** ¿Dicen lo mismo dos textos comerciales ({@see commercialText()})? */
@@ -346,9 +363,11 @@ class Plan extends Model
     }
 
     /**
-     * El catálogo comercial de ahora, con su autor, en UNA consulta: el texto
-     * y quién lo escribió son de la misma lectura (si se leyeran por separado,
-     * una edición entre las dos atribuiría un texto a quien no lo escribió).
+     * El catálogo comercial de ahora, con sus autores, en UNA consulta: el
+     * texto, quién lo escribió (`by`) y quién lo puso a la venta (`soldBy`, B-1
+     * de la revisión de security) son de la misma lectura (si se leyeran por
+     * separado, una edición entre las dos atribuiría un texto a quien no lo
+     * escribió).
      *
      * De cada plan, su texto comercial con los topes de D6: como mucho
      * {@see COMMERCIAL_CATALOG_MAX_BENEFITS} beneficios (los primeros, los que
@@ -356,20 +375,24 @@ class Plan extends Model
      * caracteres ni que no sea UTF-8 válido (nunca se dicen). NUNCA el precio,
      * la vigencia ni las reglas de acceso.
      *
-     * @return array{plans: list<array{id: int, name: string, benefits: list<string>}>, authors: list<array{planId: int, by: int|null}>}
+     * @return array{plans: list<array{id: int, name: string, benefits: list<string>}>, authors: list<array{planId: int, by: int|null, soldBy: int|null}>}
      */
     public static function commercialCatalogSnapshot(): array
     {
         $planes = [];
         $autores = [];
-        foreach (self::query()->commercialCatalog()->get(['id', 'name', 'benefits', 'commercial_text_by']) as $p) {
+        foreach (self::query()->commercialCatalog()->get(['id', 'name', 'benefits', 'commercial_text_by', 'commercial_sale_by']) as $p) {
             $texto = $p->commercialText();
             $beneficios = array_values(array_filter(
                 array_slice($texto['benefits'], 0, self::COMMERCIAL_CATALOG_MAX_BENEFITS),
                 static fn (string $b): bool => mb_check_encoding($b, 'UTF-8') && mb_strlen($b, 'UTF-8') <= self::COMMERCIAL_BENEFIT_MAX_STORED,
             ));
             $planes[] = ['id' => (int) $p->id, 'name' => $texto['name'], 'benefits' => $beneficios];
-            $autores[] = ['planId' => (int) $p->id, 'by' => $p->commercial_text_by === null ? null : (int) $p->commercial_text_by];
+            $autores[] = [
+                'planId' => (int) $p->id,
+                'by' => $p->commercial_text_by === null ? null : (int) $p->commercial_text_by,
+                'soldBy' => $p->commercial_sale_by === null ? null : (int) $p->commercial_sale_by,
+            ];
         }
 
         return ['plans' => $planes, 'authors' => $autores];
@@ -403,10 +426,12 @@ class Plan extends Model
      * la usan la telefonía y el Studio. Exactamente `{format, hash, plans,
      * authors}`; el formato {@see COMMERCIAL_CATALOG_FORMAT}; los planes con la
      * forma de {@see commercialCatalogPlans()}; la huella, la de esos planes; y
-     * los autores, uno por plan y en su orden (`by`: id ≥ 1 o null). Cualquier
-     * otra cosa es null: no se sabe qué se aprobó (falla cerrado). Nunca lanza.
+     * los autores, uno por plan y en su orden, exactamente `{planId, by,
+     * soldBy}` (cada uno, id ≥ 1 o null). La forma anterior a B-1, sin
+     * `soldBy`, no vale: no se sabría quién lo puso a la venta. Cualquier otra
+     * cosa es null: no se sabe qué se aprobó (falla cerrado). Nunca lanza.
      *
-     * @return array{hash: string, plans: list<array{id: int, name: string, benefits: list<string>}>, authors: list<array{planId: int, by: int|null}>}|null
+     * @return array{hash: string, plans: list<array{id: int, name: string, benefits: list<string>}>, authors: list<array{planId: int, by: int|null, soldBy: int|null}>}|null
      */
     public static function readCommercialCatalog(mixed $catalog): ?array
     {
@@ -434,11 +459,12 @@ class Plan extends Model
             }
             $deEste = array_keys($a);
             sort($deEste, SORT_STRING);
-            if ($deEste !== ['by', 'planId'] || $a['planId'] !== $planes[$i]['id']
-                || ($a['by'] !== null && (! is_int($a['by']) || $a['by'] < 1))) {
+            if ($deEste !== ['by', 'planId', 'soldBy'] || $a['planId'] !== $planes[$i]['id']
+                || ($a['by'] !== null && (! is_int($a['by']) || $a['by'] < 1))
+                || ($a['soldBy'] !== null && (! is_int($a['soldBy']) || $a['soldBy'] < 1))) {
                 return null;
             }
-            $leidos[] = ['planId' => $a['planId'], 'by' => $a['by']];
+            $leidos[] = ['planId' => $a['planId'], 'by' => $a['by'], 'soldBy' => $a['soldBy']];
         }
 
         return ['hash' => $catalog['hash'], 'plans' => $planes, 'authors' => $leidos];

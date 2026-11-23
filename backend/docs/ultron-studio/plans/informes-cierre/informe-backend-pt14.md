@@ -3,6 +3,7 @@
 **Árbol:** `_worktrees/lote-3/Iron-Body`, rama `cierre/voz-catalogo` sobre `c3304671` (el diseño confirmado encima de `integracion/voz` `b1f66c32`). Todo el trabajo está **en el índice, sin confirmar**.
 **Diseño:** `plans/informes-cierre/diseno-arq-pt14.md` (§4.1, §4.2, §4.3, §7 servidor; §5 congelado). Preguntas abiertas de §10 con su opción por defecto: poner un plan a la venta **sí** pide el permiso; un texto sin autor registrado **no** excluye a nadie.
 **Marcas:** [V] verificado ejecutando · [L] leído en el código · [S] supuesto, sin comprobar.
+**Después de la revisión de security** (B-1, N-2 y N-3, corregidos encima de `748f17ab`): ver **§9**. Donde §1–§6 hablan de un solo autor (`commercial_text_by`) o del formato `authors: [{planId, by}]`, manda §9.
 
 ---
 
@@ -179,3 +180,86 @@ Otras ejecuciones intermedias [V], todas en verde tras adaptar: `tests/Feature/P
 - **`PlanController::validatedData`** convierte con `(string)` cada beneficio de un array. Una lista anidada en `benefits` (M-4) da un 500 al guardar un plan, antes de llegar a esta lógica. Es anterior a PT-14.
 - **Pint** marca en `Plan.php` y `PlanController.php` el orden de los `use` y los `@see` con nombre completo. Es anterior a PT-14.
 - **Riesgo R2 («último autor») del diseño:** sigue tal cual. Que lo acepte o no es de security.
+
+---
+
+## 9. Tras la revisión de seguridad (B-1, N-2 y N-3)
+
+**Informe de security:** `…/scratchpad/cierre/informe-security-pt14.md`, veredicto NO APTO por B-1. **Corrección:** la «correcta» del informe, decidida y firmada por el lead; cambia D4 y D10 del diseño. Trabajo encima de `748f17ab`, en el índice y sin confirmar. Los demás no bloqueantes del informe (N-1, N-4 a N-8) no se tocan.
+
+### 9.1 Qué cambió
+
+| Fichero | Cambio |
+|---|---|
+| `database/migrations/2026_11_23_100001_add_commercial_text_author_to_plans_table.php` | Segunda columna en la **misma** migración (no está desplegada): `plans.commercial_sale_by` → `admins`, anulable, `nullOnDelete`. `down()` quita las dos |
+| `app/Models/Plan.php` | `commercial_sale_by` en `$hidden` y con cast `integer`. `commercialCatalogSnapshot()` lee las dos columnas en la misma consulta y da `authors: [{planId, by, soldBy}]`. `readCommercialCatalog()` exige exactamente `{planId, by, soldBy}` (cada uno, id ≥ 1 o null) y rechaza la forma anterior sin `soldBy`; el formato sigue siendo `ultron-voice-catalog/1`. Nuevo `commercialTextReadable()`: el `try/catch` de M-4 vive en `readableBenefits()`, que comparten las dos funciones |
+| `app/Support/Access/PlanCommercialText.php` | `authorChanges()` se sustituye por `textChanged()` (por valor, o ilegible con el valor en bruto cambiado; el alta, siempre) y `becomesSellable()`. `reasonFor()` recibe `$unreadableChange` (N-2). `AUTHOR_COLUMNS` con las dos columnas; `withoutAuthor()` quita las dos de `changes` |
+| `app/Http/Controllers/Api/PlanController.php` | `update`: `commercial_text_by` solo si `textChanged()`; `commercial_sale_by` solo si `becomesSellable()`; N-2: `! commercialTextReadable() && isDirty('benefits')` cuenta como texto cambiado (pide la llave en un plan vendible). `store`: `commercial_text_by` siempre; si el alta queda vendible, también `commercial_sale_by` (un `UPDATE` más en la misma transacción, después de comprobar la llave) |
+| `app/Services/Membership/PlanArchive.php` | Reactivar escribe `commercial_sale_by`; el autor del texto no cambia |
+| `app/Services/UltronStudio/StudioVoicePublishing.php` | Cuatro ojos: quien publica o promueve no puede ser `by` NI `soldBy` de ningún plan capturado (`isPlanAuthor()`). Vista previa: `authoredByYou` = eres `by` o `soldBy`; `authorRecorded` = `by !== null`. El 403, sus claves y su mensaje no cambian, y por la API no sale ni `by` ni `soldBy` |
+| `app/Services/UltronStudio/StudioVoicePublications.php` | Solo el phpdoc del tipo que devuelve `catalogOf()` |
+| `docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md` | Enmienda 21: E21-1 (la forma de los autores), E21-2 (`authors: [{planId, by, soldBy}]`, se rechaza la forma anterior), E21-4 (las dos autorías, por qué y los cuatro ojos con las dos; marcada como corregida por B-1 con la decisión del lead) y E21-7 (la migración añade las dos columnas) |
+
+**Pruebas:**
+- **Nuevas:**
+  - en A: `test_cambiar_solo_el_precio_no_toca_ninguna_autoria` y `test_una_lista_anidada_sobre_un_plan_vendible_pide_la_llave` (N-2);
+  - en el Studio: `test_b1_ni_quien_escribio_el_texto_ni_quien_lo_puso_a_la_venta_publican_y_una_tercera_persona_si`, con dos casos, «Activar» (el CRM manda solo `{active: true}`) y «Reactivar». Acaba con una llamada real sellada a la publicación y con `consultar_planes`, que dice el texto aprobado;
+  - en telefonía: dos casos manipulados más, autores sin `soldBy` (la forma anterior) y un `soldBy` que no es un id.
+- **Ajustadas** (cambio de requisito decidido por el lead):
+  - A 4: tras escribir con el plan apagado, quien tiene la llave lo enciende; queda en `commercial_sale_by` y el autor del texto no cambia;
+  - A 5: un alta no vendible deja `commercial_sale_by` en null; el alta vendible con la llave deja las dos;
+  - A 6: quien reactiva queda en `commercial_sale_by`, el autor del texto no cambia y la auditoría no lleva ninguna de las dos columnas;
+  - A 7: cambiar el texto de un plan que ya estaba a la venta no es ponerlo a la venta, y ninguna de las dos columnas sale en el listado;
+  - A 11: las dos columnas, su `nullOnDelete` y el privilegio de `iron_app` en PG para las dos;
+  - Studio 1: un plan que puso a la venta quien mira es «suyo» (`authoredByYou: true`, `authorRecorded: false`) y el mensaje nombra «Mensual» y «Semestral»;
+  - Studio 3 y 4: los autores guardados con `soldBy`;
+  - la fixture `voiceCatalogEvidence()` con `soldBy`.
+- **La clase del Studio cierra la red explícitamente en su `setUp`.** Para la llamada de B6 combina las fixtures de telefonía y del Studio con `insteadof`, como `VoiceLabToolsTest`. Con esa forma, el rastreo de `VoiceIsolationTest::test_las_pruebas_de_voz_con_red_cierran_la_red` (protección 3) no sigue a `voiceSetUp()`, y la guarda lo cazó en la primera ejecución de la lista: `Pruebas de voz con red sin Http::preventStrayRequests() (protección 3): tests/Feature/UltronStudio/UltronStudioVoiceCatalogTest.php`. Se arregló cerrando la red en la prueba; la guarda no se ha tocado.
+- **N-3, `UltronStudioEngineReadOnlyTest`.** Para los dos ficheros de la voz prohíbe además:
+  - alias de `Plan` o de su espacio de nombres (`use App\Models\Plan as …`, `use App\Models\{Plan as …}`, `use App\Models as …`);
+  - cualquier otro nombre cualificado que acabe en `\Plan` fuera del `use`;
+  - cualquier cadena que nombre `App\Models\Plan`;
+  - las consultas a la tabla `plans` por el constructor (`table('plans'` y `from('plans'`) y el SQL que la escriba.
+
+  No prohíbe el literal `'plans'` sin más, porque los dos ficheros lo usan como clave de array.
+
+### 9.2 Rojo y verde
+
+**Rojo** (SQLite, con las pruebas ya cambiadas y el código de `748f17ab`): `Tests: 38, Assertions: 228, Errors: 10, Failures: 6.`
+- **B-1** (A 4): `el autor del texto no cambia — Failed asserting that 1 is identical to 2.` Encenderlo sobrescribía al autor del texto.
+- A 5 (`two arrays are identical`, el alta vendible) y A 6 (`null is identical to 2`, sin `commercial_sale_by`).
+- **N-2:** `Expected response status code [403] but received 200.`
+- A 11: `up() vuelve a poner commercial_sale_by — Failed asserting that false is true.`
+- Telefonía, caso «autores sin quien lo puso a la venta»: el formato anterior se aceptaba (`no se sabe qué se aprobó`).
+- Las 10 de la clase del Studio, y la nueva de A sobre el precio, caían con `no such column: commercial_sale_by`, antes de llegar a la regla.
+- **Rojo de comportamiento de B6**, con la columna ya añadida (migración y `Plan`) y la regla todavía sin cambiar: `Tests: 2, Assertions: 10, Failures: 2.` En los dos casos, «Activar» y «Reactivar», `[text_by, sale_by]` daba `[6, null]` en vez de `[5, 6]`: quien lo puso a la venta pasaba a ser la autora del texto y no quedaba constancia de la venta.
+
+**Verde:**
+- Las tres clases, en SQLite: `OK (38 tests, 452 assertions)`.
+- En PostgreSQL 14, las clases tocadas (`PlanCommercialTextPermissionTest`, `UltronStudioVoiceCatalogTest`, `VoiceToolsPublishedCatalogTest`, `UltronStudioEngineReadOnlyTest`, `PlanArchiveTest` y `AuditChangesTest`): `OK (79 tests, 4761 assertions)`.
+
+**Mutaciones de N-3** [V]. Cada una se metió un momento en el fichero real como método nuevo y se ejecutó `--filter test_solo_dos_ficheros`; después se restauró la copia y se comprobó la huella (`StudioVoicePublishing.php` `93335912…` y `StudioVoicePublications.php` `26687cec…`, iguales antes y después).
+
+| Mutación | Guarda de `748f17ab` | Guarda endurecida |
+|---|---|---|
+| m1 alias (`use App\Models\Plan as PlanStore; PlanStore::query()->update(...)`) | `OK (1 test, 236 assertions)`: pasaba | `importa Plan (o su espacio de nombres) con un alias.` |
+| m2 cadena (`app('App\Models\Plan')->newQuery()->update(...)`) | `OK (1 test, 236 assertions)`: pasaba | `nombra la clase Plan en una cadena: 'App\Models\Plan'` |
+| m4 `DB::table('plans')->update(...)` | `OK (1 test, 236 assertions)`: pasaba | `consulta la tabla plans sin pasar por Plan.` |
+| m3 control (`Plan::query()->update(...)`), en `StudioVoicePublications.php` | ya caía | `usa de Plan algo que no es leer el catálogo: Plan::query(` |
+
+En `StudioVoicePublications.php`, m1, m2 y m4 caen igual (los cuatro casos ejecutados). Sin mutaciones, la guarda endurecida pasa: `OK (1 test, 1566 assertions)`.
+
+### 9.3 Ejecuciones finales (la misma lista de 45 rutas de §5)
+
+- **SQLite:** `OK, but there were issues!` → `Tests: 1420, Assertions: 447555, PHPUnit Deprecations: 3, Skipped: 276.` Ningún fallo ni error. Es la segunda ejecución: la primera dio 1 fallo, el de la protección 3 de §9.1, ya corregido.
+- **PostgreSQL 14:** `Tests: 1420, Assertions: 450108, Errors: 3, PHPUnit Deprecations: 3, Skipped: 54.` Son los **mismos 3 errores ajenos** de §5 y con los mismos mensajes: `AdminUserPasswordTest` (`42601` por el disparador con sintaxis de SQLite que escribe la propia prueba) y los dos de `WhatsappReviewIsolationTest` (`22P02`, `correlation_id` que no es uuid).
+- **Pint:** pasa en todo lo tocado. En `Plan.php` y `PlanController.php`, Pint cambiaría las mismas 6 líneas en `HEAD` y en mi versión, todas anteriores a PT-14.
+
+### 9.4 Lo que queda y no he verificado
+
+- **R2 en su forma original** (sonda B1b del informe): si otra persona con la llave edita **otro** beneficio con X delante, pasa a ser la autora del texto y la primera publica. Security lo confirma como no bloqueante; no cambia con esta corrección.
+- **`store`** hace ahora un `UPDATE` de más en la misma transacción cuando el alta queda vendible. Antes del `UPDATE` ya se comprobó la llave, y si falta, el `throw` deshace el alta entera.
+- **N-2 queda acotado a A.** `validatedData` y `benefitsArray()` no se tocan. La lista anidada la sigue pudiendo guardar quien tenga la llave, y entonces rompe igual el catálogo de la app y el de WhatsApp. Validar la forma al guardar es el hallazgo aparte del informe.
+- **La guarda de N-3** sigue siendo un análisis de tokens: una clase que se construya concatenando cadenas, o un `DB::table($variable)`, no los ve. Lo prohibido son las tres formas de las mutaciones de security y sus variantes inmediatas.
+- **No he ejecutado** la batería completa ni nada en producción.
+

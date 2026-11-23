@@ -129,6 +129,9 @@ class VoiceToolsPublishedCatalogTest extends TestCase
             'un beneficio que no es texto' => ['beneficio'],
             'autores que no son los de los planes' => ['autores'],
             'sin autores' => ['sin_autores'],
+            // B-1: la forma anterior a las dos autorías (sin `soldBy`) no se acepta: no se sabe quién lo puso a la venta.
+            'autores sin quien lo puso a la venta' => ['sin_vendedor'],
+            'quien lo puso a la venta no es un id' => ['vendedor_malo'],
         ];
     }
 
@@ -143,11 +146,13 @@ class VoiceToolsPublishedCatalogTest extends TestCase
             'huella' => $c['plans'][0]['benefits'][] = 'Primer mes sin costo adicional',
             'precio' => $c['plans'][0]['price'] = 89000,
             'veintiuno' => [$c['plans'] = array_map(static fn (int $i): array => ['id' => $i, 'name' => "Plan {$i}", 'benefits' => []], range(1, 21)),
-                $c['authors'] = array_map(static fn (int $i): array => ['planId' => $i, 'by' => null], range(1, 21))],
+                $c['authors'] = array_map(static fn (int $i): array => ['planId' => $i, 'by' => null, 'soldBy' => null], range(1, 21))],
             'formato' => $c['format'] = 'ultron-voice-catalog/2',
             'beneficio' => $c['plans'][0]['benefits'][0] = ['Acceso ilimitado al gimnasio'],
             'autores' => $c['authors'][0]['planId'] = 999,
             'sin_autores' => $c['authors'] = [],
+            'sin_vendedor' => $c['authors'] = array_map(static fn (array $a): array => ['planId' => $a['planId'], 'by' => $a['by']], $c['authors']),
+            'vendedor_malo' => $c['authors'][0]['soldBy'] = 'Sara',
         };
         if (in_array($caso, ['precio', 'veintiuno', 'beneficio'], true)) {
             // Con su huella rehecha: lo que falla es la FORMA, no la huella.

@@ -433,7 +433,7 @@ final class StudioVoicePublications
      * telefonía ({@see Plan::readCommercialCatalog()}). null si no lo tiene
      * (anterior a PT-14) o no verifica.
      *
-     * @return array{hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null}>}|null
+     * @return array{hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}|null
      */
     public static function catalogOf(StudioVoiceAgent|int $agent): ?array
     {

@@ -22,6 +22,18 @@ use Illuminate\Http\Request;
  *    texto se editaría con el plan fuera de la venta y se encendería después.
  * Apagar, archivar y borrar van en la dirección segura y no lo piden.
  *
+ * DOS AUTORÍAS (B-1 de la revisión de security; corrección decidida por el
+ * lead): quien escribe el texto queda en `commercial_text_by` (cambia solo
+ * cuando cambia el texto: {@see textChanged()}) y quien lo pone a la venta,
+ * en `commercial_sale_by` ({@see becomesSellable()}). Antes una sola columna
+ * guardaba las dos cosas, y encender un plan sobrescribía a quien escribió el
+ * texto: con un clic de otra persona, quien lo escribió lo publicaba.
+ *
+ * FALLA CERRADO TAMBIÉN CON UN TEXTO ILEGIBLE (N-2 de la misma revisión): una
+ * lista anidada no se puede leer y {@see Plan::commercialText()} la da como
+ * sin beneficios. Si el texto de después no se puede leer y el valor en bruto
+ * de `benefits` cambió, cuenta como texto cambiado.
+ *
  * El permiso no es una ruta: el nombre viaja en el mismo PUT que el precio
  * (como `payments.backdate`). Lo aplican PlanController y PlanArchive con esta
  * pieza, para que la regla viva en un solo sitio (como {@see InventoryCosts}).
@@ -36,13 +48,17 @@ final class PlanCommercialText
 
     public const REASON_BECOMES_SELLABLE = 'becomes_sellable';
 
+    /** Las columnas de las dos autorías (B-1): quién escribió el texto y quién puso el plan a la venta. */
+    public const AUTHOR_COLUMNS = ['commercial_text_by', 'commercial_sale_by'];
+
     /**
      * Por qué una escritura pide el permiso, o null si no lo pide. Pura.
      *
      * @param  array{name: string, benefits: list<string>}|null  $textBefore  null en un alta
      * @param  array{name: string, benefits: list<string>}  $textAfter
+     * @param  bool  $unreadableChange  N-2: el texto de después no se puede leer y el valor en bruto cambió
      */
-    public static function reasonFor(?array $textBefore, bool $sellableBefore, array $textAfter, bool $sellableAfter): ?string
+    public static function reasonFor(?array $textBefore, bool $sellableBefore, array $textAfter, bool $sellableAfter, bool $unreadableChange = false): ?string
     {
         if (! $sellableAfter) {
             return null;
@@ -51,33 +67,40 @@ final class PlanCommercialText
             return self::REASON_BECOMES_SELLABLE;
         }
 
-        return $textBefore === null || ! Plan::commercialTextEquals($textBefore, $textAfter) ? self::REASON_TEXT_CHANGED : null;
+        return self::textChanged($textBefore, $textAfter, $unreadableChange) ? self::REASON_TEXT_CHANGED : null;
     }
 
     /**
-     * ¿Cambia el autor? Cuando el texto cambia o el plan entra en la venta: el
-     * autor es «la última persona que escribió el texto comercial vigente o lo
-     * puso a la venta» (D4). Pura.
+     * ¿Cambió el texto comercial? Por valor ({@see Plan::commercialTextEquals()}),
+     * o porque no se puede leer y su valor en bruto cambió (N-2). Un alta
+     * (`$textBefore` null) siempre es texto nuevo. Cuando sí, quien escribe
+     * queda en `commercial_text_by`. Pura.
      *
-     * @param  array{name: string, benefits: list<string>}  $textBefore
+     * @param  array{name: string, benefits: list<string>}|null  $textBefore
      * @param  array{name: string, benefits: list<string>}  $textAfter
      */
-    public static function authorChanges(array $textBefore, bool $sellableBefore, array $textAfter, bool $sellableAfter): bool
+    public static function textChanged(?array $textBefore, array $textAfter, bool $unreadableChange = false): bool
     {
-        return ! Plan::commercialTextEquals($textBefore, $textAfter) || (! $sellableBefore && $sellableAfter);
+        return $textBefore === null || $unreadableChange || ! Plan::commercialTextEquals($textBefore, $textAfter);
+    }
+
+    /** ¿Entra en la venta? Cuando sí, quien lo hace queda en `commercial_sale_by` (B-1). Pura. */
+    public static function becomesSellable(bool $sellableBefore, bool $sellableAfter): bool
+    {
+        return ! $sellableBefore && $sellableAfter;
     }
 
     /**
-     * Los cambios de la auditoría sin la columna del autor: la línea ya dice
-     * quién escribió (su actor), y la auditoría de un plan sigue siendo la de
-     * siempre, sin un campo de fontanería más.
+     * Los cambios de la auditoría sin las columnas de las autorías: la línea ya
+     * dice quién lo hizo (su actor), y la auditoría de un plan sigue siendo la
+     * de siempre, sin campos de fontanería de más.
      *
      * @param  list<array<string, mixed>>  $changes  lo que dio `AuditTrail::changesOf()`
      * @return list<array<string, mixed>>
      */
     public static function withoutAuthor(array $changes): array
     {
-        return array_values(array_filter($changes, static fn (array $c): bool => ($c['field'] ?? null) !== 'commercial_text_by'));
+        return array_values(array_filter($changes, static fn (array $c): bool => ! in_array($c['field'] ?? null, self::AUTHOR_COLUMNS, true)));
     }
 
     /** @throws PlanArchiveException 403 `plan_commercial_text_forbidden` si quien escribe no tiene la llave */

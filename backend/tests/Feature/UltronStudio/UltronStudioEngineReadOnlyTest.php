@@ -272,6 +272,32 @@ class UltronStudioEngineReadOnlyTest extends TestCase
                     $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "{$fichero} escribe con Plan: {$sentencia}");
                 }
             }
+
+            // N-3 de la revisión de security: lo que la comprobación de los
+            // tokens `Plan` no ve. Sin alias de `Plan` ni de su espacio de
+            // nombres (`use App\Models\Plan as …`, `use App\Models\{Plan as …}`,
+            // `use App\Models as …`); ningún otro nombre cualificado que acabe
+            // en `\Plan` más que el `use` (un solo `App\Models\Plan`); ninguna
+            // cadena que nombre la clase (`app('App\Models\Plan')`); y ninguna
+            // consulta a la tabla `plans` por el constructor de consultas
+            // (`DB::table('plans')`, `->from('plans')`) ni SQL que la escriba.
+            $codigo = $this->codeOf($ruta);
+            $this->assertDoesNotMatchRegularExpression('/\buse\s+\\\\?App\\\\Models(?:\\\\Plan)?\s+as\b|\buse\s+\\\\?App\\\\Models\\\\\{[^}]*\bPlan\s+as\b/i', $codigo,
+                "{$fichero} importa Plan (o su espacio de nombres) con un alias.");
+            $cualificados = [];
+            foreach ($tokens as $t) {
+                if (in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true) && preg_match('/(^|\\\\)Plan$/i', $t[1]) === 1) {
+                    $cualificados[] = ltrim($t[1], '\\');
+                }
+                if (in_array($t[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                    $cadena = str_replace('\\\\', '\\', $t[1]);
+                    $this->assertDoesNotMatchRegularExpression('/App\\\\+Models\\\\+Plan\b/i', $cadena, "{$fichero} nombra la clase Plan en una cadena: {$t[1]}");
+                    $this->assertDoesNotMatchRegularExpression('/\b(update|insert\s+into|delete\s+from|truncate(\s+table)?)\s+("?public"?\s*\.\s*)?"?plans"?\b/i', $cadena,
+                        "{$fichero} escribe la tabla plans con SQL: {$t[1]}");
+                }
+            }
+            $this->assertSame(['App\\Models\\Plan'], $cualificados, "{$fichero} nombra Plan de otra forma que con su `use`.");
+            $this->assertDoesNotMatchRegularExpression('/\b(table|from)\s*\(\s*[\'"]\s*(public\.)?plans\b/i', $codigo, "{$fichero} consulta la tabla plans sin pasar por Plan.");
         }
 
         // Los recuentos del canario: ni una escritura, la única fachada es el

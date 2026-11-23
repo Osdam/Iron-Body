@@ -20,9 +20,13 @@ use Tests\TestCase;
  * Gobierna el CONJUNTO VENDIBLE (`Plan::sellable()`): cambiar el nombre o los
  * beneficios de un plan que se ofrece fuera, y meter un plan en la venta
  * (crearlo, encenderlo, darle precio o vigencia, reactivarlo). Se compara por
- * VALOR: reenviar lo mismo no lo pide. Quien lo escribe o lo pone a la venta
- * queda como autor (`commercial_text_by`), que no sale nunca en el listado
- * público. Por defecto solo lo tiene Super Admin.
+ * VALOR: reenviar lo mismo no lo pide. Por defecto solo lo tiene Super Admin.
+ *
+ * DOS AUTORÍAS (B-1 de la revisión de security; corrección decidida por el
+ * lead): quien ESCRIBE el texto queda en `commercial_text_by` (solo cambia
+ * cuando cambia el texto, y en el alta) y quien lo PONE A LA VENTA, en
+ * `commercial_sale_by` (alta vendible, encenderlo, reactivarlo). Ninguna de
+ * las dos sale nunca en el listado público.
  */
 class PlanCommercialTextPermissionTest extends TestCase
 {
@@ -113,10 +117,11 @@ class PlanCommercialTextPermissionTest extends TestCase
     {
         $fuera = $this->plan(['sellable' => false]);
 
-        // Paso 1: con el plan fuera de la venta, el texto sí (queda como autor).
+        // Paso 1: con el plan fuera de la venta, el texto sí (queda como autor del texto).
         $this->patchJson("/api/plans/{$fuera->id}", ['name' => 'Mensual Nuevo'], $this->hAdmin)->assertOk();
         $this->assertSame('Mensual Nuevo', $fuera->fresh()->name);
         $this->assertSame((int) $this->administrador->id, $fuera->fresh()->commercial_text_by);
+        $this->assertNull($fuera->fresh()->commercial_sale_by, 'no lo puso a la venta');
 
         // Paso 2: encenderlo, no. Ni por ninguna de las otras puertas de la venta.
         foreach ([
@@ -137,6 +142,13 @@ class PlanCommercialTextPermissionTest extends TestCase
         $vendible = $this->plan(['name' => 'Anual']);
         $this->patchJson("/api/plans/{$vendible->id}", ['sellable' => false], $this->hAdmin)->assertOk();
         $this->assertFalse($vendible->fresh()->isSellable());
+
+        // B-1: quien tiene la llave lo enciende sin tocar el texto. Queda como quien lo puso a la venta; el autor del
+        // texto sigue siendo quien lo escribió (antes de B-1, encenderlo lo sobrescribía).
+        $this->patchJson("/api/plans/{$fuera->id}", ['sellable' => true], $this->hSuper)->assertOk();
+        $this->assertTrue($fuera->fresh()->isSellable());
+        $this->assertSame((int) $this->administrador->id, $fuera->fresh()->commercial_text_by, 'el autor del texto no cambia');
+        $this->assertSame((int) $this->super->id, $fuera->fresh()->commercial_sale_by, 'quien lo puso a la venta');
     }
 
     public function test_crear_o_duplicar_un_plan_vendible_pide_el_permiso_y_uno_no_vendible_no(): void
@@ -154,13 +166,20 @@ class PlanCommercialTextPermissionTest extends TestCase
         $this->assertSame(0, Plan::query()->count(), 'no se creó nada');
         $this->assertSame(0, AuditLog::query()->where('entity', 'plan')->count());
 
-        // Fuera de la venta, sí: y queda como autor.
+        // Fuera de la venta, sí: y queda como autor del texto, no de la venta.
         foreach ([['sellable' => false], ['active' => false], ['price' => 0]] as $i => $fuera) {
             $id = $this->postJson('/api/plans', array_merge($alta, ['name' => "Semestral {$i}"], $fuera), $this->hAdmin)->assertCreated()->json('id');
             $plan = Plan::query()->findOrFail($id);
             $this->assertFalse($plan->isSellable());
             $this->assertSame((int) $this->administrador->id, $plan->commercial_text_by);
+            $this->assertNull($plan->commercial_sale_by);
         }
+
+        // Con la llave, un alta vendible (también sin `sellable`): quien la crea escribe el texto y la pone a la venta.
+        $id = $this->postJson('/api/plans', $alta, $this->hSuper)->assertCreated()->json('id');
+        $plan = Plan::query()->findOrFail($id);
+        $this->assertTrue($plan->isSellable());
+        $this->assertSame([(int) $this->super->id, (int) $this->super->id], [$plan->commercial_text_by, $plan->commercial_sale_by]);
     }
 
     public function test_reactivar_pide_tambien_el_permiso(): void
@@ -176,10 +195,58 @@ class PlanCommercialTextPermissionTest extends TestCase
         $this->assertTrue($plan->fresh()->isArchived(), 'sigue archivado');
 
         $this->conceder('plans.commercial_text');
+        $plan->forceFill(['commercial_text_by' => $this->super->id])->save();
         $this->postJson("/api/plans/{$plan->id}/reactivate", ['reason' => 'Vuelve a la venta'], $this->hAdmin)
             ->assertOk()->assertJsonPath('plan.is_archived', false);
         $this->assertTrue($plan->fresh()->isSellable());
-        $this->assertSame((int) $this->administrador->id, $plan->fresh()->commercial_text_by);
+        // B-1: quien reactiva queda como quien lo puso a la venta; el autor del texto no cambia.
+        $this->assertSame((int) $this->administrador->id, $plan->fresh()->commercial_sale_by);
+        $this->assertSame((int) $this->super->id, $plan->fresh()->commercial_text_by);
+        $traza = AuditLog::query()->where('entity', 'plan')->where('action', 'status')->sole();
+        $this->assertSame([], array_values(array_intersect(['commercial_text_by', 'commercial_sale_by'], array_column($traza->changes, 'field'))), 'la auditoría, sin las autorías');
+    }
+
+    /** B-1: lo que no es el texto ni la entrada en la venta no mueve ninguna de las dos autorías. */
+    public function test_cambiar_solo_el_precio_no_toca_ninguna_autoria(): void
+    {
+        $plan = $this->plan();
+        $plan->forceFill(['commercial_text_by' => $this->super->id, 'commercial_sale_by' => $this->super->id])->save();
+        $otra = Admin::create(['name' => 'Olga Otra', 'email' => 'olga-'.uniqid().'@ironbody.test',
+            'password' => 'secret-password', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active']);
+
+        // El CRM reenvía el mismo nombre y los mismos beneficios en cada guardado.
+        $this->putJson("/api/plans/{$plan->id}", ['name' => 'Mensual', 'benefits' => json_encode(self::BENEFICIOS), 'price' => 99000, 'active' => true, 'sellable' => true],
+            $this->actingAsAdmin($otra))->assertOk();
+        $this->patchJson("/api/plans/{$plan->id}", ['price' => 97000, 'duration_days' => 31], $this->hAdmin)->assertOk();
+
+        $this->assertSame(97000.0, $plan->fresh()->price);
+        $this->assertSame([(int) $this->super->id, (int) $this->super->id], [$plan->fresh()->commercial_text_by, $plan->fresh()->commercial_sale_by]);
+    }
+
+    /**
+     * N-2 de la revisión de security: una lista ANIDADA guardada como texto no se puede leer (`commercialText()` la da
+     * como `[]`) y, sobre un plan vendible sin beneficios, parecía «el mismo texto». A falla cerrado: si el texto de
+     * después no se puede leer y el valor en bruto cambió, pide la llave.
+     */
+    public function test_una_lista_anidada_sobre_un_plan_vendible_pide_la_llave(): void
+    {
+        $plan = $this->plan(['benefits' => null]);
+        $anidada = (string) json_encode([['Incluye entrenador personal gratis']]);
+
+        $this->patchJson("/api/plans/{$plan->id}", ['benefits' => $anidada], $this->hAdmin)
+            ->assertStatus(403)
+            ->assertExactJson(['ok' => false, 'code' => 'plan_commercial_text_forbidden', 'reasons' => ['text_changed'], 'message' => self::MSG_TEXT_CHANGED]);
+        $this->assertNull($plan->fresh()->benefits, 'nada guardado');
+
+        // Con la llave, lo de siempre: se guarda tal cual (validar la forma al guardar queda fuera de PT-14).
+        $this->patchJson("/api/plans/{$plan->id}", ['benefits' => $anidada], $this->hSuper)->assertOk();
+        $this->assertSame($anidada, $plan->fresh()->benefits);
+        $this->assertSame((int) $this->super->id, $plan->fresh()->commercial_text_by);
+
+        // Reenviarlo igual (el CRM manda el valor en bruto que leyó) no es cambiarlo.
+        $this->patchJson("/api/plans/{$plan->id}", ['benefits' => $anidada, 'price' => 91000], $this->hAdmin)->assertOk();
+        $this->assertSame(91000.0, $plan->fresh()->price);
+        $this->assertSame((int) $this->super->id, $plan->fresh()->commercial_text_by);
     }
 
     // ── 7–8: el autor y lo que ve cada uno ─────────────────────────────────
@@ -191,7 +258,9 @@ class PlanCommercialTextPermissionTest extends TestCase
         $r = $this->putJson("/api/plans/{$plan->id}", ['name' => 'Mensual Plus', 'benefits' => 'Acceso ilimitado al gimnasio, Sauna'], $this->hSuper)
             ->assertOk()->assertJsonPath('name', 'Mensual Plus')->assertJsonPath('commercial_text_locked', false);
         $this->assertArrayNotHasKey('commercial_text_by', $r->json());
+        $this->assertArrayNotHasKey('commercial_sale_by', $r->json());
         $this->assertSame((int) $this->super->id, $plan->fresh()->commercial_text_by);
+        $this->assertNull($plan->fresh()->commercial_sale_by, 'ya estaba a la venta: cambiar el texto no es ponerlo a la venta');
         // La auditoría, la de siempre: el texto que cambió, y el autor no entra en `changes` (la línea ya lleva su actor).
         $traza = AuditLog::query()->where('entity', 'plan')->where('action', 'update')->sole();
         $this->assertSame(['name', 'benefits'], array_column($traza->changes, 'field'));
@@ -199,9 +268,11 @@ class PlanCommercialTextPermissionTest extends TestCase
 
         $publico = $this->getJson('/api/plans')->assertOk()->json('data.0');
         $this->assertArrayNotHasKey('commercial_text_by', $publico, 'el listado es público: el id no viaja');
+        $this->assertArrayNotHasKey('commercial_sale_by', $publico);
         $this->assertArrayHasKey('commercial_text_locked', $publico);
         $this->assertNull($publico['commercial_text_locked'], 'sin sesión de administrador, null');
         $this->assertArrayNotHasKey('commercial_text_by', $this->getJson("/api/plans/{$plan->id}")->assertOk()->json());
+        $this->assertArrayNotHasKey('commercial_sale_by', $this->getJson("/api/plans/{$plan->id}", $this->hAdmin)->assertOk()->json());
     }
 
     public function test_commercial_text_locked_dice_lo_que_ve_cada_rol(): void
@@ -261,20 +332,27 @@ class PlanCommercialTextPermissionTest extends TestCase
         $indices = $this->planIndexes($driver);
         $plan = $this->plan();
 
+        $columnas = ['commercial_text_by', 'commercial_sale_by'];
         $migracion->down();
-        $this->assertFalse(Schema::hasColumn('plans', 'commercial_text_by'), 'down() la quita');
+        foreach ($columnas as $columna) {
+            $this->assertFalse(Schema::hasColumn('plans', $columna), "down() quita {$columna}");
+        }
         $migracion->up();
-        $this->assertTrue(Schema::hasColumn('plans', 'commercial_text_by'), 'up() la vuelve a poner');
+        foreach ($columnas as $columna) {
+            $this->assertTrue(Schema::hasColumn('plans', $columna), "up() vuelve a poner {$columna}");
+        }
         $this->assertSame($indices, $this->planIndexes($driver), 'los índices de plans siguen siendo los mismos (SQLite reconstruye la tabla)');
         $this->assertSame('Mensual', Plan::query()->findOrFail($plan->id)->name, 'las filas siguen');
-        $this->assertNull(Plan::query()->findOrFail($plan->id)->commercial_text_by, 'sin relleno: los textos anteriores, sin autor');
+        $this->assertSame([null, null], [Plan::query()->findOrFail($plan->id)->commercial_text_by, Plan::query()->findOrFail($plan->id)->commercial_sale_by],
+            'sin relleno: los textos anteriores, sin autores');
 
-        // La llave: nula si la cuenta se elimina (nullOnDelete, como archived_by).
+        // Las dos llaves: nulas si la cuenta se elimina (nullOnDelete, como archived_by).
         $cuenta = (int) Admin::create(['name' => 'Cuenta que se va', 'email' => 'va-'.uniqid().'@ironbody.test',
             'password' => 'secret-password', 'role' => Admin::ROLE_SUPER_ADMIN, 'status' => 'active'])->id;
-        DB::table('plans')->where('id', $plan->id)->update(['commercial_text_by' => $cuenta]);
+        DB::table('plans')->where('id', $plan->id)->update(['commercial_text_by' => $cuenta, 'commercial_sale_by' => $cuenta]);
         DB::table('admins')->where('id', $cuenta)->delete();
-        $this->assertNull(DB::table('plans')->where('id', $plan->id)->value('commercial_text_by'));
+        $fila = DB::table('plans')->where('id', $plan->id)->first($columnas);
+        $this->assertSame([null, null], [$fila->commercial_text_by, $fila->commercial_sale_by]);
         $this->assertSame(1, DB::table('plans')->where('id', $plan->id)->count(), 'el plan se queda');
 
         if ($driver === 'pgsql') {
@@ -283,8 +361,10 @@ class PlanCommercialTextPermissionTest extends TestCase
             // La aplicación es un rol con solo DML a nivel de tabla: la columna nueva lo hereda.
             DB::statement("DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'iron_app') THEN CREATE ROLE iron_app NOLOGIN NOSUPERUSER NOINHERIT; END IF; END \$\$");
             DB::statement('GRANT SELECT, INSERT, UPDATE, DELETE ON public.plans TO iron_app');
-            foreach (['SELECT', 'INSERT', 'UPDATE'] as $privilegio) {
-                $this->assertTrue((bool) DB::scalar("SELECT has_column_privilege('iron_app', 'public.plans', 'commercial_text_by', ?)", [$privilegio]), "iron_app: {$privilegio}");
+            foreach ($columnas as $columna) {
+                foreach (['SELECT', 'INSERT', 'UPDATE'] as $privilegio) {
+                    $this->assertTrue((bool) DB::scalar("SELECT has_column_privilege('iron_app', 'public.plans', ?, ?)", [$columna, $privilegio]), "iron_app: {$privilegio} en {$columna}");
+                }
             }
         }
     }

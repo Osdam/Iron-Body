@@ -277,16 +277,16 @@ final class StudioVoicePublishing
 
     /**
      * PT-14 (§5 B): el catálogo que capturaría publicar ahora, su huella y si
-     * quien mira lo puede publicar. De cada plan dice si lo escribió QUIEN MIRA
-     * (`authoredByYou`) y si tiene autor registrado; nunca quién escribió los
-     * demás.
+     * quien mira lo puede publicar. De cada plan dice si QUIEN MIRA escribió su
+     * texto o lo puso a la venta (`authoredByYou`, B-1) y si su texto tiene
+     * autor registrado (`authorRecorded`); nunca quién escribió los demás.
      *
      * @return array{format:string,hash:string,shortHash:string,plans:list<array<string,mixed>>,fourEyes:array{ok:bool,message?:string}}
      */
     private static function catalogPreview(StudioAccess $access): array
     {
         $catalogo = self::catalogRecord();
-        $autores = array_column($catalogo['authors'], 'by', 'planId');
+        $autores = array_column($catalogo['authors'], null, 'planId');
         $mios = self::planTextAuthored($catalogo, $access->id());
 
         return [
@@ -294,8 +294,8 @@ final class StudioVoicePublishing
             'hash' => $catalogo['hash'],
             'shortHash' => substr($catalogo['hash'], 0, 8),
             'plans' => array_map(static fn (array $p): array => $p + [
-                'authoredByYou' => ($autores[$p['id']] ?? null) === $access->id(),
-                'authorRecorded' => ($autores[$p['id']] ?? null) !== null,
+                'authoredByYou' => isset($autores[$p['id']]) && self::isPlanAuthor($autores[$p['id']], $access->id()),
+                'authorRecorded' => ($autores[$p['id']]['by'] ?? null) !== null,
             ], $catalogo['plans']),
             'fourEyes' => $mios === [] ? ['ok' => true] : ['ok' => false, 'message' => self::planTextAuthorMessage($mios, StudioVoicePublication::ACTION_PUBLISH)],
         ];
@@ -1150,14 +1150,15 @@ final class StudioVoicePublishing
      * 403 con `detail: rule_phrase_author` y el mismo evento, con
      * `diff.rulePhraseAuthor`.
      *
-     * PT-14 (D10): tampoco quien escribió o puso a la venta un plan del
-     * catálogo que se publica (`$catalog`: el capturado al publicar, o el de la
-     * instantánea del canario al promover): la aprobación de A y la de B no
-     * las da la misma persona, sea Super Admin o no. Se comparan identidades;
-     * un autor null no excluye a nadie. Mismo 403 con `detail:
-     * plan_text_author` y el mismo evento, con `diff.planTextAuthor` (ids).
+     * PT-14 (D10, corregido por B-1): tampoco quien escribió el texto de un
+     * plan del catálogo que se publica (`by`) ni quien lo puso a la venta
+     * (`soldBy`) (`$catalog`: el capturado al publicar, o el de la instantánea
+     * del canario al promover): la aprobación de A y la de B no las da la
+     * misma persona, sea Super Admin o no. Se comparan identidades; un autor
+     * null no excluye a nadie. Mismo 403 con `detail: plan_text_author` y el
+     * mismo evento, con `diff.planTextAuthor` (ids).
      *
-     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null}>}|null  $catalog
+     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}|null  $catalog
      */
     private function assertFourEyes(StudioAccess $access, Request $request, ?StudioVersion $version, ?StudioVoiceProfile $perfil, string $action, ?array $catalog = null): void
     {
@@ -1198,7 +1199,7 @@ final class StudioVoicePublishing
      * (`ultron-voice-catalog/1`): los planes, su huella y sus autores, de UNA
      * lectura (`Plan::commercialCatalogSnapshot()`).
      *
-     * @return array{format:string,hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null}>}
+     * @return array{format:string,hash:string,plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}
      */
     private static function catalogRecord(): array
     {
@@ -1213,23 +1214,35 @@ final class StudioVoicePublishing
     }
 
     /**
-     * Los planes del catálogo cuyo autor es `$adminId`, en su orden (solo los
-     * suyos: nunca dice quién escribió los demás).
+     * Los planes del catálogo de los que `$adminId` escribió el texto o los
+     * puso a la venta ({@see isPlanAuthor()}), en su orden (solo los suyos:
+     * nunca dice quién escribió los demás).
      *
-     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null}>}  $catalog
+     * @param  array{plans:list<array{id:int,name:string,benefits:list<string>}>,authors:list<array{planId:int,by:int|null,soldBy:int|null}>}  $catalog
      * @return list<array{planId:int,name:string}>
      */
     private static function planTextAuthored(array $catalog, int $adminId): array
     {
-        $autores = array_column($catalog['authors'], 'by', 'planId');
+        $autores = array_column($catalog['authors'], null, 'planId');
         $suyos = [];
         foreach ($catalog['plans'] as $p) {
-            if (($autores[$p['id']] ?? null) === $adminId) {
+            if (isset($autores[$p['id']]) && self::isPlanAuthor($autores[$p['id']], $adminId)) {
                 $suyos[] = ['planId' => $p['id'], 'name' => $p['name']];
             }
         }
 
         return $suyos;
+    }
+
+    /**
+     * B-1: ¿dio `$adminId` la aprobación de A de este plan? Escribió su texto
+     * (`by`) o lo puso a la venta (`soldBy`). Un null no es nadie.
+     *
+     * @param  array{planId:int,by:int|null,soldBy:int|null}  $author
+     */
+    private static function isPlanAuthor(array $author, int $adminId): bool
+    {
+        return ($author['by'] ?? null) === $adminId || ($author['soldBy'] ?? null) === $adminId;
     }
 
     /**
