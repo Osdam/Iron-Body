@@ -1,0 +1,323 @@
+UNIDAD 3 DEL CIERRE OPERATIVO · PT-17, EL COMPILADOR 5 DEL TURNO DE PLANES · DESPLIEGUE EN PRODUCCIÓN
+23-11-2026 (UTC; madrugada del 23-11 en Bogotá) · lead
+
+TIPO DE PRUEBA: despliegue REAL en producción (API), con la aprobación de los seis textos y la autorización específica del
+propietario, y comprobaciones reales contra producción antes y después. Nada simulado. Ningún secreto, teléfono ni dato de
+personas (de las cuentas, solo su id interno y su rol). Ninguna llamada ni campaña activada. Ninguna versión creada,
+aprobada ni publicada. Las unidades 4 a 7, sin desplegar. La vuelta atrás no hizo falta.
+
+RESULTADO: DESPLEGADA SIN DESVÍOS (código 0 del guion, 05:17:07 a 05:17:55 UTC). Producción sirve la API cabc4138.
+  · El compilador es el 5 y la conversación canaria vuelve al asesor anterior: `decide` le ofrece `legacy` con el motivo
+    `compiler_changed` (antes: `studio`, versión 39cfae9f, huella 26d57565). Así seguirá hasta que se publique la versión 4.
+  · Los clientes reales, igual que antes: `legacy` · `out_of_scope` antes y después.
+  · EL REVISOR NO CAMBIA: los dos prompts del revisor compilados con el 5 tienen la misma huella que con el 4, byte a byte.
+    Cambian los del estratega y el redactor (y su reescritura), que es lo aprobado. Los intentos no se tocan (el flujo de
+    n8n no se despliega; en el laboratorio solo cambia la constante del compilador).
+  · Controles de precios, longitud, seguridad y respaldo: son código del servidor que esta unidad no toca (2 ficheros de
+    app/: el compilador y la constante del laboratorio); el tope de longitud y el registro siguen en los prompts.
+  · Publicaciones: las mismas 5, la cabeza es la entrada 5 y `publication-check` verifica (salida 0) antes y después.
+  · n8n: el flujo S2 sigue activo y sin cambios; sus puertas responden con el secreto y rechazan sin él sin descontar cupo.
+  · Vigilancia a los 15 minutos: 14 workers en RUNNING, 0 errores, 0 trabajos fallidos, 0 respuestas 5xx.
+
+[0] LA APROBACIÓN Y LA AUTORIZACIÓN (el propietario, en la conversación; 23-11-2026 hacia las 05:10 UTC, 12:10 a. m. en Bogotá; literal)
+    «HUMAN GATE — UNIDAD 3 DE 7
+    Claude, revisé la línea base y los seis textos del compilador 5.
+    APRUEBO los seis textos presentados y AUTORIZO desplegar exclusivamente la unidad 3 sobre el commit cabc4138.
+    Condiciones: 1. Verifica el estado de producción antes del despliegue. 2. Conserva los controles de precios, longitud,
+    seguridad y respaldo. 3. No modifiques el revisor ni aumentes los intentos sin una nueva justificación y autorización.
+    4. Confirma que los clientes reales continúan con el asesor anterior y que el canario vuelve a Legacy hasta publicar la
+    versión 4. 5. Verifica el compilador 5, la integridad de las publicaciones y la disponibilidad de n8n. 6. Si falla una
+    comprobación crítica, aplica la reversión segura. 7. No despliegues las unidades 4 a 7 ni actives llamadas o campañas.
+    Después guíame para crear la versión 4, obtener su aprobación independiente y medirla en el laboratorio.
+    Antes de lanzar las 20 mediciones, comprueba los límites diarios y por hora para evitar bloqueos innecesarios.
+    No publiques la versión 4 en canario hasta superar los umbrales de aceptación establecidos.
+    Continuemos el cierre operativo de ULTRON Studio FULL.»
+
+[1] 05:12 UTC · ANTES (obligatorio en la ficha): LA SONDA DEL MOTOR CON LAS CLASES DEL COMMIT
+    ops/comprobacion-produccion/sonda-registro-y-panorama.php, en PHP a secas (sin base de datos ni red), con las 50 clases de
+    app/Services/Marketing/Ultron de cabc4138: que sus expresiones regulares compilen con el PCRE de producción (10.39; en
+    local, 10.47) y que den lo mismo sobre un corpus fijo. Huella esperada, la del banco: ff5042f4fb3910f6.
+    EN LOCAL:
+    PCRE 10.47 2025-10-21 · PHP 8.3.33
+    red de marcadores: 13 de 20 formas no salen (esperado: 13) · mal clasificadas: ninguna
+    clases del commit cargadas: 50
+    expresiones regulares en esas clases: 213 · no compilan: 0
+    avisos de PHP: 0
+    casos: 105 · preg_last_error=0
+    HUELLA ff5042f4fb3910f6
+    código de salida: 0
+    EN EL SERVIDOR (como www-data, desde una carpeta temporal que se retiró después):
+    PCRE 10.39 2021-10-29 · PHP 8.3.31
+    red de marcadores: 13 de 20 formas no salen (esperado: 13) · mal clasificadas: ninguna
+    clases del commit cargadas: 50
+    expresiones regulares en esas clases: 213 · no compilan: 0
+    avisos de PHP: 0
+    casos: 105 · preg_last_error=0
+    HUELLA ff5042f4fb3910f6
+    código de salida: 0
+    Los 105 casos dan lo mismo, uno a uno, en local y en el servidor.
+
+[2] 05:14 UTC · ESTADO DE PRODUCCIÓN Y DE SUS DEPENDENCIAS, ANTES (solo lectura; ops/comprobacion-produccion/estado-antes-despues.sh)
+    [1] CÓDIGO Y PROCESOS · 23-11-2026 05:14:43 UTC
+      sirve: 9c2325a11b2cb8309bcec44b0f96f4137faf0898 · cambios con seguimiento: 0 · sin seguimiento: 89
+      workers por estado:  14 RUNNING
+        ironbody-agent ×4
+        ironbody-commercial ×2
+        ironbody-lab ×1
+        ironbody-media ×2
+        ironbody-voice ×1
+        ironbody-whatsapp ×4
+      facturación: active · sesiones de tmux: 0 · despliegues vivos: 0
+      production.ERROR desde 2026-11-23 02:39:19 UTC: 0 · 5xx: 0 · 429: 8
+      cachés: www-data 600 config.php;www-data 600 routes-v7.php · fichero de entorno: www-data:www-data 600, modificado 2026-11-23 02:
+    [2] COLAS
+      failed_jobs desde 2026-11-23 02:39:19 UTC: 0 · en total: 2
+      trabajos en espera por cola: ninguno
+    [3] BASE DE DATOS
+      migraciones registradas: 351 · último lote: 144 · la última: 2026_11_22_100001_add_engine_to_ultron_studio_lab_run_cases
+      columna ultron_studio_lab_run_cases.engine: json, nula=YES, defecto=ninguno
+      columnas de ultron_studio_lab_run_cases: 25
+      ejecuciones del laboratorio por estado: completed=31 · en curso (queued, running): 0
+      índices no válidos: 0 · restricciones sin validar: 0 · transacciones abiertas hace más de 5 min: 0
+      privilegios de iron_app en ultron_studio_lab_run_cases: DELETE,INSERT,SELECT,UPDATE
+      filas por tabla del Studio (ultron_studio_*):
+        ultron_studio_audit_events                           58
+        ultron_studio_campaign_links                         0
+        ultron_studio_canary_numbers                         0
+        ultron_studio_drafts                                 2
+        ultron_studio_integration_snapshots                  9
+        ultron_studio_lab_events                             78
+        ultron_studio_lab_run_cases                          132
+        ultron_studio_lab_runs                               31
+        ultron_studio_lab_scenarios                          12
+        ultron_studio_lab_verdicts                           3
+        ultron_studio_message_templates                      0
+        ultron_studio_meta_template_submissions              0
+        ultron_studio_person_bindings                        0
+        ultron_studio_publications                           5
+        ultron_studio_rules                                  12
+        ultron_studio_strategies                             0
+        ultron_studio_strategy_publications                  0
+        ultron_studio_strategy_reviews                       0
+        ultron_studio_strategy_simulations                   0
+        ultron_studio_strategy_versions                      0
+        ultron_studio_template_meta_checks                   0
+        ultron_studio_version_reviews                        4
+        ultron_studio_versions                               4
+        ultron_studio_voice_agents                           4
+        ultron_studio_voice_lab_sessions                     4
+        ultron_studio_voice_profiles                         3
+        ultron_studio_voice_publications                     0
+      huella de la lista anterior: se compara antes y después
+    [4] STUDIO, WHATSAPP Y LA CANARIA
+      ultron-studio:publication-check → salida 0
+        Llave del motor: canary · estado: applied
+        Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+        Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+        Resto: Legacy
+        La publicación vigente cuadra con el motor.
+      ultron:prompt-trace --last=3 --json → sha256 d9cde934ae13a862…
+        llave de prompts: canary · sello: canary · canario configurado: True · base: n8n-29de5119 · compilador: 4
+        decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565 · motivo None
+    [5] CONFIGURACIÓN EFECTIVA (la caché; solo valores que no son secretos)
+      laboratorio: enabled=true · driver=openai · modelo=gpt-4.1-mini · esfuerzo=[] · temperatura=null
+      precios (USD por millón): entrada=0.40 · salida=1.60
+      presupuestos y topes: diario=2 · por ejecución=0.50 · ejecuciones al día=20 · casos por ejecución=12 · espera=60 s
+      clave propia del laboratorio: PUESTA
+      puerta de publicar: lab_gate=required · lab_source=simulation
+      asesor de WhatsApp: driver=openai · modelo=gpt-4.1-mini · canario configurado=sí
+    [6] LLAMADAS REALES DE n8n A /api/internal/ DESDE LAS 01:58 UTC (después de las sondas de la unidad 1)
+        GET /api/internal/marketing/ai/doctor 200 ×1
+        GET /api/internal/marketing/ai/doctor 401 ×5
+        GET /api/internal/marketing/context/N 404 ×1
+        POST /api/internal/automation/notify-member 422 ×1
+        POST /api/internal/automation/wellness-run 200 ×1
+
+    Los 8 «429» son del propio propietario al lanzar la línea base: el laboratorio admite 10 lanzamientos por hora y por
+    persona ([10]). n8n: «Iron Body - ULTRON - Commercial Advisor (Studio S2)» (4CIwgGbPRneqUjLF) ACTIVO, sin cambios desde el
+    22-11 a las 03:24 UTC; S1 y el flujo original, inactivos; «Error Handler», activo (solo metadatos).
+    ── UNIDAD 3 · ANTES · el paquete compilado y lo que el motor ofrece (solo lectura) · 05:14:47 UTC ──
+    [1] compilador desplegado: 4 · versión «Prueba de aceptación 3 · profesional 200» (CANARY) · huella del paquete que compila hoy: 26d57565894df0fb
+        strategist        29243 bytes · sha256 c84387582f581640 · tope de longitud: no · registro: no · texto de la lista de planes: no
+        composer          28997 bytes · sha256 768cb560ffb624f7 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        critic            16483 bytes · sha256 e605f3d4b3de7430 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        composer_retry    26888 bytes · sha256 f7f94c168d7f3bf4 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        critic_retry      16135 bytes · sha256 6c1d1750233a0525 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+    [2] llave de prompts: canary · lo que decide ofrecería ahora:
+        a la conversación CANARIA .................. studio · versión 39cfae9f · huella 26d57565 · motivo -
+        a un cliente real (la conversación con actividad más reciente que no es la canaria) ... legacy · versión - · huella - · motivo out_of_scope
+        a una conversación que no existe ........... legacy · versión - · huella - · motivo out_of_scope
+    [3] publicaciones del Studio: 5 · cabeza: entrada 5 (publish, 2026-11-22 13:58:15 UTC)
+        versiones por estado: APPROVED=1 · CANARY=1 · ROLLED_BACK=2
+    transacción de solo lectura deshecha; no se ha escrito nada
+
+[3] 05:15 UTC · LA UNIDAD, EN LOCAL, Y LA SUBIDA
+    origin/main = 9c2325a1 · despliegue/u3-pt17 = cabc4138f13cc398651b110d20a63ca42f17249a (el commit autorizado) = 9c2325a1 +
+    cierre/planes-c5 e5a673c1 + cherry-pick -x de c4323242, sin choques · avance rápido, 9 commits.
+    Frente a la unidad 2: 35 ficheros, 31 fuera de docs/, exactamente los de ops/cierre-lotes/pt-17/fuera-de-docs.txt: 2 de
+    app/ (Prompts/UltronPromptCompiler.php, +83 −9 con el otro; StudioLabEngineFlow.php, COMPILER 4 → 5), 20 de pruebas y 9
+    de n8n/ (fixtures, huellas y `_generado.compiler` en los flujos versionados: el guion no toca n8n). Sin migraciones,
+    configuración, rutas ni bootstrap. CALLS_ENABLED_IN_CODE = false · SENDS_ENABLED_IN_CODE = false.
+    Batería completa sobre cabc4138 (04:35–04:56 UTC): 19 430 pruebas, 527 758 aserciones; dos fallos previstos: el
+    tolerado de pagos y la puerta de diff del H9, que nombraba solo UltronPromptCompiler.php (roja hasta subir: [8]).
+    git push origin despliegue/u3-pt17:main  →  9c2325a1..cabc4138 (avance rápido; sin forzar).
+
+[4] 05:16 UTC · GUION, LISTA Y DECLARACIÓN EN EL SERVIDOR (/root/cierre-pt-17, 600 de root)
+    guion  local y servidor: db4bc1f5d856da8d945c9f305cded769ba6c9d8c14ebc8a4a8672f0bea78547a
+    lista  local y servidor: e975a040dc394ce01965d9fef90f8e6eba904d47d7b5830a5dea974c70b209a6 (35 ficheros)
+    fuera-de-docs.txt, misma huella en local y en el servidor (d93951e2…). Sin banderas: la unidad es solo código.
+
+[5] 05:16:44 UTC · --solo-comprobar (salida entera del guion; no toca nada)
+    == deploy-cierre-lote.sh · 2026-11-23T05:16:44Z · modo comprobar · PREVIO=9c2325a1 · NUEVO=cabc4138 · lista /root/cierre-pt-17/lista.txt
+       declaraciones: migraciones — · config — · rutas — · programador —
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción 9c2325a1 limpia · origin/main cabc4138 · 9 commit(s) · 35 ficheros = la lista (…)
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 9c2325a1 y en cabc4138; los dos ficheros sin cambios
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       pendientes frente a origin/main: ninguna (el lote no migra)
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+    código de salida: 0
+
+[6] 05:17:07 → 05:17:55 UTC · EL DESPLIEGUE, DENTRO DE tmux (sesión u3; salida entera del guion)
+    bash /root/deploy-cierre-lote.sh 9c2325a1 cabc4138 /root/cierre-pt-17/lista.txt
+    == deploy-cierre-lote.sh · 2026-11-23T05:17:07Z · modo despliegue · PREVIO=9c2325a1 · NUEVO=cabc4138 · lista /root/cierre-pt-17/lista.txt
+       declaraciones: migraciones — · config — · rutas — · programador —
+    0. comprobaciones previas (solo lectura y git fetch; si algo falla, no se toca nada):
+       producción 9c2325a1 limpia · origin/main cabc4138 · 9 commit(s) · 35 ficheros = la lista (…)
+       ni composer, ni vendor; migraciones solo las declaradas y añadidas; config sin cambios · rutas HTTP sin cambios · programador sin cambios en routes/console.php
+       constantes de llamadas (VoiceCallPolicy) y de envíos (OutreachSendGate): cerradas en 9c2325a1 y en cabc4138; los dos ficheros sin cambios
+          cabc4138 chore(ultron-studio): integración final: el laboratorio frente al motor sigue al compilador 5
+          6fa06500 merge: unidad 3 del cierre operativo, PT-17 (el compilador 5 del turno de planes) encima de la unidad 2
+          e5a673c1 docs(ultron-studio): Enmienda A4-5 del H5 (el compilador 5, las instrucciones firmadas del turno de planes) y
+          56518135 chore(n8n): S1 y S2 regenerados con el compilador 5 (solo metadatos y fixtures)
+          3763d992 test(ultron-studio): las fijaciones del compilador 4 en la oferta, la publicación y el Studio pasan al 5
+          e7755e87 test(ultron-prompts): las fijaciones del compilador 4 pasan al 5, con las huellas del generador
+          25afd240 test(ultron-prompts): compilador 5 en §B.3, en la transcripción de Node y en compile-cases.json
+          4ef5d4cf feat(ultron-prompts): compilador 5, las instrucciones firmadas del turno de planes (PT-17)
+          298ff261 test(ultron-prompts): PT-17, N1 a N4 del compilador 5, en rojo con el compilador 4
+       workers 14 RUNNING (esperados 14) · 0 BACKOFF/FATAL · ironbody-billing-worker active · cachés de rutas y de configuración: www-data 600 · OPcache del FPM: sin líneas (valores por defecto)
+       pendientes frente a origin/main: ninguna (el lote no migra)
+       route:list: 1046 rutas · schedule:list: 53 tareas
+       analizador de errores (C1), autoprueba con el awk de este servidor: bien
+       sin credenciales: admin/voice/status → 401
+       plan: respaldo → código → cachés (sin config:cache · sin route:cache) → queue:restart → comprobaciones posteriores
+    1. respaldo /var/backups/ironbody/cierre-lote-20261123-051710 (700 de root; ficheros 600): commits, lista, declaraciones, cachés (la de configuración lleva secretos: no se imprime), route:list, schedule:list, supervisor, migraciones registradas, 0 definición(es) de partida y 0 esquema(s) de tabla, el guion y SHA256SUMS (11 ficheros)
+    2. código → cachés:
+    C. código: HEAD=cabc4138 (merge --ff-only, umask 022) · www-data lee los 35 ficheros del merge
+    K. cachés: configuración sin regenerar · rutas sin regenerar (como www-data, umask 077) · www-data 600 / www-data 600
+    3. workers (RUNNING · BACKOFF/FATAL): antes [14 0] → [14 0] y [14 0] (dos lecturas, pasado el margen) · con pid nuevo 14 de 14 · ironbody-billing-worker active → active
+    4. sin credenciales: admin/voice/status → 401 (esperado 401)
+       migrate:status --pending (como www-data): ninguna pendiente · declaradas registradas: 0 de 0
+       schedule:list: 53 → 53 tareas · diferencia [] (declarada [])
+       route:list: 1046 → 1046 rutas · diferencia [] (declarada: 0 línea(s))
+       production.ERROR nuevos en laravel*.log: 0 desde el paso 0 · 0 desde el primer cambio (los que cuentan)
+       producción sirve cabc4138 · respaldo /var/backups/ironbody/cierre-lote-20261123-051710 · registro /var/backups/ironbody/cierre-lote-20261123-051710/registro.log
+       VIGILANCIA (15 min, solo lectura): supervisorctl status (los 14 en RUNNING) · production.ERROR nuevos · failed_jobs · 5xx del access.log (DEPLOY_CIERRE_LOTES.md §7)
+       vuelta atrás: bash /root/deploy-cierre-lote.sh 9c2325a1 cabc4138 /root/cierre-pt-17/lista.txt --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-051710
+    LOTE DESPLEGADO SIN DESVÍOS
+    CÓDIGO DE SALIDA DEL GUION: 0
+
+[7] 05:18 UTC · DESPUÉS: LO ÚNICO QUE CAMBIA FRENTE A [2] (misma lectura; todo lo demás, idéntico)
+    ANTES   sirve: 9c2325a11b2cb8309bcec44b0f96f4137faf0898 · cambios con seguimiento: 0 · sin seguimiento: 89
+    DESPUÉS sirve: cabc4138f13cc398651b110d20a63ca42f17249a · cambios con seguimiento: 0 · sin seguimiento: 89
+    ANTES   ultron:prompt-trace --last=3 --json → sha256 d9cde934ae13a862…
+    ANTES   llave de prompts: canary · sello: canary · canario configurado: True · base: n8n-29de5119 · compilador: 4
+    ANTES   decide ofrecería ahora a la canaria: studio · versión 39cfae9f-19a1-44bd-8d8e-f9f3327fed81 · huella 26d57565 · motivo None
+    DESPUÉS ultron:prompt-trace --last=3 --json → sha256 fff79746d0de5ffe…
+    DESPUÉS llave de prompts: canary · sello: canary · canario configurado: True · base: n8n-29de5119 · compilador: 5
+    DESPUÉS decide ofrecería ahora a la canaria: legacy · versión None · huella None · motivo compiler_changed
+
+    ── UNIDAD 3 · DESPUÉS · el paquete compilado y lo que el motor ofrece (solo lectura) · 05:18:18 UTC ──
+    [1] compilador desplegado: 5 · versión «Prueba de aceptación 3 · profesional 200» (CANARY) · huella del paquete que compila hoy: 2eb9be6f5d3e6b50
+        strategist        30121 bytes · sha256 00524410f40531eb · tope de longitud: no · registro: no · texto de la lista de planes: sí
+        composer          29790 bytes · sha256 632814302c7116ca · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        critic            16483 bytes · sha256 e605f3d4b3de7430 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        composer_retry    27568 bytes · sha256 9d63a6c3f4d12c2b · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+        critic_retry      16135 bytes · sha256 6c1d1750233a0525 · tope de longitud: sí · registro: sí · texto de la lista de planes: sí
+    [2] llave de prompts: canary · lo que decide ofrecería ahora:
+        a la conversación CANARIA .................. legacy · versión - · huella - · motivo compiler_changed
+        a un cliente real (la conversación con actividad más reciente que no es la canaria) ... legacy · versión - · huella - · motivo out_of_scope
+        a una conversación que no existe ........... legacy · versión - · huella - · motivo out_of_scope
+    [3] publicaciones del Studio: 5 · cabeza: entrada 5 (publish, 2026-11-22 13:58:15 UTC)
+        versiones por estado: APPROVED=1 · CANARY=1 · ROLLED_BACK=2
+    transacción de solo lectura deshecha; no se ha escrito nada
+
+    Papeles del paquete: su huella con el compilador 4 → con el 5
+      strategist      c84387582f581640 → 00524410f40531eb  cambia (lleva ahora el texto de la lista de planes)
+      composer        768cb560ffb624f7 → 632814302c7116ca  cambia
+      composer_retry  f7f94c168d7f3bf4 → 9d63a6c3f4d12c2b  cambia
+      critic          e605f3d4b3de7430 → e605f3d4b3de7430  IGUAL
+      critic_retry    6c1d1750233a0525 → 6c1d1750233a0525  IGUAL
+    La huella del paquete que compila el 5 con el contenido de la versión 3 es 2eb9be6f5d3e6b50…, la que el diseño de PT-17
+    había calculado de antemano. Es la que tendrá la versión 4 si lleva ese mismo contenido.
+
+[8] 05:18 UTC · n8n (LAS PUERTAS INTERNAS) Y LA GUARDA QUE ESTABA ROJA HASTA SUBIR
+    ── UNIDAD 3 · DESPUÉS · puertas internas (las que usa n8n), con el secreto dentro del servidor · 05:18:38 UTC ──
+      05:18:40 UTC · CON el secreto · GET  marketing/ai/doctor          → 200 (esperado 200) · tope 120 · quedan 119 · el asesor (decide, commit…)
+      05:18:40 UTC · CON el secreto · POST automation/notify-member     → 422 (esperado 422) · tope 600 · quedan 599 · las notificaciones a socios
+      05:18:40 UTC · CON el secreto · GET  marketing/context/999999999  → 404 (esperado 404) · tope 120 · quedan 119 · el tercer grupo (send-message, followups, context)
+      RESULTADO: con el secreto, los tres grupos pasan la puerta y el limitador y llegan a su controlador, con su tope de siempre
+      sin credenciales, desde fuera: HTTP/2 401  · cabeceras x-ratelimit-*: 0
+    La puerta de diff del H9, con origin/main ya en cabc4138 (local, árbol de la unidad): OK (1 test, 15 assertions).
+
+[9] VIGILANCIA A LOS 15 MINUTOS (DEPLOY_CIERRE_LOTES.md §7; solo lectura)
+    [1] CÓDIGO Y PROCESOS · 23-11-2026 05:32:17 UTC
+      sirve: cabc4138f13cc398651b110d20a63ca42f17249a · cambios con seguimiento: 0 · sin seguimiento: 89
+      workers por estado:  14 RUNNING
+      facturación: active · sesiones de tmux: 0 · despliegues vivos: 0
+      production.ERROR desde 2026-11-23 05:17:07 UTC: 0 · 5xx: 0 · 429: 0
+      failed_jobs desde 2026-11-23 05:17:07 UTC: 0 · en total: 2
+      trabajos en espera por cola: ninguno
+      ultron-studio:publication-check → salida 0
+        Cabeza: entrada 5 (publish, 2026-11-22T13:58:15+00:00) · verifica
+        Canario: «Prueba de aceptación 3 · profesional 200» (39cfae9f-19a1-44bd-8d8e-f9f3327fed81)
+        Resto: Legacy
+        La publicación vigente cuadra con el motor.
+        llave de prompts: canary · sello: canary · canario configurado: True · base: n8n-29de5119 · compilador: 5
+        decide ofrecería ahora a la canaria: legacy · versión None · huella None · motivo compiler_changed
+
+    Vuelta atrás (disponible; no usada):
+      bash /root/deploy-cierre-lote.sh 9c2325a1 cabc4138 /root/cierre-pt-17/lista.txt \
+           --vuelta-atras=/var/backups/ironbody/cierre-lote-20261123-051710        (dentro de tmux)
+    Devuelve el compilador 4 y la versión 3 se vuelve a ofrecer sola a la canaria. Si entretanto se publicara una versión
+    con el 5, al volver caería a Legacy: eso no lo deshace el código.
+
+[10] PARA LA VERSIÓN 4: QUIÉN PUEDE HACER QUÉ, EL BORRADOR Y LOS LÍMITES DEL LABORATORIO (solo lectura)
+    [1] versiones del Studio (de la más antigua a la más nueva):
+        ad1f1562 · «ULTRON Studio - Canario V1 - Pruebas» · APPROVED · contenido d2361ab5 · creada 2026-11-09 18:53 UTC por la cuenta 27 (Super Admin) · formato 2
+        4017639c · «Prueba de aceptación · profesional 200» · ROLLED_BACK · contenido 24b29173 · creada 2026-11-11 19:17 UTC por la cuenta 32 (Super Admin) · formato 2
+        2e243853 · «Prueba de aceptación 2 · profesional 200» · ROLLED_BACK · contenido 24b29173 · creada 2026-11-13 16:52 UTC por la cuenta 32 (Super Admin) · formato 2
+        39cfae9f · «Prueba de aceptación 3 · profesional 200» · CANARY · contenido 24b29173 · creada 2026-11-22 03:35 UTC por la cuenta 32 (Super Admin) · formato 2
+        revisiones de versiones (decisión · cuenta que revisó · rol): approved · 38 · QA ULTRON - Revisor | approved · 38 · QA ULTRON - Revisor | approved · 27 · Super Admin | approved · 27 · Super Admin
+        veredictos del laboratorio (decisión · cuenta · rol): approved · 27 · Super Admin | approved · 27 · Super Admin | approved · 27 · Super Admin
+    [2] borradores guardados, y la versión que saldría AHORA de cada uno:
+        borrador de la cuenta 32 · revisión 6 · guardado 2026-11-11 19:17 UTC · huella de contenido que saldría: 24b29173 (IGUAL a la de la versión en canario) · paquete de prompts con el compilador de hoy: 2eb9be6f (IGUAL al de la versión en canario)
+        borrador de la cuenta 27 · revisión 1 · guardado 2026-11-09 18:52 UTC · huella de contenido que saldría: d2361ab5 (DISTINTA a la de la versión en canario) · paquete de prompts con el compilador de hoy: 3f6a5674 (DISTINTO al de la versión en canario)
+          lo que difiere de la versión en canario: configs, layout
+          claves de configuración distintas (solo nombres): persona.tone, persona.maxChars
+    [3] reglas vivas del Studio: 12 · catálogo: 2026-10-19.1
+    transacción de solo lectura deshecha; no se ha escrito nada
+
+    Lectura: las versiones «Prueba de aceptación» 1, 2 y 3 las CREÓ la cuenta técnica (32) desde su borrador, y el
+    propietario (27) las aprobó, dio el veredicto del laboratorio y las publicó. Las reglas de cuatro ojos del servidor:
+    nadie aprueba, ni da el veredicto del laboratorio, ni publica una versión que creó. El borrador de la cuenta técnica
+    daría hoy una versión con el MISMO contenido que la 3 (24b29173) y el mismo paquete (2eb9be6f); el del propietario, no
+    (difiere en persona.tone y persona.maxChars).
+    Llaves del Studio por rol (solo nombres de rol): Super Admin, todas (4 cuentas activas); Administrativo, casi todas,
+    incluidas aprobar y publicar (1); «QA ULTRON - Revisor», aprobar y ver (1); «QA de Ultron Studio», aprobar, ver y voz (1).
+    Límites del laboratorio (código y configuración de producción): 10 lanzamientos por hora y por persona (30 por red), 20
+    ejecuciones por día de Bogotá, US$ 2,00 al día, US$ 0,50 por ejecución y 12 casos por ejecución; lecturas, 120 por
+    minuto; cambios, 30 por minuto. En la línea base, el propietario chocó con el de la hora:
+      POST lab/runs, por hora UTC: 03h → 10 con 201 y 4 con 429 · 04h → 10 con 201 y 4 con 429.
+    El día de presupuesto de hoy (23-11, Bogotá) está a 0 de 20 ejecuciones y US$ 0,00 de US$ 2,00.
+
+[11] LO QUE NO SE HA COMPROBADO, Y POR QUÉ
+    · Un turno real de la conversación canaria tras el despliegue (saldría con los prompts del asesor anterior): no ha
+      escrito nadie y no se provoca ninguna prueba real hasta validar el turno de planes en el laboratorio.
+    · Que el compilador 5 arregle el turno de planes: lo dirá la medición en el laboratorio (17 o más de 20 válidas y 12 o
+      más al primer borrador). No se publica la versión 4 hasta superarla.
