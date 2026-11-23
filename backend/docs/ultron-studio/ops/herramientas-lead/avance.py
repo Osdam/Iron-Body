@@ -62,7 +62,7 @@ APARTADOS = {
         ("Perfil de voz revisión 3 aprobado por otra cuenta", 10, 0.00, "acción del propietario", "o"),
         ("Veredicto del laboratorio hablado", 10, 0.00, "acción del propietario", "o"),
         ("Publicación de la voz en canario", 25, 0.00, "depende de Twilio y de las dos anteriores", "o"),
-        ("Sofía dice los beneficios de los planes (datos del CRM en la llamada)", 20, 0.50, "integrado el 22-11 (lote 3, b1f66c32): batería completa sin regresiones y revisión final aprobada; seguridad: apto para la canaria; para contactos reales falta decidir quién gobierna esos textos (PT-14)", "c"),
+        ("Sofía dice los beneficios de los planes (datos del CRM en la llamada)", 20, 0.50, "integrado el 22-11 (lote 3, b1f66c32): batería completa sin regresiones y revisión final aprobada; seguridad: apto para la canaria; quién gobierna esos textos quedó decidido e implementado en PT-14 (23-11, unidad de voz e610d035), que no tiene peso propio en este cálculo", "c"),
         ("Guarda de voz ampliada para contactos reales", 15, 0.32, "léxico ampliado y nombre del plan por la guarda (C-1 i y ii), revisado por seguridad; quedan huecos y frenos falsos por calibrar", "c"),
         ("Instrucciones del Studio aplicadas a la voz, vistas en una llamada real", 20, 0.00, "", "o"),
     ]),
@@ -114,7 +114,7 @@ APARTADOS = {
         ("Reimportar el número en ElevenLabs con clave restringida y rotar el token maestro", 20, 0.00, "", "o"),
     ]),
     14: (0.00, [
-        ("Batería completa sobre la integración final", 15, 1.00, "hecha el 22-11 sobre integracion/final con todo dentro (2ed62f81; la punta 269736bd solo añade una prueba ajustada y documentos): 19 730 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
+        ("Batería completa sobre la integración final", 15, 1.00, "hecha el 23-11 sobre integracion/final con todo dentro, PT-14 y PT-19 incluidos (4e53f04a): 19 781 pruebas; el único fallo es la puerta de diff, que pasa sola al subir (PT-11)", "t"),
         ("Recorridos de extremo a extremo simulados sobre la integración", 25, 1.00, "hechos el 22-11 (PT-12): WhatsApp, automatización, gobierno y seguridad demostrados en simulado; voz parcial (el audio y el corte por duración solo los demuestra una llamada real)", "t"),
         ("Pruebas canarias reales de los cinco recorridos", 45, 0.00, "", "o"),
         ("Matriz final de aceptación", 15, 0.00, "es la aceptación con las pruebas reales; el documento técnico (PT-13, MATRIZ_ACEPTACION_TECNICA.md) existe desde el 22-11 y no mueve este valor", "o"),

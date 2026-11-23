@@ -30,8 +30,8 @@
 | Turno de planes · compilador 5 (PT-17) | `cierre/planes-c5` `e5a673c1` | 19 259 pruebas, solo los fallos esperados | Seguridad: apto con condiciones. Revisión final: aprobado, 0 bloqueantes |
 | Cobro manual con IVA adicional (PT-16) | `cierre/pagos-guarda-iva` `e1c2af3c` | Dentro de la integración definitiva | Revisión final: aprobado, 0 bloqueantes |
 | Condiciones previas a ampliar WhatsApp (PT-15) | `cierre/planes-condiciones` `a994b050` | Dentro de la integración definitiva | Revisión final: aprobado con condiciones, 0 bloqueantes. Seguridad: 0 bloqueantes |
-| CRM · tres pantallas nuevas | repositorio del CRM, `cierre/crm-lote5` `9d5a8e6` | 1 453 pruebas del Studio y 814 de automatización, Inbox y quejas; compilación de producción | Revisión final (dos pases): aprobado con condiciones, 0 bloqueantes |
-| **Todo junto** | `integracion/final` `269736bd` | **19 730 pruebas, 544 039 aserciones; el único fallo es la puerta de diff con los siete ficheros esperados, que pasa sola al subir** | Recorridos de extremo a extremo simulados (PT-12), hechos sobre `c4323242` (antes de entrar PT-15) |
+| CRM · tres pantallas nuevas y lo de PT-14 | repositorio del CRM, `cierre/crm-planes-voz` `744dfc2` | El Studio entero, planes y modelos: 1 538 pruebas; compilación de producción sin errores | Revisión final de las tres pantallas (dos pases) y de PT-14: aprobado, 0 bloqueantes |
+| **Todo junto** | `integracion/final` `4e53f04a` | **19 781 pruebas, 547 748 aserciones; el único fallo es la puerta de diff con los siete ficheros esperados, que pasa sola al subir** | Recorridos de extremo a extremo simulados (PT-12), hechos sobre `c4323242` (antes de entrar PT-15, PT-19 y PT-14) |
 | Guion de despliegue por lotes | `ops/deploy-cierre-lote.sh` (sha256 `7c7298d8…`) | — | Ensayado en el banco con los tres lotes: comprobar, desplegar y volver atrás, 0 · 0 · 0 |
 
 ## 2. Función por función
@@ -66,7 +66,8 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | Función | Estado | Evidencia | Qué falta |
 |---|---|---|---|
 | Sofía dice los beneficios de los planes con datos del CRM | **EN INTEGRACIÓN** (lote 3) | Batería (19 328); revisión final; simulado (`e2e-final/02-voz.txt`) | Autorización específica del lote 3 |
-| Guarda de lo que Sofía dice, ampliada | **EN INTEGRACIÓN**, con huecos documentados | 968 casos sin perder ningún código frente a producción | Para clientes reales: PT-14 (quién gobierna esos textos) |
+| Guarda de lo que Sofía dice, ampliada | **EN INTEGRACIÓN**, con huecos documentados | 968 casos sin perder ningún código frente a producción | Calibrar el léxico antes de llamar a clientes reales (una orden escrita en un beneficio y aprobada sigue pasando la guarda) |
+| Quién gobierna lo que Sofía dice de los planes (PT-14): permiso propio para el nombre y los beneficios, y catálogo publicado con cuatro ojos | **EN INTEGRACIÓN** (unidad de voz) | Batería (19 367, 0 regresiones; 19 781 en la integración); seguridad independiente, apto con condiciones y 0 bloqueantes; revisión final aprobada; CRM, 1 538 pruebas | Autorización específica de la unidad de voz; antes de la primera publicación, la comprobación del runbook |
 | Perfil de voz aprobado por otra cuenta, veredicto del laboratorio hablado y publicación de la voz en canario | **BLOQUEADO** | — | Acciones del propietario, en ese orden |
 | Instrucciones del Studio aplicadas a la voz, vistas en una llamada | Pendiente (real) | Simulado: el sello de cada llamada coincide con lo publicado | Una llamada real |
 
@@ -141,7 +142,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 
 | Función | Estado | Evidencia |
 |---|---|---|
-| Batería completa sobre la integración definitiva | **HECHO** | 19 730 pruebas; un único fallo, la puerta de diff |
+| Batería completa sobre la integración definitiva | **HECHO** | 19 781 pruebas; un único fallo, la puerta de diff |
 | Recorridos de extremo a extremo simulados | **HECHO**, con la voz parcial | `plans/informes-cierre/informe-tester-e2e-final.md` |
 | Pruebas canarias reales de los cinco recorridos | Pendiente (real) | — |
 | Aceptación final | Pendiente | Después de las pruebas reales |
@@ -163,7 +164,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | PT-11 | Integración definitiva y su batería | CERRADO | `integracion/final` `c4323242` |
 | PT-12 | Recorridos de extremo a extremo simulados | CERRADO (voz parcial) | `informe-tester-e2e-final.md` |
 | PT-13 | Esta matriz | CERRADO con este documento | — |
-| PT-14 | Quién gobierna lo que Sofía dice de los planes | DECIDIDO (las dos protecciones, A y B); en implementación | `plans/informes-cierre/diseno-arq-pt14.md` (rama `cierre/voz-catalogo`) |
+| PT-14 | Quién gobierna lo que Sofía dice de los planes | CERRADO (las dos protecciones, A y B); sin desplegar | `diseno-arq-pt14.md`, `informe-backend-pt14.md`, `informe-security-pt14.md`, `informe-reviewer-pt14.md` (rama `cierre/voz-catalogo`) |
 | PT-15 | Condiciones previas a ampliar WhatsApp | CERRADO | `informe-backend-pt15-condiciones.md`, `informe-reviewer-pt15.md`, `informe-security-pt15.md` |
 | PT-16 | Cobro manual con IVA adicional | CERRADO | `informe-reviewer-pt17-pt16.md`, parte B |
 | PT-17 | Instrucciones del turno de planes (compilador 5) | CERRADO en lo técnico; la aceptación exige la medición y la quinta prueba | `informe-security-pt17.md`, `informe-reviewer-pt17-pt16.md` |
@@ -187,7 +188,7 @@ Cerrados (100 %). El laboratorio de simulación, la publicación en canario, la 
 | Aprobar los seis textos nuevos y autorizar el despliegue del compilador 5; publicar una versión nueva; quinta prueba | Aceptar el apartado 4 |
 | Autorizar el despliegue del lote 4 y de sus pantallas; fijar el texto legal con su asesoría | Autorizaciones de contacto y quejas |
 | Autorización específica del lote 3; después, A0 a A3 del runbook | Voz y primera llamada |
-| Decidir PT-14 | Llamar a clientes reales |
+| Autorizar la unidad de voz (el lote 3 con PT-14, ya decidido e implementado) | Llamar a clientes reales |
 | Autorizar el despliegue de PT-16 y de PT-15 | Pagos con IVA adicional; ampliar WhatsApp |
 | **Autorizar el despliegue de PT-19** (la corrección ya está implementada, revisada y probada) | Que nadie pueda dejar sin respuesta al asesor de WhatsApp, ni sin notificaciones a los socios, con peticiones sin credenciales |
 | Vincular a dos personas reales; rotar la clave de ElevenLabs; clave restringida de Twilio | Sombra con estrategias, plantillas de Meta, voz |

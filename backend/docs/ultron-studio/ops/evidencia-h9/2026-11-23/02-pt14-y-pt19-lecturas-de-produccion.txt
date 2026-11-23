@@ -1,0 +1,30 @@
+PT-14 y PT-19 · LECTURAS DE PRODUCCIÓN (SOLO LECTURA; solo recuentos, privilegios y longitudes; ningún dato personal ni secreto)
+23-11-2026 (UTC) · lead
+
+TIPO DE PRUEBA: lectura en producción. No se ha escrito nada.
+
+[1] 22-11-2026, 21:55 UTC · lo que sirve producción
+    API: f1fe6cac (HEAD suelto) · `ultron-studio:publication-check`: salida 0 («La publicación vigente cuadra con el motor»;
+    canario: «Prueba de aceptación 3 · profesional 200»; resto: Legacy) · errores del día en el registro: 1 (14:23:40 UTC,
+    una orden de consola del lead lanzada sin su argumento; sin efecto).
+
+[2] 22-11-2026, 22:36 UTC · para PT-19 (¿hace falta un tope para los intentos con un secreto equivocado?)
+    Longitud del secreto interno: 64 caracteres, dos clases de caracteres (solo la longitud; el valor no se ha leído ni impreso).
+    Almacén de la caché del limitador: database.
+
+[3] 23-11-2026, 00:21 UTC · para PT-14 (psql de solo lectura: default_transaction_read_only=on, statement_timeout=20 s)
+    planes: 26 · vendibles: 12
+    vendibles sin beneficios: 0
+    vendibles con beneficios que no son una lista plana de textos (JSON): 0
+    tipo de la columna benefits: text
+    iron_app sobre plans (tabla): SELECT true · INSERT true · UPDATE true
+      → los privilegios son de TABLA: las dos columnas nuevas de PT-14 (commercial_text_by y commercial_sale_by) los heredan.
+    cuentas activas por rol: Administrativo=1 · QA ULTRON - Revisor=1 · QA de Ultron Studio=1 · Recepción=2 · Super Admin=4
+      → ninguna cuenta activa con el rol Administrador: hoy solo los Super Admin editan planes, y los Super Admin tienen la
+        llave nueva por defecto. El primer día, PT-14 no le quita nada a nadie.
+    publicaciones de voz: 0
+      → la instantánea del catálogo puede cambiar de forma sin coste; Sofía no ha dicho nunca un plan en producción.
+
+LO QUE NO SE HA COMPROBADO
+    Cuántas personas distintas hay detrás de las 4 cuentas de Super Admin (los cuatro ojos piden dos personas).
+    opcache.revalidate_freq del FPM y si algún pool fija valores de OPcache (lo comprueba el paso 0 del guion de PT-19).
