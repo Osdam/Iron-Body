@@ -27,6 +27,9 @@ use InvalidArgumentException;
  *    (`subject`, `consent`, `voice`, `history`, los frenos ajenos de
  *    `operations`, la identidad de canal de `channelState` y la cartera de
  *    `context`). El resto (banderas, estrategia, calendario) es de B9-run.
+ *  - {@see consentFor()} (C9-2): la autorización de un canal para una
+ *    finalidad, combinando el prospecto con el libro de C9; la usan la
+ *    escalera y la comprobación del canal de plantillas al despachar.
  *
  * Lo que no se leyó (no se pidió o la fuente no tiene datos) sale null: el
  * núcleo lo trata como DESCONOCIDO y niega o deja fuera (el lado seguro).
@@ -147,18 +150,7 @@ final class CoreProjection
         $p = $s->policy;
         $bool = static fn (string $k): ?bool => $p === null ? null : ($p[$k] ?? null);
         $hechoBool = static fn (string $k): ?bool => $s->has($k) && is_bool($s->fact($k)) ? $s->fact($k) : null;
-        $negado = $bool('lead.consent_denied') !== false;
-
-        $consentimiento = static function (string $canal) use ($p, $purpose, $negado): string {
-            if ($p === null) {
-                return 'missing';
-            }
-            if ($negado) {
-                return 'denied';
-            }
-
-            return ($p["consent.{$canal}.{$purpose}"] ?? false) === true ? 'granted' : 'missing';
-        };
+        $consentimiento = static fn (string $canal): string => self::consentFor($p, $canal, $purpose);
 
         $frenos = $global['brakes'] ?? null;
         $freno = static fn (string $k): bool => $frenos === null || ($frenos[$k] ?? true) === true;
@@ -193,6 +185,44 @@ final class CoreProjection
                 'legacyFollowupsScheduler' => $freno('legacy_followups_active'),
             ],
         ];
+    }
+
+    /**
+     * LA AUTORIZACIÓN de un canal para una finalidad (`granted`, `denied` o
+     * `missing`), la que lee N1 (contrato H9, D9-15; Enmienda C9). PURA: con la
+     * política de la foto, sin volver a la base. Se niega por defecto y gana
+     * cualquier señal negativa:
+     *  - `denied` si el prospecto está denegado (`lead.consent_denied`; un
+     *    valor ausente también, falla cerrado) o, en WhatsApp, si el libro de
+     *    C9 dice que la persona la RETIRÓ para esta finalidad;
+     *  - `granted` si el prospecto la concede (`consent.<canal>.<finalidad>`)
+     *    o, en WhatsApp, si el libro de C9 tiene una confirmación vigente para
+     *    el número de destino de hoy ({@see OutreachConsentFacts}) y se sabe
+     *    que nadie pidió «no contactar» (ni ella ni un prospecto con su número);
+     *  - si no, `missing`. Cada finalidad solo por su propia fila: la
+     *    autorización comercial no vale para cobranza.
+     * Sin la política (no se leyó), `missing`. Con las claves de C9 ausentes o
+     * en false el resultado es exactamente el de antes de C9.
+     *
+     * @param  array<string, bool>|null  $policy  `SubjectFacts::$policy`
+     * @param  string  $channel  `whatsapp` o `voice_call` (las claves `consent.<canal>.*`)
+     */
+    public static function consentFor(?array $policy, string $channel, string $purpose): string
+    {
+        if ($policy === null) {
+            return 'missing';
+        }
+        $negado = ($policy['lead.consent_denied'] ?? null) !== false;
+        $c9 = $channel === OutreachConsentFacts::CHANNEL;
+        if ($negado || ($c9 && ($policy["c9.whatsapp.{$purpose}.revoked"] ?? false) === true)) {
+            return 'denied';
+        }
+        if (($policy["consent.{$channel}.{$purpose}"] ?? false) === true) {
+            return 'granted';
+        }
+        $sinNoContactar = ($policy['lead.do_not_contact'] ?? null) === false && ($policy['lead.do_not_contact_sibling'] ?? null) === false;
+
+        return $c9 && $sinNoContactar && ($policy["c9.whatsapp.{$purpose}.granted"] ?? false) === true ? 'granted' : 'missing';
     }
 
     /**

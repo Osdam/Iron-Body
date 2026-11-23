@@ -751,7 +751,7 @@ class SupervisionController extends Controller
         };
     }
 
-    /** Los 27 hechos de `CommercialVocabulary::EVENTS`. Uno nuevo sin etiqueta sale con su clave: la prueba lo impide. */
+    /** Los 28 hechos de `CommercialVocabulary::EVENTS`. Uno nuevo sin etiqueta sale con su clave: la prueba lo impide. */
     private function factLabel(?string $event): string
     {
         return match ($event) {
@@ -778,6 +778,7 @@ class SupervisionController extends Controller
             V::EV_APP_LINKED => 'Vinculó la app',
             V::EV_OBJECTION_RAISED => 'El cliente puso una objeción',
             V::EV_COMPLAINT_CREATED => 'El cliente presentó una queja',
+            V::EV_COMPLAINT_DISMISSED => 'Una persona del equipo descartó una queja que marcó la IA',
             V::EV_CUSTOMER_SATISFIED => 'El cliente dijo que está satisfecho',
             V::EV_REFERRAL_OPPORTUNITY => 'Buen momento para pedir un referido',
             V::EV_OFFER_REJECTED => 'El cliente rechazó una oferta',

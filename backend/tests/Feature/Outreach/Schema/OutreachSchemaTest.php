@@ -27,6 +27,11 @@ class OutreachSchemaTest extends TestCase
     use OutreachSchemaFixtures;
     use RefreshDatabase;
 
+    /** C9-1 (cierre de ULTRON STUDIO): la novena tabla de la familia `outreach_*`, con sus guardas y sus pruebas propias. */
+    private const C9_MIGRATION = '2026_11_22_100001_create_outreach_consents_table';
+
+    private const C9_CONSENTS = 'outreach_consents';
+
     private const COLUMNS_RUNS = [
         'id' => ['bigint', 'integer', false],
         'uuid' => ['uuid', 'varchar', false],
@@ -339,9 +344,12 @@ class OutreachSchemaTest extends TestCase
             foreach (self::PG_CHECKS as $tabla => $nombres) {
                 $this->assertSameSet($nombres, $this->checksOn($tabla), $tabla);
             }
-            $this->assertSame(51, $this->countLike('trigger', 'outreach\\_%'), 'pasadas 6 + cursores 4 + inscripciones 10 + trabajos 11 + decisiones 7 + resultados 5 + frenos 5 + reservas 3');
-            $this->assertSame(75, $this->countLike('check', 'outreach\\_%'), 'pasadas 7 + cursores 2 + inscripciones 12 + trabajos 19 + decisiones 13 + resultados 11 + frenos 8 + reservas 3');
-            $this->assertSame(8, (int) DB::scalar("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'outreach\\_%'"));
+            // Los recuentos son de las ocho tablas de DB9: C9-1 suma `outreach_consents` a la familia `outreach_*` con los
+            // suyos (OutreachConsentsSchemaTest). La familia sigue siendo una lista cerrada.
+            $this->assertSame(51, $this->countTriggers(self::EXECUTION_TABLES), 'pasadas 6 + cursores 4 + inscripciones 10 + trabajos 11 + decisiones 7 + resultados 5 + frenos 5 + reservas 3');
+            $this->assertSame(75, $this->countChecks(self::EXECUTION_TABLES), 'pasadas 7 + cursores 2 + inscripciones 12 + trabajos 19 + decisiones 13 + resultados 11 + frenos 8 + reservas 3');
+            $this->assertSameSet([...self::EXECUTION_TABLES, self::C9_CONSENTS], array_map(static fn (object $f): string => $f->tablename,
+                DB::select("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'outreach\\_%'")), 'las 8 de DB9 y la de C9-1, ninguna más');
             $this->assertSame(0, (int) DB::scalar("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname LIKE 'outreach\\_%' AND t.tgenabled <> 'O'"));
 
             return;
@@ -351,7 +359,7 @@ class OutreachSchemaTest extends TestCase
             $this->assertSameSet([...array_filter($nombres, static fn (string $n): bool => ! str_ends_with($n, '_truncate')), ...(self::SQLITE_ONLY_TRIGGERS[$tabla] ?? [])],
                 $this->triggersOn($tabla), $tabla);
         }
-        $this->assertSame(46, $this->countLike('trigger', 'outreach_%'), '51 − 8 de TRUNCATE + 3 equivalentes');
+        $this->assertSame(46, $this->countTriggers(self::EXECUTION_TABLES), '51 − 8 de TRUNCATE + 3 equivalentes (las de DB9; C9-1 cuenta las suyas)');
     }
 
     public function test_solo_en_postgres_las_funciones_son_propias_invoker_y_cualificadas(): void
@@ -361,7 +369,9 @@ class OutreachSchemaTest extends TestCase
         $m = $this->migrationNamed(self::EXECUTION_MIGRATION);
         $propias = $m::ownFunctions();
         $this->assertCount(13, $propias, '12 guardas entre tablas + outreach_forbid()');
-        $this->assertSame(13, (int) DB::scalar("SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\\_%'"));
+        // La familia `outreach_%`: las 13 de DB9 y las 3 de C9-1 (`outreach_consent_*`), ninguna más.
+        $this->assertSameSet([...$propias, ...$this->migrationNamed(self::C9_MIGRATION)::ownFunctions()],
+            array_map(static fn (object $f): string => $f->proname, DB::select("SELECT proname FROM pg_proc WHERE proname LIKE 'outreach\\_%'")));
         foreach ($propias as $funcion) {
             $f = DB::selectOne('SELECT l.lanname AS lang, p.provolatile AS vol, p.prosecdef::int AS definer, pg_get_userbyid(p.proowner) AS owner, p.prosrc AS src
                 FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang WHERE p.proname = ?', [$funcion]);
@@ -518,7 +528,7 @@ class OutreachSchemaTest extends TestCase
             foreach (self::EXECUTION_TABLES as $tabla) {
                 $this->assertFalse(Schema::hasTable($tabla), "up() dejó {$tabla}");
             }
-            $this->assertSame(0, (int) DB::scalar("SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\\_%'"), 'up() dejó funciones');
+            $this->assertSame(0, $this->countDb9Functions(), 'up() dejó funciones');
         });
     }
 
@@ -599,7 +609,7 @@ class OutreachSchemaTest extends TestCase
                 $this->assertFalse(Schema::hasTable($tabla), $tabla);
             }
             if ($this->isPostgres()) {
-                $this->assertSame(0, (int) DB::scalar("SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\\_%'"));
+                $this->assertSame(0, $this->countDb9Functions(), 'down() dejó funciones de DB9');
             }
             $this->assertSame($gobierno, $this->footprint(self::GOVERNANCE_TABLES), 'down() tocó el gobierno');
             $m->up();
@@ -615,6 +625,13 @@ class OutreachSchemaTest extends TestCase
             DB::rollBack();
         }
         $this->assertSame($h9, $this->footprint(self::EXECUTION_TABLES, $m::ownFunctions()));
+    }
+
+    /** Las funciones de DB9 que existen (las de C9-1, `outreach_consent_*`, son de su migración y no cuentan). */
+    private function countDb9Functions(): int
+    {
+        return (int) DB::scalar('SELECT count(*) FROM pg_proc WHERE proname = ANY(?::text[])',
+            ['{'.implode(',', $this->migrationNamed(self::EXECUTION_MIGRATION)::ownFunctions()).'}']);
     }
 
     /**

@@ -89,6 +89,27 @@
 --   Una solicitud de un socio o prospecto suele llevar los dos bloques en la misma pasada (:term/:phone para los textos
 --   del Studio y :subject para la automatización comercial); el libro recibe una fila por bloque que redacte algo.
 --
+-- C9-1 · EL LIBRO DE AUTORIZACIONES DE CONTACTO (outreach_consents; cierre de ULTRON STUDIO, database-specialist,
+-- 22-11-2026; plans/informes-cierre/informe-db-consent.md; probado en PostgreSQL 14 por
+-- tests/Feature/Outreach/Schema/OutreachConsentSuppression1581Test.php). Sin variables nuevas; en una base anterior a
+-- C9-1 (sin la tabla) no se nombra.
+--   · Por :subject (bloque B): las autorizaciones de la persona (petición, confirmación, rechazo y retirada) pasan a la
+--     FORMA SUPRIMIDA: subject_key = 'x:' || id, sin socio ni lead, phone_ref a NULL, evidence = '[suprimido]' y
+--     redacted_at. Es la única mutación de la persona que admite la tabla (ocon_redaction_only: una vez y entera). Sus
+--     seudónimos de teléfono se leen ANTES, como los de sus trabajos, para borrar los contadores phone:<seudónimo>. Se
+--     quedan el tipo, la finalidad, el canal, la fuente, el texto legal (versión y sha256 del TEXTO, no de la persona) y
+--     la autoría del personal. Una persona suprimida deja de tener autorizaciones: el lector no la encuentra y falla
+--     cerrado (missing). Nunca se borra una fila.
+--   · Por :admin_id (bloque A): recorded_by_name y confirmed_by_name a «[suprimido]» (ocon_staff_names_redaction_only).
+--   · NO se busca por :term ni por :phone: la evidencia solo admite la forma suprimida entera, que es de su persona.
+--   · Su guarda (outreach_consent_forbid y sus outreach_consent_chk_*) DEJA PASAR esas dos redacciones y nada más: no se
+--     apaga ningún disparador de esta tabla (los dos bloques la saltan). Si lo escrito no fuera la forma suprimida, la
+--     guarda salta y se deshace todo.
+--   · Con :dry 0, el bloque B toma LOCK TABLE outreach_consents IN SHARE MODE antes de leerla (N-B3 de
+--     plans/informes-cierre/informe-db-cierre.md): espera a las inserciones de la aplicación en vuelo (≤ 5 s) y frena las
+--     nuevas hasta el COMMIT; las lecturas siguen. Sin él, una autorización de la persona que se confirmara a mitad
+--     quedaría sin redactar.
+--
 -- HITO 8 · LA VOZ (B-T3 del cierre integral, database-specialist, 10-11-2026; contrato H8 D8-17 y D8-18; H-24 de
 -- ULTRON_STUDIO_H8_PREPARACION_PLAN_PAGO.md). Integra, con las correcciones de su informe, la propuesta de OPS8-d
 -- (`supresion-1581-voz.propuesta.sql`). Probado en PostgreSQL 14 por tests/Feature/Telephony/Schema/
@@ -349,6 +370,7 @@ DECLARE
         ["outreach_brakes", "opened_by_name", "opened_by_admin_id"], ["outreach_brakes", "released_by_name", "released_by_admin_id"],
         ["outreach_jobs", "assisted_claimed_by_name", "assisted_claimed_by_admin_id"],
         ["outreach_outcomes", "recorded_by_name", "recorded_by_admin_id"],
+        ["outreach_consents", "recorded_by_name", "recorded_by_admin_id"], ["outreach_consents", "confirmed_by_name", "confirmed_by_admin_id"],
         ["ultron_studio_voice_profiles", "created_by_name", "created_by_admin_id"], ["ultron_studio_voice_profiles", "submitted_by_name", "submitted_by_admin_id"],
         ["ultron_studio_voice_profiles", "reviewed_by_name", "reviewed_by_admin_id"], ["ultron_studio_voice_agents", "created_by_name", "created_by_admin_id"],
         ["ultron_studio_voice_publications", "actor_name", "actor_admin_id"], ["ultron_studio_voice_lab_sessions", "verdict_by_name", "verdict_by_admin_id"],
@@ -716,6 +738,10 @@ BEGIN
                     OR EXISTS (SELECT 1 FROM unnest(tg.tgattr::int2[]) u(n) JOIN pg_attribute a ON a.attrelid = tg.tgrelid AND a.attnum = u.n WHERE a.attname = ANY (v_cols)))
              ORDER BY tg.tgname
         LOOP
+            -- C9-1: la guarda de outreach_consents deja pasar la redacción (y solo ella): se queda encendida y la valida.
+            IF t.proname = 'outreach_consent_forbid' THEN
+                CONTINUE;
+            END IF;
             IF t.proname NOT IN ('ultron_studio_forbid', 'ultron_studio_lab_forbid', 'outreach_forbid', 'voice_forbid') THEN
                 RAISE EXCEPTION 'supresión: %.% es un disparador de UPDATE con otra función (%) que saltaría con las columnas [%]: no se apaga lo que no se conoce; avisar a database-specialist', v_tabla, t.tgname, t.proname, array_to_string(v_cols, ', ')
                     USING ERRCODE = '55000';
@@ -887,6 +913,7 @@ $supresion$;
 -- (`php artisan outreach:suppress-subject <clave> --apply`). Los seudónimos de teléfono se leen de SUS trabajos antes
 -- de redactar; los contadores `phone:<seudónimo>` del día se borran (un número compartido pierde ese recuento: la otra
 -- persona podría recibir hoy un contacto más; es el diseño de DB9 §13.2). Nunca borra una fila de las 4 tablas.
+-- C9-1: también outreach_consents (si existe), a su forma suprimida y SIN apagar ningún disparador (su guarda la admite).
 DO $supresion_h9$
 DECLARE
     v_dry        boolean := current_setting('supresion.dry') IN ('1', 'on', 'true', 'yes');
@@ -913,6 +940,9 @@ DECLARE
     v_antes      bigint;
     v_despues    bigint;
     v_resto      bigint;
+    -- C9-1: el libro de autorizaciones, si esta base ya lo tiene (no está en v_tablas: su guarda no se apaga).
+    v_consents   boolean := to_regclass('public.outreach_consents') IS NOT NULL;
+    v_ocon       bigint := 0;
 BEGIN
     IF v_subject = '' THEN
         RETURN;
@@ -929,7 +959,7 @@ BEGIN
     IF to_regclass('public.outreach_jobs') IS NULL OR to_regclass('public.outreach_budget_counters') IS NULL THEN
         RAISE EXCEPTION 'supresión H9: las tablas de la automatización comercial no existen en esta base (¿la fase 1 del Hito 9 sin desplegar?)' USING ERRCODE = '42P01';
     END IF;
-    FOREACH v_tabla IN ARRAY v_tablas || ARRAY['outreach_budget_counters'] LOOP
+    FOREACH v_tabla IN ARRAY v_tablas || ARRAY['outreach_budget_counters'] || CASE WHEN v_consents THEN ARRAY['outreach_consents'] ELSE '{}'::text[] END LOOP
         IF (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = v_tabla) IS DISTINCT FROM v_owner THEN
             RAISE EXCEPTION 'supresión H9: % no es de % (el rol dueño es otro)', v_tabla, v_owner USING ERRCODE = '42501';
         END IF;
@@ -942,8 +972,21 @@ BEGIN
             END IF;
         END LOOP;
     END IF;
+    -- C9-1 · N-B3 (informe-db-cierre): el cerrojo del libro ANTES de leerlo. En READ COMMITTED, una autorización de la
+    -- persona que la aplicación está insertando (sin confirmar todavía) no la ven ni el recuento, ni el UPDATE, ni la
+    -- comprobación final: si confirma después, queda sin redactar y la supresión dice «0 filas». SHARE espera a esas
+    -- inserciones en vuelo (como mucho lock_timeout, 5 s: si no, aborta entero y se repite), frena las nuevas hasta el
+    -- COMMIT y deja leer. En seco no se toma: solo cuenta, y no frena a la aplicación.
+    IF v_consents AND NOT v_dry THEN
+        LOCK TABLE public.outreach_consents IN SHARE MODE;
+    END IF;
     -- Los seudónimos de teléfono de SUS trabajos, leídos ANTES de redactar (después ya no se pueden saber).
     SELECT coalesce(array_agg(DISTINCT phone_ref::text), '{}') INTO v_scopes FROM public.outreach_jobs WHERE subject_key = v_subject AND phone_ref IS NOT NULL;
+    -- C9-1: y los de SUS autorizaciones (el número para el que valían), antes de que la redacción los borre.
+    IF v_consents THEN
+        v_scopes := v_scopes || coalesce((SELECT array_agg(DISTINCT phone_ref::text) FROM public.outreach_consents
+                                           WHERE subject_key = v_subject AND phone_ref IS NOT NULL), '{}');
+    END IF;
     v_refs := ARRAY(SELECT DISTINCT x FROM unnest(v_refs || v_scopes) AS x ORDER BY x);
     v_scopes := ARRAY(SELECT 'phone:' || x FROM unnest(v_refs) AS x);
     SELECT count(*) INTO v_antes FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
@@ -958,6 +1001,12 @@ BEGIN
         v_total := v_total + v_n;
         RAISE NOTICE '  % · % fila(s) · %', v_tabla, v_n, CASE WHEN v_dry THEN 'pasarían a la forma suprimida' ELSE 'pasan a la forma suprimida' END;
     END LOOP;
+    IF v_consents THEN
+        SELECT count(*) INTO v_ocon FROM public.outreach_consents WHERE subject_key = v_subject AND redacted_at IS NULL;
+        v_cuentas := v_cuentas || jsonb_build_object('outreach_consents', v_ocon);
+        v_total := v_total + v_ocon;
+        RAISE NOTICE '  outreach_consents · % fila(s) · %', v_ocon, CASE WHEN v_dry THEN 'pasarían a la forma suprimida' ELSE 'pasan a la forma suprimida' END;
+    END IF;
     SELECT count(*) INTO v_contadores FROM public.outreach_budget_counters WHERE scope = ANY (v_scopes);
     RAISE NOTICE '  outreach_budget_counters · % contador(es) phone: de sus seudónimos · %', v_contadores, CASE WHEN v_dry THEN 'se borrarían' ELSE 'se borran' END;
     SELECT count(*) INTO v_vivos FROM public.outreach_jobs WHERE subject_key = v_subject AND status IN ('planned', 'claimed', 'dispatching');
@@ -965,7 +1014,7 @@ BEGIN
     IF v_vivos > 0 OR v_abiertas > 0 THEN
         RAISE NOTICE '  VIVO: % trabajo(s) y % inscripción(es) abierta(s): antes de redactar los para la aplicación: php artisan outreach:suppress-subject <clave> --apply (como www-data)', v_vivos, v_abiertas;
     END IF;
-    RAISE NOTICE 'total H9: % fila(s) en 4 tablas · % contador(es)', v_total, v_contadores;
+    RAISE NOTICE 'total H9: % fila(s) en % tablas · % contador(es)', v_total, CASE WHEN v_consents THEN 5 ELSE 4 END, v_contadores;
     IF v_dry THEN
         RAISE NOTICE 'EN SECO (H9): nada ha cambiado.';
         RETURN;
@@ -1021,6 +1070,18 @@ BEGIN
         END LOOP;
     END LOOP;
 
+    -- C9-1 · outreach_consents: a la forma suprimida con TODOS sus disparadores encendidos (ocon_redaction_only la admite
+    -- y rechaza cualquier otra: entonces se deshace todo). Las filas que ya estaban redactadas no se tocan.
+    IF v_consents AND v_ocon > 0 THEN
+        UPDATE public.outreach_consents
+           SET subject_key = 'x:' || id, member_id = NULL, lead_id = NULL, phone_ref = NULL, evidence = '[suprimido]',
+               redacted_at = (now() AT TIME ZONE 'UTC')
+         WHERE subject_key = v_subject AND redacted_at IS NULL;
+        GET DIAGNOSTICS v_n = ROW_COUNT;
+        v_cuentas := v_cuentas || jsonb_build_object('outreach_consents', v_n);
+        RAISE NOTICE '  outreach_consents · % fila(s) a la forma suprimida · ningún disparador apagado (su guarda admite la redacción)', v_n;
+    END IF;
+
     -- ── 3. Comprobaciones antes del COMMIT (si una falla, se deshace todo) ─────────────────────────────────
     SELECT count(*) INTO v_despues FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
      WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%' OR c.relname LIKE 'voice\_%') AND tg.tgenabled = 'O';
@@ -1033,6 +1094,9 @@ BEGIN
         v_resto := v_resto + v_n;
     END LOOP;
     v_resto := v_resto + (SELECT count(*) FROM public.outreach_budget_counters WHERE scope = ANY (v_scopes));
+    IF v_consents THEN
+        v_resto := v_resto + (SELECT count(*) FROM public.outreach_consents WHERE subject_key = v_subject);
+    END IF;
     IF v_resto <> 0 THEN
         RAISE EXCEPTION 'supresión H9: tras redactar siguen % fila(s) con la clave o contador(es) de sus teléfonos: se deshace todo', v_resto USING ERRCODE = '55000';
     END IF;
@@ -1043,8 +1107,8 @@ BEGIN
            (event, subject_type, subject_uuid, actor_type, actor_admin_id, actor_name, actor_role, from_status, to_status,
             content_hash, summary, diff, metadata, ip_address, user_agent, created_at)
     VALUES ('system.personal_data_redacted', 'system', NULL, 'system', NULL, 'supresion-1581', NULL, NULL, NULL, NULL,
-            left(format('Supresión de datos personales (Ley 1581), radicado %s: automatización comercial, %s fila(s) en forma suprimida en 4 tabla(s) y %s contador(es) de teléfono borrado(s)',
-                        v_radicado, v_total, (v_cuentas->>'outreach_budget_counters')::bigint), 255),
+            left(format('Supresión de datos personales (Ley 1581), radicado %s: automatización comercial, %s fila(s) en forma suprimida en %s tabla(s) y %s contador(es) de teléfono borrado(s)',
+                        v_radicado, v_total, CASE WHEN v_consents THEN 5 ELSE 4 END, (v_cuentas->>'outreach_budget_counters')::bigint), 255),
             NULL,
             json_build_object('radicado', v_radicado, 'scope', 'outreach', 'fields', v_cuentas::json,
                               'phone_refs', coalesce(array_length(v_refs, 1), 0), 'tool', 'docs/ultron-studio/ops/supresion-1581.sql'),

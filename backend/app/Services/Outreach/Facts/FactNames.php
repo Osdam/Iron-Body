@@ -97,6 +97,25 @@ final class FactNames
     /** Los motivos globales de N2 ({@see OperationalBrakes}). */
     public const GLOBAL_BRAKES = OperationalBrakes::KEYS;
 
+    /**
+     * C9-2 (Enmienda C9): las entradas de política del LIBRO DE AUTORIZACIONES
+     * ({@see OutreachConsentFacts}), por finalidad, en WhatsApp. Aparte de
+     * {@see POLICY} para no tocar sus líneas; las dos son entradas de política
+     * ({@see isPolicy()}) y también booleanas. `granted` y `revoked` false =
+     * ninguna. Las combina con el prospecto {@see CoreProjection::consentFor()}.
+     */
+    public const C9_POLICY = [
+        'c9.whatsapp.collections.granted', 'c9.whatsapp.collections.revoked',
+        'c9.whatsapp.commercial.granted', 'c9.whatsapp.commercial.revoked',
+        'c9.whatsapp.service.granted', 'c9.whatsapp.service.revoked',
+    ];
+
+    /** ¿Es una entrada de política por persona ({@see POLICY} o {@see C9_POLICY})? */
+    public static function isPolicy(string $key): bool
+    {
+        return in_array($key, self::POLICY, true) || in_array($key, self::C9_POLICY, true);
+    }
+
     /** ¿Es válido este valor para este hecho? (null = desconocido; nunca en los NO nulos). */
     public static function validValue(string $fact, mixed $value): bool
     {

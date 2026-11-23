@@ -25,6 +25,9 @@ use PHPUnit\Framework\TestCase;
  *
  * Q1-2 (11-11-2026): `MarketingAiActionCommercialObserver` entra en la lista
  * y le da emisor a `complaint_created` (catálogo `outreach-catalog/2026-11-11.2`).
+ * Q1-8 (22-11-2026): `ComplaintCommercialEmitter` entra en la lista (la queja
+ * que registra el personal y el descarte de una de la IA) y le da emisor a
+ * `complaint_dismissed` (catálogo `outreach-catalog/2026-11-22.1`).
  */
 class OutreachCatalogEmittersTest extends TestCase
 {
@@ -32,6 +35,7 @@ class OutreachCatalogEmittersTest extends TestCase
     private const EMITTERS = [
         'app/Console/Commands/ScanCommercialFacts.php',
         'app/Observers/Commercial/AttendanceCommercialObserver.php',
+        'app/Observers/Commercial/ComplaintCommercialEmitter.php',
         'app/Observers/Commercial/ElectronicInvoiceCommercialObserver.php',
         'app/Observers/Commercial/MarketingAiActionCommercialObserver.php',
         'app/Observers/Commercial/MarketingAppointmentCommercialObserver.php',
@@ -94,8 +98,9 @@ class OutreachCatalogEmittersTest extends TestCase
             }
         }
         ksort($emitidos);
-        $this->assertSame(22, count($emitidos), 'los 21 eventos con emisor de la auditoría B (I-5) y complaint_created (Q1-2)');
+        $this->assertSame(23, count($emitidos), 'los 21 eventos con emisor de la auditoría B (I-5), complaint_created (Q1-2) y complaint_dismissed (Q1-8)');
         $this->assertArrayHasKey('complaint_created', $emitidos, 'Q1-2: lo emite MarketingAiActionCommercialObserver');
+        $this->assertArrayHasKey('complaint_dismissed', $emitidos, 'Q1-8: lo emite ComplaintCommercialEmitter');
 
         foreach (OutreachCatalog::CRM_EVENTS as $clave => $finalidades) {
             $this->assertSame(isset($emitidos[$clave]), OutreachCatalog::event($clave)['available'], "{$clave}: available tiene que decir si alguien lo emite");

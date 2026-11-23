@@ -283,14 +283,23 @@ trait RunWorld
      * (parte canario) y N3 (versión «solo canario», la línea base) exigen para que un trabajo suyo salga. Los números
      * son sintéticos (`31…`), distintos de los de {@see qualifyingMember()} (`300…`).
      *
+     * Con WhatsApp, además, lo que N1 exige para que un asistido COMERCIAL por WhatsApp salga: su identidad de WhatsApp
+     * con la autorización comercial (un prospecto suyo `granted` con ese número y conversación de WhatsApp, como
+     * {@see qualifyingMember()}). Sin ella la escalera nunca lo dejaría salir, y la bandeja lo retiene con
+     * `policy_unknown` (I-1 del revisor de la bandeja).
+     *
      * @return array{user: int, member: int, key: string, phone: string}
      */
     protected function canaryMember(string ...$mediums): array
     {
         $telefono = '31'.str_pad((string) (++$this->canariosSembrados), 8, '0', STR_PAD_LEFT);
         $r = $this->socio([], ['phone' => $telefono]);
-        foreach ($mediums === [] ? ['whatsapp'] : $mediums as $medio) {
+        $mediums = $mediums === [] ? ['whatsapp'] : $mediums;
+        foreach ($mediums as $medio) {
             $this->canary('+57'.$telefono, $medio);
+        }
+        if (in_array('whatsapp', $mediums, true)) {
+            $this->conversation($this->lead(['member_id' => $r['member'], 'phone' => $telefono, 'consent_status' => 'granted']));
         }
 
         return $r + ['key' => 'm:'.$r['member'], 'phone' => $telefono];

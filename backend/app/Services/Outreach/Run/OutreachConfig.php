@@ -307,6 +307,23 @@ final class OutreachConfig
         return self::int('outreach.human_requested_days', 30, 1, 365);
     }
 
+    /** Q1-8 (NB3): las quejas que una cuenta registra al día mientras `outreach.complaints.per_account_per_day` no valga. */
+    public const STAFF_COMPLAINTS_PER_ACCOUNT_PER_DAY_DEFAULT = 20;
+
+    /**
+     * Q1-8 (NB3 de la revisión de API): el tope de quejas que una cuenta del
+     * personal puede registrar en un día de Bogotá. Un entero de 1 a 200
+     * manda (más de 200 = 200); cualquier otra cosa (nada, 0, un negativo, un
+     * texto) deja {@see STAFF_COMPLAINTS_PER_ACCOUNT_PER_DAY_DEFAULT}: no hay
+     * forma de quitar el tope por configuración.
+     */
+    public static function staffComplaintsPerAccountPerDay(): int
+    {
+        $v = config('outreach.complaints.per_account_per_day');
+
+        return is_int($v) && $v >= 1 ? min(200, $v) : self::STAFF_COMPLAINTS_PER_ACCOUNT_PER_DAY_DEFAULT;
+    }
+
     /** Q1-3: los días de la ventana de la queja mientras `outreach.complaint_days` no exista o no valga. */
     public const COMPLAINT_DAYS_DEFAULT = 30;
 

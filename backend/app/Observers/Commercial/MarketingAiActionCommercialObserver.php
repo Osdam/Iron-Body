@@ -37,7 +37,10 @@ use Illuminate\Support\Facades\DB;
  * de su metadata libre.
  *
  * Una queja al día de Bogotá por conversación (o por prospecto, si la fila no
- * trae conversación). La ventana del H9 cuenta desde la última.
+ * trae conversación). La ventana del H9 cuenta desde la última. Si una persona
+ * DESCARTÓ la del día (Q1-8, `complaint_dismissed`), la queja siguiente de ese
+ * día abre otra clave (`…:<Ymd>:2`, `…:3`…) y vuelve a frenar: un descarte
+ * nunca alcanza a una queja posterior ({@see ComplaintCommercialEmitter}).
  *
  * DESPUÉS DEL COMMIT de quien crea la fila (`DB::afterCommit`), nunca dentro
  * de su transacción. En PostgreSQL una sentencia que falla dentro de una
@@ -109,8 +112,8 @@ class MarketingAiActionCommercialObserver
     private function record(int $actionId, int $leadId, ?int $conversacion, string $source, Carbon $cuando, string $dia): void
     {
         $ambito = $conversacion !== null ? "conversation:{$conversacion}" : "lead:{$leadId}";
-
-        $this->recorder->record(
+        $base = ComplaintCommercialEmitter::aiComplaintKey($ambito, $dia);
+        $registrar = fn (string $clave) => $this->recorder->record(
             event: V::EV_COMPLAINT_CREATED,
             subject: $this->resolver->fromLead($leadId) + ['opportunity_id' => null],
             payload: [
@@ -118,9 +121,24 @@ class MarketingAiActionCommercialObserver
                 'conversation_id' => $conversacion,
                 'ai_action_id' => $actionId,
             ],
-            dedupeKey: "{$ambito}:complaint:{$dia}",
+            dedupeKey: $clave,
             // La hora de la fila, la misma con la que se calculó el día de la clave.
             occurredAt: $cuando,
         );
+
+        // La del día, salvo que una persona la haya descartado (Q1-8): entonces la siguiente de la serie.
+        $clave = $base;
+        for ($n = 2; $n <= ComplaintCommercialEmitter::MAX_REOPENED_PER_DAY + 1; $n++) {
+            if (! ComplaintCommercialEmitter::isDismissed($clave)) {
+                // Registrada, o la del día sigue viva (es la misma queja): hecho. Si la descartaron entre la
+                // comprobación y el registro (el duplicado es la descartada), se pasa a la siguiente.
+                if ($registrar($clave) !== null || ! ComplaintCommercialEmitter::isDismissed($clave)) {
+                    return;
+                }
+            }
+            $clave = "{$base}:{$n}";
+        }
+        // Más descartes que el tope el mismo día en la misma conversación: una queja por fila de la IA (frena).
+        $registrar("{$base}:a{$actionId}");
     }
 }

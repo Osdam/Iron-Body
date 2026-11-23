@@ -8,8 +8,12 @@ use App\Models\Member;
 use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\StrategyContent;
 use App\Services\Outreach\Facts\CatalogDomains;
+use App\Services\Outreach\Facts\CoreProjection;
+use App\Services\Outreach\Facts\OutreachConsentFacts;
 use App\Services\Outreach\Run\AssistedQueue;
 use App\Services\Outreach\Run\OutcomeRecorder;
+use App\Services\Outreach\Run\OutreachAccess;
+use App\Services\Outreach\Run\OutreachConsents;
 use App\Services\Outreach\Run\OutreachDispatcher;
 use App\Services\Outreach\Run\OutreachException;
 use App\Services\Outreach\Run\OutreachPlanner;
@@ -25,6 +29,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Outreach\Run\Support\RunWorld;
@@ -442,6 +447,223 @@ class H9AssistedEligibilityTest extends TestCase
         $this->assertSame('opted_out', $motivo());
 
         $this->assertSame(['brake', 'strategy_stopped', 'template_not_approved', 'opted_out', 'complaint_recent', 'subject_minor', 'rne_check_missing', 'canary_scope_mismatch', 'policy_unknown', 'complaint_unknown', 'expired'], AssistedQueue::WITHHELD_REASONS);
+    }
+
+    // ── C-1 (revisión de API del consentimiento) · La retirada del libro de autorizaciones ──
+
+    /** La retirada por el servicio REAL del libro (`POST consents/revoke`: sin segunda cuenta ni texto legal). */
+    private function revokeInLedger(int $memberId, string $purpose = 'commercial'): void
+    {
+        $r = (new OutreachConsents)->revoke(new OutreachAccess($this->threePeople()['caro']), [
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $memberId, 'purpose' => $purpose,
+            'source' => 'member_request', 'evidence' => 'Pidió en recepción que no le escriban más',
+        ]);
+        $this->assertSame(201, $r['http']);
+    }
+
+    /**
+     * C-1: la persona retira su autorización de WhatsApp (el libro de C9) DESPUÉS de que su asistido salió. La escalera
+     * la niega (`denied`) en la pasada siguiente; la bandeja, en el acto: lo libre no se ofrece ni se reclama y el
+     * reclamante pierde el enlace y el guion (`opted_out`). Antes, el trabajo seguía en la bandeja hasta su plazo.
+     */
+    public function test_c1_una_retirada_del_libro_despues_de_salir_retiene_lo_libre_y_lo_reclamado(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b] = $this->startedFor(['3001234567', '3001234568']);
+        $mio = (string) $a['job']->uuid;
+        $libre = (string) $b['job']->uuid;
+        $cola = new AssistedQueue;
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $a['member']['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'antes: el libre se ofrece');
+
+        foreach ([$a, $b] as $p) {
+            $this->revokeInLedger($p['member']['member']);
+        }
+        $this->assertSame(2, DB::table('outreach_consents')->where('kind', 'revoked')->count());
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'opted_out', '300123456');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
+    }
+
+    /** C-1: cada finalidad por su fila. Retirar la de SERVICIO no retiene un asistido comercial. */
+    public function test_c1_la_retirada_de_otra_finalidad_no_retiene(): void
+    {
+        $gente = $this->threePeople();
+        [$p] = $this->startedFor(['3001234567']);
+        $this->revokeInLedger($p['member']['member'], 'service');
+
+        $r = (new AssistedQueue)->claim($gente['beto'], (string) $p['job']->uuid, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $p['member']['member']], true, null], self::contact($r['job']));
+    }
+
+    /**
+     * C-1 y R3-2: la retirada llega justo DESPUÉS de la última lectura de la comprobación y ANTES del `UPDATE`. La
+     * relectura la ve: la reclamación queda escrita, pero el 201 no lleva ni el enlace ni el guion.
+     */
+    public function test_c1_la_retirada_que_llega_entre_el_reclamo_y_la_relectura_no_entrega_el_contacto(): void
+    {
+        $gente = $this->threePeople();
+        [$p] = $this->startedFor(['3001234567']);
+        $uuid = (string) $p['job']->uuid;
+        $sql = [];
+        $inyectada = null;
+        DB::listen(function ($q) use (&$sql, &$inyectada, $p): void {
+            $sql[] = strtolower($q->sql);
+            if ($inyectada === null && str_contains(strtolower($q->sql), '"detail_code"')) {
+                $inyectada = count($sql) - 1;
+                $this->revokeInLedger($p['member']['member']);
+            }
+        });
+
+        $r = (new AssistedQueue)->claim($gente['beto'], $uuid, (string) Str::uuid());
+        $update = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with(ltrim($q), 'update "outreach_jobs"')));
+        $this->assertNotNull($inyectada, 'la retirada llegó a mitad');
+        $this->assertLessThan($update, $inyectada, 'después de comprobar y ANTES del UPDATE');
+        $this->assertSame([false, [null, false, 'opted_out']], [$r['replayed'], self::contact($r['job'])], 'el 201 ya no lleva el enlace ni el guion');
+        $this->assertSame((int) $gente['beto']->id, (int) DB::table('outreach_jobs')->where('uuid', $uuid)->value('assisted_claimed_by_admin_id'), 'queda reclamado: no se deshace nada');
+        $this->assertSame([null, false, 'opted_out'], self::contact((new AssistedQueue)->queue($gente['beto'], 'mine')[0]));
+        $this->assertStringNotContainsString('3001234567', json_encode($r));
+    }
+
+    /**
+     * C-1, lo que está en producción: con el libro VACÍO y sin la TABLA, la bandeja da lo mismo que antes (se ofrece lo
+     * libre, el reclamante recibe el enlace y el guion, y lo que ya retenía sigue reteniendo con su motivo). Esta prueba
+     * pasa igual con el `AssistedQueue` de antes de C-1: lo comprobé al cerrarlo.
+     */
+    public function test_c1_con_el_libro_vacio_o_sin_la_tabla_la_bandeja_es_la_de_antes(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b, $c] = $this->startedFor(['3001234567', '3001234568', '3001234569']);
+        MarketingLead::query()->findOrFail($c['member']['lead'])->forceFill(['do_not_contact' => true])->save();
+        $this->claimedBy((int) $a['job']->id, $gente['ana']);
+        $vistas = function () use ($gente, $a): array {
+            $cola = new AssistedQueue;
+            $mine = $cola->queue($gente['ana'], 'mine', 50);
+
+            return [
+                'unclaimed' => array_column($cola->queue($gente['beto'], 'unclaimed', 50), 'uuid'),
+                'withheld' => $cola->page($gente['beto'], 'unclaimed', 50)['withheld'],
+                'mine' => self::contact(self::row($mine, (string) $a['job']->uuid)),
+                'all' => array_map(static fn (array $f): array => [$f['uuid'], $f['person'], $f['script'] !== null], $cola->queue($gente['ana'], 'all', 50)),
+            ];
+        };
+        $esperado = [
+            'unclaimed' => [(string) $b['job']->uuid],
+            'withheld' => 1,
+            'mine' => [['kind' => 'member', 'id' => $a['member']['member']], true, null],
+        ];
+
+        $this->assertSame(0, DB::table('outreach_consents')->count(), 'el libro, vacío');
+        $conLibro = $vistas();
+        $this->assertSame($esperado, array_intersect_key($conLibro, $esperado), 'con el libro vacío');
+        Schema::drop('outreach_consents');
+        OutreachConsentFacts::forgetLedger();
+        try {
+            $this->assertSame($conLibro, $vistas(), 'sin la tabla: lo mismo');
+        } finally {
+            OutreachConsentFacts::forgetLedger();
+        }
+    }
+
+    // ── I-1 (revisor de la bandeja) · Perder el consentimiento comercial de WhatsApp sin un «denegado» ──
+
+    /**
+     * I-1 de `informe-reviewer-bandeja.md` (su sonda P-2), con la directiva del propietario («un contacto que pierde
+     * elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal restringido»). El asistido
+     * comercial por WhatsApp sale con el prospecto `granted` y Ana lo reclama. Después, la persona escribe desde
+     * OTRO número: nace un prospecto suyo con `consent_status = null` y conversación de WhatsApp. `LeadFacts` toma ese,
+     * el más reciente: `consent.whatsapp.commercial = false` y `lead.consent_denied = false` (null no es
+     * «denegado»). La escalera negaría (`no_consent_for_purpose_channel`); la bandeja retiene con `policy_unknown`,
+     * como por voz. Antes seguía entregando la ficha y el guion.
+     */
+    public function test_i1_por_whatsapp_comercial_perder_el_consentimiento_sin_un_denegado_retiene_con_policy_unknown(): void
+    {
+        $gente = $this->threePeople();
+        [$a, $b] = $this->startedFor(['3001234567', '3001234568']);
+        $mio = (string) $a['job']->uuid;
+        $libre = (string) $b['job']->uuid;
+        $cola = new AssistedQueue;
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $a['member']['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+
+        foreach ([$a, $b] as $i => $p) {
+            $nuevo = '300999000'.$i;
+            $lead = $this->lead(['member_id' => $p['member']['member'], 'phone' => $nuevo, 'consent_status' => null]);
+            $this->conversation($lead);
+            // El número nuevo también es un número de prueba activo: el caso no es F-2 (`canary_scope_mismatch`).
+            $this->canary('+57'.$nuevo, 'whatsapp');
+        }
+        // Lo que lee N1: sin la autorización comercial de WhatsApp y sin un «denegado» que conste.
+        $foto = $this->snap([$a['member']['key']], '2026-11-17 15:15:00', CoreProjection::selectionFor([]))->subject($a['member']['key']);
+        $this->assertSame(['missing', false], [CoreProjection::policyInput($foto, 'commercial', null)['consent']['whatsapp'], $foto->policy('lead.consent_denied')]);
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', '300123456', '300999000');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'opted_out', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
+    }
+
+    /** La autorización de COBRANZA por WhatsApp del libro, por el servicio REAL: Ana la registra para el número de hoy y Beto la confirma. */
+    private function grantCollectionsInLedger(int $memberId): void
+    {
+        $texto = 'Autorizo a Iron Body a escribirme por WhatsApp sobre mis pagos pendientes.';
+        config(['outreach_consents.legal.collections' => ['version' => 'c9-whatsapp-cobranza/2026-11-22.1', 'text' => $texto]]);
+        $gente = $this->threePeople();
+        $servicio = new OutreachConsents;
+        $pedida = $servicio->record(new OutreachAccess($gente['ana']), [
+            'clientRequestId' => (string) Str::uuid(), 'personType' => 'member', 'personId' => $memberId, 'purpose' => 'collections',
+            'source' => 'reception_form', 'evidence' => 'Formulario firmado en recepción', 'legalVersion' => 'c9-whatsapp-cobranza/2026-11-22.1',
+            'legalHash' => hash('sha256', $texto),
+        ]);
+        $this->assertSame(201, $pedida['http']);
+        $this->assertSame(201, $servicio->confirm(new OutreachAccess($gente['beto']), (string) $pedida['consent']['uuid'], (string) Str::uuid())['http']);
+    }
+
+    /**
+     * I-1 TAMBIÉN PARA LA COBRANZA POR WHATSAPP (última tanda del lote 4; decisión del lead con la misma directiva: «un
+     * contacto que pierde elegibilidad debe dejar de poder ofrecerse, reclamarse o ejecutarse por el canal
+     * restringido»). La cobranza por WhatsApp solo la autoriza el libro de C9, para un número
+     * (`consent.whatsapp.collections` es siempre false, P9-15). Dos asistidos de cobranza salen con esa autorización
+     * para el número de hoy y Ana reclama uno: se ofrece y se entrega. Después la persona escribe desde OTRO número:
+     * nace un prospecto suyo con conversación y ése es el número de hoy, así que la autorización ya no vale. N1 lee
+     * `missing` sin un `denied` (la escalera negaría, `no_consent_for_purpose_channel`); la bandeja retiene con
+     * `policy_unknown`. Hasta esta tanda seguía entregando la ficha y el guion.
+     */
+    public function test_i1_por_whatsapp_de_cobranza_la_autorizacion_que_deja_de_valer_retiene_con_policy_unknown(): void
+    {
+        $gente = $this->threePeople();
+        $this->runFlags('live');
+        $this->plantilla = $this->assistedTemplate(['purpose' => 'collections', 'content' => ['medium' => 'whatsapp', 'script' => 'Saluda y recuerda con respeto que hay una cuota pendiente; ofrece ayuda para ponerse al día.']]);
+        $this->vivo = $this->liveStrategy($this->validContent($this->plantilla, [
+            'goal' => 'collect_payment', 'purpose' => 'collections', 'exclusions' => null,
+            'trigger' => ['event' => 'receivable.overdue', 'params' => ['daysMin' => 3, 'daysMax' => 30]],
+            'audience' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => true],
+            'success' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => false],
+        ]));
+        $socios = [$this->canaryMember('whatsapp'), $this->canaryMember('whatsapp')];
+        foreach ($socios as $s) {
+            $this->grantCollectionsInLedger($s['member']);
+        }
+        [$mio, $libre] = array_map(fn (array $s): string => $this->uuidOf($this->seedStarted(['subject_key' => $s['key'], 'member_id' => $s['member']], 'whatsapp')), $socios);
+        $this->assertSame(['collections'], DB::table('outreach_enrollments')->distinct()->pluck('purpose')->all());
+        $cola = new AssistedQueue;
+        $foto = $this->snap([$socios[0]['key']], '2026-11-17 15:00:00', CoreProjection::selectionFor([]))->subject($socios[0]['key']);
+        $this->assertSame('granted', CoreProjection::policyInput($foto, 'collections', null)['consent']['whatsapp'], 'antes: la autorización de cobranza del número de hoy');
+        $r = $cola->claim($gente['ana'], $mio, (string) Str::uuid());
+        $this->assertSame([['kind' => 'member', 'id' => $socios[0]['member']], true, null], self::contact($r['job']), 'antes: el enlace y el guion');
+        $this->assertNotNull(self::row($cola->queue($gente['beto'], 'unclaimed', 50), $libre), 'antes: el libre se ofrece');
+
+        foreach ($socios as $i => $s) {
+            $nuevo = '300999100'.$i;
+            $this->conversation($this->lead(['member_id' => $s['member'], 'phone' => $nuevo, 'consent_status' => null]));
+            // El número nuevo también es un número de prueba activo: el caso no es F-2 (`canary_scope_mismatch`).
+            $this->canary('+57'.$nuevo, 'whatsapp');
+        }
+        $foto = $this->snap([$socios[0]['key']], '2026-11-17 15:00:00', CoreProjection::selectionFor([]))->subject($socios[0]['key']);
+        $this->assertSame(['missing', false, false], [CoreProjection::policyInput($foto, 'collections', null)['consent']['whatsapp'], $foto->policy('lead.consent_denied'),
+            $foto->policy('c9.whatsapp.collections.revoked')], 'lo que lee N1: la autorización de otro número, sin un «denegado» ni una retirada');
+
+        $this->assertWithheldEverywhere($cola, $mio, $libre, 'policy_unknown', $socios[0]['phone'], $socios[1]['phone'], '300999100');
+        $this->assertSame(OutcomeRecorder::RESULT_RECORDED, $cola->recordOutcome($gente['ana'], $mio, 'no_answer', (string) Str::uuid())['result'], 'el resultado se sigue registrando');
     }
 
     // ── R3-2 · Lo que llega entre la comprobación y el UPDATE ───────────────
@@ -882,8 +1104,10 @@ class H9AssistedEligibilityTest extends TestCase
         if (! $this->escuchando) {
             $this->escuchando = true;
             DB::listen(function ($q): void {
-                // `in (?, ?, …)` crece con el lote, no es una consulta más.
-                $this->consultas[] = (string) preg_replace('/\(\?(, \?)*\)/', '(?…)', (string) $q->sql);
+                // `in (?, ?, …)` crece con el lote, no es una consulta más. Tampoco la lista `VALUES (?, ?), (?, ?), …`
+                // de la tanda del libro de autorizaciones (C9, `OutreachConsentFacts`): una sentencia por tramo de claves.
+                $sql = (string) preg_replace('/\(\?(, \?)*\)/', '(?…)', (string) $q->sql);
+                $this->consultas[] = (string) preg_replace('/VALUES \(\?…\)(?:, \(\?…\))*/', 'VALUES (?…)…', $sql);
             });
         }
         $antes = count($this->consultas);

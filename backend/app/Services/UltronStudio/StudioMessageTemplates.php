@@ -7,6 +7,7 @@ use App\Models\UltronStudio\StudioMessageTemplate;
 use App\Rules\PlainText;
 use App\Services\Outreach\Core\CanonicalJson;
 use App\Services\Outreach\Core\OutreachCatalog;
+use App\Services\Outreach\Facts\WhatsappSignals;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -30,7 +31,11 @@ use InvalidArgumentException;
  *    marcadores CERRADOS por posición, {@see MARKERS}) y `optOutLine: true`
  *    (obligatorio: el texto dice cómo dejar de recibir mensajes, Ley 2300 art.
  *    5 par. 2). Comercial solo `marketing`; cobranza y servicio solo
- *    `utility` (cobranza sin ofertas ni precio, P9-7).
+ *    `utility` (cobranza sin ofertas ni precio, P9-7). La casilla no basta
+ *    (hallazgo «MALA 2c», 22-11-2026): el cuerpo o el pie tienen que pedir
+ *    una respuesta que el normalizador de W9 registre como baja SEGURA
+ *    ({@see hasOptOutInstruction()}), sin una negación delante del verbo
+ *    (NB6); si no, `opt_out_text_missing`.
  *  - `assisted`: `medium` (`whatsapp`/`voice`) y `script` (≤ 600, el guion
  *    que ve el personal).
  *  - `voice` (V9): `purposeKey`, un objetivo de la lista cerrada del motor
@@ -186,6 +191,38 @@ final class StudioMessageTemplates
      * de `WhatsappSignals::OPT_OUT_PHRASES` (una prueba lo fija).
      */
     public const OPT_OUT_LABELS = ['Darme de baja', 'No más mensajes', 'Detener promociones'];
+
+    /**
+     * LA INSTRUCCIÓN DE BAJA del texto (hallazgo «MALA 2c» de
+     * plantillas-propuestas.md, 22-11-2026; D9-6 y D9-15: «el texto dice cómo
+     * dejar de recibir mensajes»): uno de estos verbos, en la forma normalizada
+     * de `WhatsappSignals::normalize()` (minúsculas, sin tildes ni signos),
+     * seguido, como mucho tras uno de {@see OPT_OUT_FILLERS}, de la respuesta
+     * que la persona enviaría. Esa respuesta tiene que ser, entera, una baja
+     * SEGURA para el normalizador de W9 (`WhatsappSignals::isOptOutText()`,
+     * la lista cerrada `OPT_OUT_PHRASES`): «responda BAJA» sí; «responda
+     * SALIR», no, porque el motor no la registraría como baja.
+     */
+    public const OPT_OUT_VERBS = [
+        'responde', 'responda', 'respondan', 'respondenos', 'respondanos', 'responder',
+        'contesta', 'conteste', 'contesten', 'contestanos', 'contestenos', 'contestar',
+        'escribe', 'escriba', 'escriban', 'escribenos', 'escribanos', 'escribir',
+        'envia', 'envie', 'envien', 'envianos', 'envienos', 'enviar',
+    ];
+
+    /** Lo que puede ir entre el verbo y la respuesta («responda con la palabra BAJA»), del más largo al más corto. */
+    public const OPT_OUT_FILLERS = ['con la palabra', 'la palabra', 'con'];
+
+    /**
+     * NB6 de la revisión de API de Q1-8: una de estas negaciones (en la forma
+     * normalizada, sin tildes) en las DOS palabras anteriores al verbo anula
+     * esa instrucción («No responda BAJA», «Nunca escriba STOP», «no nos
+     * escriba BAJA»). Solo la negación: el resto de las burlas semánticas
+     * («si responde BAJA perderá sus beneficios») lo ve la revisión a cuatro
+     * ojos. Más lejos no cuenta: «Si no desea recibir más mensajes, responda
+     * BAJA» es la línea de las cinco plantillas propuestas.
+     */
+    public const OPT_OUT_NEGATIONS = ['no', 'nunca', 'jamas'];
 
     /**
      * Los ejemplos FICTICIOS por defecto de cada marcador (lo que Meta pide
@@ -905,6 +942,7 @@ final class StudioMessageTemplates
         'restriction_violated' => 'El texto incumple una restricción del código (importes, descuentos, URL o promesas).',
         'category_purpose_mismatch' => 'La categoría no corresponde a la finalidad (comercial: marketing; cobranza y servicio: utility).',
         'opt_out_required' => 'La plantilla tiene que decir cómo dejar de recibir mensajes (optOutLine: true).',
+        'opt_out_text_missing' => 'El cuerpo o el pie tienen que decir cómo darse de baja con una respuesta que el sistema reconozca (por ejemplo: «Si no desea recibir más mensajes, responda BAJA»).',
         'placeholders_mismatch' => 'Los marcadores {{n}} del texto no cuadran con las variables.',
         'duplicate_value' => 'Valor repetido.',
         'too_many_values' => 'Demasiados valores.',
@@ -1019,8 +1057,61 @@ final class StudioMessageTemplates
             $ejemplos = self::metaExamples($raw['examples'], $variables, $falla);
             $ejemplos === null ? $bien = false : $out['examples'] = $ejemplos;
         }
+        // La casilla dice que el texto lleva la línea de baja: se comprueba en el TEXTO (cuerpo o pie). Solo
+        // con un cuerpo ya válido; un pie inválido ya tiene su error y no cuenta como instrucción.
+        if (($out['optOutLine'] ?? false) === true && isset($out['bodyPreview'])
+            && ! self::hasOptOutInstruction($out['bodyPreview'], $out['footer']['text'] ?? null)) {
+            $bien = self::failFalse($falla, 'content.bodyPreview', 'opt_out_text_missing');
+        }
 
         return $bien ? $out : null;
+    }
+
+    /**
+     * ¿Pide alguno de estos textos una respuesta que W9 registraría como baja
+     * SEGURA? Un verbo de {@see OPT_OUT_VERBS} sin una de
+     * {@see OPT_OUT_NEGATIONS} en las dos palabras anteriores, quizá uno de
+     * {@see OPT_OUT_FILLERS} y, justo después, unas palabras que
+     * `WhatsappSignals::isOptOutText()` acepta enteras. PURA. Lo que no se
+     * puede leer no cuenta (falla cerrado: la plantilla se rechaza).
+     */
+    public static function hasOptOutInstruction(?string ...$textos): bool
+    {
+        $largo = 1;
+        foreach (WhatsappSignals::OPT_OUT_PHRASES as $frase) {
+            $largo = max($largo, substr_count($frase, ' ') + 1);
+        }
+        foreach ($textos as $texto) {
+            $forma = WhatsappSignals::normalize($texto);
+            if ($forma === '') {
+                continue;
+            }
+            $palabras = explode(' ', $forma);
+            foreach ($palabras as $i => $palabra) {
+                if (! in_array($palabra, self::OPT_OUT_VERBS, true)) {
+                    continue;
+                }
+                if (array_intersect(array_slice($palabras, max(0, $i - 2), min(2, $i)), self::OPT_OUT_NEGATIONS) !== []) {
+                    continue;
+                }
+                $desde = $i + 1;
+                $resto = implode(' ', array_slice($palabras, $desde));
+                foreach (self::OPT_OUT_FILLERS as $relleno) {
+                    if ($resto === $relleno || str_starts_with($resto, $relleno.' ')) {
+                        $desde += substr_count($relleno, ' ') + 1;
+
+                        break;
+                    }
+                }
+                for ($n = 1; $n <= $largo && $desde + $n <= count($palabras); $n++) {
+                    if (WhatsappSignals::isOptOutText(implode(' ', array_slice($palabras, $desde, $n)))) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     // ── Piezas del contenido ampliado (puras; lo único que leen es la configuración de Q1 y Q2) ──

@@ -144,8 +144,10 @@ class MetaTemplateContentTest extends TestCase
         $this->assertFalse(T::missingMetaExamples($r['canonical']));
         // El orden de las claves de entrada no cambia los bytes.
         $this->assertSame($r['hash'], T::content('whatsapp', 'commercial', array_reverse(self::BIEN, true))['hash']);
-        // Solo con los ejemplos: sigue sin componentes (no llegan al socio).
+        // Solo con los ejemplos: sigue sin componentes (no llegan al socio). Sin el pie, la instrucción de baja
+        // va en el cuerpo (hallazgo «MALA 2c»: la casilla no basta, MetaTemplateOptOutTextTest).
         $soloEjemplos = array_diff_key(self::BIEN, ['header' => 1, 'footer' => 1, 'buttons' => 1]);
+        $soloEjemplos['bodyPreview'] .= ' Responde BAJA para no recibir más mensajes.';
         $this->assertSame([], self::errores($soloEjemplos));
         $this->assertFalse(T::hasComponents($soloEjemplos));
     }
@@ -233,7 +235,8 @@ class MetaTemplateContentTest extends TestCase
         // Y los límites exactos SÍ caben.
         $justos = self::bien([
             'header' => ['format' => 'TEXT', 'text' => str_repeat('a', 60)],
-            'footer' => ['text' => str_repeat('b', 60)],
+            // 60 justos, con la instrucción de baja (el cuerpo de BIEN no la lleva: «MALA 2c»).
+            'footer' => ['text' => 'Responde BAJA '.str_repeat('b', 60 - 14)],
             'examples' => ['first_name' => str_repeat('c', 40), 'plan_name' => 'Plan', 'membership_end_date_text' => 'Mañana'],
             'buttons' => [
                 ['type' => 'URL', 'text' => str_repeat('d', 25), 'url' => 'https://'.self::HOST.'/'.str_repeat('e', 200 - strlen('https://'.self::HOST.'/'))],
@@ -454,7 +457,8 @@ class MetaTemplateContentTest extends TestCase
             'bodyPreview' => $cuerpo,
             'variables' => $marcadores,
             'examples' => $ejemplos,
-            'footer' => ['text' => str_repeat('😴', T::FOOTER_MAX)],
+            // El pie lleva la instrucción de baja, obligatoria en el texto desde «MALA 2c» (14 caracteres de 1 byte).
+            'footer' => ['text' => 'Responde BAJA '.str_repeat('😴', T::FOOTER_MAX - 14)],
             'buttons' => [
                 ['type' => 'URL', 'text' => str_repeat('😁', T::BUTTON_TEXT_MAX), 'url' => $url('a')],
                 ['type' => 'URL', 'text' => str_repeat('😂', T::BUTTON_TEXT_MAX), 'url' => $url('b')],

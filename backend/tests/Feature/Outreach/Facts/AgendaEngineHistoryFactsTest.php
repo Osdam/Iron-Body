@@ -259,6 +259,43 @@ class AgendaEngineHistoryFactsTest extends TestCase
     }
 
     /**
+     * El gemelo de C-5 (`informe-apisec-consent.md`): un trabajador de cola arrancado ANTES de las migraciones del H9
+     * (vio las tablas ausentes) cuenta los contactos asistidos en cuanto existen, sin reiniciarse: el «no» no se
+     * recuerda. El «sí», sí: después, ninguna consulta al catálogo por lote. Antes, el «no» quedaba para toda la vida
+     * del proceso.
+     */
+    public function test_un_proceso_que_vio_las_tablas_del_h9_ausentes_cuenta_sus_contactos_en_cuanto_existen(): void
+    {
+        $s = $this->socio();
+        $clave = SubjectKey::member($s['member']);
+        ContactHistoryFacts::forgetOutreachSource();
+        DB::beginTransaction();
+        try {
+            $this->migrationNamed(self::EXECUTION_MIGRATION)->down();
+            $this->assertFalse((new ContactHistoryFacts)->hasOutreachSource());
+            $this->assertFalse($this->snap([$clave], self::NOW, new FactSelection([], [], true))->sources['outreach_history']);
+
+            // Llegan las migraciones; el mismo proceso, sin olvidar nada.
+            $this->migrationNamed(self::EXECUTION_MIGRATION)->up();
+            $this->contactoAsistido($this->inscripcion($this->liveVersion(), $s['member'], 'live'), 'answered', '2026-11-03 16:00:00');
+            $foto = $this->snap([$clave], self::NOW, new FactSelection([], [], true));
+            $this->assertTrue($foto->sources['outreach_history'], 'la fuente existe sin reiniciar el proceso');
+            $this->assertSame(['outreach'], array_column($foto->subject($clave)->contacts, 'source'), 'y su contacto asistido cuenta');
+
+            // El «sí» se recuerda: ninguna consulta al catálogo.
+            $sql = [];
+            DB::listen(function ($q) use (&$sql): void {
+                $sql[] = $q->sql;
+            });
+            $this->assertTrue((new ContactHistoryFacts)->hasOutreachSource());
+            $this->assertSame([], $sql);
+        } finally {
+            DB::rollBack();
+            ContactHistoryFacts::forgetOutreachSource();
+        }
+    }
+
+    /**
      * Una inscripción activa del socio en el modo dado (una abierta por estrategia, persona y modo: sombra y vivo no chocan).
      *
      * @param  array{strategy: int, version: int, seq: int, purpose: string, v: object}  $vivo

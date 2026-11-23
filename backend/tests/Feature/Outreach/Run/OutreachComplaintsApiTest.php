@@ -1,0 +1,489 @@
+<?php
+
+namespace Tests\Feature\Outreach\Run;
+
+use App\Http\Controllers\Crm\CommercialAutomation\OutreachComplaintController;
+use App\Http\Middleware\LimitRequestBodySize;
+use App\Models\Admin;
+use App\Models\AdminRole;
+use App\Models\RolePermission;
+use App\Observers\Commercial\ComplaintCommercialEmitter;
+use App\Services\Commercial\CommercialEventRecorder;
+use App\Services\Outreach\Core\OutreachCatalog;
+use App\Services\Outreach\Core\PolicyLadder;
+use App\Services\Outreach\Facts\CoreProjection;
+use App\Services\Outreach\Run\LadderInputBuilder;
+use App\Services\Outreach\Run\OutreachAccess;
+use App\Services\Outreach\Run\OutreachConfig;
+use App\Services\Outreach\Run\OutreachPlanner;
+use App\Services\Outreach\Run\OutreachReplay;
+use App\Support\Access\AuthorizationMap;
+use App\Support\Access\CrmPermission;
+use App\Support\Access\PermissionCatalog;
+use App\Support\Access\RolePermissionPolicy;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
+use Mockery;
+use Tests\Feature\Outreach\Run\Support\RunWorld;
+use Tests\TestCase;
+
+/**
+ * Q1-8 (a) · REGISTRAR UNA QUEJA presencial o por teléfono
+ * (`POST /api/admin/commercial-automation/complaints`; Enmienda Q1-8 del
+ * contrato H9), por HTTP y sobre las clases REALES: la puerta de
+ * `AuthorizationMap`, una persona, la llave, la de VER a la persona (sin
+ * oráculo), la validación sin texto libre, la idempotencia por
+ * `clientRequestId`, una al día por persona, el registro de hechos apagado
+ * (409) y un registro que no queda (503). De extremo a extremo: tras
+ * registrarla, la escalera niega comercial y cobranza (N6 `complaint_recent`)
+ * y el servicio no cambia.
+ *
+ * El martes 17-11-2026 a las 10:00 de Bogotá (15:00Z).
+ */
+class OutreachComplaintsApiTest extends TestCase
+{
+    use RefreshDatabase;
+    use RunWorld;
+
+    private const NOW = '2026-11-17 15:00:00';
+
+    private const URL = '/api/admin/commercial-automation/complaints';
+
+    /** PT-18 · Los `users.id` de los socios de esta prueba, lejos de los `members.id` (`FactsWorld::usuariosDesde()`). */
+    private const USERS_FROM = 870001;
+
+    /** @var array<string, array{0: Admin, 1: array<string, string>}> */
+    private array $sesiones = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+        Carbon::setTestNow(Carbon::parse(self::NOW, 'UTC'));
+        config(['commercial.events_enabled' => true, 'commercial.enabled' => false]);
+        $this->usuariosDesde(self::USERS_FROM);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    /** Una cuenta del personal con EXACTAMENTE esas llaves (un rol propio). @param  list<string>  $llaves @return array<string, string> */
+    private function sesion(string $nombre, array $llaves): array
+    {
+        $clave = $nombre.'|'.implode(',', $llaves);
+        if (isset($this->sesiones[$clave])) {
+            return $this->sesiones[$clave][1];
+        }
+        $rol = 'q18-'.substr(md5(implode(',', $llaves)), 0, 8);
+        AdminRole::firstOrCreate(['name' => $rol], ['is_system' => false]);
+        foreach ($llaves as $llave) {
+            RolePermission::query()->updateOrCreate(['role' => $rol, 'permission' => $llave], ['granted' => true]);
+        }
+        Cache::forget('crm.role_permissions.v1');
+        app(RolePermissionPolicy::class)->flush();
+        $admin = Admin::create(['name' => $nombre, 'email' => strtolower($nombre).'-'.uniqid().'@q18.test', 'password' => 'secret-password', 'role' => $rol, 'status' => 'active']);
+
+        $this->sesiones[$clave] = [$admin, $this->actingAsAdmin($admin)];
+
+        return $this->sesiones[$clave][1];
+    }
+
+    /** Mueve el reloj y abre sesiones nuevas para las MISMAS cuentas (las de antes caducan con el reloj). */
+    private function reloj(string $utc): void
+    {
+        Carbon::setTestNow(Carbon::parse($utc, 'UTC'));
+        foreach ($this->sesiones as $clave => [$admin]) {
+            $this->sesiones[$clave] = [$admin, $this->actingAsAdmin($admin)];
+        }
+    }
+
+    /** @return array<string, string> */
+    private function recepcion(): array
+    {
+        return $this->sesion('Recepcion', [OutreachAccess::COMPLAINTS_RECORD, 'members.view', 'marketing.view']);
+    }
+
+    /** @return array<string, mixed> */
+    private static function queja(string $tipo, int $id, array $cambios = []): array
+    {
+        return array_replace(['clientRequestId' => (string) Str::uuid(), 'personType' => $tipo, 'personId' => $id, 'channel' => 'in_person', 'category' => 'billing'], $cambios);
+    }
+
+    /** @return list<object> */
+    private static function quejas(): array
+    {
+        return DB::table('commercial_events')->where('event', 'complaint_created')->orderBy('id')->get()->all();
+    }
+
+    // ── La ruta, la llave y los roles ───────────────────────────────────────
+
+    public function test_la_ruta_con_su_llave_su_tope_y_su_cupo_y_la_llave_solo_para_super_admin(): void
+    {
+        $this->assertCount(OutreachComplaintController::ROUTE_COUNT, OutreachComplaintController::ROUTES);
+        $ruta = null;
+        foreach (Route::getRoutes() as $r) {
+            if ($r->uri() === 'api/admin/commercial-automation/complaints') {
+                $ruta = $r;
+            }
+        }
+        $this->assertNotNull($ruta);
+        $this->assertSame(['POST'], $ruta->methods());
+        $this->assertSame(OutreachComplaintController::authorizationMap(), ['POST api/admin/commercial-automation/complaints' => AuthorizationMap::resolve($ruta)]);
+        $this->assertSame('commercial_automation.complaints_record', AuthorizationMap::resolve($ruta));
+        $this->assertContains(LimitRequestBodySize::class.':16384', $ruta->gatherMiddleware());
+        $this->assertContains('throttle:ultron-studio-write', $ruta->gatherMiddleware());
+
+        $llave = OutreachAccess::COMPLAINTS_RECORD;
+        $this->assertContains($llave, OutreachAccess::PERMISSIONS);
+        $this->assertContains($llave, PermissionCatalog::all());
+        $this->assertContains($llave, CrmPermission::defaultsFor(Admin::ROLE_SUPER_ADMIN));
+        foreach ([Admin::ROLE_ADMINISTRADOR, Admin::ROLE_RECEPCION, Admin::ROLE_ADMINISTRATIVO, CrmPermission::ROLE_ENTRENADOR] as $rol) {
+            $this->assertNotContains($llave, CrmPermission::defaultsFor($rol), "{$llave} en {$rol}");
+        }
+        $this->assertStringContainsString('No llega por defecto al Administrador', (string) array_column(PermissionCatalog::rows(), null, 'key')[$llave]['help']);
+        // El token compartido no entra (el dominio está excluido).
+        $s = $this->socio();
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->sharedTokenHeaders())->assertStatus(403);
+        $this->assertSame([], self::quejas());
+    }
+
+    public function test_sin_la_llave_o_sin_ver_a_la_persona_403_sin_oraculo_y_sin_escribir(): void
+    {
+        $s = $this->socio();
+        $lead = $this->lead(['member_id' => $s['member']]);
+        $suelto = $this->lead();
+        // Sin la llave: la puerta, exista o no la persona.
+        foreach ([$s['user'], 999999] as $id) {
+            $this->postJson(self::URL, self::queja('member', $id), $this->sesion('SinLlave', ['members.view', 'marketing.view']))
+                ->assertStatus(403)->assertJsonPath('code', 'forbidden');
+        }
+        // Con la llave pero sin ver socios: 403 ANTES de leer la persona, igual exista o no.
+        foreach ([$s['user'], 999999] as $id) {
+            $this->postJson(self::URL, self::queja('member', $id), $this->sesion('Ciega', [OutreachAccess::COMPLAINTS_RECORD]))
+                ->assertStatus(403)->assertJsonPath('code', 'forbidden')->assertJsonPath('required_permission', 'members.view');
+        }
+        // Un prospecto de un socio es el socio: ver prospectos no basta. Uno suelto, sí.
+        $mercadeo = $this->sesion('Mercadeo', [OutreachAccess::COMPLAINTS_RECORD, 'marketing.view']);
+        $this->postJson(self::URL, self::queja('lead', $lead), $mercadeo)->assertStatus(403)->assertJsonPath('required_permission', 'members.view');
+        $this->assertSame([], self::quejas(), 'ninguna petición rechazada escribe');
+        $this->postJson(self::URL, self::queja('lead', $suelto), $mercadeo)->assertCreated();
+        // Con todo: la que no existe, 404.
+        $this->postJson(self::URL, self::queja('member', 999999), $this->recepcion())->assertStatus(404)->assertJsonPath('code', 'person_not_found');
+        $this->assertCount(1, self::quejas());
+    }
+
+    public function test_sin_texto_libre_y_con_listas_cerradas(): void
+    {
+        $s = $this->socio();
+        foreach ([
+            'sin medio' => [['channel' => null], 'channel'], 'medio fuera de la lista' => [['channel' => 'whatsapp'], 'channel'],
+            'categoría fuera de la lista' => [['category' => 'Me cobraron doble'], 'category'], 'sin categoría' => [['category' => null], 'category'],
+            'sin identificador' => [['clientRequestId' => null], 'clientRequestId'], 'identificador que no es uuid' => [['clientRequestId' => 'x'], 'clientRequestId'],
+            'tipo de persona' => [['personType' => 'user'], 'personType'], 'id 0' => [['personId' => 0], 'personId'],
+        ] as $nombre => [$cambio, $campo]) {
+            $r = $this->postJson(self::URL, array_filter(self::queja('member', $s['user'], $cambio), static fn ($v) => $v !== null), $this->recepcion())
+                ->assertStatus(422)->assertJsonPath('code', 'validation_failed');
+            $this->assertSame(['invalid'], $r->json("errors.{$campo}"), $nombre);
+            $this->assertStringNotContainsString('cobraron', (string) $r->getContent(), 'el 422 no repite el valor');
+        }
+        $this->assertSame([], self::quejas());
+
+        // Un campo de más (un texto) se ignora: no se guarda.
+        $this->postJson(self::URL, self::queja('member', $s['user'], ['note' => 'Se quejó a gritos de Ana', 'text' => 'x']), $this->recepcion())->assertCreated();
+        $q = self::quejas()[0];
+        $this->assertSame(['category', 'channel', 'client_request_id', 'recorded_by', 'source'], array_keys(self::sorted(json_decode((string) $q->payload, true))));
+        $this->assertStringNotContainsString('gritos', (string) $q->payload);
+    }
+
+    // ── Lo que escribe ─────────────────────────────────────────────────────
+
+    public function test_registra_el_mismo_hecho_que_la_ia_con_source_staff_sin_texto_ni_telefono(): void
+    {
+        $s = $this->socio();
+        $lead = $this->lead(['member_id' => $s['member'], 'phone' => '3009990001']);
+        $sesion = $this->recepcion();
+        $crid = (string) Str::uuid();
+        $r = $this->postJson(self::URL, self::queja('lead', $lead, ['clientRequestId' => strtoupper($crid), 'channel' => 'phone', 'category' => 'attention']), $sesion)->assertCreated();
+        $this->assertSame([
+            'personType' => 'lead', 'personId' => $lead, 'recordsAs' => ['type' => 'member', 'id' => $s['user']], 'channel' => 'phone', 'category' => 'attention',
+            'source' => 'staff', 'day' => '2026-11-17', 'brake' => ['days' => 30, 'purposes' => ['collections', 'commercial']],
+        ], $r->json('data'));
+        $this->assertFalse($r->json('meta.replayed'));
+
+        [$q] = self::quejas();
+        $admin = Admin::query()->where('name', 'Recepcion')->value('id');
+        $this->assertSame([$s['member'], 'complaint_created:member:'.$s['member'].':complaint:staff:20261117', '2026-11-17 15:00:00'], [(int) $q->member_id, $q->dedupe_key, (string) $q->occurred_at]);
+        $this->assertSame(['category' => 'attention', 'channel' => 'phone', 'client_request_id' => $crid, 'recorded_by' => (int) $admin, 'source' => 'staff'], self::sorted(json_decode((string) $q->payload, true)));
+        foreach (['3009990001', 'Socio', '@facts.test'] as $dato) {
+            $this->assertStringNotContainsString($dato, json_encode((array) $q), 'ni teléfono ni nombre en la fila');
+            $this->assertStringNotContainsString($dato, (string) $r->getContent(), 'ni en la respuesta');
+        }
+    }
+
+    public function test_dos_el_mismo_dia_una_sola_y_la_respuesta_no_dice_si_ya_habia_otra(): void
+    {
+        $s = $this->socio();
+        $a = $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated();
+        $b = $this->postJson(self::URL, self::queja('member', $s['user'], ['channel' => 'phone']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
+        $this->assertCount(1, self::quejas(), 'una al día de Bogotá por persona');
+        $this->assertSame(array_keys($a->json()), array_keys($b->json()), 'la misma forma: no es un oráculo de «ya se quejó»');
+        $this->assertSame([false, false], [$a->json('meta.replayed'), $b->json('meta.replayed')]);
+
+        // 23:59:59 de Bogotá: el mismo día. 00:00 del 18: otro.
+        $this->reloj('2026-11-18 04:59:59');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated();
+        $this->assertCount(1, self::quejas());
+        $this->reloj('2026-11-18 05:00:00');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
+        $this->assertSame(['member:'.$s['member'].':complaint:staff:20261117', 'member:'.$s['member'].':complaint:staff:20261118'],
+            array_map(static fn (object $q): string => substr((string) $q->dedupe_key, strlen('complaint_created:')), self::quejas()));
+    }
+
+    public function test_idempotente_por_client_request_id(): void
+    {
+        $s = $this->socio();
+        $otro = $this->socio();
+        $peticion = self::queja('member', $s['user']);
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertCreated();
+        // Lo mismo: 200 `replayed`, sin fila nueva (también al día siguiente).
+        $r = $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk();
+        $this->assertSame([true, '2026-11-17'], [$r->json('meta.replayed'), $r->json('data.day')]);
+        $this->reloj('2026-11-19 15:00:00');
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true)->assertJsonPath('data.day', '2026-11-17');
+        $this->assertCount(1, self::quejas());
+        // Otro contenido, otra persona u otra cuenta con el mismo identificador: 409.
+        foreach ([['channel' => 'phone'], ['category' => 'other'], ['personId' => $otro['user']]] as $cambio) {
+            $this->postJson(self::URL, array_replace($peticion, $cambio), $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        }
+        $this->postJson(self::URL, $peticion, $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        $this->assertCount(1, self::quejas());
+    }
+
+    public function test_con_el_registro_de_hechos_apagado_409_y_no_escribe(): void
+    {
+        $s = $this->socio();
+        config(['commercial.events_enabled' => false]);
+        $this->postJson(self::URL, [], $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'commercial_events_disabled');
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertStatus(409)->assertJsonPath('code', 'commercial_events_disabled');
+        $this->assertSame(0, DB::table('commercial_events')->count());
+    }
+
+    public function test_si_el_registro_no_queda_es_503_y_no_dice_que_lo_hizo(): void
+    {
+        $s = $this->socio();
+        // La frontera: el registrador contiene el fallo y devuelve null (lo que hace ante un INSERT que falla).
+        $this->app->instance(CommercialEventRecorder::class, Mockery::mock(CommercialEventRecorder::class, ['record' => null]));
+        $this->postJson(self::URL, self::queja('member', $s['user']), $this->recepcion())->assertStatus(503)->assertJsonPath('code', 'complaint_not_recorded');
+        $this->assertSame([], self::quejas());
+    }
+
+    // ── NB3: el tope diario por cuenta y el registro ───────────────────────
+
+    /**
+     * NB3 (`informe-apisec-quejas.md`): una cuenta registra como mucho N quejas al día de Bogotá (20 por defecto,
+     * `outreach.complaints.per_account_per_day`). Pasado el tope, 429 `complaint_daily_limit_reached` y no escribe.
+     * Repetir una petición ya hecha no cuenta; otra cuenta tiene su propio tope; el día siguiente vuelve a empezar.
+     */
+    public function test_nb3_el_tope_diario_por_cuenta_429_sin_escribir_y_las_repeticiones_no_cuentan(): void
+    {
+        config(['outreach.complaints.per_account_per_day' => 3]);
+        $gente = [$this->socio(), $this->socio(), $this->socio(), $this->socio()];
+        $primera = self::queja('member', $gente[0]['user']);
+        $this->postJson(self::URL, $primera, $this->recepcion())->assertCreated();
+        foreach ([1, 2] as $i) {
+            $this->postJson(self::URL, self::queja('member', $gente[$i]['user']), $this->recepcion())->assertCreated();
+        }
+        $this->assertCount(3, self::quejas());
+
+        // La cuarta persona del día: 429, sin escribir y sin decir nada de la persona.
+        $this->postJson(self::URL, self::queja('member', $gente[3]['user']), $this->recepcion())->assertStatus(429)->assertExactJson([
+            'ok' => false, 'code' => 'complaint_daily_limit_reached', 'limit' => 3,
+            'message' => 'Ya registraste 3 quejas hoy, el tope diario de una cuenta. No se ha guardado nada: si hace falta registrar más, pídeselo a un Super Admin.',
+        ]);
+        $this->assertCount(3, self::quejas());
+        // Repetir una petición ya hecha no cuenta ni se bloquea: 200 `replayed`.
+        $this->postJson(self::URL, $primera, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true);
+        $this->assertCount(3, self::quejas());
+        // Otra cuenta: su propio tope.
+        $this->postJson(self::URL, self::queja('member', $gente[3]['user']), $this->sesion('Otra', [OutreachAccess::COMPLAINTS_RECORD, 'members.view']))->assertCreated();
+        $this->assertCount(4, self::quejas());
+        // 23:59:59 de Bogotá: el mismo día, sigue en el tope. 00:00 del 18: vuelve a empezar.
+        $this->reloj('2026-11-18 04:59:59');
+        $this->postJson(self::URL, self::queja('member', $gente[0]['user']), $this->recepcion())->assertStatus(429);
+        $this->reloj('2026-11-18 05:00:00');
+        $this->postJson(self::URL, self::queja('member', $gente[0]['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.day', '2026-11-18');
+        $this->assertCount(5, self::quejas());
+    }
+
+    public function test_nb3_por_defecto_20_y_la_configuracion_no_quita_el_tope(): void
+    {
+        // Sin variable en el entorno, el fichero deja la clave en null y manda el defecto del código.
+        $this->assertNull((require base_path('config/outreach.php'))['complaints']['per_account_per_day']);
+        $this->assertNull(config('outreach.complaints.per_account_per_day'));
+        $this->assertSame(20, OutreachConfig::staffComplaintsPerAccountPerDay());
+        $this->assertStringContainsString("\nCOMMERCIAL_AUTOMATION_COMPLAINTS_PER_ACCOUNT_PER_DAY=\n", (string) file_get_contents(base_path('.env.example')));
+        // Por la ruta: 20 al día, la 21 da 429.
+        for ($i = 0; $i < 20; $i++) {
+            $this->postJson(self::URL, self::queja('member', $this->socio()['user']), $this->recepcion())->assertCreated();
+        }
+        $this->postJson(self::URL, self::queja('member', $this->socio()['user']), $this->recepcion())->assertStatus(429)->assertJsonPath('limit', 20);
+        $this->assertCount(20, self::quejas());
+        // Un entero de 1 a 200 manda (más, 200); 0, un negativo, un texto o nada dejan los 20: no hay forma de quitarlo.
+        foreach ([[7, 7], [1, 1], [200, 200], [500, 200], [0, 20], [-3, 20], ['7', 20], [null, 20], [1.5, 20], [true, 20]] as [$valor, $esperado]) {
+            config(['outreach.complaints.per_account_per_day' => $valor]);
+            $this->assertSame($esperado, OutreachConfig::staffComplaintsPerAccountPerDay(), json_encode($valor));
+        }
+    }
+
+    /**
+     * NB3: dos peticiones a la vez de la misma cuenta no pasan el tope. Contar y registrar van en una transacción con
+     * la fila de la cuenta bloqueada: en PostgreSQL, `SELECT … FROM admins … FOR UPDATE` antes de contar y de insertar
+     * (SQLite no tiene `FOR UPDATE`: se comprueba sobre el SQL, como el resto de los bloqueos del repositorio).
+     */
+    public function test_nb3_solo_en_postgres_cuenta_y_registra_con_la_cuenta_bloqueada(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Solo PostgreSQL: SQLite no tiene FOR UPDATE.');
+        }
+        $s = $this->socio();
+        $sesion = $this->recepcion();
+        $sql = [];
+        DB::listen(function ($q) use (&$sql): void {
+            $sql[] = strtolower((string) $q->sql);
+        });
+        $this->postJson(self::URL, self::queja('member', $s['user']), $sesion)->assertCreated();
+        $bloqueo = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "admins"') && str_ends_with($q, 'for update')));
+        $cuenta = array_key_first(array_filter($sql, static fn (string $q): bool => str_contains($q, 'from "commercial_events"') && str_contains($q, '"occurred_at" <')));
+        $insercion = array_key_first(array_filter($sql, static fn (string $q): bool => str_starts_with($q, 'insert into "commercial_events"')));
+        $this->assertNotNull($bloqueo, 'la cuenta se bloquea');
+        $this->assertTrue($bloqueo < $cuenta && $cuenta < $insercion, 'bloquear, contar y registrar, en ese orden');
+    }
+
+    /** NB3: el registro dice sobre quién fue por su identificador interno (la persona canónica), nunca su nombre ni su teléfono. */
+    public function test_nb3_el_registro_lleva_el_tipo_y_el_id_de_la_persona_y_nada_mas_de_ella(): void
+    {
+        $s = $this->socio();
+        $lead = $this->lead(['member_id' => $s['member'], 'phone' => '3009990001', 'name' => 'Persona Privada']);
+        $sesion = $this->recepcion();
+        Log::spy();
+        $this->postJson(self::URL, self::queja('lead', $lead, ['channel' => 'phone', 'category' => 'attention']), $sesion)->assertCreated();
+        $admin = (int) Admin::query()->where('name', 'Recepcion')->value('id');
+        Log::shouldHaveReceived('info')->with('commercial.complaint.staff_recorded', [
+            'channel' => 'phone', 'category' => 'attention', 'result' => 'recorded', 'by' => $admin, 'subject_type' => 'member', 'subject_id' => $s['member'],
+        ])->once();
+    }
+
+    // ── PT-18 · Un socio del CRM es su `users.id` ───────────────────────────
+
+    /**
+     * PT-18 (B-1 de la revisión final del CRM) · El CRM nombra a un socio por su
+     * `users.id`. Con los ids cruzados (el `users.id` de Ana es el `members.id`
+     * de Luis; `users.id ≠ members.id` para los dos), la queja de Ana cae sobre
+     * la ficha de Ana y el freno es suyo; Luis no recibe nada hasta que se
+     * registra la suya. La respuesta nombra a la persona con el id que mandó el
+     * CRM, también en `recordsAs`. Repetirla es la misma (200 `replayed`).
+     */
+    public function test_pt18_la_queja_de_un_socio_cae_sobre_ese_socio(): void
+    {
+        $ana = $this->socio();
+        $luis = $this->socio([], ['id' => $ana['user']]);
+        $this->assertSame($ana['user'], $luis['member'], 'el users.id de Ana es el members.id de Luis');
+        $this->assertNotSame($ana['user'], $ana['member']);
+        $this->assertNotSame($luis['user'], $luis['member']);
+
+        $peticion = self::queja('member', $ana['user']);
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertCreated()
+            ->assertJsonPath('data.personType', 'member')->assertJsonPath('data.personId', $ana['user'])
+            ->assertJsonPath('data.recordsAs', ['type' => 'member', 'id' => $ana['user']]);
+        $this->assertSame([[$ana['member'], 'complaint_created:member:'.$ana['member'].':complaint:staff:20261117']],
+            array_map(static fn (object $q): array => [(int) $q->member_id, (string) $q->dedupe_key], self::quejas()), 'la queja es de Ana, no de Luis');
+        $this->postJson(self::URL, $peticion, $this->recepcion())->assertOk()->assertJsonPath('meta.replayed', true)->assertJsonPath('data.personId', $ana['user']);
+        $this->assertCount(1, self::quejas());
+
+        $this->postJson(self::URL, self::queja('member', $luis['user']), $this->recepcion())->assertCreated()->assertJsonPath('data.recordsAs.id', $luis['user']);
+        $this->assertSame([$ana['member'], $luis['member']], array_map(static fn (object $q): int => (int) $q->member_id, self::quejas()));
+    }
+
+    /**
+     * PT-18 · Un número que es el `members.id` de alguien pero no el `users.id`
+     * de nadie no es nadie: 404 `person_not_found` con el MISMO cuerpo que un id
+     * que no existe y que un usuario sin ficha de socio. 0 quejas escritas.
+     */
+    public function test_pt18_un_members_id_que_no_es_un_users_id_es_404_y_no_escribe(): void
+    {
+        $ana = $this->socio();
+        $this->assertSame(0, DB::table('users')->where('id', $ana['member'])->count(), 'el members.id de Ana no es el users.id de nadie');
+        $sinFicha = (int) DB::table('users')->insertGetId(['id' => self::USERS_FROM - 1, 'name' => 'Sin ficha', 'email' => 'sin-ficha-'.Str::random(6).'@facts.test',
+            'password' => 'x', 'created_at' => self::utc('2026-01-01 12:00'), 'updated_at' => self::utc('2026-01-01 12:00')]);
+        $nadie = $this->postJson(self::URL, self::queja('member', 999999), $this->recepcion())->assertStatus(404)->assertJsonPath('code', 'person_not_found')->getContent();
+        foreach (['el members.id de Ana' => $ana['member'], 'un usuario sin ficha de socio' => $sinFicha] as $que => $id) {
+            $this->assertSame($nadie, $this->postJson(self::URL, self::queja('member', $id), $this->recepcion())->assertStatus(404)->getContent(), $que);
+        }
+        $this->assertSame(0, DB::table('commercial_events')->count());
+    }
+
+    // ── De extremo a extremo: la escalera ──────────────────────────────────
+
+    public function test_tras_registrarla_la_escalera_niega_comercial_y_cobranza_y_el_servicio_no_cambia(): void
+    {
+        $this->runFlags('shadow');
+        $this->liveStrategy($this->validContent($this->assistedTemplate(), ['exclusions' => null]));
+        $socio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234567');
+        $limpio = $this->qualifyingMember(self::utcAt(self::NOW), 5, '3001234568');
+        $this->postJson(self::URL, self::queja('member', $socio['user'], ['channel' => 'in_person']), $this->recepcion())->assertCreated();
+
+        // Comercial, por el planificador real: la inscripción sale por N6 y no hay trabajo para ella.
+        $planner = new OutreachPlanner;
+        $planner->sweep(now(), true);
+        $planner->planDue(now());
+        $estado = DB::table('outreach_enrollments')->pluck('exit_reason', 'subject_key')->all();
+        $this->assertSame(['complaint_recent', null], [$estado[$socio['key']], $estado[$limpio['key']]]);
+        $this->assertSame(1, DB::table('outreach_jobs')->count(), 'solo la persona sin queja');
+        $salida = DB::table('outreach_decisions')->where('kind', 'exit')->first();
+        $this->assertSame(['N6', ['complaint_recent']], [$salida->level, json_decode((string) $salida->reasons, true)]);
+        foreach (DB::table('outreach_decisions')->orderBy('id')->get() as $d) {
+            $r = (new OutreachReplay)->replay((string) $d->uuid);
+            $this->assertSame(OutreachReplay::SAME, $r['result'], json_encode($r));
+        }
+
+        // Las tres finalidades sobre la foto REAL de la persona (BatchSnapshotBuilder → EngineFacts) y la escalera real:
+        // comercial y cobranza niegan en N6; el servicio decide lo mismo que sin la queja.
+        $eventos = CoreProjection::snapshot($this->snap([$socio['key']], self::NOW, CoreProjection::selectionFor(['events' => ['complaint_created']]))->subject($socio['key']))->events;
+        $this->assertSame(['complaint_created'], array_column($eventos, 'key'));
+        $base = json_decode((string) file_get_contents(base_path('tests/fixtures/outreach/policy-ladder-cases.json')), true)['baseInput'];
+        foreach (['commercial' => true, 'collections' => true, 'service' => false] as $finalidad => $frena) {
+            $queja = LadderInputBuilder::complaintRecently($eventos, self::utcAt(self::NOW), $finalidad);
+            $this->assertSame($frena, $queja, $finalidad);
+            $con = PolicyLadder::decide(array_replace_recursive($base, ['purpose' => $finalidad, 'context' => ['complaintRecently' => $queja]]));
+            $sin = PolicyLadder::decide(array_replace_recursive($base, ['purpose' => $finalidad, 'context' => ['complaintRecently' => false]]));
+            if ($frena) {
+                $this->assertSame(['deny', 'N6', ['complaint_recent'], 'exit_complaint'], [$con['verdict'], $con['level'], $con['reasons'], $con['effect']], $finalidad);
+            } else {
+                $this->assertSame($sin, $con, 'el servicio no cambia');
+                $this->assertNotContains('complaint_recent', $con['reasons']);
+            }
+        }
+
+        // Pasada la ventana (día 31 de Bogotá), ya no frena.
+        $this->assertFalse(LadderInputBuilder::complaintRecently($eventos, self::utcAt('2026-12-18 05:00:00'), 'commercial'));
+        $this->assertTrue(LadderInputBuilder::complaintRecently($eventos, self::utcAt('2026-12-18 04:59:59'), 'commercial'), 'el día 30 está dentro');
+        $this->assertSame(OutreachCatalog::MAX_WINDOW_DAYS, ComplaintCommercialEmitter::DISMISS_WINDOW_DAYS, 'el emisor descarta hasta donde lee el H9');
+    }
+
+    /** @param  array<string, mixed>  $a @return array<string, mixed> */
+    private static function sorted(array $a): array
+    {
+        ksort($a);
+
+        return $a;
+    }
+}

@@ -17,6 +17,10 @@
 -- en las 10 con estado. Lo esperado va en el comentario de cada columna: «antes → después». Si algo no cuadra, PARAR y
 -- avisar a database-specialist. NO se ejecuta nunca `migrate:rollback` en producción: down() se niega con filas
 -- (§9.2 nivel 3: las tablas quedan).
+-- C9-1 (cierre de ULTRON STUDIO, 2026_11_22_100001_create_outreach_consents_table; plans/informes-cierre/
+-- informe-db-consent.md): la novena tabla de la familia, `outreach_consents`. Sus comprobaciones van en el ÚLTIMO
+-- bloque («C9-1»); en los recuentos de la familia de arriba, lo que suma C9-1 va entre corchetes.
+-- ultron_studio_forbid() y outreach_forbid() no cambian ni un byte con C9-1.
 SELECT
   (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
     WHERE NOT t.tgisinternal AND c.relname LIKE 'ultron\_studio\_%')                       AS disparadores_studio,    -- 68 → 123
@@ -34,17 +38,17 @@ SELECT
       'ultron_studio_message_templates', 'ultron_studio_strategy_versions', 'ultron_studio_strategy_simulations',
       'ultron_studio_strategy_reviews', 'ultron_studio_strategy_publications'))             AS check_gobierno_h9,      -- 0 → 53 (5+6+12+11+5+4+10)
   (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-    WHERE NOT t.tgisinternal AND c.relname LIKE 'outreach\_%')                             AS disparadores_outreach,  -- 0 → 51 (6+4+10+11+7+5+5+3)
+    WHERE NOT t.tgisinternal AND c.relname LIKE 'outreach\_%')                             AS disparadores_outreach,  -- 0 → 51 (6+4+10+11+7+5+5+3) [C9-1: +8; ensayo local 51 → 59]
   (SELECT count(*) FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid
-    WHERE k.contype = 'c' AND c.relname LIKE 'outreach\_%')                                AS check_outreach,         -- 0 → 75 (7+2+12+19+13+11+8+3)
+    WHERE k.contype = 'c' AND c.relname LIKE 'outreach\_%')                                AS check_outreach,         -- 0 → 75 (7+2+12+19+13+11+8+3) [C9-1: +13; ensayo local 75 → 88]
   (SELECT count(*) FROM pg_index i JOIN pg_class t ON t.oid = i.indrelid
-    WHERE t.relname LIKE 'outreach\_%' AND i.indpred IS NOT NULL)                          AS parciales_outreach,     -- 0 → 3 (oenr_one_open, ojob_one_live, obrk_one_open)
-  (SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'outreach\_%') AS tablas_outreach,   -- 0 → 8 (si antes no es 0, PARAR: hay tablas outreach_* que no son del H9)
+    WHERE t.relname LIKE 'outreach\_%' AND i.indpred IS NOT NULL)                          AS parciales_outreach,     -- 0 → 3 (oenr_one_open, ojob_one_live, obrk_one_open) [C9-1: +0, no tiene parciales]
+  (SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'outreach\_%') AS tablas_outreach,   -- 0 → 8 (si antes no es 0, PARAR: hay tablas outreach_* que no son del H9) [C9-1: +1; ensayo local 8 → 9]
   (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
     WHERE NOT t.tgisinternal AND (c.relname LIKE 'outreach\_%' OR c.relname LIKE 'ultron\_studio\_%')
       AND t.tgenabled <> 'O')                                                              AS disparadores_apagados,  -- 0 → 0 (una supresión 1581 a medias los dejaría apagados: no puede pasar, es una transacción)
   (SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\_%' OR proname LIKE 'ultron\_studio\_chk\_%'
-     OR proname = 'ultron_studio_strategy_publication_chain')                              AS funciones_h9,           -- 0 → 33 (20 del gobierno, 13 de la ejecución)
+     OR proname = 'ultron_studio_strategy_publication_chain')                              AS funciones_h9,           -- 0 → 33 (20 del gobierno, 13 de la ejecución) [C9-1: +3; ensayo local 37 → 40, con las migraciones posteriores a DB9]
   (SELECT count(*) FROM pg_proc WHERE (proname LIKE 'outreach\_%' OR proname LIKE 'ultron\_studio\_chk\_%'
      OR proname = 'ultron_studio_strategy_publication_chain') AND prosecdef)              AS funciones_h9_definer,   -- 0 → 0 (ninguna SECURITY DEFINER)
   (SELECT count(DISTINCT pg_get_userbyid(proowner)) FROM pg_proc
@@ -99,7 +103,7 @@ SELECT a.pid, a.state, now() - a.xact_start AS dura, left(a.query, 60) AS consul
 -- w UPDATE (has_any_column_privilege) · d DELETE · D TRUNCATE · s USAGE de su secuencia. Después:
 --   ra---s en las 5 de solo inserción: ultron_studio_strategy_publications (la cadena), ultron_studio_strategy_reviews,
 --          ultron_studio_strategy_simulations, outreach_decisions, outreach_outcomes (REVOKE UPDATE, DELETE de DB9;
---          42501 si se intenta);
+--          42501 si se intenta); y, con C9-1, en outreach_consents (REVOKE UPDATE, DELETE, TRUNCATE);
 --   raw--s en las 10 con estado: ultron_studio_person_bindings, ultron_studio_strategies,
 --          ultron_studio_message_templates, ultron_studio_strategy_versions, outreach_runs, outreach_cursors,
 --          outreach_enrollments, outreach_jobs, outreach_brakes, outreach_budget_counters (REVOKE DELETE de DB9; los
@@ -160,3 +164,39 @@ SELECT (SELECT count(*) FROM ultron_studio_publications)          AS filas_caden
        (SELECT count(*) FROM ultron_studio_audit_events)          AS filas_libro,
        (SELECT count(*) FROM ultron_studio_integration_snapshots) AS filas_instantaneas,
        (SELECT count(*) FROM ultron_studio_versions)              AS filas_versiones;
+-- ══ C9-1 · el libro de autorizaciones de contacto (outreach_consents) ══════════════════════════════════════════════
+-- Antes → después de `ironbody-migrate --path=… 2026_11_22_100001_create_outreach_consents_table.php`. Todo por to_regclass:
+-- antes (sin la tabla) no falla. Si algo no cuadra, PARAR y avisar a database-specialist; nunca `migrate:rollback`.
+SELECT to_regclass('public.outreach_consents') IS NOT NULL                                AS c9_tabla,               -- f → t
+  (SELECT count(*) FROM pg_trigger t WHERE NOT t.tgisinternal
+      AND t.tgrelid = to_regclass('public.outreach_consents'))                             AS c9_disparadores,        -- 0 → 8 (5 de fila, 2 sobre la propia tabla, 1 contra TRUNCATE)
+  (SELECT count(*) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgenabled <> 'O'
+      AND t.tgrelid = to_regclass('public.outreach_consents'))                             AS c9_disparadores_apagados, -- 0 → 0 (la supresión no apaga ninguno de esta tabla)
+  (SELECT count(*) FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid WHERE NOT t.tgisinternal
+      AND t.tgrelid = to_regclass('public.outreach_consents') AND p.proname = 'outreach_forbid') AS c9_con_outreach_forbid, -- 0 → 0 (tiene la suya, outreach_consent_forbid)
+  (SELECT count(*) FROM pg_constraint k WHERE k.contype = 'c'
+      AND k.conrelid = to_regclass('public.outreach_consents'))                            AS c9_check,               -- 0 → 13
+  (SELECT count(*) FROM pg_constraint k WHERE k.contype = 'f'
+      AND k.conrelid = to_regclass('public.outreach_consents')
+      AND k.confrelid = k.conrelid)                                                        AS c9_fk_a_si_misma,       -- 0 → 1 (ocon_request_fk: la resolución a su petición; ninguna otra FK)
+  (SELECT count(*) FROM pg_index i WHERE i.indisunique
+      AND i.indrelid = to_regclass('public.outreach_consents'))                            AS c9_unicos,              -- 0 → 4 (pkey, uuid, client_request_id, request_uuid)
+  (SELECT pg_get_indexdef(i.indexrelid) LIKE '%(subject_key, purpose, channel, id) INCLUDE (kind, request_uuid, phone_ref)'
+     FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = 'ocon_subject_idx') AS c9_indice_cubridor, -- (vacío) → t
+  (SELECT count(*) FROM pg_index i WHERE NOT (i.indisvalid AND i.indisready)
+      AND i.indrelid = to_regclass('public.outreach_consents'))                            AS c9_indices_invalidos,   -- 0 → 0
+  (SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\_consent\_%')                 AS c9_funciones,           -- 0 → 3 (outreach_consent_forbid y 2 outreach_consent_chk_*)
+  (SELECT count(*) FROM pg_proc WHERE proname LIKE 'outreach\_consent\_%' AND prosecdef)   AS c9_funciones_definer,   -- 0 → 0
+  (SELECT string_agg(DISTINCT pg_get_userbyid(proowner), ',') FROM pg_proc
+    WHERE proname LIKE 'outreach\_consent\_%')                                             AS c9_dueno_funciones,     -- (vacío) → iron
+  (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'outreach_consents') AS c9_dueno_tabla, -- (vacío) → iron
+  (SELECT md5(pg_get_functiondef(oid)) FROM pg_proc WHERE proname = 'outreach_forbid')      AS huella_outreach_forbid, -- la misma antes y después (C9-1 no la toca)
+  CASE WHEN has_table_privilege(:'app', to_regclass('public.outreach_consents')::oid, 'SELECT') THEN 'r' ELSE '-' END ||
+  CASE WHEN has_table_privilege(:'app', to_regclass('public.outreach_consents')::oid, 'INSERT') THEN 'a' ELSE '-' END ||
+  CASE WHEN has_any_column_privilege(:'app', to_regclass('public.outreach_consents')::oid, 'UPDATE') THEN 'w' ELSE '-' END ||
+  CASE WHEN has_table_privilege(:'app', to_regclass('public.outreach_consents')::oid, 'DELETE') THEN 'd' ELSE '-' END ||
+  CASE WHEN has_table_privilege(:'app', to_regclass('public.outreach_consents')::oid, 'TRUNCATE') THEN 'D' ELSE '-' END ||
+  CASE WHEN has_sequence_privilege(:'app', to_regclass('public.outreach_consents_id_seq')::oid, 'USAGE') THEN 's' ELSE '-' END AS c9_app, -- ------ → ra---s
+  (SELECT count(*) FROM migrations WHERE migration = '2026_11_22_100001_create_outreach_consents_table') AS c9_migracion_registrada, -- 0 → 1
+  (SELECT CASE WHEN to_regclass('public.outreach_consents') IS NULL THEN NULL
+          ELSE (xpath('/row/n/text()', query_to_xml('SELECT count(*) AS n FROM public.outreach_consents', false, true, '')))[1]::text END) AS c9_filas; -- (vacío) → 0 (inerte: nada la escribe hasta C9-3)

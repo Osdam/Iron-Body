@@ -41,6 +41,11 @@ use DateTimeInterface;
 final class OutreachCatalog
 {
     /**
+     * `2026-11-22.1` (Q1-8 del plan de quejas, Enmienda Q1-8 del contrato):
+     * `complaint_dismissed` entra en el vocabulario (una persona descartó una
+     * queja de la IA). Tiene emisor (`ComplaintCommercialEmitter`): disponible,
+     * sin finalidad y nunca disparador, como `complaint_created`; y la queja que
+     * descarta deja de leerse (`EngineFacts::events()`). Antes,
      * `2026-11-11.2` (Q1-2 del plan de quejas): `complaint_created` tiene
      * emisor (`MarketingAiActionCommercialObserver`) y pasa a `available`;
      * sigue sin ser disparador (sin finalidad, DF-K4). Antes, `2026-11-11.1`
@@ -49,7 +54,7 @@ final class OutreachCatalog
      * disparador; y `2026-11-10.2` (L9-29): la clave de ciclo de las clases es
      * `cls:{class_id}:{session_date}` (keyVersion 2).
      */
-    public const VERSION = 'outreach-catalog/2026-11-11.2';
+    public const VERSION = 'outreach-catalog/2026-11-22.1';
 
     /** La forma de {@see export()}. */
     public const EXPORT_CONTRACT = 'outreach-catalog-export/1';
@@ -174,13 +179,14 @@ final class OutreachCatalog
     public const EVENT_CLASSES = [self::CLASS_CRM_FACT, self::CLASS_INTEGRATION, self::CLASS_OUTCOME, self::CLASS_PERIODIC];
 
     /**
-     * Los 27 eventos de `CommercialVocabulary::EVENTS` (copiados; la prueba los
+     * Los 28 eventos de `CommercialVocabulary::EVENTS` (copiados; la prueba los
      * ata) → sus finalidades posibles. Sin finalidad: no abren inscripciones
-     * (`complaint_created`, DF-K4, y `human_requested`, que solo DETIENE).
+     * (`complaint_created`, DF-K4; `complaint_dismissed`, Q1-8; y
+     * `human_requested`, que solo DETIENE).
      */
     public const CRM_EVENTS = [
         'app_linked' => ['commercial'], 'appointment_completed' => ['commercial', 'service'], 'appointment_created' => ['commercial', 'service'],
-        'attendance_milestone' => ['commercial'], 'complaint_created' => [], 'customer_satisfied' => ['commercial'], 'first_checkin' => ['commercial'],
+        'attendance_milestone' => ['commercial'], 'complaint_created' => [], 'complaint_dismissed' => [], 'customer_satisfied' => ['commercial'], 'first_checkin' => ['commercial'],
         'human_requested' => [], 'inactivity_detected' => ['commercial'], 'invoice_rejected' => ['service'], 'invoice_requested' => ['service'],
         'invoice_validated' => ['service'], 'lead_created' => ['commercial'], 'lead_qualified' => ['commercial'], 'membership_activated' => ['commercial'],
         'membership_expired' => ['commercial'], 'membership_renewed' => ['commercial'], 'objection_raised' => ['commercial'], 'offer_presented' => ['commercial'],

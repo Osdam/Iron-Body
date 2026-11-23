@@ -330,6 +330,18 @@ final class CrmPermission
             'ultron.person_bindings_manage',
             'commercial_automation.simulate_real',
             'commercial_automation.release',
+            // C9 (Enmienda C9 del H9): las autorizaciones de contacto por WhatsApp llevan
+            // datos personales y habilitan mensajes: solo Super Admin por defecto, como
+            // los contactos de voz; se reparten a mano (cuatro ojos: hacen falta dos cuentas).
+            'commercial_automation.consents_record',
+            'commercial_automation.consents_confirm',
+            // Q1-8 (Enmienda Q1-8 del H9): registrar una queja presencial o por teléfono es un dato
+            // personal («esta persona se quejó») y calla el contacto automático 30 días: solo Super
+            // Admin por defecto, como las llaves vecinas; se reparte a mano a quien atiende en recepción.
+            'commercial_automation.complaints_record',
+            // Q1-8 (B1 de la revisión de API): descartar una queja de la IA SUELTA su freno (vuelven los
+            // mensajes comerciales y de cobranza): solo Super Admin por defecto, como `release`.
+            'commercial_automation.complaints_dismiss',
             // Plantillas de WhatsApp de Meta desde el CRM (L9-96, PLANTILLAS_META_PLAN
             // §5.10): enviar crea plantillas reales en la cuenta de WhatsApp del gimnasio
             // (irreversible) y da fe de lo que Meta responde. Solo Super Admin por defecto.

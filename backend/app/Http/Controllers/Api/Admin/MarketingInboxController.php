@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\MarketingConversation;
+use App\Observers\Commercial\ComplaintCommercialEmitter;
 use App\Services\Marketing\InboxContextService;
 use App\Services\Marketing\MarketingConversationAssignmentService;
 use App\Services\Marketing\MarketingConversationNoteService;
@@ -15,6 +16,9 @@ use App\Services\Marketing\MarketingInboxService;
 use App\Services\Marketing\MarketingManualReplyService;
 use App\Services\Marketing\MarketingManualTakeoverService;
 use App\Services\Marketing\MarketingStaffReviewService;
+use App\Services\Observability\ChannelLog;
+use App\Services\Outreach\Run\OutreachAccess;
+use App\Support\Access\CrmPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -465,16 +469,57 @@ class MarketingInboxController extends Controller
             return $r;
         }
 
-        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            // Q1-8: la categoría cerrada al resolver una revisión marcada como queja. Opcional: sin ella, todo como siempre.
+            'complaint_category' => ['nullable', 'string', Rule::in(ComplaintCommercialEmitter::REVIEW_CATEGORIES)],
+            // NB2 (Q1-8): la acción de la IA más reciente que vio quien decide (`ai_actions[].id` del detalle). Opcional;
+            // solo cuenta con `not_a_complaint`: si la IA marcó otra queja después, 409 y nada se descarta.
+            'last_seen_ai_action_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $categoria = $data['complaint_category'] ?? null;
+        // B1 (Q1-8): «No era una queja» SUELTA el freno de las quejas de la IA. Exige su propia llave, ANTES de leer
+        // la conversación y de abrir la transacción: sin ella, 403 y nada escrito (la revisión sigue pendiente).
+        // Confirmarla, «otra» o resolver sin categoría: como siempre, con la capacidad del Inbox.
+        if ($categoria === ComplaintCommercialEmitter::NOT_A_COMPLAINT && ($r = $this->deniedWithoutComplaintDismiss($request, $id))) {
+            return $r;
+        }
 
         $conversation = $this->findConversation($id);
         if (! $conversation) {
             return $this->notFound();
         }
 
-        $staffReview->resolve($conversation, $this->adminId($request), $data['note'] ?? null);
+        if ($categoria === null) {
+            $staffReview->resolve($conversation, $this->adminId($request), $data['note'] ?? null);
 
-        return response()->json(['ok' => true, 'staff_review_pending' => false]);
+            return response()->json(['ok' => true, 'staff_review_pending' => false]);
+        }
+
+        $vista = isset($data['last_seen_ai_action_id']) ? (int) $data['last_seen_ai_action_id'] : null;
+        $descartadas = $staffReview->resolveComplaint($conversation, $this->adminId($request), $categoria, $data['note'] ?? null, $vista);
+
+        return response()->json(['ok' => true, 'staff_review_pending' => false, 'complaint' => ['category' => $categoria, 'dismissed' => $descartadas]]);
+    }
+
+    /**
+     * B1 (Q1-8): sin `commercial_automation.complaints_dismiss`, el 403 de la puerta (`forbidden` +
+     * `required_permission`). Soltar frenos es solo de Super Admin por defecto (`CrmPermission`).
+     */
+    private function deniedWithoutComplaintDismiss(Request $request, int $conversationId): ?JsonResponse
+    {
+        if (CrmPermission::allows($this->admin($request), OutreachAccess::COMPLAINTS_DISMISS)) {
+            return null;
+        }
+        // Un intento de soltar un freno sin la llave es una señal de seguridad, no ruido (como `auth:admin:forbidden`).
+        ChannelLog::warning('commercial.complaint.dismiss_forbidden', ['conversation_id' => $conversationId, 'by' => $this->adminId($request)]);
+
+        return response()->json([
+            'ok' => false,
+            'code' => 'forbidden',
+            'message' => 'No tienes permiso para esta acción.',
+            'required_permission' => OutreachAccess::COMPLAINTS_DISMISS,
+        ], 403);
     }
 
     // ── 11. Métricas ──────────────────────────────────────────────────────────────

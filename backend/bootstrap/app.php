@@ -50,6 +50,13 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/voice.php'));
+
+            // AUTOMATIZACIÓN COMERCIAL (contrato H9 §7, Enmienda C9): las
+            // autorizaciones de contacto (/api/admin/commercial-automation/*),
+            // en su propio fichero. Mismo grupo `api`.
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/commercial-automation.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

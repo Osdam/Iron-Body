@@ -893,6 +893,16 @@ final class AuthorizationMap
         'GET api/admin/ultron-studio/outreach/assisted/queue' => 'commercial_automation.assisted_work',
         'POST api/admin/ultron-studio/outreach/assisted/{uuid}/claim' => 'commercial_automation.assisted_work',
         'POST api/admin/ultron-studio/outreach/assisted/{uuid}/outcome' => 'commercial_automation.assisted_work',
+        // C9-3 (Enmienda C9): las autorizaciones de contacto (routes/commercial-automation.php, 5 rutas,
+        // OutreachConsentController::ROUTES). Dentro, además, una persona y la llave de VER a la persona.
+        'GET api/admin/commercial-automation/consents' => ['commercial_automation.consents_record', 'commercial_automation.consents_confirm'],
+        'POST api/admin/commercial-automation/consents' => 'commercial_automation.consents_record',
+        'POST api/admin/commercial-automation/consents/{uuid}/confirm' => 'commercial_automation.consents_confirm',
+        'POST api/admin/commercial-automation/consents/{uuid}/reject' => 'commercial_automation.consents_confirm',
+        'POST api/admin/commercial-automation/consents/revoke' => ['commercial_automation.consents_record', 'commercial_automation.consents_confirm'],
+        // Q1-8 (Enmienda Q1-8): registrar una queja presencial o por teléfono (OutreachComplaintController::ROUTES).
+        // Dentro, además, una persona y la llave de VER a la persona.
+        'POST api/admin/commercial-automation/complaints' => 'commercial_automation.complaints_record',
 
         // VOZ Y TELEFONÍA · Hito 8 (D8-22, «API»): el CRM de la telefonía en
         // routes/voice.php. El registro, las métricas y el estado, con
@@ -1048,6 +1058,11 @@ final class AuthorizationMap
         // (`POST strategies/versions/{uuid}/simulations`, `ultron.strategies_edit`);
         // el controlador exige además esta llave cuando `sample` es `real`.
         'commercial_automation.simulate_real',
+        // Q1-8 (B1 de la revisión de API): descartar una queja de la IA viaja por la misma ruta que resolver
+        // cualquier revisión del Inbox (`POST marketing/inbox/conversations/{id}/staff-review/resolve`,
+        // `marketing.manage`); el controlador exige además esta llave cuando `complaint_category` es
+        // `not_a_complaint`, porque suelta un freno.
+        'commercial_automation.complaints_dismiss',
     ];
 
     /**
