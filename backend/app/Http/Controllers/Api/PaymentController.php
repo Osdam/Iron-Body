@@ -362,6 +362,12 @@ class PaymentController extends Controller
      * con su justificación, que queda auditada. Un importe distinto sigue
      * siendo posible; lo que deja de ser posible es que ocurra en silencio.
      *
+     * Con Pricing V2 ENCENDIDO esta regla no corre: la comparación estricta la
+     * hace applyAuthoritativePricing() contra el bruto que cotiza el backend
+     * (IVA incluido), con las mismas salidas. Compararlo además aquí con
+     * `plan.price` crudo contradecía a V2 en un plan `base_plus_tax` (ningún
+     * importe pasaba las dos reglas). Con V2 apagado, nada cambia.
+     *
      * @param  array<string, mixed>  $data
      *
      * @throws ValidationException
@@ -369,6 +375,10 @@ class PaymentController extends Controller
     private function assertAmountMatchesPlan(array $data): void
     {
         if (empty($data['plan_id']) || ($data['amount_override'] ?? false)) {
+            return;
+        }
+
+        if (config('billing.pricing.v2_enabled', false)) {
             return;
         }
 

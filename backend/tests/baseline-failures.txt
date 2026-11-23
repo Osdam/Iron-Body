@@ -1,1 +1,0 @@
-Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
