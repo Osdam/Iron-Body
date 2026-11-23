@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Services\UltronStudio\StudioLabEngineFlow;
+use App\Services\UltronStudio\StudioLabEngineModelClient;
 use App\Services\UltronStudio\StudioLabModelClient;
 use App\Services\UltronStudio\StudioLabPrompts;
 use Closure;
@@ -22,8 +24,24 @@ use RuntimeException;
  *    para un fallo clasificado.
  * Sin guion para una llamada, falla la prueba: ninguna llamada pasa sin verse.
  */
-final class ScriptedLabClient implements StudioLabModelClient
+final class ScriptedLabClient implements StudioLabEngineModelClient, StudioLabModelClient
 {
+    /**
+     * Apartado 5 del cierre: el guion de los nodos del motor, aparte. Cada paso
+     * es `['node' => 'Composer', 'output' => [...], 'usage' => [in, out]]` o
+     * `['node' => …, 'class' => 'timeout'|…]`; el nodo se comprueba (la prueba
+     * dice qué camino espera). Lo llamado queda en `$engineCalls`.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public array $engineScript = [];
+
+    /** @var list<array{node:string,system:string,user:string,timeout:int}> */
+    public array $engineCalls = [];
+
+    /** Se ejecuta en cada llamada del motor, antes de contestar (p. ej. para mover el reloj). @var (Closure(int): void)|null */
+    public ?Closure $whileEngineWaiting = null;
+
     /** @var list<array{role:string,input:string,maxOutputTokens:int}> */
     public array $calls = [];
 
@@ -66,6 +84,32 @@ final class ScriptedLabClient implements StudioLabModelClient
         }
 
         return ['status' => self::STATUS_OK, 'output' => $salida, 'usage' => $uso ?? ['inputTokens' => 0, 'outputTokens' => 0, 'reasoningTokens' => 0], 'class' => null, 'http' => 200, 'latencyMs' => 1, 'exception' => null];
+    }
+
+    public function completeEngine(string $node, string $system, string $user, int $timeoutSeconds): array
+    {
+        $this->engineCalls[] = ['node' => $node, 'system' => $system, 'user' => $user, 'timeout' => $timeoutSeconds];
+        if ($this->whileEngineWaiting !== null) {
+            ($this->whileEngineWaiting)(count($this->engineCalls));
+        }
+        $paso = array_shift($this->engineScript);
+        if ($paso === null) {
+            throw new RuntimeException("El guion del motor no tiene paso para «{$node}».");
+        }
+        if (($paso['node'] ?? null) !== $node) {
+            throw new RuntimeException("El guion esperaba «{$paso['node']}» y el recorrido llamó a «{$node}».");
+        }
+        $uso = isset($paso['usage']) && is_array($paso['usage'])
+            ? ['inputTokens' => (int) $paso['usage'][0], 'outputTokens' => (int) $paso['usage'][1], 'reasoningTokens' => 0]
+            : null;
+        if (isset($paso['class'])) {
+            return ['status' => self::STATUS_ERROR, 'output' => null, 'usage' => $uso, 'class' => $paso['class'], 'http' => $paso['http'] ?? null, 'latencyMs' => 1, 'exception' => null];
+        }
+        if (! StudioLabPrompts::conforms(StudioLabEngineFlow::schemaOf($node), $paso['output'])) {
+            throw new RuntimeException("La salida del guion para «{$node}» no cumple su esquema.");
+        }
+
+        return ['status' => self::STATUS_OK, 'output' => $paso['output'], 'usage' => $uso ?? ['inputTokens' => 0, 'outputTokens' => 0, 'reasoningTokens' => 0], 'class' => null, 'http' => 200, 'latencyMs' => 1, 'exception' => null];
     }
 
     /** Lo que queda del guion sin consumir. */

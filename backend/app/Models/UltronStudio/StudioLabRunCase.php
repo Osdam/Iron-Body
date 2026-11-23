@@ -39,6 +39,7 @@ use LogicException;
  * @property list<array<string, mixed>>|null $checks
  * @property array<string, mixed>|null $judge
  * @property list<array<string, mixed>>|null $calls
+ * @property array<string, mixed>|null $engine el recorrido del motor (solo en sus ejecuciones; apartado 5 del cierre)
  * @property string $budget_day
  * @property int $reserved_micros
  * @property int|null $cost_micros
@@ -68,9 +69,13 @@ class StudioLabRunCase extends Model
     /** Terminales e inmutables (disparador `uslc_forbid_terminal_update`). */
     public const TERMINAL_STATUSES = [self::STATUS_DONE, self::STATUS_ERROR, self::STATUS_SKIPPED];
 
-    /** Lo que escribe el paso que procesa el caso (o lo salta). */
+    /**
+     * Lo que escribe el paso que procesa el caso (o lo salta). `engine`
+     * (apartado 5 del cierre, migración `2026_11_22_100001`): el recorrido del
+     * motor, solo en sus ejecuciones.
+     */
     public const MUTABLE = [
-        'status', 'outcome', 'error_code', 'reply', 'checks', 'judge', 'calls',
+        'status', 'outcome', 'error_code', 'reply', 'checks', 'judge', 'calls', 'engine',
         'cost_micros', 'overrun_micros', 'input_tokens', 'output_tokens',
         'started_at', 'finished_at', 'updated_at',
     ];
@@ -82,7 +87,7 @@ class StudioLabRunCase extends Model
     ];
 
     /** Lo que se escribe en JSON: el UPDATE del constructor no aplica los casts. */
-    private const JSON_COLUMNS = ['checks', 'judge', 'calls'];
+    private const JSON_COLUMNS = ['checks', 'judge', 'calls', 'engine'];
 
     protected $table = 'ultron_studio_lab_run_cases';
 
@@ -99,6 +104,7 @@ class StudioLabRunCase extends Model
             'checks' => 'array',
             'judge' => 'array',
             'calls' => 'array',
+            'engine' => 'array',
             'reserved_micros' => 'integer',
             'cost_micros' => 'integer',
             'overrun_micros' => 'integer',

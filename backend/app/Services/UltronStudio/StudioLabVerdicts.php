@@ -130,6 +130,11 @@ final class StudioLabVerdicts
             ->where('ultron_studio_lab_verdicts.version_id', $version->id)
             ->where('ultron_studio_lab_verdicts.version_content_hash', $version->content_hash);
 
+        // Apartado 5 del cierre: cada familia de ejecuciones (la simulación o el recorrido del motor, `motor-…`)
+        // solo ve las suyas, también para `stale_prompts`: un veredicto del motor no cuenta para la simulación.
+        $deSuFamilia = static fn ($q) => StudioLabRuns::whereFidelity($q, 'lab_run.prompt_version',
+            StudioLabEngineFlow::isEnginePromptVersion($promptVersion) ? StudioLabRuns::FIDELITY_MODE_ENGINE : StudioLabRuns::FIDELITY_SIMULATION);
+
         $ultimo = $sobreEstaHuella()
             ->where('lab_run.prompt_version', $promptVersion)
             ->orderByDesc('ultron_studio_lab_verdicts.id')
@@ -144,11 +149,41 @@ final class StudioLabVerdicts
         }
 
         return [
-            'latest' => $sobreEstaHuella()->exists() ? 'stale_prompts' : null,
+            'latest' => $deSuFamilia($sobreEstaHuella())->exists() ? 'stale_prompts' : null,
             'runUuid' => null,
             'verdictId' => null,
             'promptVersion' => null,
         ];
+    }
+
+    /**
+     * SOLO LEE (NB2 de la revisión de seguridad del apartado 5). Con la llave
+     * de la puerta en `engine` ({@see StudioPublishing::labSource()}): el
+     * veredicto de {@see latestFor()} vale solo si su ejecución congeló EL
+     * MISMO paquete de prompts que se va a publicar
+     * (`target_snapshot.engine.bundleHash`, {@see StudioLabRuns}). La versión
+     * de prompts del motor (`StudioLabEngineFlow::promptVersion()`) es
+     * constante: si la base o el compilador cambiaran sin subirla, un
+     * veredicto viejo del motor seguiría contando. Si la huella no coincide,
+     * falta, o la de hoy no se puede calcular (`$bundleHash` null), el mismo
+     * tratamiento que `stale_prompts` (falla cerrado). Con la llave en
+     * `simulation` no se llama: la puerta se lee como siempre.
+     *
+     * @param  array{latest:string|null,runUuid:string|null,verdictId:int|null,promptVersion:string|null}  $latest
+     * @return array{latest:string|null,runUuid:string|null,verdictId:int|null,promptVersion:string|null}
+     */
+    public static function boundToBundle(array $latest, ?string $bundleHash): array
+    {
+        if ($latest['runUuid'] === null) {
+            return $latest;
+        }
+        $instantanea = StudioLabRun::query()->where('uuid', $latest['runUuid'])->value('target_snapshot');
+        $congelada = is_array($instantanea) && is_array($instantanea['engine'] ?? null) ? ($instantanea['engine']['bundleHash'] ?? null) : null;
+        if ($bundleHash !== null && is_string($congelada) && hash_equals($congelada, $bundleHash)) {
+            return $latest;
+        }
+
+        return ['latest' => 'stale_prompts', 'runUuid' => null, 'verdictId' => null, 'promptVersion' => null];
     }
 
     private static function label(string $decision): string

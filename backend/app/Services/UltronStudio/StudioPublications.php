@@ -1361,18 +1361,41 @@ final class StudioPublications
      * pero sí con otros, `stale_prompts`; sin ninguno, null. Con `required`
      * pasa solo `approved`; con `waived`, siempre (y queda escrito).
      *
+     * Con la llave en `engine` (NB2), además, el veredicto tiene que ser sobre
+     * el paquete de prompts que se publicaría: si no, `stale_prompts`
+     * ({@see StudioLabVerdicts::boundToBundle()}).
+     *
      * @return array{mode:string,ok:bool,latest:string|null,runUuid:string|null,verdictId:int|null,promptVersion:string|null}
      */
     private function labGate(StudioVersion $version): array
     {
         $modo = StudioPublishing::labGateMode();
-        $ultimo = StudioLabVerdicts::latestFor($version, StudioLabPrompts::PROMPT_VERSION);
+        // Apartado 5 del cierre (B8): con la llave en `simulation` (por defecto), la versión de prompts de siempre.
+        $ultimo = StudioLabVerdicts::latestFor($version, StudioPublishing::labGatePromptVersion());
+        if (StudioPublishing::labSource() === StudioLabRuns::FIDELITY_MODE_ENGINE) {
+            $ultimo = StudioLabVerdicts::boundToBundle($ultimo, self::bundleHashToPublish($version));
+        }
 
         return [
             'mode' => $modo,
             // `approved` es la decisión aprobatoria del laboratorio (StudioLabVerdict::DECISION_APPROVED).
             'ok' => $modo === D::LAB_WAIVED || $ultimo['latest'] === 'approved',
         ] + $ultimo;
+    }
+
+    /**
+     * La huella del paquete de prompts que firmaría esta versión al publicar:
+     * la de {@see promptFacts()} (sus cuatro valores y las frases de sus
+     * S-NNN, compilados hoy). Null si no compila: entonces ningún veredicto
+     * del motor puede demostrar que probó lo que se publica.
+     */
+    private static function bundleHashToPublish(StudioVersion $version): ?string
+    {
+        try {
+            return StudioPromptBundle::compile(StudioPromptBundle::governedFrom(is_array($version->content) ? $version->content : []))['prompts']['bundleHash'];
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

@@ -118,6 +118,12 @@ return [
         // cada publicación. Cualquier otro valor, `required`.
         'lab_gate' => strtolower(trim((string) env('ULTRON_STUDIO_PUBLISH_LAB_GATE', 'required'))) === 'waived' ? 'waived' : 'required',
 
+        // Apartado 5 del cierre: de qué laboratorio cuenta el veredicto para la
+        // puerta. `simulation` (defecto: como siempre) o `engine` (el
+        // recorrido del motor). Lo cambia el propietario, después de publicar
+        // la versión aprobada. Cualquier otro valor, `simulation`.
+        'lab_source' => strtolower(trim((string) env('ULTRON_STUDIO_PUBLISH_LAB_SOURCE', 'simulation'))) === 'engine' ? 'engine' : 'simulation',
+
         // La evidencia mínima del canario para promover: horas desde la
         // publicación (1–168) y turnos sellados (1–100). Fuera del rango, se
         // recorta; vacío o no entero, el defecto.

@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioLabEvent;
 use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
+use Closure;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\TimeoutExceededException;
 use Illuminate\Support\Carbon;
@@ -110,7 +111,14 @@ final class StudioLabRunner
     /** Lo que dice `run.finished` cuando para un paso que falló dos veces antes de reclamar. */
     public const STEP_FAILURE_SUMMARY = 'el paso falló dos veces sin llegar a reclamar un caso';
 
-    public function __construct(private readonly StudioLabEvents $events) {}
+    /** Los milisegundos de un reloj monótono (NB4: el plazo de un caso del motor). */
+    private readonly Closure $clockMs;
+
+    /** @param  (Closure(): int)|null  $clockMs  solo las pruebas lo cambian: por defecto, `hrtime` */
+    public function __construct(private readonly StudioLabEvents $events, ?Closure $clockMs = null)
+    {
+        $this->clockMs = $clockMs ?? static fn (): int => intdiv(hrtime(true), 1_000_000);
+    }
 
     /**
      * Un paso. Devuelve qué pasó (para las pruebas y el registro): `noop`,
@@ -440,6 +448,10 @@ final class StudioLabRunner
      */
     private function process(StudioLabRun $run, StudioLabRunCase $caso): string
     {
+        // El recorrido del motor (apartado 5 del cierre): su propia rama; la simulación sigue igual.
+        if (StudioLabEngineFlow::isEnginePromptVersion($run->prompt_version)) {
+            return $this->processEngine($run, $caso);
+        }
         $target = is_array($run->target_snapshot) ? $run->target_snapshot : [];
         $escenario = is_array($caso->scenario_snapshot) ? $caso->scenario_snapshot : [];
         $precios = ['input' => (int) ($run->prices['input'] ?? 0), 'output' => (int) ($run->prices['output'] ?? 0)];
@@ -501,6 +513,119 @@ final class StudioLabRunner
         }
 
         return StudioLabOutcome::callEffect($clase, $this->streakBefore((int) $run->id, (int) $caso->position));
+    }
+
+    /**
+     * UN CASO DEL RECORRIDO DEL MOTOR (apartado 5 del cierre; B5): los cinco
+     * prompts compilados de la versión que se congeló al crear la ejecución
+     * (`target_snapshot.engine`; si lo gobernado congelado no pasa el filtro
+     * de datos personales, no sale nada: `blocked_input`, B1; si su huella ya
+     * no es la congelada, tampoco: `internal_error`), el tramo S2 ({@see StudioLabEngineCase}), las
+     * pruebas deterministas de siempre más los hallazgos del motor sobre el
+     * texto final, el juez del laboratorio y la agregación. Cada llamada se
+     * cobra como hoy (por su `usage`, o su tope si no se sabe), con su papel.
+     * El bloque `engine` va en la misma liquidación.
+     *
+     * NB4: el caso entero cabe en el job. El recorrido tiene como límite
+     * {@see StudioLabEngineCase::CASE_BUDGET_SECONDS} menos el plazo del juez;
+     * lo que no cabe no se llama y el caso termina `timeout`, cobrando solo
+     * las llamadas hechas (no la reserva entera de un job muerto).
+     */
+    private function processEngine(StudioLabRun $run, StudioLabRunCase $caso): string
+    {
+        $target = is_array($run->target_snapshot) ? $run->target_snapshot : [];
+        $motor = is_array($target['engine'] ?? null) ? $target['engine'] : [];
+        $escenario = is_array($caso->scenario_snapshot) ? $caso->scenario_snapshot : [];
+        $precios = ['input' => (int) ($run->prices['input'] ?? 0), 'output' => (int) ($run->prices['output'] ?? 0)];
+        $maxJuez = (int) ($run->prices['judgeMaxOutputTokens'] ?? StudioLabConfig::DEFAULT_JUDGE_MAX_OUTPUT_TOKENS);
+        $reserva = (int) $caso->reserved_micros;
+        // NB4: el caso entero cabe en el job. El recorrido acaba, como muy tarde, aquí; lo que
+        // queda del plazo es del juez (su tiempo configurado, ≤ 60 s).
+        $limite = ($this->clockMs)() + max(0, StudioLabEngineCase::CASE_BUDGET_SECONDS - StudioLabConfig::current()->timeoutSeconds) * 1000;
+
+        if (StudioLabRuns::governedPersonalData((array) ($motor['governed'] ?? [])) !== []) {
+            // B1 (defensa, como la del escenario): lo congelado no pasa el filtro de
+            // datos personales de hoy. No se compila ni se envía nada.
+            $this->settle($run, $caso, self::errorValues(self::CLASS_BLOCKED_INPUT, [], 0, $reserva));
+
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
+        try {
+            $paquete = StudioPromptBundle::rolesFor((array) ($motor['governed'] ?? []), $motor['version'] ?? null, $motor['contentHash'] ?? null);
+        } catch (InvalidArgumentException) {
+            $paquete = null;
+        }
+        if ($paquete === null || ! hash_equals((string) ($motor['bundleHash'] ?? ''), $paquete['bundleHash'])) {
+            // Lo que se iba a probar ya no es lo que se congeló: no se envía nada.
+            $this->settle($run, $caso, self::errorValues(self::CLASS_INTERNAL_ERROR, [], 0, $reserva));
+
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
+
+        $cliente = $this->engineClient($run, $target);
+        try {
+            $r = app(StudioLabEngineCase::class)->run($paquete, $escenario, $cliente, $this->clockMs, $limite);
+        } catch (InvalidArgumentException) {
+            // El filtro de datos personales cambió desde que se creó: no se envía nada.
+            $this->settle($run, $caso, self::errorValues(self::CLASS_BLOCKED_INPUT, [], 0, $reserva));
+
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
+        $llamadas = array_map(fn (array $l): array => $this->call($run, $caso, $l['role'], $l['result']['class'] ?? null, $l['result'],
+            StudioLabCost::callEstimate(intdiv((int) $l['inputBytes'], 3) + 1, (int) $l['maxTokens'], $precios)['maxMicros'], $precios), $r['calls']);
+
+        if ($r['status'] !== 'done') {
+            $clase = (string) $r['class'];
+            $valores = self::errorValues($clase, $llamadas, array_sum(array_column($llamadas, 'costMicros')), $reserva);
+        } else {
+            $reply = (string) $r['reply'];
+            $hallazgos = [
+                ...StudioLabChecks::check($reply, $target),
+                ...(new StudioLabEngineChecks)->check($reply, is_array($escenario['facts'] ?? null) ? $escenario['facts'] : StudioLabCatalog::DEFAULT_FACTS),
+                ...$r['findings'],
+            ];
+            $criterios = array_values(array_filter(is_array($escenario['criteria'] ?? null) ? $escenario['criteria'] : [], 'is_array'));
+            $reglas = array_values(array_filter(is_array($target['rules'] ?? null) ? $target['rules'] : [], 'is_array'));
+            $entradaJuez = StudioLabPrompts::judgeInput($target, $escenario, $reply);
+            $topeJuez = StudioLabCost::callEstimate(intdiv(strlen(StudioLabPrompts::JUDGE_INSTRUCTIONS.$entradaJuez), 3) + 1, $maxJuez, $precios)['maxMicros'];
+            $j = $this->client($run, $target)->complete(StudioLabPrompts::ROLE_JUDGE, StudioLabPrompts::JUDGE_INSTRUCTIONS, $entradaJuez, StudioLabPrompts::judgeSchema(), $maxJuez);
+            $juez = StudioLabPrompts::readJudgeCall($j, array_column($criterios, 'id'), array_column($reglas, 'code'));
+            $llamadas[] = $this->call($run, $caso, StudioLabPrompts::ROLE_JUDGE, $juez['class'], $j, $topeJuez, $precios);
+            $clase = $juez['class'];
+            $valores = [
+                'status' => StudioLabRunCase::STATUS_DONE,
+                'outcome' => StudioLabOutcome::forCase($hallazgos, $juez['judge'], $criterios),
+                'error_code' => null,
+                'reply' => $reply,
+                'checks' => $hallazgos,
+                'judge' => $juez['judge'],
+                'engine' => $r['engine'],
+            ] + self::settlement($llamadas, array_sum(array_column($llamadas, 'costMicros')), $reserva);
+        }
+
+        if (! $this->settle($run, $caso, $valores)) {
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
+
+        return StudioLabOutcome::callEffect($clase, $this->streakBefore((int) $run->id, (int) $caso->position));
+    }
+
+    /**
+     * El proveedor de los nodos del motor: el de OpenAI (o el guionizado de
+     * las pruebas, si sabe hacerlo) o el de prueba sin red. Como {@see client()}.
+     *
+     * @param  array<string, mixed>  $target
+     */
+    private function engineClient(StudioLabRun $run, array $target): StudioLabEngineModelClient
+    {
+        if ($run->mode === StudioLabConfig::MODE_OPENAI) {
+            $propio = app()->bound(StudioLabModelClient::class) ? app(StudioLabModelClient::class) : null;
+
+            return $propio instanceof StudioLabEngineModelClient ? $propio : new StudioLabOpenAiClient;
+        }
+        $maximo = $target['configs']['persona']['maxChars'] ?? null;
+
+        return new StudioLabFakeClient(is_int($maximo) ? $maximo : null);
     }
 
     /**

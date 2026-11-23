@@ -108,8 +108,15 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      */
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
-        'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
     ];
+
+    /**
+     * Enmienda 9 de H4 (22-11-2026, apartado 5 del cierre): los lectores del
+     * recorrido del motor en el laboratorio. Solo leen: ni una escritura, ni
+     * una fachada que escriba, ni configuración.
+     */
+    private const LAB_ENGINE_READERS = ['StudioLabEngineCheck.php', 'StudioLabEngineContext.php'];
 
     /** Enmienda M-1 (M1-6): lo único del motor que el Studio importa para los prompts. */
     private const PROMPT_COMPILER_CLASSES = [
@@ -205,6 +212,15 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->assertSame([], $this->writeCalls($guardas), 'StudioLabEngineChecks escribe.');
         $this->assertSame([], $this->forbiddenNames($guardas), 'StudioLabEngineChecks usa algo que escribe.');
         $this->assertSame([], $this->configWrites($guardas), 'StudioLabEngineChecks cambia la configuración.');
+
+        // Enmienda 9 de H4: los lectores del recorrido del motor, con las mismas restricciones.
+        foreach (self::LAB_ENGINE_READERS as $fichero) {
+            $ruta = app_path('Services/UltronStudio/'.$fichero);
+            $this->assertSame([], $this->writeCalls($ruta), "{$fichero} escribe.");
+            $this->assertSame([], $this->forbiddenNames($ruta), "{$fichero} usa algo que escribe.");
+            $this->assertSame([], $this->configWrites($ruta), "{$fichero} cambia la configuración.");
+            $this->assertStringNotContainsString('config(', (string) file_get_contents($ruta), "{$fichero} no lee la configuración.");
+        }
 
         // Las reglas: escriben SOLO su propio modelo (y toman su cerrojo). Lo que
         // nombra la base de conocimiento, solo lee.

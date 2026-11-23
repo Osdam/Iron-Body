@@ -59,6 +59,23 @@ final class StudioLabRuns
      */
     public const FIDELITY = 'Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.';
 
+    /**
+     * Los dos modos de una ejecución (apartado 5 del cierre): la simulación de
+     * siempre (por defecto) o el recorrido del motor (`prompt_version` =
+     * `motor-…`). El modo no se guarda aparte: lo dice el `prompt_version`.
+     */
+    public const FIDELITY_SIMULATION = 'simulation';
+
+    public const FIDELITY_MODE_ENGINE = 'engine';
+
+    public const FIDELITY_MODES = [self::FIDELITY_SIMULATION, self::FIDELITY_MODE_ENGINE];
+
+    /**
+     * La franja de fidelidad de una ejecución del motor (apartado 5; texto que
+     * aprueba el propietario). Se calcula al leer, como {@see FIDELITY}.
+     */
+    public const FIDELITY_ENGINE = 'Recorrido del motor: los cinco prompts compilados de la versión, el modelo y los parámetros de los nodos del flujo S2 de n8n, la comprobación del servidor y hasta dos reescrituras, como en el WhatsApp real. Lo que no es igual: la persona y la memoria son sintéticas (un primer contacto), no hay commit ni envío (si saldría el texto del modelo o un respaldo es una predicción con la regla del commit), el juez de los criterios es del laboratorio y cada escenario es una muestra (el redactor tiene temperatura 0,7, como el motor).';
+
     public const DISABLED_MESSAGE = 'El laboratorio está apagado en el servidor.';
 
     public const BASELINE_LABEL = 'Línea base del código';
@@ -95,6 +112,7 @@ final class StudioLabRuns
         private readonly StudioLabScenarios $scenarios,
         private readonly StudioVersions $versions,
         private readonly StudioDrafts $drafts,
+        private readonly StudioLabEngineContext $engineContext,
     ) {}
 
     /** La bandera: apagada, todo `lab/*` salvo `GET lab/status` es 409 `lab_disabled`. */
@@ -180,10 +198,11 @@ final class StudioLabRuns
      * @throws ValidationException 422 por posición en `scenarioUuids`
      * @throws UltronStudioException 404/409 del objetivo; 409 `target_contains_personal_data`
      */
-    public function estimate(StudioAccess $access, array $target, array $scenarioUuids): array
+    public function estimate(StudioAccess $access, array $target, array $scenarioUuids, string $fidelity = self::FIDELITY_SIMULATION): array
     {
         $cfg = StudioLabConfig::current();
-        $objetivo = $this->resolveTarget($access, $target);
+        // Sin el modelo del motor, la estimación lo dice como negativa (como POST lab/runs), no lanza.
+        $objetivo = $this->withEngine($this->resolveTarget($access, $target), $fidelity, $cfg, false);
         $escenarios = $this->resolveScenarios($scenarioUuids, $objetivo['snapshot']);
 
         return $this->estimateDto($access, $cfg, $objetivo, $escenarios, $this->computeEstimate($objetivo['snapshot'], $escenarios, $cfg));
@@ -199,12 +218,12 @@ final class StudioLabRuns
      * @param  list<string>  $scenarioUuids  ya en minúsculas y distintos
      * @return array{run:StudioLabRun,replayed:bool}
      */
-    public function create(StudioAccess $access, array $target, array $scenarioUuids, int $acceptedMaxMicros, string $clientRequestId): array
+    public function create(StudioAccess $access, array $target, array $scenarioUuids, int $acceptedMaxMicros, string $clientRequestId, string $fidelity = self::FIDELITY_SIMULATION): array
     {
         // 2. Los permisos (la puerta ya los comprobó; esto es la defensa en profundidad).
         $access->require(self::LAB_RUN);
 
-        $peticion = self::requestKey($target, $scenarioUuids, $acceptedMaxMicros);
+        $peticion = self::requestKey($target, $scenarioUuids, $acceptedMaxMicros, $fidelity);
         if ($previa = $this->replay($access, $clientRequestId, $peticion)) {
             return ['run' => $previa, 'replayed' => true];
         }
@@ -215,8 +234,9 @@ final class StudioLabRuns
             throw UltronStudioException::labNotConfigured($cfg->reasons(), $cfg->mode());
         }
 
-        // 4 y 5. El objetivo (con el filtro de datos personales) y los escenarios.
-        $objetivo = $this->resolveTarget($access, $target);
+        // 4 y 5. El objetivo (con el filtro de datos personales; en el modo motor,
+        // con sus prompts compilados) y los escenarios.
+        $objetivo = $this->withEngine($this->resolveTarget($access, $target), $fidelity, $cfg);
         $escenarios = $this->resolveScenarios($scenarioUuids, $objetivo['snapshot']);
 
         // 6. Las ejecuciones del día (se repite dentro del cerrojo).
@@ -357,6 +377,8 @@ final class StudioLabRuns
             ->with(['verdict', 'targetVersion:id,uuid,created_by_admin_id'])
             ->when($filters['version'] ?? null, fn ($q, string $uuid) => $q->whereIn('target_version_id', StudioVersion::query()->select('id')->where('uuid', $uuid)))
             ->when($filters['target'] ?? null, fn ($q, string $kind) => $q->where('target_kind', $kind))
+            // Apartado 5 del cierre: el modo, con la misma marca que la puerta. Sin él, la consulta de siempre.
+            ->when($filters['fidelity'] ?? null, fn ($q, string $fidelity) => self::whereFidelity($q, 'prompt_version', $fidelity))
             ->when(($filters['scope'] ?? 'all') === 'mine', fn ($q) => $q->where('created_by_admin_id', $access->id()))
             ->orderByDesc('id')
             ->paginate($perPage);
@@ -364,6 +386,25 @@ final class StudioLabRuns
         [$conteos, $enVuelo] = self::countsByRun($pagina->getCollection()->pluck('id')->all());
 
         return $pagina->through(fn (StudioLabRun $r): array => $this->summary($access, $r, $conteos[$r->id] ?? self::emptyCounts(), isset($enVuelo[$r->id])));
+    }
+
+    /**
+     * LAS EJECUCIONES DE UN MODO (apartado 5 del cierre): las del motor tienen
+     * un `prompt_version` que empieza por {@see StudioLabEngineFlow::PROMPT_VERSION_PREFIX};
+     * las de la simulación, no. La usan las listas (`GET lab/runs?fidelity=`) y
+     * la puerta de publicar ({@see StudioLabVerdicts::latestFor()}): una sola
+     * marca, en un solo sitio.
+     *
+     * @template T of \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
+     *
+     * @param  T  $query
+     * @return T
+     */
+    public static function whereFidelity(mixed $query, string $column, string $fidelity): mixed
+    {
+        $patron = StudioLabEngineFlow::PROMPT_VERSION_PREFIX.'%';
+
+        return $fidelity === self::FIDELITY_MODE_ENGINE ? $query->where($column, 'like', $patron) : $query->where($column, 'not like', $patron);
     }
 
     /** La ejecución si quien mira puede verla; si no, el mismo 404 que un uuid inexistente. */
@@ -405,14 +446,16 @@ final class StudioLabRuns
         $casos = StudioLabRunCase::query()->with('scenario:id,uuid')->where('run_id', $run->id)->orderBy('position')->get();
         $enVuelo = $casos->contains(static fn (StudioLabRunCase $c): bool => $c->status === StudioLabRunCase::STATUS_RUNNING);
 
+        $motor = StudioLabEngineFlow::isEnginePromptVersion($run->prompt_version);
+
         return $this->summary($access, $run, self::countsOf($casos), $enVuelo) + [
-            'fidelity' => self::FIDELITY,
+            'fidelity' => $motor ? self::FIDELITY_ENGINE : self::FIDELITY,
             'targetSnapshot' => self::snapshotOut(is_array($run->target_snapshot) ? $run->target_snapshot : []),
             'cases' => $casos->map(fn (StudioLabRunCase $c): array => self::presentCase($c))->all(),
             'resultsHash' => $run->results_hash,
             'requiredAcknowledgements' => self::requiredAcknowledgements($casos->all()),
             'actions' => $this->actions($access, $run),
-        ];
+        ] + ($motor ? ['engine' => self::engineOut(is_array($run->target_snapshot['engine'] ?? null) ? $run->target_snapshot['engine'] : [])] : []);
     }
 
     /**
@@ -462,7 +505,8 @@ final class StudioLabRuns
                 'by' => ['name' => $veredicto->reviewer_name, 'role' => $veredicto->reviewer_role],
                 'at' => $veredicto->created_at?->toIso8601String(),
             ] : null,
-        ];
+            // Solo en las del motor: el resumen de una simulación no gana ninguna clave.
+        ] + (StudioLabEngineFlow::isEnginePromptVersion($run->prompt_version) ? ['fidelityMode' => self::FIDELITY_MODE_ENGINE] : []);
     }
 
     // ── Cálculos compartidos con el runner y el veredicto ───────────────────
@@ -559,6 +603,8 @@ final class StudioLabRuns
      */
     public static function resultsHash(StudioLabRun $run, iterable $cases): string
     {
+        // El recorrido del motor entra en la huella SOLO en sus ejecuciones: la de una simulación no cambia (T6).
+        $motor = StudioLabEngineFlow::isEnginePromptVersion($run->prompt_version);
         $casos = [];
         foreach ($cases as $c) {
             $casos[] = [
@@ -570,7 +616,7 @@ final class StudioLabRuns
                 'reply' => $c->reply,
                 'checks' => is_array($c->checks) ? array_values($c->checks) : [],
                 'judge' => is_array($c->judge) ? $c->judge : null,
-            ];
+            ] + ($motor ? ['engine' => is_array($c->engine) ? $c->engine : null] : []);
         }
 
         return StudioContentHasher::hash([
@@ -698,7 +744,68 @@ final class StudioLabRuns
             throw UltronStudioException::targetContainsPersonalData($campos);
         }
 
-        return ['kind' => $kind, 'version' => $version, 'draftOwner' => $dueno, 'label' => $etiqueta, 'contentHash' => $huella, 'snapshot' => $snapshot];
+        return ['kind' => $kind, 'version' => $version, 'draftOwner' => $dueno, 'label' => $etiqueta, 'contentHash' => $huella, 'snapshot' => $snapshot, 'content' => $contenido];
+    }
+
+    /**
+     * EL MODO MOTOR (apartado 5): congela en la instantánea del objetivo lo
+     * que se va a probar (`engine`): lo gobernado de la versión ENTERA (sus
+     * cuatro valores y las frases de sus reglas S-NNN, como al publicar), la
+     * huella del paquete que se firmaría, la base, el compilador, la revisión y
+     * la huella de los nodos y el modelo de los nodos. El laboratorio en
+     * `openai` tiene que estar configurado con ESE modelo (sus precios son los
+     * del modelo que se llama): si no, 409 `lab_not_configured` con
+     * `engine_model`. Lo que no compila no se prueba (409
+     * `prompts_compile_failed`). En simulación, nada cambia.
+     *
+     * B1 de la revisión de seguridad: lo gobernado pasa el filtro de datos
+     * personales ANTES de compilar. La simulación lleva como mucho 20 S-NNN
+     * (y {@see resolveTarget()} solo filtra esas); el motor compila las frases
+     * de TODAS las vivas. Si algo no pasa, el mismo 409
+     * `target_contains_personal_data` que el objetivo, con `rules.<código>`:
+     * no se congela nada, no se escribe nada y no se sale a la red.
+     *
+     * @param  array<string,mixed>  $objetivo
+     * @return array<string,mixed>
+     */
+    private function withEngine(array $objetivo, string $fidelity, StudioLabConfig $cfg, bool $strict = true): array
+    {
+        if ($fidelity !== self::FIDELITY_MODE_ENGINE) {
+            return $objetivo;
+        }
+        $modelo = StudioLabEngineFlow::NODES[StudioLabEngineFlow::COMPOSER]['model'];
+        if ($strict && self::engineModelMismatch($cfg)) {
+            throw UltronStudioException::labNotConfigured(['engine_model'], $cfg->mode());
+        }
+        $contenido = is_array($objetivo['content'] ?? null) ? $objetivo['content'] : [];
+        try {
+            $gobernado = StudioPromptBundle::governedFrom($contenido);
+        } catch (\InvalidArgumentException) {
+            throw UltronStudioException::promptsCompileFailed();
+        }
+        $campos = self::governedPersonalData($gobernado, StudioRulePhrases::byRule($contenido));
+        if ($campos !== []) {
+            throw UltronStudioException::targetContainsPersonalData($campos);
+        }
+        try {
+            $paquete = StudioPromptBundle::rolesFor($gobernado, $objetivo['version']?->uuid, $objetivo['contentHash']);
+        } catch (\InvalidArgumentException) {
+            throw UltronStudioException::promptsCompileFailed();
+        }
+        $objetivo['snapshot']['engine'] = [
+            'flowRev' => StudioLabEngineFlow::FLOW_REV,
+            'flowVersion' => StudioLabEngineFlow::VERSION,
+            'base' => StudioPromptBundle::base(),
+            'compiler' => StudioPromptBundle::compilerVersion(),
+            'bundleHash' => $paquete['bundleHash'],
+            'nodesHash' => StudioLabEngineFlow::nodesHash(),
+            'model' => $modelo,
+            'governed' => $gobernado,
+            'version' => $objetivo['version']?->uuid,
+            'contentHash' => $objetivo['contentHash'],
+        ];
+
+        return $objetivo;
     }
 
     /**
@@ -752,14 +859,50 @@ final class StudioLabRuns
         $precios = $cfg->prices() ?? ['input' => 0, 'output' => 0];
         $porCaso = [];
         $total = ['expectedMicros' => 0, 'maxMicros' => 0];
+        $motor = is_array($snapshot['engine'] ?? null) ? $snapshot['engine'] : null;
         foreach ($escenarios as $s) {
-            $e = StudioLabCost::estimateScenario($snapshot, StudioLabScenarios::contentOf($s), $cfg->actorMaxOutputTokens, $cfg->judgeMaxOutputTokens, $precios);
+            $e = $motor !== null
+                ? $this->engineEstimate($snapshot, $motor, StudioLabScenarios::contentOf($s), $cfg, $precios)
+                : StudioLabCost::estimateScenario($snapshot, StudioLabScenarios::contentOf($s), $cfg->actorMaxOutputTokens, $cfg->judgeMaxOutputTokens, $precios);
             $porCaso[] = $e['maxMicros'];
             $total['expectedMicros'] += $e['expectedMicros'];
             $total['maxMicros'] += $e['maxMicros'];
         }
 
         return $total + ['perCase' => $porCaso, 'prices' => $precios];
+    }
+
+    /** ¿El laboratorio en `openai` está configurado con otro modelo que el de los nodos del motor? */
+    private static function engineModelMismatch(StudioLabConfig $cfg): bool
+    {
+        return $cfg->isOpenAi() && $cfg->model !== StudioLabEngineFlow::NODES[StudioLabEngineFlow::COMPOSER]['model'];
+    }
+
+    /**
+     * Lo que puede costar un caso del motor: los siete nodos (el peor camino:
+     * el estratega, tres redactores y tres revisores), cada uno con su prompt,
+     * su segundo mensaje sobre el contexto del escenario y su `maxTokens`, y el
+     * juez del laboratorio.
+     *
+     * @param  array<string,mixed>  $snapshot
+     * @param  array<string,mixed>  $motor
+     * @param  array<string,mixed>  $escenario
+     * @param  array{input:int,output:int}  $precios
+     * @return array{expectedMicros:int,maxMicros:int}
+     */
+    private function engineEstimate(array $snapshot, array $motor, array $escenario, StudioLabConfig $cfg, array $precios): array
+    {
+        $paquete = StudioPromptBundle::rolesFor((array) $motor['governed'], $motor['version'] ?? null, $motor['contentHash'] ?? null);
+        $ctx = $this->engineContext->build($escenario, $paquete['sp']);
+        $llamadas = [];
+        foreach (StudioLabEngineFlow::NODES as $nodo => $spec) {
+            $usuario = StudioLabEngineFlow::encode(StudioLabEngineFlow::userPayload($nodo, $ctx['decide'], $ctx['inbound'], [], []));
+            $llamadas[] = StudioLabCost::engineCallEstimate($paquete['roles'][$spec['role']], $usuario, $spec['schema'], $spec['maxTokens'], $precios);
+        }
+        $juez = StudioLabCost::judgeInputTokens(StudioLabCost::callBytes(StudioLabPrompts::JUDGE_INSTRUCTIONS, StudioLabPrompts::judgeEstimateInput($snapshot, $escenario), StudioLabPrompts::judgeSchema()), StudioLabEngineFlow::NODES[StudioLabEngineFlow::COMPOSER]['maxTokens']);
+        $llamadas[] = StudioLabCost::callEstimate($juez, $cfg->judgeMaxOutputTokens, $precios);
+
+        return StudioLabCost::sum($llamadas);
     }
 
     /**
@@ -782,16 +925,19 @@ final class StudioLabRuns
         $negativa = match (true) {
             ! $access->can(self::LAB_RUN) => UltronStudioException::forbidden(self::LAB_RUN),
             ! $cfg->configured() => UltronStudioException::labNotConfigured($cfg->reasons(), $cfg->mode()),
+            is_array($objetivo['snapshot']['engine'] ?? null) && self::engineModelMismatch($cfg) => UltronStudioException::labNotConfigured(['engine_model'], $cfg->mode()),
             $hoy >= $cfg->maxRunsPerDay => UltronStudioException::labDailyRunsExceeded($hoy, $cfg->maxRunsPerDay),
             $calculo['maxMicros'] > $cfg->runBudgetMicros => UltronStudioException::labRunBudgetExceeded($calculo['maxMicros'], $cfg->runBudgetMicros),
             $calculo['maxMicros'] > 0 && $calculo['maxMicros'] > $restante => UltronStudioException::labDailyBudgetExceeded($calculo['maxMicros'], $restante),
             default => null,
         };
 
+        $motor = is_array($objetivo['snapshot']['engine'] ?? null);
+
         return [
             'mode' => $cfg->mode(),
             'model' => $cfg->isOpenAi() ? $cfg->model : null,
-            'promptVersion' => StudioLabPrompts::PROMPT_VERSION,
+            'promptVersion' => $motor ? StudioLabEngineFlow::promptVersion() : StudioLabPrompts::PROMPT_VERSION,
             'cases' => count($escenarios),
             'estimate' => ['expectedMicros' => $calculo['expectedMicros'], 'maxMicros' => $calculo['maxMicros']],
             'budget' => [
@@ -806,7 +952,7 @@ final class StudioLabRuns
             'allowed' => $negativa === null,
             'refusal' => $negativa !== null ? ['code' => $negativa->errorCode, 'message' => $negativa->getMessage()] : null,
             'excludedRules' => array_values($objetivo['snapshot']['excludedRules'] ?? []),
-        ];
+        ] + ($motor ? ['fidelityMode' => self::FIDELITY_MODE_ENGINE, 'fidelity' => self::FIDELITY_ENGINE, 'engine' => self::engineOut($objetivo['snapshot']['engine'])] : []);
     }
 
     /**
@@ -822,6 +968,7 @@ final class StudioLabRuns
         $yo = $access->snapshot();
         $modo = (string) $cfg->mode();
         $modelo = $cfg->isOpenAi() ? (string) $cfg->model : '';
+        $version = is_array($objetivo['snapshot']['engine'] ?? null) ? StudioLabEngineFlow::promptVersion() : StudioLabPrompts::PROMPT_VERSION;
 
         $run = StudioLabRun::query()->forceCreate([
             'client_request_id' => $clientRequestId,
@@ -834,7 +981,7 @@ final class StudioLabRuns
             'catalog_version' => StudioLabCatalog::VERSION,
             'mode' => $modo,
             'model' => $modelo,
-            'prompt_version' => StudioLabPrompts::PROMPT_VERSION,
+            'prompt_version' => $version,
             // Con estos máximos se calculó la reserva, y con ellos se cobra un timeout.
             'prices' => $calculo['prices'] + [
                 'actorMaxOutputTokens' => $cfg->actorMaxOutputTokens,
@@ -873,7 +1020,7 @@ final class StudioLabRuns
                     'target' => ['kind' => $objetivo['kind'], 'uuid' => $objetivo['version']?->uuid, 'label' => $objetivo['label']],
                     'mode' => $modo,
                     'model' => $modelo !== '' ? $modelo : null,
-                    'promptVersion' => StudioLabPrompts::PROMPT_VERSION,
+                    'promptVersion' => $version,
                     'scenarios' => array_map(static fn (StudioLabScenario $s): string => $s->code, $escenarios),
                     'estimateMaxMicros' => $calculo['maxMicros'],
                     'acceptedMaxMicros' => $acceptedMaxMicros,
@@ -906,7 +1053,7 @@ final class StudioLabRuns
      * @param  list<string>  $uuids
      * @return array<string, mixed>
      */
-    private static function requestKey(array $target, array $uuids, int $acceptedMax): array
+    private static function requestKey(array $target, array $uuids, int $acceptedMax, string $fidelity = self::FIDELITY_SIMULATION): array
     {
         $kind = (string) ($target['kind'] ?? '');
 
@@ -916,6 +1063,7 @@ final class StudioLabRuns
             'revision' => $kind === StudioLabRun::TARGET_DRAFT ? (int) $target['revision'] : null,
             'scenarios' => array_values($uuids),
             'acceptedMax' => $acceptedMax,
+            'fidelity' => $fidelity === self::FIDELITY_MODE_ENGINE ? self::FIDELITY_MODE_ENGINE : self::FIDELITY_SIMULATION,
         ];
     }
 
@@ -947,6 +1095,7 @@ final class StudioLabRuns
             'revision' => $previa->target_kind === StudioLabRun::TARGET_DRAFT ? (int) ($snapshot['draftRevision'] ?? 0) : null,
             'scenarios' => $escenarios,
             'acceptedMax' => (int) $previa->accepted_max_micros,
+            'fidelity' => StudioLabEngineFlow::isEnginePromptVersion($previa->prompt_version) ? self::FIDELITY_MODE_ENGINE : self::FIDELITY_SIMULATION,
         ];
 
         if ((int) $previa->created_by_admin_id !== $access->id() || $original !== $peticion) {
@@ -1056,6 +1205,26 @@ final class StudioLabRuns
             ],
             'startedAt' => $c->started_at?->toIso8601String(),
             'finishedAt' => $c->finished_at?->toIso8601String(),
+        ] + (is_array($c->engine) ? ['engine' => $c->engine] : []);
+    }
+
+    /**
+     * La cabecera de una ejecución del motor: lo congelado, sin lo gobernado
+     * (que ya enseña `targetSnapshot.configs`).
+     *
+     * @param  array<string,mixed>  $motor
+     * @return array<string,mixed>
+     */
+    private static function engineOut(array $motor): array
+    {
+        return [
+            'flowRev' => $motor['flowRev'] ?? null,
+            'flowVersion' => $motor['flowVersion'] ?? null,
+            'base' => $motor['base'] ?? null,
+            'compiler' => $motor['compiler'] ?? null,
+            'bundleHash' => $motor['bundleHash'] ?? null,
+            'nodesHash' => $motor['nodesHash'] ?? null,
+            'model' => $motor['model'] ?? null,
         ];
     }
 
@@ -1083,6 +1252,46 @@ final class StudioLabRuns
             ], array_values(array_filter(is_array($snapshot['rules'] ?? null) ? $snapshot['rules'] : [], 'is_array'))),
             'contentHash' => $snapshot['contentHash'] ?? null,
         ];
+    }
+
+    /**
+     * B1 de la revisión de seguridad del apartado 5: lo GOBERNADO que el modo
+     * motor compila y envía ({@see StudioPromptBundle::governedFrom()}: los
+     * cuatro valores y las frases de TODAS las S-NNN vivas) y no pasa el
+     * filtro de datos personales, en el lenguaje del Studio:
+     * `configs.<capa>.<clave>` o `rules.<código>` (cada regla que aporta una
+     * frase que no pasa, en el orden del contenido, según `$byRule`). Una frase
+     * que no se puede atribuir a ninguna regla (la defensa del runner solo
+     * tiene lo congelado) sale como `rules.forbiddenPhrases`. Vacío = se puede
+     * compilar y enviar.
+     *
+     * @param  array<string,mixed>  $governed
+     * @param  list<array{code:string,phrases:list<string>}>  $byRule  {@see StudioRulePhrases::byRule()}
+     * @return list<string>
+     */
+    public static function governedPersonalData(array $governed, array $byRule = []): array
+    {
+        $out = [];
+        foreach ($governed as $id => $valor) {
+            if ($id !== StudioPublicationDeclaration::GOVERNED_PHRASES && StudioLabPersonalData::scan($valor) !== []) {
+                $out[] = "configs.{$id}";
+            }
+        }
+        $frases = $governed[StudioPublicationDeclaration::GOVERNED_PHRASES] ?? [];
+        $malas = array_values(array_filter(is_array($frases) ? $frases : [$frases], static fn (mixed $f): bool => StudioLabPersonalData::scan($f) !== []));
+        $atribuidas = [];
+        foreach ($byRule as $regla) {
+            $suyas = array_values(array_filter($regla['phrases'], static fn (string $f): bool => in_array($f, $malas, true)));
+            if ($suyas !== []) {
+                $out[] = 'rules.'.$regla['code'];
+                array_push($atribuidas, ...$suyas);
+            }
+        }
+        if (array_filter($malas, static fn (mixed $f): bool => ! in_array($f, $atribuidas, true)) !== []) {
+            $out[] = StudioPublicationDeclaration::GOVERNED_PHRASES;
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**
