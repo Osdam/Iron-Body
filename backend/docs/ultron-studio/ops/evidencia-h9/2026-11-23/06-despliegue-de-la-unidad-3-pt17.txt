@@ -303,8 +303,22 @@ RESULTADO: DESPLEGADA SIN DESVÍOS (código 0 del guion, 05:17:07 a 05:17:55 UTC
     [3] reglas vivas del Studio: 12 · catálogo: 2026-10-19.1
     transacción de solo lectura deshecha; no se ha escrito nada
 
-    Lectura: las versiones «Prueba de aceptación» 1, 2 y 3 las CREÓ la cuenta técnica (32) desde su borrador, y el
-    propietario (27) las aprobó, dio el veredicto del laboratorio y las publicó. Las reglas de cuatro ojos del servidor:
+    Quién hizo cada paso de las versiones anteriores (id interno de la cuenta y rol; la cuenta 27 es la del propietario:
+    lanzó las 20 ejecuciones de la línea base):
+    LÍNEA BASE (día 22-11 de Bogotá) · lanzadas por la cuenta 27 (Super Admin): 20
+    REVISIÓN · versión «ULTRON Studio - Canario V1 - Pruebas» (creada por la cuenta 27) · approved por la cuenta 38 (QA ULTRON - Revisor) el 2026-11-09 18:55 UTC
+    REVISIÓN · versión «Prueba de aceptación · profesional 200» (creada por la cuenta 32) · approved por la cuenta 38 (QA ULTRON - Revisor) el 2026-11-11 23:36 UTC
+    REVISIÓN · versión «Prueba de aceptación 2 · profesional 200» (creada por la cuenta 32) · approved por la cuenta 27 (Super Admin) el 2026-11-18 22:28 UTC
+    REVISIÓN · versión «Prueba de aceptación 3 · profesional 200» (creada por la cuenta 32) · approved por la cuenta 27 (Super Admin) el 2026-11-22 03:52 UTC
+    PUBLICACIÓN · entrada 1 · publish · versión «Prueba de aceptación · profesional 200» · por la cuenta 27 (Super Admin) el 2026-11-12 21:45 UTC
+    PUBLICACIÓN · entrada 2 · rollback · versión «Prueba de aceptación · profesional 200» · por la cuenta 27 (Super Admin) el 2026-11-12 22:55 UTC
+    PUBLICACIÓN · entrada 3 · publish · versión «Prueba de aceptación 2 · profesional 200» · por la cuenta 27 (Super Admin) el 2026-11-18 22:40 UTC
+    PUBLICACIÓN · entrada 4 · rollback · versión «Prueba de aceptación 2 · profesional 200» · por la cuenta 27 (Super Admin) el 2026-11-22 04:02 UTC
+    PUBLICACIÓN · entrada 5 · publish · versión «Prueba de aceptación 3 · profesional 200» · por la cuenta 27 (Super Admin) el 2026-11-22 13:58 UTC
+
+    Lectura: las versiones «Prueba de aceptación» 1, 2 y 3 las CREÓ la cuenta técnica (32) desde su borrador. El
+    propietario (27) aprobó la 2 y la 3 (la primera la aprobó la cuenta revisora de QA, 38), dio los tres veredictos del
+    laboratorio y las publicó. Las reglas de cuatro ojos del servidor:
     nadie aprueba, ni da el veredicto del laboratorio, ni publica una versión que creó. El borrador de la cuenta técnica
     daría hoy una versión con el MISMO contenido que la 3 (24b29173) y el mismo paquete (2eb9be6f); el del propietario, no
     (difiere en persona.tone y persona.maxChars).
