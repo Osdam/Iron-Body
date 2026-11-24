@@ -230,6 +230,8 @@ final class UltronDraftCheck
 
         $textosDeLaLista = $this->textosDeLaLista($poDelTurno);
         $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $textosDeLaLista, $politica, $sp, $catalog);
+        // Con la lista del servidor, tampoco se escribe a mano un plan que no se vende ahora (revisión final de la puerta 2, I1-a): una lectura más, solo en ese turno.
+        $conocidos = UltronPlansOverview::serverList($sp) && $poDelTurno !== [] ? $this->knowledge->knownPlans() : null;
         $defectos = array_slice([
             ...UltronDraftDefects::of(
                 ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
@@ -239,6 +241,7 @@ final class UltronDraftCheck
                 $catalog,
                 $inbound,
                 $textosDeLaLista,
+                $conocidos,
             ),
             // En un turno de lista (compilador 6; PT-17 L2, lo traiga o no el borrador), el tope de la lista y sin recortar la pregunta final, como el commit.
             ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces, UltronReplyFitter::plansListCap($sp, $poDelTurno))),

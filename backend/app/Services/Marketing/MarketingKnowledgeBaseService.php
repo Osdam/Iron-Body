@@ -166,6 +166,26 @@ class MarketingKnowledgeBaseService
             ])->all();
     }
 
+    /**
+     * TODOS LOS PLANES DEL CATÁLOGO QUE NO ESTÁN ARCHIVADOS, se vendan o no
+     * (id y nombre; PT-17, puerta 2, revisión final, I1-a). Para saber si un
+     * borrador escribe a mano el nombre de un plan que NO SE VENDE ahora (el
+     * Élite desactivado de la sonda S3): con la lista del servidor, eso es
+     * ofrecer lo que no se vende. `UltronPlansOverview::verify()` deja fuera
+     * los que sí se venden con {@see activePlans()} (`Plan::sellable()`, el
+     * mismo del commit). Archivado = fuera del catálogo (existe solo para su
+     * historia). NUNCA es fuente de precio ni de oferta: para eso,
+     * {@see activePlans()}.
+     *
+     * @return list<array{id:int,name:string}>
+     */
+    public function knownPlans(): array
+    {
+        return Plan::query()->notArchived()->orderBy('sort_order')->orderBy('id')->get(['id', 'name'])
+            ->map(fn (Plan $p) => ['id' => (int) $p->id, 'name' => (string) $p->name])
+            ->values()->all();
+    }
+
     public function activePlansCount(): int
     {
         return Plan::sellable()->count();

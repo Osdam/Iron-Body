@@ -131,6 +131,25 @@ final class UltronPlansOverview
 
     public const HEADER_SOME = 'Algunos de nuestros planes: ';
 
+    /**
+     * EL INTERRUPTOR DE §6 (revisión final de la puerta 2, I1-c y menor 3):
+     * ¿pone el servidor la lista en un borrador de forma B SIN ranura (antes de
+     * la pregunta final)? Por defecto, sí. Apagado (false), ese borrador no
+     * recibe la lista ({@see self::render()}: `placed` = false) y es `missing`
+     * ({@see self::verify()}): `ai/check` pide la ranura y el commit, en el
+     * turno de lista, da la lista fija. Se apaga cambiando esta constante (y
+     * desplegando): el riesgo 1 de §6 es que el revisor juzga un borrador sin
+     * la lista que pondrá el servidor.
+     */
+    public const INSERT_WITHOUT_SLOT = true;
+
+    /**
+     * Lo que se aplica: {@see self::INSERT_WITHOUT_SLOT}. Variable solo para
+     * que las pruebas ejerzan el interruptor apagado (lo cambian y lo
+     * restauran); el código de la aplicación no la escribe.
+     */
+    public static bool $insertWithoutSlot = self::INSERT_WITHOUT_SLOT;
+
     /** La ranura, con o sin espacios dentro de las llaves (como el resto de marcadores) y con su caja exacta. */
     private const RANURA = '/\{\{\s*LISTA_DE_PLANES\s*\}\}/';
 
@@ -146,6 +165,16 @@ final class UltronPlansOverview
      * sueltas.
      */
     private const RANURA_CON_LLAVE_PEGADA = '/\{\s*\{\{\s*LISTA_DE_PLANES\s*\}\}|\{\{\s*LISTA_DE_PLANES\s*\}\}\s*\}/';
+
+    /**
+     * La ranura con, como mucho, UNA llave pegada a cada lado (revisión final
+     * de la puerta 2, menor 1; sonda S4): {@see self::place()} la sustituye
+     * entera, para que la lista no salga entre llaves sueltas donde nadie la
+     * para (con herramientas). El espacio de alrededor solo se lo queda con la
+     * llave: sin ella, el resto del borrador queda byte a byte. Sigue siendo
+     * `mixed` ({@see self::verify()}, M1).
+     */
+    private const RANURA_Y_SUS_LLAVES = '/(?:\{\s*)?\{\{\s*LISTA_DE_PLANES\s*\}\}(?:\s*\})?/';
 
     /** Una llave pegada a cualquier marcador (`{{{PLAN_1}}}`; M1): también sería un resto. */
     private const LLAVE_PEGADA_A_UN_MARCADOR = '/\{\s*\{\{|\}\}\s*\}/';
@@ -291,6 +320,17 @@ final class UltronPlansOverview
         }
 
         return self::SHAPE_SERVER;
+    }
+
+    /**
+     * ¿Trae el borrador SIN expandir la ranura ({@see self::SLOT}, con su caja
+     * exacta, con o sin espacios dentro de las llaves)? Lo mismo que anota el
+     * commit en `metadata.plans_overview.slot`. La usa
+     * {@see UltronDraftDefects::isListFinal()} (revisión final, I1-b).
+     */
+    public static function hasSlot(string $raw): bool
+    {
+        return preg_match(self::RANURA, $raw) === 1;
     }
 
     // ── Lo que ve el modelo ─────────────────────────────────────────────────
@@ -484,6 +524,27 @@ final class UltronPlansOverview
     }
 
     /**
+     * EL NOMBRE SIN LOS CONTROLES DE {@see self::CONTROLES_EN_UN_TEXTO}
+     * (revisión final de la puerta 2, menor 2; sonda S7), para la lista fija,
+     * que no suelta un plan por su nombre: los saltos de línea pasan a un
+     * espacio (como `MarketingKnowledgeBaseService::asData()`) y los controles
+     * de dirección se quitan; después, sin espacios dobles ni en los bordes.
+     * Un texto sin ninguno sale tal cual, byte a byte. Un texto que no es
+     * UTF-8 válido se sanea antes (`mb_scrub`): la expresión no puede fallar.
+     */
+    public static function withoutControls(string $texto): string
+    {
+        $valido = mb_check_encoding($texto, 'UTF-8') ? $texto : mb_scrub($texto, 'UTF-8');
+        if (preg_match(self::CONTROLES_EN_UN_TEXTO, $valido) !== 1) {
+            return $valido;
+        }
+        $sinSaltos = preg_replace('/[\r\n\x{0B}\x{0C}\x{85}\x{2028}\x{2029}]/u', ' ', $valido) ?? $valido;
+        $sinDireccion = preg_replace('/[\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $sinSaltos) ?? $sinSaltos;
+
+        return trim((string) preg_replace('/ {2,}/', ' ', $sinDireccion));
+    }
+
+    /**
      * El encabezado de la frase de la lista que se inserta sin ranura: los de
      * la lista fija sin «Claro. ». Si todos los planes de `po` son de un mes,
      * {@see self::HEADER_SOME_MONTHLY} si hay otro de un mes vendible fuera de
@@ -518,7 +579,10 @@ final class UltronPlansOverview
      * Pone la lista en el borrador.
      *  - Con UNA ranura ({@see self::SLOT}, con o sin espacios dentro de las
      *    llaves), la sustituye por la lista y deja el resto byte a byte
-     *    (`slot` = true).
+     *    (`slot` = true). Con una llave pegada a un lado o a los dos
+     *    (`{{{LISTA_DE_PLANES}}}`), la llave se va con la ranura (menor 1:
+     *    {@see self::RANURA_Y_SUS_LLAVES}); `verify()` lo sigue dando por
+     *    `mixed`.
      *  - Con más de una, null: no se elige.
      *  - Sin ranura, añade la frase «encabezado + lista + .»: justo antes de la
      *    última frase ({@see UltronReplyFitter::sentences()}) si esa frase
@@ -536,7 +600,7 @@ final class UltronPlansOverview
         }
         if ($ranuras === 1) {
             // Con un callback: un precio («$65.000») no se lee como una referencia del reemplazo.
-            return ['text' => (string) preg_replace_callback(self::RANURA, static fn (): string => $lista, $raw, 1), 'slot' => true];
+            return ['text' => (string) preg_replace_callback(self::RANURA_Y_SUS_LLAVES, static fn (): string => $lista, $raw, 1), 'slot' => true];
         }
 
         $frase = $header.$lista.'.';
@@ -570,7 +634,9 @@ final class UltronPlansOverview
      *  - Con forma B, la lista entera ({@see self::compose()}) puesta en su
      *    sitio ({@see self::place()}), con `used` = `po`. Si no se puede
      *    componer (falta un plan) o colocar (más de una ranura), el borrador
-     *    tal cual y `placed` = false: quien llama no lo deja salir.
+     *    tal cual y `placed` = false: quien llama no lo deja salir. Y lo mismo
+     *    sin ranura con el interruptor de §6 apagado
+     *    ({@see self::INSERT_WITHOUT_SLOT}; I1-c).
      *
      * @param  list<int>  $po  la lista del turno (vacía sin lista o en un turno de cobro)
      * @param  array<int,string>  $textos  plan_id → su texto ({@see self::item()}), leído ahora
@@ -590,7 +656,8 @@ final class UltronPlansOverview
             return ['text' => $r['text'], 'shape' => $forma, 'slot' => false, 'used' => $r['used'], 'placed' => count($r['used']) >= self::MIN_MARKERS];
         }
         $lista = self::compose($po, $textos);
-        $puesta = $lista === null ? null : self::place($raw, $lista, self::header($po, $activePlans));
+        $sinRanuraApagado = ! self::$insertWithoutSlot && ! self::hasSlot($raw);
+        $puesta = $lista === null || $sinRanuraApagado ? null : self::place($raw, $lista, self::header($po, $activePlans));
         if ($puesta === null) {
             return ['text' => $raw, 'shape' => $forma, 'slot' => preg_match(self::RANURA, $raw) === 1, 'used' => $po, 'placed' => false];
         }
@@ -651,20 +718,30 @@ final class UltronPlansOverview
      *     1..n (si no, `mixed`). Así una lista que ya no valía da el mismo
      *     detalle que antes, y solo cambian las que valían.
      *  6. Forma B: con `PLAN_NAME`, `PLAN_PRICE` o `PLAN_DURATION` (cotiza un
-     *     plan en vez de dar la lista) → `missing`; el nombre de un plan de la
-     *     lista escrito a mano → `name_written`; si no, null.
+     *     plan en vez de dar la lista) → `missing`; sin la ranura y con el
+     *     interruptor de §6 apagado ({@see self::INSERT_WITHOUT_SLOT}; I1-c)
+     *     → `missing`; el nombre escrito a mano de un plan de la lista, o de
+     *     un plan del catálogo que NO SE VENDE ahora (de `$knownPlans`, el que
+     *     no está en `$activePlans`, que es `Plan::sellable()`; revisión final,
+     *     I1-a acotado por el lead: ofrecer lo que no se vende, el Élite
+     *     desactivado de la sonda S3), con la misma lectura que la puerta 1
+     *     ({@see CommercialTurnPolicy::plansNamedIn()}) → `name_written`; si
+     *     no, null. Uno que SE VENDE, aunque no sea de la lista, se puede
+     *     nombrar: es verdad (la sonda S2), como en la forma A. Un nombre que
+     *     no es del catálogo (uno inventado) no lo ve: lo juzga el revisor.
      *  7. Y una lista que por lo demás vale (5 o 6) pero deja restos con forma
      *     de marcador fuera de las llaves (`PLAN_1` suelto, `{PLAN_1}`) →
      *     `mixed` ({@see self::dejaRestosDeMarcador()}).
      * Sin `$serverList`, lo de hoy, byte a byte.
      *
      * @param  list<int>  $po  la lista firmada (vacía sin lista)
-     * @param  array<int,array<string,mixed>>  $activePlans  el catálogo: los nombres de los planes de la lista
+     * @param  array<int,array<string,mixed>>  $activePlans  el catálogo VENDIBLE (`activePlans()`): los nombres de los planes de la lista y, con `$knownPlans`, cuáles se venden
      * @param  bool  $serverList  la lista la compone Laravel ({@see self::serverList()})
+     * @param  array<int,array<string,mixed>>|null  $knownPlans  con la lista del servidor, los planes que conoce el servidor, se vendan o no (id y nombre; `MarketingKnowledgeBaseService::knownPlans()`): para la regla 6 cuentan los que no están en `$activePlans`; sin ellos, solo los de la lista
      */
-    public static function verify(string $raw, array $po, array $activePlans, bool $serverList = false): ?string
+    public static function verify(string $raw, array $po, array $activePlans, bool $serverList = false, ?array $knownPlans = null): ?string
     {
-        return $serverList ? self::verificaConLaListaDelServidor($raw, $po, $activePlans) : self::verificaLosMarcadores($raw, $po, $activePlans);
+        return $serverList ? self::verificaConLaListaDelServidor($raw, $po, $activePlans, $knownPlans ?? []) : self::verificaLosMarcadores($raw, $po, $activePlans);
     }
 
     /**
@@ -673,8 +750,9 @@ final class UltronPlansOverview
      *
      * @param  list<int>  $po
      * @param  array<int,array<string,mixed>>  $activePlans
+     * @param  array<int,array<string,mixed>>  $knownPlans
      */
-    private static function verificaConLaListaDelServidor(string $raw, array $po, array $activePlans): ?string
+    private static function verificaConLaListaDelServidor(string $raw, array $po, array $activePlans, array $knownPlans): ?string
     {
         $po = array_values(array_map('intval', $po));
         preg_match_all(self::PATTERN, $raw, $m);
@@ -727,8 +805,15 @@ final class UltronPlansOverview
         if ($deUnPlan) {
             return self::MISSING;
         }
+        // Sin la ranura y sin la inserción (I1-c), lo que falta es la lista: antes que un nombre a mano, como en la puerta 1 (C2).
+        if ($ranuras === 0 && ! self::$insertWithoutSlot) {
+            return self::MISSING;
+        }
+        // A mano, ni uno de la lista (su texto lo pone el servidor) ni uno que no se vende (I1-a acotado: ofrecer lo que no se vende). Uno que se vende, sí: es verdad.
+        $vendibles = array_map(static fn (array $p): int => (int) $p['id'], $activePlans);
         $deLaListaEnElCatalogo = array_values(array_filter($activePlans, fn (array $p): bool => in_array((int) $p['id'], $po, true)));
-        if (CommercialTurnPolicy::plansNamedIn($raw, $deLaListaEnElCatalogo) !== []) {
+        $queNoSeVenden = array_values(array_filter($knownPlans, static fn (array $p): bool => ! in_array((int) $p['id'], $vendibles, true)));
+        if (CommercialTurnPolicy::plansNamedIn($raw, [...$deLaListaEnElCatalogo, ...$queNoSeVenden]) !== []) {
             return self::NAME_WRITTEN;
         }
 

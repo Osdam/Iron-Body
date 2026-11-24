@@ -105,6 +105,9 @@ class UltronListaDelServidorTest extends TestCase
     /** Un veredicto duro del revisor: el respaldo de la rendición ({@see UltronCommitService::safeFallback()}). */
     private const RECHAZO_DURO = ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.2, 'hard_fail' => 'invented_price', 'issues' => ['factuality']];
 
+    /** Un rechazo BLANDO del revisor (sin fallo duro ni dimensiones de veto): con la lista final del turno, un aviso (L4). */
+    private const RECHAZO_BLANDO = ['verdict' => 'fail', 'attempt' => 2, 'score' => 0.3, 'issues' => ['relevance'], 'hard_fail' => null];
+
     /**
      * Nombres largos para los tres de la lista (44, 47 y 47 caracteres): la
      * lista fija entera mide 309 y no cabe en el tope publicado (200), que
@@ -555,6 +558,183 @@ class UltronListaDelServidorTest extends TestCase
         $this->assertCount(1, $avisos);
         $this->assertSame(['warning', [4]], [$avisos[0][0], $avisos[0][1]['plan_ids'] ?? null]);
         $this->assertStringNotContainsString('Mensual', (string) json_encode($avisos[0][1], JSON_UNESCAPED_UNICODE), 'sin el texto del nombre');
+    }
+
+    // ── Revisión final de la puerta 2 ───────────────────────────────────────
+
+    /**
+     * I1-a, acotado por el lead: en la forma B, `name_written` también con el
+     * nombre a mano de un plan del catálogo (sin archivar) que NO SE VENDE
+     * ahora: ofrecer lo que no se vende. La sonda S3: el Élite desactivado,
+     * fuera de la lista. Con un rechazo blando del revisor, el respaldo.
+     */
+    public function test_i1a_un_plan_que_no_se_vende_escrito_a_mano_es_name_written(): void
+    {
+        Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => false]);
+        $borrador = 'Le confirmo que el plan Élite es el que mejor le encaja. ¿Le ayudo a concretar su inscripción?';
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        $this->assertNotContains(8, $this->cargaDe(['decide_token' => $token])['po'], 'el Élite no es de la lista');
+
+        $c = $this->check($m, $token, $borrador)->assertOk();
+        $this->assertSame([['code' => 'plans_overview', 'detail' => O::NAME_WRITTEN, 'issue' => 'relevance']], $c->json('defects'));
+        $this->assertSame(N::serverNote(N::PLANS_OVERVIEW, O::NAME_WRITTEN), $c->json('notes'));
+
+        // Con un rechazo blando del revisor, no es la lista final: el respaldo, no el aviso, y sin el Élite.
+        $r = $this->commit($this->payload($m, $token, self::propuesta(SalesIntents::PRICING_QUESTION, $borrador, null), self::RECHAZO_BLANDO))->assertOk()->json();
+        $this->assertSame('SAFE_CURATED_REPLY', $r['fallback_mode'] ?? null);
+        $this->assertStringNotContainsString('Élite', (string) $r['reply_final']);
+        $this->assertArrayNotHasKey('critic_advisory', $this->ultimaAccion()->metadata);
+    }
+
+    /**
+     * I1-a, acotado por el lead (la sonda S2): un plan que SE VENDE, aunque no
+     * sea de la lista, se puede nombrar: es verdad. `ai/check` no lo marca y,
+     * con el revisor de acuerdo, sale del modelo con la lista del servidor.
+     * Con I1-a sobre todo el catálogo era `name_written`: si el filtro de los
+     * vendibles desaparece, esta prueba cae.
+     */
+    public function test_i1a_un_plan_que_se_vende_fuera_de_la_lista_se_puede_nombrar(): void
+    {
+        $borrador = 'Le recomiendo el Trimestre, que es el que mejor se ajusta a lo que busca. ¿Le interesa?';
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        $this->assertNotContains(5, $this->cargaDe(['decide_token' => $token])['po'], 'el Trimestre no es de la lista');
+
+        $c = $this->check($m, $token, $borrador)->assertOk();
+        $this->assertSame([true, []], [$c->json('pass'), $c->json('defects')]);
+
+        $r = $this->commit($this->payload($m, $token, self::propuesta(SalesIntents::PRICING_QUESTION, $borrador, null), self::APROBADO))->assertOk()->json();
+        $this->assertSame('Le recomiendo el Trimestre, que es el que mejor se ajusta a lo que busca. Algunos planes de un mes: '.self::LISTA.'. ¿Le interesa?', $r['reply_final']);
+        $this->assertSame([true, null], [$this->ultimaAccion()->metadata['plans_overview']['valid'], $this->ultimaAccion()->metadata['plans_overview']['detail']]);
+    }
+
+    /**
+     * I1-b: con la lista del servidor, «lista final» solo con la forma A
+     * estricta válida o la forma B CON ranura. Sin ranura (el revisor no ve la
+     * lista que pondrá el servidor, riesgo 1 de §6), un rechazo blando se
+     * respeta y `ai/check` deja reescribir. S6: un nombre inventado, que solo
+     * el revisor puede ver.
+     */
+    public function test_i1b_la_forma_b_sin_ranura_no_es_la_lista_final(): void
+    {
+        $inventado = 'Le recomiendo el Plan Gold Premium, ideal para empezar con todo. ¿Le interesa?';
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+
+        $c = $this->check($m, $token, $inventado)->assertOk();
+        $this->assertSame([true, [], true, null], [$c->json('pass'), $c->json('defects'), $c->json('may_rewrite'), $c->json('budget.reason')], 'sin ranura no es la lista final: se puede reescribir');
+        $r = $this->commit($this->payload($m, $token, self::propuesta(SalesIntents::PRICING_QUESTION, $inventado, null), self::RECHAZO_BLANDO))->assertOk()->json();
+        $this->assertSame('SAFE_CURATED_REPLY', $r['fallback_mode'] ?? null, 'el rechazo del revisor se respeta');
+        $this->assertStringNotContainsString('Gold Premium', (string) $r['reply_final']);
+
+        // Con la ranura sí es la lista final: el mismo rechazo blando es un aviso y sale del modelo (L4). En otra conversación: la memoria de la primera cambia el orden de la lista.
+        $this->nuevaConversacion();
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        $c = $this->check($m, $token, self::CON_RANURA)->assertOk();
+        $this->assertSame([true, false, 'list_final'], [$c->json('pass'), $c->json('may_rewrite'), $c->json('budget.reason')]);
+        $r = $this->commit($this->payload($m, $token, self::propuesta(SalesIntents::PRICING_QUESTION, self::CON_RANURA, null), self::RECHAZO_BLANDO))->assertOk()->json();
+        $this->assertSame('Claro, con gusto. Le comparto nuestros planes: '.self::LISTA.'. ¿Cuál le interesa más?', $r['reply_final']);
+        $this->assertTrue($this->ultimaAccion()->metadata['critic_advisory'] ?? false);
+    }
+
+    /**
+     * I1-c: la constante de §6 que apaga la inserción sin ranura (por defecto,
+     * encendida). Apagada, el borrador sin ranura en el turno de lista es
+     * `missing` en `ai/check` y en el commit (sale la lista fija); con la
+     * ranura, nada cambia.
+     */
+    public function test_i1c_con_la_insercion_sin_ranura_apagada_falta_la_lista(): void
+    {
+        $this->assertTrue(O::INSERT_WITHOUT_SLOT, 'por defecto, encendida');
+        $antes = O::$insertWithoutSlot;
+        O::$insertWithoutSlot = false;
+        try {
+            [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+            $c = $this->check($m, $token, self::SIN_RANURA)->assertOk();
+            $this->assertSame([['code' => 'plans_overview', 'detail' => O::MISSING, 'issue' => 'relevance']], $c->json('defects'));
+            $this->assertSame(N::serverNote(N::PLANS_OVERVIEW, O::MISSING, ['X' => 75, 'N' => 320, 'R' => 245]), $c->json('notes'));
+            $r = $this->commit($this->payload($m, $token, self::propuesta(SalesIntents::PRICING_QUESTION, self::SIN_RANURA, null), self::APROBADO))->assertOk()->json();
+            $this->assertSame(self::LISTA_FIJA, $r['reply_final']);
+            $this->assertSame([false, O::MISSING, false], [$this->ultimaAccion()->metadata['plans_overview']['valid'], $this->ultimaAccion()->metadata['plans_overview']['detail'], $this->ultimaAccion()->metadata['plans_overview']['slot']]);
+
+            // Con la ranura, igual que encendida (en otra conversación: la memoria de la primera cambia el orden de la lista).
+            $this->nuevaConversacion();
+            $r = $this->aprobado(self::PANORAMA_CON_PRECIO, self::CON_RANURA);
+            $this->assertSame('Claro, con gusto. Le comparto nuestros planes: '.self::LISTA.'. ¿Cuál le interesa más?', $r['reply_final']);
+        } finally {
+            O::$insertWithoutSlot = $antes;
+        }
+    }
+
+    /**
+     * I3-3: las notas de la lista del servidor de `name_written` y
+     * `price_written`, literales, por el endpoint de `ai/check` con `k` = 8.
+     *
+     * @return array<string, array{string, string, string}>
+     */
+    public static function notasPorElEndpoint(): array
+    {
+        return [
+            'name_written' => ['Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', O::NAME_WRITTEN, 'relevance'],
+            'price_written' => ['Claro. Desde $50.000 al mes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', O::PRICE_WRITTEN, 'factuality'],
+        ];
+    }
+
+    #[DataProvider('notasPorElEndpoint')]
+    public function test_i3_las_notas_de_la_ranura_por_el_endpoint(string $borrador, string $detalle, string $issue): void
+    {
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+
+        $c = $this->check($m, $token, $borrador)->assertOk();
+
+        $this->assertSame([['code' => 'plans_overview', 'detail' => $detalle, 'issue' => $issue]], $c->json('defects'));
+        $this->assertSame(N::serverNote(N::PLANS_OVERVIEW, $detalle), $c->json('notes'));
+        $this->assertStringNotContainsString('{{', (string) $c->json('notes'));
+    }
+
+    /** Menor 1 (S4): con herramientas, la triple llave sale sin llaves sueltas (la ranura se las queda); `verify()` sigue dando `mixed`. */
+    public function test_menor1_la_triple_llave_con_herramientas_sale_sin_llaves(): void
+    {
+        $r = $this->aprobado(self::PANORAMA_CON_PRECIO, 'Claro, con gusto. Le comparto nuestros planes: {{{LISTA_DE_PLANES}}}. Le dejo la app. ¿Cuál le interesa más?', [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+        $this->assertStringContainsString('Le comparto nuestros planes: '.self::LISTA.'. Le dejo la app.', (string) $r['reply_final']);
+        $this->assertDoesNotMatchRegularExpression('/[{}]/', (string) $r['reply_final']);
+        $this->assertSame(O::MIXED, $this->ultimaAccion()->metadata['plans_overview']['detail']);
+    }
+
+    /**
+     * Menor 2 (S7): un nombre con un control de dirección o un separador de
+     * línea sale en la lista fija SIN el control y con todos los planes; el
+     * aviso lleva el id del plan, sin el nombre.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function nombresParaLaListaFija(): array
+    {
+        return [
+            'U+202E' => ["Plan \u{202E}Mensual"],
+            'U+2028' => ["Plan\u{2028}Mensual"],
+            'U+2066 y U+2069' => ["Plan \u{2066}Mensual\u{2069}"],
+        ];
+    }
+
+    #[DataProvider('nombresParaLaListaFija')]
+    public function test_menor2_la_lista_fija_quita_los_controles_del_nombre_y_no_suelta_el_plan(string $nombre): void
+    {
+        $avisos = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$avisos): void {
+            if ($e->message === 'ultron.commit.fixed_list_name_controls') {
+                $avisos[] = [$e->level, $e->context];
+            }
+        });
+        $m = $this->entrante(self::PANORAMA_CON_PRECIO);
+        $decide = $this->decide($m);
+        Plan::query()->whereKey(4)->update(['name' => $nombre]);
+
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::CON_RANURA, null), self::APROBADO))->assertOk()->json();
+
+        $this->assertSame(self::LISTA_FIJA, $r['reply_final'], 'la lista fija entera, con el nombre sin el control');
+        $this->assertDoesNotMatchRegularExpression('/[\x{0B}\x{0C}\x{85}\x{2028}\x{2029}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', (string) $r['reply_final']);
+        $this->assertSame([['warning', [4]]], array_map(static fn (array $a): array => [$a[0], $a[1]['plan_ids'] ?? null], $avisos));
+        $this->assertStringNotContainsString('Mensual', (string) json_encode($avisos, JSON_UNESCAPED_UNICODE), 'sin el texto del nombre');
     }
 
     // ── Andamio ──────────────────────────────────────────────────────────────

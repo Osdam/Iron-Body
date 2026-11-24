@@ -65,9 +65,11 @@ use Illuminate\Validation\Rule;
  * genera.
  *
  * NI LOG, NI ESCRITURAS, NI RED, NI CONFIGURACIÓN: del motor solo funciones
- * puras y tres lecturas del catálogo (los planes vendibles por id y el mensual
- * por defecto) y, si la política exige los hechos del gimnasio, la base de
- * conocimiento y las clases. Lo vigilan `UltronStudioEngineReadOnlyTest` y
+ * puras y cuatro lecturas del catálogo (los planes vendibles por id, el
+ * mensual por defecto y, con la lista del servidor, los planes que no están
+ * archivados: id y nombre, revisión final de la puerta 2, I1-a) y, si la
+ * política exige los hechos del gimnasio, la base de conocimiento y las
+ * clases. Lo vigilan `UltronStudioEngineReadOnlyTest` y
  * `StudioLabIsolationTest`.
  */
 final class StudioLabEngineCheck
@@ -216,11 +218,23 @@ final class StudioLabEngineCheck
 
         // Lo que sigue sin arreglar: la longitud que no cabe, el tuteo que queda y todo lo demás de la comprobación.
         $defectos = $this->defects($turn, $draft);
+        /*
+         * Con la lista del servidor y herramientas (revisión final de la puerta
+         * 2, I2; sondas S1 y S1b): el commit no exige la lista en un turno con
+         * herramientas (sin panorama, G1.2), así que la lista que falta, va
+         * mezclada o lleva un nombre a mano sale como esté, con la lista que
+         * compone Laravel. `ai/check` la sigue marcando (se pide reescribirla).
+         * El marcador desconocido, la cifra y el turno de cobro siguen
+         * tumbándola: en el commit son un 422. Lo que lleve forma de marcador
+         * lo para la red del commit (E10 de `UltronCheckCommitParityTest`).
+         */
+        $sinPanorama = UltronPlansOverview::serverList($sp) && $draft['tools_requested'] !== [];
         $codigos = [];
         foreach ($defectos as $d) {
-            $fatal = match ($d['code']) {
-                UltronRegenerationNotes::LENGTH_OVER_CAP => $descartado,
-                UltronRegenerationNotes::REGISTER_TUTEO => $tuteoQueQueda !== [],
+            $fatal = match (true) {
+                $d['code'] === UltronRegenerationNotes::LENGTH_OVER_CAP => $descartado,
+                $d['code'] === UltronRegenerationNotes::REGISTER_TUTEO => $tuteoQueQueda !== [],
+                $d['code'] === UltronRegenerationNotes::PLANS_OVERVIEW && $sinPanorama => ! in_array($d['detail'], [UltronPlansOverview::MISSING, UltronPlansOverview::MIXED, UltronPlansOverview::NAME_WRITTEN], true),
                 default => true,
             };
             if ($fatal && ! in_array($d['code'], $codigos, true)) {
@@ -342,9 +356,11 @@ final class StudioLabEngineCheck
         // se expande y de ellos saca `UltronDraftDefects::listBudget()` el presupuesto de las notas (Enmienda A4-4).
         $textosDeLaLista = $this->listTexts($po);
         $expandido = $this->expanded($turn, $draft, $turno['policy'], $textosDeLaLista);
+        // Con la lista del servidor, los planes que conoce el servidor: el que no se vende no se escribe a mano (I1-a), como `UltronDraftCheck::inspect()`.
+        $conocidos = UltronPlansOverview::serverList($turn['sp']) && $po !== [] ? $this->knowledge->knownPlans() : null;
 
         return array_slice([
-            ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound'], $textosDeLaLista),
+            ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound'], $textosDeLaLista, $conocidos),
             ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy']), UltronReplyFitter::plansListCap($turn['sp'], $po)),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
     }

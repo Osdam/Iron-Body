@@ -267,6 +267,60 @@ class UltronPlansOverviewComposeTest extends TestCase
         }
     }
 
+    /**
+     * Revisión final, menor 1 (S4): la ranura se queda con UNA llave pegada a
+     * cada lado (`{{{LISTA_DE_PLANES}}}`), para que la lista no salga entre
+     * llaves sueltas; sin llave pegada, el espacio de alrededor no se toca.
+     */
+    public function test_place_absorbe_una_llave_pegada_a_cada_lado(): void
+    {
+        $lista = O::compose([3, 4, 8], self::PRODUCCION);
+        foreach ([
+            'Estos son: {{{LISTA_DE_PLANES}}}. ¿Cuál?' => 'Estos son: '.$lista.'. ¿Cuál?',
+            'Estos son: { {{LISTA_DE_PLANES}} }. ¿Cuál?' => 'Estos son: '.$lista.'. ¿Cuál?',
+            'Estos son: {{{LISTA_DE_PLANES}}. ¿Cuál?' => 'Estos son: '.$lista.'. ¿Cuál?',
+            'Estos son: {{LISTA_DE_PLANES}}}. ¿Cuál?' => 'Estos son: '.$lista.'. ¿Cuál?',
+            'Estos son: {{LISTA_DE_PLANES}}. ¿Cuál?' => 'Estos son: '.$lista.'. ¿Cuál?',
+            'Estos son:  {{ LISTA_DE_PLANES }}  ¿Cuál?' => 'Estos son:  '.$lista.'  ¿Cuál?',
+        ] as $raw => $esperado) {
+            $this->assertSame(['text' => $esperado, 'slot' => true], O::place($raw, $lista, O::HEADER_ALL), $raw);
+        }
+        $this->assertSame(O::MIXED, O::verify('Estos son: {{{LISTA_DE_PLANES}}}. ¿Cuál?', [3, 4, 8], self::catalogo(), true), 'y verify() sigue dando mixed (M1)');
+    }
+
+    /**
+     * Revisión final, I1-c: con la inserción sin ranura apagada (la constante
+     * de §6), un borrador sin ranura no recibe la lista (`placed` false) y es
+     * `missing`; con la ranura, nada cambia. Por defecto, encendida.
+     */
+    public function test_con_la_insercion_sin_ranura_apagada_el_borrador_sin_ranura_es_missing(): void
+    {
+        $this->assertTrue(O::INSERT_WITHOUT_SLOT);
+        $this->assertTrue(O::$insertWithoutSlot);
+        $po = [3, 4, 8];
+        $c = self::catalogo();
+        $sin = 'Claro, con gusto. ¿Cuál le interesa?';
+        $con = 'Estos son: {{LISTA_DE_PLANES}}. ¿Cuál?';
+        $this->assertTrue(O::render($sin, $po, self::PRODUCCION, $c, true)['placed'], 'encendida: se inserta');
+        $this->assertNull(O::verify($sin, $po, $c, true));
+
+        $antes = O::$insertWithoutSlot;
+        O::$insertWithoutSlot = false;
+        try {
+            $r = O::render($sin, $po, self::PRODUCCION, $c, true);
+            $this->assertSame(['text' => $sin, 'shape' => O::SHAPE_SERVER, 'slot' => false, 'used' => $po, 'placed' => false], $r);
+            $this->assertSame(O::MISSING, O::verify($sin, $po, $c, true));
+            $this->assertSame(O::MISSING, O::verify('El Élite es el completo. ¿Le interesa?', $po, $c, true), 'sin ranura, lo que falta es la lista');
+            $this->assertTrue(O::render($con, $po, self::PRODUCCION, $c, true)['placed'], 'con la ranura, igual');
+            $this->assertNull(O::verify($con, $po, $c, true));
+            $this->assertSame(O::MISSING, O::verify('Tenemos {{PLAN_1}} y {{PLAN_2}}.', $po, $c, true), 'la forma A, igual que encendida');
+            $this->assertNull(O::verify($sin, [], $c, true), 'sin lista en el turno no hay nada que insertar');
+            $this->assertSame(O::MISSING, O::verify($sin, $po, $c, false), 'sin la lista del servidor (k ≤ 7), lo de siempre: sin marcadores falta la lista');
+        } finally {
+            O::$insertWithoutSlot = $antes;
+        }
+    }
+
     public function test_place_con_dos_ranuras_no_elige(): void
     {
         $lista = O::compose([3, 4], self::PRODUCCION);
@@ -400,7 +454,10 @@ class UltronPlansOverviewComposeTest extends TestCase
             '6 · cotiza un plan en vez de la lista' => ['El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. ¿Le interesa?', $po, O::MISSING],
             '6 · un nombre de la lista a mano' => ['El Plan Valera es el más pedido. {{LISTA_DE_PLANES}}', $po, O::NAME_WRITTEN],
             '6 · un nombre a mano sin ranura' => ['El Élite es el completo. ¿Cuál le interesa?', $po, O::NAME_WRITTEN],
-            '6 · un plan de fuera de la lista no cuenta' => ['También hay un Plan Semana. {{LISTA_DE_PLANES}}', $po, null],
+            // Revisión final, I1-a acotado por el lead: un plan que SE VENDE, aunque no sea de la lista, se puede nombrar (es verdad).
+            // El que no se vende sí cuenta, con los planes que conoce el servidor: `test_verify_ve_un_plan_que_no_se_vende_y_no_uno_que_se_vende`.
+            '6 · un plan que se vende y no es de la lista no cuenta' => ['También hay un Plan Semana. {{LISTA_DE_PLANES}}', $po, null],
+            '6 · y sin ranura' => ['Le recomiendo el Plan Semana para empezar. ¿Le interesa?', $po, null],
             '6 · por su lugar, sin nombre' => ['{{LISTA_DE_PLANES}}. El tercero es el más completo.', $po, null],
             // 7. La que por lo demás vale pero deja restos con forma de marcador (las sondas S4 y S5): mixed, no el último recurso.
             '7 · B con PLAN_1 sin llaves (S4)' => ['Claro. Tenemos PLAN_1 y PLAN_2, los dos de un mes. Le dejo la app.', $po, O::MIXED],
@@ -420,6 +477,38 @@ class UltronPlansOverviewComposeTest extends TestCase
     public function test_verify_con_la_lista_del_servidor_sigue_la_tabla_de_1_3(string $raw, array $po, ?string $esperado): void
     {
         $this->assertSame($esperado, O::verify($raw, $po, self::catalogo(), true));
+    }
+
+    /**
+     * Revisión final, I1-a acotado por el lead: con la lista del servidor, la
+     * regla 6 ve también el nombre a mano de un plan del catálogo que NO SE
+     * VENDE ahora (de `$knownPlans`, el que no está en `$activePlans`; el
+     * Élite de la sonda S3): `name_written`, con ranura o sin ella. Uno que SE
+     * VENDE, aunque no sea de la lista y venga entre los conocidos (S2), no:
+     * nombrarlo es verdad. Si el filtro de los vendibles desaparece, esta
+     * prueba cae. Sin la lista del servidor, `$knownPlans` no cuenta, y la
+     * forma A no cambia.
+     */
+    public function test_verify_ve_un_plan_que_no_se_vende_y_no_uno_que_se_vende(): void
+    {
+        $vendibles = array_values(array_filter(self::catalogo(), static fn (array $p): bool => (int) $p['id'] !== 8));
+        // Como `knownPlans()`: todos los que no están archivados, se vendan o no.
+        $conocidos = [['id' => 3, 'name' => 'Plan Valera'], ['id' => 4, 'name' => 'Plan Mensual'], ['id' => 8, 'name' => 'Élite'], ['id' => 9, 'name' => 'Plan Semana'], ['id' => 30, 'name' => 'Plan Viejo']];
+        $po = [3, 4];
+        foreach (['Le confirmo que el plan Élite es el que mejor le encaja. {{LISTA_DE_PLANES}}', 'Le confirmo que el plan Élite es el que mejor le encaja. ¿Le interesa?'] as $raw) {
+            $this->assertNull(O::verify($raw, $po, $vendibles, true), $raw);
+            $this->assertSame(O::NAME_WRITTEN, O::verify($raw, $po, $vendibles, true, $conocidos), $raw);
+            $this->assertSame(O::verify($raw, $po, $vendibles, false), O::verify($raw, $po, $vendibles, false, $conocidos), $raw);
+        }
+        $this->assertSame(O::NAME_WRITTEN, O::verify('El Plan Viejo ya no está. Estos son: {{LISTA_DE_PLANES}}', $po, $vendibles, true, $conocidos), 'otro que no se vende');
+        // El Plan Semana se vende y no es de la lista: se puede nombrar (S2), aunque venga entre los conocidos.
+        foreach (['También tenemos el Plan Semana, para probar. {{LISTA_DE_PLANES}}', 'Le recomiendo el Plan Semana para empezar. ¿Le interesa?'] as $raw) {
+            $this->assertNull(O::verify($raw, $po, $vendibles, true, $conocidos), $raw);
+        }
+        // Uno de la lista, a mano, como siempre.
+        $this->assertSame(O::NAME_WRITTEN, O::verify('El Plan Valera es el más pedido. {{LISTA_DE_PLANES}}', $po, $vendibles, true, $conocidos));
+        // La forma A estricta no cambia: un nombre de fuera de la lista no es de su regla.
+        $this->assertNull(O::verify('Tenemos {{PLAN_1}} y {{PLAN_2}}. El Élite ya no está.', $po, $vendibles, true, $conocidos));
     }
 
     /**

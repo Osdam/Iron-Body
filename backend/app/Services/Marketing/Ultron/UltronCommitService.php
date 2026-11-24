@@ -5979,7 +5979,9 @@ class UltronCommitService
      * el texto de un plan no puede salir (un control o un salto de línea en su
      * nombre; {@see UltronPlansOverview::unsafeListText()}), el detalle es
      * `unsafe_plan_name`, con un aviso que dice sus id y nunca el nombre
-     * (revisión de seguridad de la puerta 2, M2).
+     * (revisión de seguridad de la puerta 2, M2). En la forma B, el nombre a
+     * mano de un plan que no se vende ahora (sin archivar) también es
+     * `name_written` (revisión final, I1-a); el de uno que se vende, no.
      *
      * @param  list<int>  $po  la lista del turno (vacía en un turno de cobro)
      * @param  list<int>  $ofrecida  la lista firmada por `decide`
@@ -6015,7 +6017,8 @@ class UltronCommitService
             $inseguros !== [] => self::LISTA_NOMBRE_NO_SEGURO,
             // Forma B: si la lista no se puede componer entera, la del catálogo de ahora (todo o nada, P-2).
             $formaB && UltronPlansOverview::compose($po, $textos) === null => self::LISTA_NO_VENDIBLE,
-            $formaB => UltronPlansOverview::verify($borrador, $po, $activos, true) ?? ($puesta['placed'] ? null : UltronPlansOverview::MISSING),
+            // Con los planes que conoce el servidor: tampoco se escribe a mano uno que no se vende ahora (revisión final, I1-a).
+            $formaB => UltronPlansOverview::verify($borrador, $po, $activos, true, $this->knowledge->knownPlans()) ?? ($puesta['placed'] ? null : UltronPlansOverview::MISSING),
             default => UltronPlansOverview::verify($borrador, $po, $activos, $delServidor),
         };
 
@@ -6063,6 +6066,13 @@ class UltronCommitService
      * la lista (`tope_de_lista` = true: quien llama la controla con ese tope).
      * Si ni así cabe, null.
      *
+     * SIN CONTROLES EN UN NOMBRE (revisión final de la puerta 2, menor 2;
+     * sonda S7): un salto de línea o un control de dirección en el nombre de
+     * un plan (U+000B, U+000C, U+0085, U+2028, U+2029, U+202A a U+202E y
+     * U+2066 a U+2069) no sale, y el plan sí: no se suelta ninguno
+     * ({@see UltronPlansOverview::withoutControls()}). El aviso dice qué
+     * planes, por su id y nunca con el nombre.
+     *
      * @param  array<string,mixed>  $policy  la política del turno ({@see CommercialTurnPolicy::decide()}): `hard_required_plan` y `forbidden_plan_ids`
      * @param  int|null  $topeDeLaLista  con la lista del servidor, el tope de la lista del turno: la lista entera o null
      * @return array{texto:string,esqueleto:string,planes:array<int,string>,desde:int,soltadas:int,tope_de_lista:bool}|null
@@ -6092,12 +6102,19 @@ class UltronCommitService
 
         $items = [];
         $esqueleto = [];
+        $conControles = [];
         foreach ($elegidos as $id) {
             $plan = $modelos[$id];
-            $nombre = trim((string) $plan->name);
+            $nombre = UltronPlansOverview::withoutControls(trim((string) $plan->name));
+            if ($nombre !== trim((string) $plan->name)) {
+                $conControles[] = (int) $id;
+            }
             $precio = $this->replies->formatCop((float) $plan->price);
             $items[$id] = $todosDeUnMes ? $nombre.', '.$precio : $nombre.' ('.$duracionDe($plan).'), '.$precio;
             $esqueleto[$id] = $todosDeUnMes ? '{{PLAN_NAME}}, {{PLAN_PRICE}}' : '{{PLAN_NAME}} ({{PLAN_DURATION}}), {{PLAN_PRICE}}';
+        }
+        if ($conControles !== []) {
+            ChannelLog::warning('ultron.commit.fixed_list_name_controls', ['plan_ids' => $conControles]);
         }
 
         /*

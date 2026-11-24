@@ -92,9 +92,10 @@ final class UltronDraftDefects
      * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
      * @param  string  $inbound  el texto de la persona (solo para saber si pregunta el precio)
      * @param  array<int,string>  $listTexts  plan_id → su texto ya expandido ({@see UltronPlansOverview::item()}) de los planes de `po` que se venden AHORA; el que falta cuenta como su marcador literal (así lo deja la expansión)
+     * @param  array<int,array<string,mixed>>|null  $knownPlans  con la lista del servidor, los planes del catálogo que conoce el servidor, se vendan o no (`knownPlans()`; revisión final, I1-a): el que no se vende ahora no se escribe a mano
      * @return list<array{code:string,detail:?string,issue:string,note:string}>
      */
-    public static function of(array $draft, string $expanded, array $sp, array $po, array $catalog, string $inbound, array $listTexts = []): array
+    public static function of(array $draft, string $expanded, array $sp, array $po, array $catalog, string $inbound, array $listTexts = [], ?array $knownPlans = null): array
     {
         if (($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO) {
             return [];
@@ -141,7 +142,7 @@ final class UltronDraftDefects
              * notas, las de la ranura, con lo que ocupa la lista compuesta si
              * falta o va mezclada.
              */
-            $delServidor = UltronPlansOverview::verify($raw, $po, $catalog, true);
+            $delServidor = UltronPlansOverview::verify($raw, $po, $catalog, true, $knownPlans);
             if ($delServidor !== null) {
                 $params = in_array($delServidor, [UltronPlansOverview::MISSING, UltronPlansOverview::MIXED], true) ? ($deLaLista ?? []) : [];
                 $defectos[] = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $delServidor, $params, false, true);
@@ -288,9 +289,11 @@ final class UltronDraftDefects
      * laboratorio. Pura.
      *
      * Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), la lista
-     * válida es la de la regla estricta (la ranura, o ninguna marca, o la
-     * forma A entera y en su orden): {@see UltronPlansOverview::verify()} con
-     * `serverList`.
+     * válida es la de la regla estricta: {@see UltronPlansOverview::verify()}
+     * con `serverList`. Y solo la forma A entera y en su orden o la forma B
+     * CON la ranura (revisión final, I1-b): sin la ranura, el revisor juzgó
+     * un borrador sin la lista que pondrá el servidor (riesgo 1 de §6), así
+     * que su rechazo blando se respeta y `ai/check` deja reescribir.
      *
      * @param  string  $raw  el borrador SIN expandir
      * @param  array<string,mixed>  $sp  el `sp` firmado en el token
@@ -300,10 +303,13 @@ final class UltronDraftDefects
      */
     public static function isListFinal(string $raw, array $sp, array $po, array $catalog, array $defects): bool
     {
+        $servidor = UltronPlansOverview::serverList($sp);
+
         return $defects === []
             && $po !== []
             && UltronReplyFitter::plansListCap($sp, $po) !== null
-            && UltronPlansOverview::verify($raw, $po, $catalog, UltronPlansOverview::serverList($sp)) === null;
+            && UltronPlansOverview::verify($raw, $po, $catalog, $servidor) === null
+            && (! $servidor || UltronPlansOverview::shape($raw) === UltronPlansOverview::SHAPE_MARKERS || UltronPlansOverview::hasSlot($raw));
     }
 
     /**

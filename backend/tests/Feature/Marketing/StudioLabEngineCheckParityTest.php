@@ -286,6 +286,12 @@ class StudioLabEngineCheckParityTest extends TestCase
             'A y B a la vez: respaldo' => [self::PANORAMA, $p, 'Claro. Le comparto {{LISTA_DE_PLANES}}; el más pedido es {{PLAN_1}}. ¿Cuál le interesa?', null, [], 'pass'],
             'forma B y el revisor la rechaza sin fallo grave: del modelo' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 'fail'],
             'forma B y el revisor la rechaza con un fallo grave: respaldo' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 'grave'],
+            // Revisión final de la puerta 2, I2 (S1 y S1b): con herramientas el commit no exige la lista; la lista que no vale sale del modelo, y el laboratorio lo predice.
+            'S1 con herramientas, un nombre a mano junto a la ranura: del modelo' => [self::PANORAMA, $p, 'Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', null, ['app_links_send'], 'pass'],
+            'S1b con herramientas, la forma A fuera de orden: del modelo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_2}}, {{PLAN_1}} y {{PLAN_3}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', null, ['app_links_send'], 'pass'],
+            'S1c con herramientas, dos de tres: del modelo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', null, ['app_links_send'], 'pass'],
+            // I1-b: sin ranura no es la lista final; el rechazo blando del revisor se respeta.
+            'forma B sin ranura y el revisor la rechaza sin fallo grave: respaldo' => [self::PANORAMA, $p, 'Claro, con gusto. Todos incluyen acceso total al gimnasio. ¿Cuál le interesa más?', null, [], 'blando'],
         ];
     }
 
@@ -343,6 +349,10 @@ class StudioLabEngineCheckParityTest extends TestCase
         }
         if ($veredicto === 'fail') {
             $this->assertSame([null, true], [$prediccion['cause'], $prediccion['criticAdvisory'] ?? null], 'el aviso del revisor');
+        }
+        // Revisión final de la puerta 2, I1-b: el mismo rechazo blando (`blando`) sobre lo que no es la lista final no es un aviso: el respaldo del revisor.
+        if ($veredicto === 'blando') {
+            $this->assertSame([StudioLabEngineCheck::CAUSE_CRITIC, null], [$prediccion['cause'], $prediccion['criticAdvisory'] ?? null], 'sin aviso del revisor');
         }
         $this->assertSame([StudioLabEngineCheck::ORIGIN_MODEL, StudioLabEngineCheck::ORIGIN_FALLBACK], [UltronReplyOrigin::MODEL, UltronReplyOrigin::FALLBACK]);
     }

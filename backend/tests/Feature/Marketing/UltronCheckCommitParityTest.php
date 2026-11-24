@@ -51,9 +51,9 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  * antes de medir, y decide sobre el mundo de ese instante). SON ONCE, E1 a E11
  * (m-7 del revisor: este docblock decía siete y eran nueve; E10 y E11 se
  * añadieron en las correcciones tras las revisiones). E1 a E3 se ejercitan
- * abajo, cada una con su prueba que fija la divergencia exacta; E10 la fija la
- * suya en `UltronA4ListaDelModeloTest`; las demás quedan declaradas aquí con su
- * porqué, sin prueba propia. En ninguna sale un texto peor que sin la
+ * abajo, cada una con su prueba que fija la divergencia exacta; E10, abajo
+ * (con la lista del servidor) y en `UltronA4ListaDelModeloTest`; las demás
+ * quedan declaradas aquí con su porqué, sin prueba propia. En ninguna sale un texto peor que sin la
  * comprobación: lo peor es una reescritura perdida (E1, E4, E6, E9, E10, E11) o
  * una llamada de más (E2, E3, E5 y la otra dirección de E6):
  *
@@ -122,12 +122,19 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *       distinto. Sin prueba propia.
  *
  * CORRECCIONES TRAS LAS REVISIONES (encargo `encargo-be-r6.md`):
- *  E10. Un marcador MAL ESCRITO (`PLAN_1` sin llaves, `{PLAN_1}`) en un turno
- *       con herramientas (I-1 del revisor): ni la comprobación ni el commit
- *       miran la lista con herramientas (G1.2), así que la comprobación dice
- *       `[]`; el commit lo para en el punto de control (C1: la red de los
- *       marcadores) y manda el último recurso, con `metadata.server_replaced`.
- *       Una reescritura perdida, no un texto peor: antes salía literal. Lo fija
+ *  E10. Con herramientas en el turno, el commit no exige la lista (G1.2: no
+ *       hay panorama). Con los marcadores (compilador ≤ 7) la comprobación
+ *       tampoco la mira (salvo el marcador que no existe, un 422 en los dos)
+ *       y dice `[]`. Con la lista del servidor (`k` ≥ 8;
+ *       revisión final de la puerta 2, S1 y S1b) la comprobación la mira
+ *       SIEMPRE: una lista que no vale (`missing`, `mixed`, `name_written`)
+ *       recibe su nota y se pide reescribirla, pero si el último borrador sigue
+ *       así, el commit lo envía tal cual, con la lista que compone Laravel (y lo
+ *       mismo predice el laboratorio, I2). En los dos casos, lo que lleva forma
+ *       de marcador (`PLAN_1` sin llaves, `{PLAN_1}`, la ranura sin llaves) lo
+ *       para el punto de control del commit (C1, la red de los marcadores) con
+ *       el último recurso y `metadata.server_replaced`. Una reescritura de más o
+ *       perdida, no un texto peor. Lo fijan `test_e10_…` (abajo) y
  *       `UltronA4ListaDelModeloTest::test_un_marcador_mal_escrito_no_sale_con_herramientas`.
  *  E11. «Profesional» y los enlaces de la app ya enviados hace menos de una
  *       hora (H4-12 b, anterior a este cambio): la comprobación cuenta los
@@ -478,6 +485,30 @@ class UltronCheckCommitParityTest extends TestCase
 
         $this->assertSame([], $this->causasDelCommit($commit, false), 'la divergencia declarada');
         $this->assertSame('fit', $this->ultimaAccion()->metadata['length']['action']);
+    }
+
+    /**
+     * E10 con la lista del servidor (S1 y S1b de la revisión final de la puerta
+     * 2): con herramientas, la comprobación pide reescribir la lista que no
+     * vale y el commit, que con herramientas no exige la lista, la envía.
+     */
+    public function test_e10_con_herramientas_la_lista_que_no_vale_sale_del_modelo(): void
+    {
+        foreach ([
+            'S1: un nombre a mano junto a la ranura' => ['Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', 'name_written'],
+            'S1b: la forma A fuera de orden' => ['Claro. Tenemos {{PLAN_2}}, {{PLAN_1}} y {{PLAN_3}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', 'mixed'],
+        ] as $caso => [$borrador, $detalle]) {
+            [$m, $token, $conLista] = $this->turno(self::PANORAMA);
+            $this->assertTrue($conLista, $caso);
+
+            $this->assertSame(['plans_overview'], $this->loQueMarcaLaComprobacion($m, $token, $borrador, SalesIntents::PRICING_QUESTION, null, ['app_links_send']), $caso);
+            $commit = $this->commit($m, $token, $borrador, SalesIntents::PRICING_QUESTION, null, ['app_links_send']);
+
+            $this->assertSame([], $this->causasDelCommit($commit, true), "{$caso}: la divergencia declarada");
+            $fila = $this->ultimaAccion()->metadata;
+            $this->assertSame([false, $detalle], [$fila['plans_overview']['valid'], $fila['plans_overview']['detail']], $caso);
+            $this->assertArrayNotHasKey('server_replaced', $fila, "{$caso}: sale del modelo, con la lista que compone Laravel");
+        }
     }
 
     // ── Andamio ──────────────────────────────────────────────────────────────

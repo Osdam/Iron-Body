@@ -363,4 +363,37 @@ class UltronReplyFitterTest extends TestCase
         }
         $this->assertNull(F::pricingLayout($cab, $planes, $tambien, $pregunta, 40), 'encabezado y primer plan son obligatorios');
     }
+
+    /**
+     * PT-17, puerta 2, L1 (comprobación 3 del propietario: «sale la lista fija
+     * entera, nunca una lista parcial»): con `$whole`, todos los planes son
+     * obligatorios. Solo se sueltan «También hay…» y, después, la pregunta; si
+     * ni así cabe, null, nunca dos de tres.
+     */
+    public function test_respaldo_de_precios_entero_nunca_suelta_un_plan(): void
+    {
+        $cab = 'Claro. Planes de un mes: ';
+        $planes = ['Plan Valera, $65.000 COP', 'Plan Mensual, $80.000 COP', 'Élite, $180.000 COP'];
+        $tambien = 'También hay planes por día, por semana y de varios meses.';
+        $pregunta = '¿Sobre cuál amplío la información?';
+
+        $esperados = [
+            // tope => [planes, también, pregunta]
+            200 => ['items' => 3, 'also' => true, 'question' => true],
+            160 => ['items' => 3, 'also' => false, 'question' => true],
+            120 => ['items' => 3, 'also' => false, 'question' => false],
+        ];
+        foreach ($esperados as $tope => $layout) {
+            $this->assertSame($layout, F::pricingLayout($cab, $planes, $tambien, $pregunta, $tope, true), (string) $tope);
+            $this->assertLessThanOrEqual($tope, F::measure(F::composePricing($cab, $planes, $tambien, $pregunta, $layout)));
+        }
+        // Donde la regla de siempre suelta un plan (80: dos de tres), la entera no sale.
+        $this->assertSame(2, F::pricingLayout($cab, $planes, $tambien, $pregunta, 80)['items'] ?? null);
+        $this->assertNull(F::pricingLayout($cab, $planes, $tambien, $pregunta, 80, true));
+        $this->assertNull(F::pricingLayout($cab, $planes, $tambien, $pregunta, 60, true));
+        // Sin tope, entera con todo, como siempre; sin planes, nada.
+        $this->assertSame(['items' => 3, 'also' => true, 'question' => true], F::pricingLayout($cab, $planes, $tambien, $pregunta, null, true));
+        $this->assertNull(F::pricingLayout($cab, [], $tambien, $pregunta, 200, true));
+        $this->assertSame(['items' => 3, 'also' => false, 'question' => true], F::pricingLayout($cab, $planes, null, $pregunta, 200, true), 'sin «También hay…»');
+    }
 }

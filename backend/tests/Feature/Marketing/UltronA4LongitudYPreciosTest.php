@@ -269,7 +269,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
     {
         Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => false]);
         $this->publica(200);
-        // PT-17, puerta 2, L1: el respaldo de la rendición con el compilador de estos textos (≤ 7); con 8 el rechazo blando de la forma B es un aviso (L4).
+        // PT-17, puerta 2, L1: el respaldo de la rendición con el compilador de estos textos (≤ 7). Con 8, la gemela de abajo
+        // (`test_con_el_compilador_8_…_da_la_lista_fija`): desde la revisión final (I1-a, I1-b), la misma lista fija.
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, compilador: 7);
         // F5 (I-4): «1 día», en singular (antes «1 días», que esta prueba fijaba como correcto).
         // G5 (I-6): nombra 3 de 8 vendibles → «Algunos de nuestros planes»; el encabezado, 11 caracteres más
@@ -289,9 +290,39 @@ class UltronA4LongitudYPreciosTest extends TestCase
         // Documenta (plan §2.2 c): si PROMO X4 se mueve delante, sale él.
         Plan::query()->whereKey(14)->update(['sort_order' => 0]);
         $this->publica(200);
-        // PT-17, puerta 2, L1: con el compilador de estos textos (≤ 7); con 8 el rechazo blando de la forma B es un aviso (L4).
+        // PT-17, puerta 2, L1: con el compilador de estos textos (≤ 7). Con 8, la gemela de abajo (revisión final, I1-b).
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, compilador: 7);
         $this->assertStringStartsWith('Claro. Algunos planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
+    }
+
+    /**
+     * Revisión final de la puerta 2, I3-1: las gemelas con el compilador 8 de
+     * las dos de arriba, fijadas al 7. El borrador del revisor caído nombra a
+     * mano el Élite, que no es de la lista. En la primera ni se vende (la
+     * sonda S3 del revisor): con la lista del servidor es `name_written`
+     * (I1-a). En la segunda se vende: nombrarlo es verdad y no es
+     * `name_written` (I1-a acotado por el lead). En las dos, sin la ranura,
+     * nunca es la lista final (I1-b): el rechazo blando se respeta y sale la
+     * misma lista fija que con el 7. Antes de la revisión final, con 8 era un
+     * aviso y salía el borrador con la lista.
+     */
+    public function test_con_el_compilador_8_el_rechazo_blando_del_que_nombra_otro_plan_da_la_lista_fija(): void
+    {
+        Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => false]);
+        $this->publica(200);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        $this->assertSame('SAFE_CURATED_REPLY', $r['fallback_mode'] ?? null, 'S3');
+        $this->assertSame('Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertArrayNotHasKey('critic_advisory', $this->ultimaAccion()->metadata);
+
+        $this->nuevaConversacion();
+        Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => true]);
+        Plan::query()->whereKey(14)->update(['sort_order' => 0]);
+        $this->publica(200);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        $this->assertSame('SAFE_CURATED_REPLY', $r['fallback_mode'] ?? null);
+        $this->assertStringStartsWith('Claro. Algunos planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
+        $this->assertArrayNotHasKey('critic_advisory', $this->ultimaAccion()->metadata);
     }
 
     // ── §5.4 · El horario ───────────────────────────────────────────────────
@@ -700,6 +731,31 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?', compilador: 7);
         $this->assertSame('Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
         $this->assertStringNotContainsString('Planes de un mes', $r['reply_final']);
+    }
+
+    /**
+     * Revisión final de la puerta 2, I3-2: las dos filas de «Tope 160» del
+     * documento A4 con el compilador 8 (el documento aprobado es el del 7 y no
+     * se toca). Con la lista del servidor la lista fija no suelta ningún plan y
+     * cabe en el tope; el texto exacto no se fija: lo tiene que aprobar el
+     * propietario.
+     */
+    public function test_con_el_compilador_8_a_160_la_lista_fija_no_suelta_ningun_plan_y_cabe(): void
+    {
+        foreach ([
+            '¿Cuánto vale el plan día? ¿Qué planes tienen?' => ['PLAN DÍA', 'Plan Valera', 'Plan Mensual'],
+            '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?' => ['Trimestre', 'Plan Valera', 'Plan Mensual'],
+        ] as $texto => $planes) {
+            $this->nuevaConversacion();
+            $this->publica(160);
+            $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, $texto);
+
+            $this->assertSame('SAFE_CURATED_REPLY', $r['fallback_mode'] ?? null, $texto);
+            foreach ($planes as $plan) {
+                $this->assertStringContainsString($plan, (string) $r['reply_final'], "{$texto}: ningún plan se suelta");
+            }
+            $this->assertLessThanOrEqual(160, UltronReplyFitter::measure((string) $r['reply_final']), "{$texto}: cabe");
+        }
     }
 
     /** Mutación M12: en la rama de la política, los precios cuelgan de la versión aplicada, no del tope. */
