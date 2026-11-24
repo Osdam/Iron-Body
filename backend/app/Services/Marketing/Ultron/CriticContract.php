@@ -30,6 +30,32 @@ final class CriticContract
         'invented_membership_fact',
     ];
 
+    /*
+     * LAS DIMENSIONES QUE VETAN (PT-17, puerta 1, L4). Decisión P-1 A del
+     * propietario, 24-11-2026, literal: «El revisor solo podrá provocar
+     * fallback ante errores graves, defectos de servidor o incumplimientos
+     * reales de seguridad, exactitud o política. Los rechazos injustificados
+     * deben evitarse sin eliminar las validaciones críticas».
+     *
+     * Un `fail` sin fallo duro que señala alguna de estas no es blando
+     * ({@see self::isSoftFail()}): sigue llevando al respaldo. Las demás
+     * dimensiones (estilo y juicio comercial: `naturalness`,
+     * `progressive_disclosure`, `customer_fit`, `question_discipline`…) son
+     * blandas. La clasificación es del lead (24-11-2026); cambiarla es una
+     * decisión, no un retoque.
+     */
+
+    /** Seguridad: el pago, las direcciones y la derivación. */
+    public const VETO_SECURITY = ['payment_safety', 'url_safety', 'handoff_leak'];
+
+    /** Exactitud: lo que el texto afirma de los hechos, la app, la membresía, las herramientas y la memoria. */
+    public const VETO_EXACTNESS = ['factuality', 'app_factuality', 'membership_factuality', 'tool_consistency', 'memory_consistency'];
+
+    /** Política: la presión sobre la persona. */
+    public const VETO_POLICY = ['pressure_control'];
+
+    public const VETO_DIMENSIONS = [...self::VETO_SECURITY, ...self::VETO_EXACTNESS, ...self::VETO_POLICY];
+
     public const MAX_ISSUES = 8;
 
     /** Lo que admite el endpoint; el contrato guarda lo mismo, no 160. */
@@ -94,6 +120,45 @@ final class CriticContract
         $h = $critic['hard_fail'] ?? null;
 
         return ($critic['verdict'] ?? 'pass') === 'fail' || (is_string($h) && $h !== '');
+    }
+
+    /**
+     * ¿Un rechazo BLANDO? (PT-17, puerta 1, L4; decisión P-1 A del
+     * propietario, citada en {@see self::VETO_DIMENSIONS}.) Lo es un `fail`
+     * que no declara ningún fallo duro ({@see self::HARD_FAILS}) y que no
+     * señala ninguna dimensión de seguridad, exactitud o política
+     * ({@see self::VETO_DIMENSIONS}). Falla cerrado: cualquier cosa en
+     * `hard_fail` que no sea null ni vacía —del vocabulario o no— lo hace
+     * grave, y unos `issues` que no son una lista, o un `issue` que no es una
+     * dimensión del vocabulario, no permiten saberlo: tampoco es blando (lo
+     * desconocido no autoriza nada; por HTTP el controlador ya lo rechaza).
+     * Una lista con {@see self::MAX_ISSUES} o más tampoco: n8n la corta a ocho
+     * sin ordenarla (Preparar Commit, `issues…slice(0, 8)`), y las dimensiones
+     * de veto van al final del vocabulario. Con la lista llena no se puede
+     * saber si el corte se llevó una dimensión de veto (revisión de la puerta
+     * 1, 24-11-2026, hallazgo Importante 1).
+     *
+     * Solo la lee el commit (y su predicción en el laboratorio) en un turno de
+     * lista, sobre la lista limpia del turno
+     * ({@see UltronDraftDefects::isListFinal()}): ahí un rechazo blando es un
+     * aviso (`critic_advisory`) y sale el texto del modelo, que sigue pasando
+     * por todas las guardas del commit.
+     */
+    public static function isSoftFail(array $critic): bool
+    {
+        $h = $critic['hard_fail'] ?? null;
+        $issues = $critic['issues'] ?? [];
+        if (($critic['verdict'] ?? 'pass') !== 'fail' || ($h !== null && $h !== '') || ! is_array($issues)
+            || count($issues) >= self::MAX_ISSUES) {
+            return false;
+        }
+        foreach ($issues as $i) {
+            if (! is_string($i) || ! in_array($i, self::DIMENSIONS, true) || in_array($i, self::VETO_DIMENSIONS, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

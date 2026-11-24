@@ -37,10 +37,11 @@ use InvalidArgumentException;
  *      con el tono firmado `profesional` (`sp.t`).
  *  (c) `length_over_cap`: la medida del texto expandido por encima del tope
  *      firmado (`sp.n`), cualquier exceso (también si al commit le bastaría
- *      quitar la pregunta final: §4.4). Desde el compilador 6, si el borrador
- *      trae la lista que ofreció el servidor, contra el tope de la lista
+ *      quitar la pregunta final: §4.4). Desde el compilador 6, en un turno en
+ *      que el servidor ofreció la lista, contra el tope de la lista
  *      ({@see UltronReplyFitter::plansListCap()}; también con el tope de la
- *      línea base, sin `sp.n`), y su nota y la de la lista van con esa cifra.
+ *      línea base, sin `sp.n`), lo traiga o no el borrador (PT-17, L2: un
+ *      solo tope por turno), y su nota y la de la lista van con esa cifra.
  *  (d) `benefit_misattributed`: {@see UltronBenefitAttribution} sobre el texto
  *      expandido.
  * Con la lista y el tope firmados, la nota de (a) cuando falta la lista o va
@@ -94,8 +95,8 @@ final class UltronDraftDefects
         $raw = (string) ($draft['reply_draft'] ?? '');
         $po = array_values(array_map('intval', $po));
         $defectos = [];
-        // El tope de ESTE borrador: el de la lista si la trae (compilador 6, {@see UltronReplyFitter::plansListCap()}); si no, el publicado.
-        $tope = UltronReplyFitter::plansListCap($sp, $po, $raw) ?? UltronReplyFitter::cap($sp['n'] ?? null);
+        // El tope de ESTE turno: el de la lista si el servidor la ofreció (PT-17, L2, {@see UltronReplyFitter::plansListCap()}); si no, el publicado.
+        $tope = UltronReplyFitter::plansListCap($sp, $po) ?? UltronReplyFitter::cap($sp['n'] ?? null);
 
         /*
          * EL PRESUPUESTO DE LA LISTA (corrección (1) del turno 2 de la tercera
@@ -181,11 +182,11 @@ final class UltronDraftDefects
      * de la app; `$laravelBlock`), se mira sin ella. Si la longitud lo
      * descartaría, no hay recorte por registro (como en el commit).
      *
-     * Con la lista de planes (compilador 6, `$plansListCap` de
-     * {@see UltronReplyFitter::plansListCap()} con el borrador sin expandir y
-     * la lista del turno), la longitud se mide contra ese tope y SIN quitar
-     * la pregunta final ({@see UltronReplyFitter::plansListDraft()}), como en
-     * el commit. Sin él (null), la regla de siempre.
+     * En un turno de lista (compilador 6, `$plansListCap` de
+     * {@see UltronReplyFitter::plansListCap()} con la lista del turno; PT-17,
+     * L2: lo traiga o no el borrador), la longitud se mide contra ese tope y
+     * SIN quitar la pregunta final ({@see UltronReplyFitter::plansListDraft()}),
+     * como en el commit. Sin él (null), la regla de siempre.
      *
      * @param  string  $expanded  el borrador expandido (lo que mediría el commit)
      * @param  array<string,mixed>  $sp  el `sp` firmado en el token
@@ -193,7 +194,7 @@ final class UltronDraftDefects
      * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
      * @param  list<string>  $facts  los hechos del gimnasio ({@see CommercialTurnPolicy::knownFacts()}); vacío si la política no los exige
      * @param  bool  $laravelBlock  el texto lleva los enlaces de la app que pega Laravel
-     * @param  int|null  $plansListCap  el tope de la lista de este borrador, o null
+     * @param  int|null  $plansListCap  el tope de la lista de este turno, o null
      * @return list<array{code:string,detail:null,issue:string,note:string}>
      */
     public static function ofPolicy(string $expanded, array $sp, array $policy, array $catalog, array $facts, bool $laravelBlock = false, ?int $plansListCap = null): array
@@ -237,6 +238,36 @@ final class UltronDraftDefects
         }
 
         return $defectos;
+    }
+
+    /**
+     * «LISTA FIRME» (PT-17, puerta 1, L4; decisión P-1 del propietario del
+     * 24-11-2026): ¿es este borrador la lista limpia de un turno de lista?
+     * Sí si el turno es de lista ({@see UltronReplyFitter::plansListCap()}
+     * con la lista del turno: Studio, compilador 6 o posterior, tope y lista
+     * ofrecida; vacía en un turno de cobro), el borrador SIN expandir trae una
+     * lista válida ({@see UltronPlansOverview::verify()}: dos planes o más,
+     * solo con sus marcadores) y el servidor no le encuentra NINGÚN defecto
+     * (`$defects`, los de {@see self::of()} y {@see self::ofPolicy()}).
+     *
+     * La usan `ai/check` (con esto contesta `may_rewrite=false` y el motivo
+     * `list_final`: no se pide un tercer borrador para un segundo que ya vale)
+     * y el commit (un rechazo blando del revisor sobre ese borrador no produce
+     * respaldo; {@see CriticContract::isSoftFail()}), en producción y en el
+     * laboratorio. Pura.
+     *
+     * @param  string  $raw  el borrador SIN expandir
+     * @param  array<string,mixed>  $sp  el `sp` firmado en el token
+     * @param  list<int>  $po  la lista del turno (vacía sin lista o en un turno de cobro)
+     * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
+     * @param  list<array<string,mixed>>  $defects  lo que la comprobación le encuentra
+     */
+    public static function isListFinal(string $raw, array $sp, array $po, array $catalog, array $defects): bool
+    {
+        return $defects === []
+            && $po !== []
+            && UltronReplyFitter::plansListCap($sp, $po) !== null
+            && UltronPlansOverview::verify($raw, $po, $catalog) === null;
     }
 
     /**

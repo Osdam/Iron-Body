@@ -463,6 +463,8 @@ class UltronDecideService
         $catalogo = $this->knowledge->activePlans();
         $politica = CommercialTurnPolicy::decide($intentTurno, $phase, $memory, $catalogo, $resolved, (string) $message->body);
         $panorama = $this->listaDelPanorama($prompts, $politica, $resolved, $catalogo, $intentTurno, (string) $message->body);
+        // Con la lista ofrecida, el turno responde con ella: ni recomendar uno ni preguntar (PT-17, L3; lo mismo en el laboratorio).
+        $strategyHints = StrategyContract::conLaLista($strategyHints, $panorama !== null);
 
         $token = $this->tokens->issue(
             (int) $conversation->id,

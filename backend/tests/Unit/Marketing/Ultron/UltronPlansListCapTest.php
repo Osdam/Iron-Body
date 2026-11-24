@@ -23,8 +23,7 @@ use PHPUnit\Framework\TestCase;
  *     también en una consulta combinada (la lista y otra respuesta). Cada fila
  *     usa el `sp` que firma `decide`: con 320, el de la línea base, SIN `n`
  *     (bloqueante B1 de la revisión del 23-11-2026).
- *  2. NO se aplica (null: el tope publicado, como hoy) con un marcador, sin
- *     marcadores, con un marcador repetido o de fuera de la lista, sin lista
+ *  2. NO se aplica (null: el tope publicado, como hoy) sin lista
  *     (o en un turno de cobro, que llega sin lista), con un tope firmado que no
  *     vale, en Legacy, y sin el sello del compilador 6 (`sp.k` ausente, 5 o de
  *     otro tipo): el token de un compilador anterior se mide como hoy. Lo mismo
@@ -37,6 +36,11 @@ use PHPUnit\Framework\TestCase;
  *  5. `of()` con la línea base (320, sin `n`): la lista de 310 pasa, la de 450
  *     da `length_over_cap` con la nota de 320, y sin lista (o con el sello del
  *     5) 450 no se mide, como hoy.
+ *
+ * PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: en el turno de lista vale
+ * también con un marcador, sin marcadores, con uno repetido o de fuera de la lista
+ * (`enElTurnoDeLista`), y un borrador de un solo plan recibe «falta la lista» con
+ * el presupuesto de 320, sin la longitud de 200.
  */
 class UltronPlansListCapTest extends TestCase
 {
@@ -115,48 +119,67 @@ class UltronPlansListCapTest extends TestCase
     #[DataProvider('topes')]
     public function test_con_la_lista_el_tope_es_el_publicado_y_nunca_menos_de_320(array $sp, int $publicado, int $esperado): void
     {
-        $this->assertSame($esperado, F::plansListCap($sp, self::PO, self::DOS), 'dos marcadores');
-        $this->assertSame($esperado, F::plansListCap($sp, self::PO, self::TRES), 'tres marcadores');
-        $this->assertSame($esperado, F::plansListCap($sp, self::PO, self::COMBINADA), 'la lista y otra respuesta en el mismo mensaje');
-        $this->assertSame($esperado, F::plansListCap($sp, [3, 4], self::DOS), 'una lista de dos');
-        $this->assertSame($esperado, F::plansListCap($sp, self::PO, 'Tenemos {{ PLAN_1 }} y {{PLAN_3}}.'), 'con espacios dentro, como la expansión');
-        // Es la cifra que el compilador 6 le da al redactor.
-        $this->assertSame(C::plansListChars($publicado), F::plansListCap($sp, self::PO, self::TRES));
+        // PT-17, puerta 1, L2: el tope es del TURNO con lista, así que el borrador ya no entra en la función (con dos,
+        // tres o ningún marcador, el tope es el mismo). Revisión de la puerta 1, menor 2: sin tercer argumento.
+        $this->assertSame($esperado, F::plansListCap($sp, self::PO), 'una lista de tres');
+        $this->assertSame($esperado, F::plansListCap($sp, [3, 4]), 'una lista de dos');
+        // Es la cifra que el compilador le da al redactor.
+        $this->assertSame(C::plansListChars($publicado), F::plansListCap($sp, self::PO));
     }
 
     // ── 2 ─────────────────────────────────────────────────────────────────────
 
-    /** @return array<string, array{array<string,mixed>, list<int>, string}> */
+    /** @return array<string, array{array<string,mixed>, list<int>}> */
     public static function fueraDeLaRegla(): array
     {
         return [
-            'un marcador' => [self::sp(200), self::PO, 'Le recomiendo {{PLAN_1}}, con acceso total. ¿Le sirve?'],
-            'ningún marcador' => [self::sp(200), self::PO, 'Tenemos Plan Valera y Plan Mensual. ¿Cuál le sirve?'],
-            'un marcador repetido' => [self::sp(200), self::PO, '{{PLAN_1}} es el más pedido y {{PLAN_1}} da acceso total.'],
-            'uno de fuera de la lista' => [self::sp(200), [3, 4], 'Tenemos {{PLAN_1}} y {{PLAN_3}}.'],
-            'los de un plan, no los de la lista' => [self::sp(200), self::PO, 'El {{PLAN_NAME}} cuesta {{PLAN_PRICE}} y {{PLAN_1}} también.'],
-            'sin lista (no se ofreció, o un turno de cobro)' => [self::sp(200), [], self::TRES],
-            'un tope que no vale' => [self::sp(200, ['n' => 150]), self::PO, self::TRES],
-            'un tope en texto' => [self::sp(200, ['n' => '200']), self::PO, self::TRES],
-            'un tope firmado nulo (no es la línea base)' => [self::sp(200, ['n' => null]), self::PO, self::TRES],
-            'línea base: un marcador' => [self::spDeLaLineaBase(), self::PO, 'Le recomiendo {{PLAN_1}}, con acceso total. ¿Le sirve?'],
-            'línea base: sin lista' => [self::spDeLaLineaBase(), [], self::TRES],
-            'línea base: sello del compilador 5 (sin k)' => [array_diff_key(self::spDeLaLineaBase(), ['k' => 1]), self::PO, self::TRES],
-            'línea base: Legacy con un sp de más' => [self::spDeLaLineaBase(['m' => 'legacy']), self::PO, self::TRES],
-            'Legacy' => [['m' => 'legacy', 'r' => 'prompts_off', 'h' => null, 'v' => null, 'c' => null, 'e' => null, 's' => null], self::PO, self::TRES],
-            'Legacy con un sp de más' => [self::sp(200, ['m' => 'legacy']), self::PO, self::TRES],
-            'sin modo' => [array_diff_key(self::sp(200), ['m' => 1]), self::PO, self::TRES],
-            'sello del compilador 5 (sin k: de antes del despliegue)' => [array_diff_key(self::sp(200), ['k' => 1]), self::PO, self::TRES],
-            'sello del compilador 5 (k = 5)' => [self::sp(200, ['k' => 5]), self::PO, self::TRES],
-            'k en texto' => [self::sp(200, ['k' => '6']), self::PO, self::TRES],
-            'sin sp' => [[], self::PO, self::TRES],
+            'sin lista (no se ofreció, o un turno de cobro)' => [self::sp(200), []],
+            'un tope que no vale' => [self::sp(200, ['n' => 150]), self::PO],
+            'un tope en texto' => [self::sp(200, ['n' => '200']), self::PO],
+            'un tope firmado nulo (no es la línea base)' => [self::sp(200, ['n' => null]), self::PO],
+            'línea base: sin lista' => [self::spDeLaLineaBase(), []],
+            'línea base: sello del compilador 5 (sin k)' => [array_diff_key(self::spDeLaLineaBase(), ['k' => 1]), self::PO],
+            'línea base: Legacy con un sp de más' => [self::spDeLaLineaBase(['m' => 'legacy']), self::PO],
+            'Legacy' => [['m' => 'legacy', 'r' => 'prompts_off', 'h' => null, 'v' => null, 'c' => null, 'e' => null, 's' => null], self::PO],
+            'Legacy con un sp de más' => [self::sp(200, ['m' => 'legacy']), self::PO],
+            'sin modo' => [array_diff_key(self::sp(200), ['m' => 1]), self::PO],
+            'sello del compilador 5 (sin k: de antes del despliegue)' => [array_diff_key(self::sp(200), ['k' => 1]), self::PO],
+            'sello del compilador 5 (k = 5)' => [self::sp(200, ['k' => 5]), self::PO],
+            'k en texto' => [self::sp(200, ['k' => '6']), self::PO],
+            'sin sp' => [[], self::PO],
         ];
     }
 
     #[DataProvider('fueraDeLaRegla')]
-    public function test_fuera_de_la_regla_no_hay_tope_de_lista(array $sp, array $po, string $borrador): void
+    public function test_fuera_de_la_regla_no_hay_tope_de_lista(array $sp, array $po): void
     {
-        $this->assertNull(F::plansListCap($sp, $po, $borrador));
+        $this->assertNull(F::plansListCap($sp, $po));
+    }
+
+    /**
+     * PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista. Estas filas estaban
+     * «fuera de la regla» porque el borrador no traía dos marcadores de la lista;
+     * ahora el tope es del turno en que el servidor ofreció la lista, lo traiga o
+     * no el borrador (el contrato del redactor: en ese turno, «no pasa de 320»).
+     *
+     * El borrador ya no es una entrada de la función: las filas de antes (un marcador, ninguno, uno repetido, los de un
+     * plan…) se reducen a las combinaciones de `sp` y lista que sí la cambian (revisión de la puerta 1, menor 2).
+     *
+     * @return array<string, array{array<string,mixed>, list<int>}>
+     */
+    public static function enElTurnoDeLista(): array
+    {
+        return [
+            'tope 200 · lista de tres' => [self::sp(200), self::PO],
+            'tope 200 · lista de dos' => [self::sp(200), [3, 4]],
+            'línea base · lista de tres' => [self::spDeLaLineaBase(), self::PO],
+        ];
+    }
+
+    #[DataProvider('enElTurnoDeLista')]
+    public function test_en_el_turno_de_lista_el_tope_es_el_del_turno_sin_mirar_el_borrador(array $sp, array $po): void
+    {
+        $this->assertSame(320, F::plansListCap($sp, $po));
     }
 
     // ── 3 ─────────────────────────────────────────────────────────────────────
@@ -204,11 +227,11 @@ class UltronPlansListCapTest extends TestCase
         $this->assertSame([N::LENGTH_OVER_CAP], array_column($d, 'code'));
         $this->assertStringContainsString('mide 210 caracteres y el limite publicado es 200', $d[0]['note']);
 
-        // Con un solo marcador de la lista no es una respuesta de lista: 250 falla contra 200.
+        // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: con un solo marcador, en el MISMO turno, el mismo tope (320): 229 cabe; lo que le falta es la lista, con el presupuesto de 320.
         $uno = 'Le recomiendo {{PLAN_1}}, con acceso total al gimnasio y asesoría semi personalizada desde el primer día, ideal para empezar con buena guía y a su ritmo, sin prisa y con el acompañamiento del equipo. ¿Le sirve así?';
-        $codigos = array_column(self::defectos($uno, self::sp(200)), 'code');
-        $this->assertContains(N::LENGTH_OVER_CAP, $codigos);
-        $this->assertStringContainsString('el limite publicado es 200', self::defectos($uno, self::sp(200))[array_search(N::LENGTH_OVER_CAP, $codigos, true)]['note']);
+        $d = self::defectos($uno, self::sp(200));
+        $this->assertSame([[N::PLANS_OVERVIEW, 'missing']], array_map(static fn (array $x): array => [$x['code'], $x['detail']], $d));
+        $this->assertStringContainsString('Ya expandidos ocupan 71 caracteres: quedan 179 de 250.', $d[0]['note']);
 
         // El sello del compilador 5 (sin `k`): la misma lista de 310 falla contra 200, como hoy.
         $d = self::defectos($de310, array_diff_key(self::sp(200), ['k' => 1]));

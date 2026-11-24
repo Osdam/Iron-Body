@@ -468,7 +468,21 @@ class UltronCommitService
         }
 
         // ── Camino del critic fallido ─────────────────────────────────────────
-        if (CriticContract::isFail($critic)) {
+        /*
+         * EL VETO ACOTADO DEL REVISOR (PT-17, puerta 1, L4; decisión P-1 del
+         * propietario del 24-11-2026: «El revisor solo podrá provocar fallback
+         * ante errores graves, defectos de servidor o incumplimientos reales de
+         * seguridad, exactitud o política»). En un turno de lista, un rechazo
+         * BLANDO (sin fallo duro) sobre la lista limpia del turno —la que la
+         * comprobación del servidor da por buena— no produce respaldo: sigue
+         * por el camino normal con TODAS sus guardas (dinero, marcadores,
+         * contenido, política, longitud, registro) y la fila lo anota como
+         * aviso (`critic_advisory`). Un fallo duro, cualquier defecto del
+         * servidor o cualquier otro turno: el respaldo de siempre.
+         */
+        $avisoDelRevisor = CriticContract::isFail($critic)
+            && $this->avisoDelRevisor($conversation, $message, $payload, $critic, $turno, (array) ($token['extra'] ?? []));
+        if (CriticContract::isFail($critic) && ! $avisoDelRevisor) {
             return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, $turno, (array) ($token['extra'] ?? []));
         }
 
@@ -680,15 +694,15 @@ class UltronCommitService
         /*
          * EL TOPE DE LA LISTA (Enmienda A4-6 del H5, PT-17b; decisión B del
          * propietario). Con el compilador 6 (`sp.k`), un tope publicado (el
-         * firmado o, sin `sp.n`, el de la línea base) y al menos dos marcadores
-         * de la lista del turno en el borrador SIN expandir, la respuesta se
-         * mide contra max(tope publicado, 320) y no
-         * se le quita la pregunta final ({@see UltronReplyFitter::plansListCap()},
-         * la misma regla que `ai/check` y el laboratorio). Null en cualquier
-         * otro caso: el tope publicado, como hoy; Legacy nunca llega aquí con
-         * lista.
+         * firmado o, sin `sp.n`, el de la línea base) y la lista del turno
+         * (no un turno de cobro), el borrador se mide contra max(tope
+         * publicado, 320) y no se le quita la pregunta final, lo traiga o no
+         * (PT-17, puerta 1, L2: un solo tope por turno;
+         * {@see UltronReplyFitter::plansListCap()}, la misma regla que
+         * `ai/check` y el laboratorio). Null en cualquier otro caso: el tope
+         * publicado, como hoy; Legacy nunca llega aquí con lista.
          */
-        $topeDeLista = $lista === null ? null : UltronReplyFitter::plansListCap(is_array($token['extra']['sp'] ?? null) ? $token['extra']['sp'] : [], $listaDelTurno, $sanitized['reply']);
+        $topeDeLista = $lista === null ? null : UltronReplyFitter::plansListCap(is_array($token['extra']['sp'] ?? null) ? $token['extra']['sp'] : [], $listaDelTurno);
         if ($lista !== null) {
             $sanitized['reply'] = $lista['text'];
         }
@@ -1370,6 +1384,8 @@ class UltronCommitService
             'handoff_authorized' => $handoffAutorizado ?: null,
             // El veredicto se audita también cuando aprueba; si no vino, no se inventa.
             'critic' => CriticContract::judged($critic) ? CriticContract::forMetadata($critic) : null,
+            // PT-17, L4: el revisor lo rechazó sin fallo grave y sale igual (la lista limpia del turno). Sin aviso, no se escribe.
+            UltronReplyOrigin::CRITIC_ADVISORY => $avisoDelRevisor ?: null,
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,
             'plans_mentioned' => $estilo['plans_mentioned'],
             'plan_price_realigned' => $realineado,
@@ -2314,6 +2330,66 @@ class UltronCommitService
         $codigos = array_map(fn (array $d): string => $d['detail'] === null ? $d['code'] : $d['code'].'/'.$d['detail'], $r['defects']);
 
         return ['pass' => $codigos === [], 'codes' => $codigos, 'length' => $r['length']];
+    }
+
+    /**
+     * EL AVISO DEL REVISOR (PT-17, puerta 1, L4; decisión P-1 del propietario
+     * del 24-11-2026). ¿El rechazo del revisor de ESTE borrador es solo un
+     * aviso? Sí, y solo si se cumple todo:
+     *  - versión del Studio (`$turno['studio']`): Legacy no cambia;
+     *  - el rechazo es BLANDO ({@see CriticContract::isSoftFail()}): un fallo
+     *    duro, del vocabulario o no, va al respaldo como siempre;
+     *  - el turno es de lista y el borrador es su lista limpia: la MISMA
+     *    comprobación que `ai/check` ({@see UltronDraftCheck::inspect()}, con
+     *    el `sp` y la lista firmados) no le encuentra ningún defecto y la lista
+     *    vale ({@see UltronDraftDefects::isListFinal()}).
+     * Lo que venga después lo decide el camino normal con todas sus guardas:
+     * un aviso no es un salvoconducto. Lo mismo predice el laboratorio
+     * (`StudioLabEngineCheck::predict()`, que el motor no importa).
+     *
+     * Sin la lista firmada no se consulta nada. Si la comprobación falla al
+     * leer, NO hay aviso (falla cerrado: el respaldo de siempre) y queda el
+     * log, sin textos.
+     *
+     * @param  array<string,mixed>  $critic  el veredicto tal como llegó
+     * @param  array{studio:bool,tope:?int,tono:?string}  $turno
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`): el `sp` y la lista `po`
+     */
+    private function avisoDelRevisor(MarketingConversation $conversation, MarketingMessage $message, array $payload, array $critic, array $turno, array $firmado): bool
+    {
+        $proposal = (array) ($payload['proposal'] ?? []);
+        $borrador = (string) ($proposal['reply_draft'] ?? '');
+        if (! ($turno['studio'] ?? false) || ! CriticContract::isSoftFail($critic) || trim($borrador) === ''
+            || UltronPlansOverview::signedList($firmado['po'] ?? null) === null) {
+            return false;
+        }
+
+        try {
+            $r = $this->draftCheck->inspect((int) $conversation->id, (int) $message->id, (array) ($firmado['sp'] ?? []), $firmado['po'] ?? null, [
+                'reply_draft' => $borrador,
+                'intent' => (string) ($proposal['intent'] ?? ''),
+                'recommended_plan_id' => $proposal['recommended_plan_id'] ?? null,
+                'tools_requested' => array_values((array) ($proposal['tools_requested'] ?? [])),
+            ]);
+        } catch (Throwable $e) {
+            try {
+                ChannelLog::warning('ultron.commit.critic_advisory_check_failed', [
+                    'conversation_id' => (int) $conversation->id, 'error_class' => class_basename($e),
+                ]);
+            } catch (Throwable) {
+                // Tragado a propósito: es traza; sin aviso sale el respaldo de siempre.
+            }
+
+            return false;
+        }
+        if (! $r['list_final']) {
+            return false;
+        }
+        ChannelLog::info('ultron.commit.critic_advisory', [
+            'conversation_id' => (int) $conversation->id, 'issues' => CriticContract::issues($critic['issues'] ?? null),
+        ]);
+
+        return true;
     }
 
     /**

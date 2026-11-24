@@ -128,14 +128,23 @@ final class UltronReplyFitter
     // ── El tope de la lista de planes (compilador 6; regla del propietario) ─
 
     /**
-     * EL TOPE DE UNA RESPUESTA CON LA LISTA DE PLANES DEL SERVIDOR (Enmienda
-     * A4-6 del H5, PT-17b; decisión B del propietario, 23-11-2026), o null.
+     * EL TOPE DE UN TURNO CON LA LISTA DE PLANES DEL SERVIDOR (Enmienda A4-6
+     * del H5, PT-17b, decisión B del propietario del 23-11-2026; y PT-17,
+     * puerta 1, L2 del diagnóstico del 24-11-2026), o null.
      *
      * Medido en el laboratorio: con la lista de tres planes ya expandida
      * (unos 71 caracteres de nombres y precios oficiales) y un tope publicado
      * de 200, 23 de los 24 terceros borradores se pasaban y el commit les
      * quitaba la pregunta final. El texto del redactor del compilador 6 le da
      * al modelo ESTA cifra ({@see UltronPromptCompiler::plansListChars()}).
+     *
+     * UN SOLO TOPE POR TURNO (L2, causa C2 del diagnóstico). Hasta el 24-11
+     * solo se aplicaba si el borrador traía dos marcadores de la lista: un
+     * borrador del mismo turno con un solo plan se medía contra 200, se le
+     * quitaba la pregunta (y salía el respaldo igual) y su nota calculaba
+     * sobre 160, cuando la lista con su pregunta mide unos 225. El contrato
+     * firmado del redactor dice que en ESE TURNO el mensaje «no pasa de
+     * <L>»: el tope es del turno, no del borrador.
      *
      * El tope de lista es max(tope publicado, 320) y SOLO si se cumple todo:
      *  - el turno lo gobierna el Studio (`sp.m` = `studio`) y lo compiló el
@@ -148,20 +157,16 @@ final class UltronReplyFitter
      *    de la revisión del 23-11-2026: sin esto, una lista de 450 salía sin
      *    medir). Un `sp.n` firmado que no vale no da tope de lista;
      *  - el servidor ofreció la lista en ese turno (`$po`, la lista del turno:
-     *    la firmada, y vacía en un turno de cobro);
-     *  - la respuesta lleva al menos DOS marcadores de esa lista
-     *    ({@see UltronPlansOverview::MIN_MARKERS}), distintos, con la misma
-     *    lectura que la expansión ({@see UltronPlansOverview::expand()}).
+     *    la firmada, y vacía en un turno de cobro).
      * En cualquier otro caso, null: quien llama usa el tope publicado, como
      * hoy, y Legacy (sin `studio`) no entra nunca. Se mide igual, sobre el
-     * texto expandido; a una respuesta con lista no se le quita la pregunta
-     * final ({@see self::plansListDraft()}).
+     * texto expandido, y en un turno de lista no se le quita la pregunta
+     * final a ningún borrador ({@see self::plansListDraft()}).
      *
      * @param  array<string,mixed>  $sp  el `sp` firmado en el token
      * @param  list<int>  $po  la lista del turno
-     * @param  string  $rawDraft  el borrador SIN expandir
      */
-    public static function plansListCap(array $sp, array $po, string $rawDraft): ?int
+    public static function plansListCap(array $sp, array $po): ?int
     {
         // Sin `n`, el publicado es el de la línea base (320); con un `n` que no vale, ninguno.
         $tope = array_key_exists('n', $sp)
@@ -172,18 +177,17 @@ final class UltronReplyFitter
             || ! is_int($compilador) || $compilador < self::PLANS_LIST_SINCE_COMPILER || $po === []) {
             return null;
         }
-        $po = array_values(array_map('intval', $po));
-        $marcadores = UltronPlansOverview::expand($rawDraft, array_fill_keys($po, ''), $po)['used'];
 
-        return count($marcadores) >= UltronPlansOverview::MIN_MARKERS ? UltronPromptCompiler::plansListChars($tope) : null;
+        return UltronPromptCompiler::plansListChars($tope);
     }
 
     /**
-     * La respuesta con la lista contra su tope ({@see self::plansListCap()}):
-     * cabe entera o null. NO se le quita la pregunta final (decisión B.3 del
-     * propietario): si se pasa, en `ai/check` es `length_over_cap` y el
-     * modelo reescribe dentro de los intentos de siempre, y en el commit se
-     * descarta (`policy_length_exceeded`) y sale el respaldo de hoy.
+     * Un borrador de un turno de lista contra su tope
+     * ({@see self::plansListCap()}): cabe entero o null. NO se le quita la
+     * pregunta final (decisión B.3 del propietario): si se pasa, en
+     * `ai/check` es `length_over_cap` y el modelo reescribe dentro de los
+     * intentos de siempre, y en el commit se descarta
+     * (`policy_length_exceeded`) y sale el respaldo de hoy.
      *
      * @return array{text:string, dropped:int}|null
      */

@@ -339,6 +339,19 @@ final class UltronPlansOverview
      * `{{PLAN_PRICE}}`): lo que le falta es la lista, y quitarle el nombre
      * dejaba otro borrador que volvía a dar `missing`.
      *
+     * Y SI HABLA DE UN SOLO PLAN, FALTA LA LISTA (PT-17, puerta 1, L2; C2 del
+     * diagnóstico del 24-11-2026): contados los planes de la lista que nombra,
+     * por su marcador o a mano, si son menos de dos —«el Plan Valera … todo
+     * por {{PLAN_1}}», el nombre y el marcador del MISMO plan, o «el
+     * {{PLAN_1}} por {{PLAN_PRICE}}»—, `missing`, justo después del marcador
+     * desconocido y de la cifra (que siguen mandando) y antes que `mixed` y
+     * `name_written`. En la medición del compilador 7, diez borradores así
+     * recibieron solo «NOMBRE DUPLICADO» y uno «MEZCLADO», nunca «falta la
+     * lista», y el siguiente siguió con un plan. Con dos planes distintos o
+     * más, lo de siempre: el repetido o mezclado es `mixed`, y uno a mano
+     * («{{PLAN_1}} y el Plan Mensual») es `name_written`. Solo cambia el
+     * detalle (y con él la nota): todos son un defecto, igual que antes.
+     *
      * @param  list<int>  $po  la lista firmada (vacía sin lista)
      * @param  array<int,array<string,mixed>>  $activePlans  el catálogo: los nombres de los planes de la lista
      */
@@ -364,6 +377,13 @@ final class UltronPlansOverview
         if (SalesAgentDecisionSchema::containsPrice($raw)) {
             return self::PRICE_WRITTEN;
         }
+        $deLaListaEnElCatalogo = array_values(array_filter($activePlans, fn (array $p) => in_array((int) $p['id'], $po, true)));
+        $aMano = array_map('intval', CommercialTurnPolicy::plansNamedIn($raw, $deLaListaEnElCatalogo));
+        // Los planes de la lista de los que habla, por su marcador o a mano: con menos de dos, lo que falta es la lista (PT-17, L2).
+        $planes = array_unique([...array_map(fn (int $k): int => $po[$k - 1], $validos), ...$aMano]);
+        if (count($planes) < self::MIN_MARKERS) {
+            return self::MISSING;
+        }
         $deUnPlan = [UltronDraftPlaceholders::PRICE, UltronDraftPlaceholders::NAME, UltronDraftPlaceholders::DURATION];
         if ($validos !== [] && (array_intersect($nombres, $deUnPlan) !== [] || count($validos) !== count(array_unique($validos)))) {
             return self::MIXED;
@@ -371,15 +391,8 @@ final class UltronPlansOverview
         if ($validos === []) {
             return self::MISSING;
         }
-        $deLaListaEnElCatalogo = array_values(array_filter($activePlans, fn (array $p) => in_array((int) $p['id'], $po, true)));
-        if (CommercialTurnPolicy::plansNamedIn($raw, $deLaListaEnElCatalogo) !== []) {
-            return self::NAME_WRITTEN;
-        }
-        if (count(array_unique($validos)) < self::MIN_MARKERS) {
-            return self::MISSING;
-        }
 
-        return null;
+        return $aMano === [] ? null : self::NAME_WRITTEN;
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────

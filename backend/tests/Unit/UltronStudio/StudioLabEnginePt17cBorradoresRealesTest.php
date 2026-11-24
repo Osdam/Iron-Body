@@ -37,9 +37,9 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *      lista (tres planes, `PLAN_3` = Élite, id 8) y el horario del domingo,
  *      sin recorte; con `recommended_plan_id` 3 o 8 (la referencia del
  *      contrato no cambia el texto).
- *  R2. PRIMEROS BORRADORES: los 25 reales siguen dando EXACTAMENTE sus
- *      códigos de forma (la lista que falta o el nombre a mano, la longitud),
- *      medidos con lo mismo que en el laboratorio; y uno con la lista válida
+ *  R2. PRIMEROS BORRADORES: los 25 reales siguen dando sus códigos de la lista
+ *      (la que falta o el nombre a mano) y, con un solo tope por turno de lista
+ *      (PT-17 L2), la longitud solo a los que pasan de 320; y uno con la lista válida
  *      (el segundo borrador real de 38/171) pasa ya como primer intento.
  *  R3. SIN RECHAZOS INJUSTIFICADOS: los 14 textos finales reales que escribió
  *      el modelo y los 5 segundos borradores de la combinada pasan todas las
@@ -214,16 +214,21 @@ class StudioLabEnginePt17cBorradoresRealesTest extends TestCase
             $turno = $turnos[str_ends_with($nombre, '/E-006') ? 'combinada' : 'planes'];
             $this->assertNotSame([], $caso['codes'], "{$nombre}: ningún primer borrador fue válido en la medición");
             [$check, $commit] = $this->pasa($turno, $caso['text'], 1);
-            $this->assertSame($caso['codes'], self::codigos($check), "{$nombre}: los mismos códigos que en producción");
+            // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: la longitud, solo si pasa de 320 (lo traiga o no la lista).
+            $esperados = $caso['labChars'] <= 320 ? array_values(array_diff($caso['codes'], ['length_over_cap'])) : $caso['codes'];
+            $this->assertSame($esperados, self::codigos($check), "{$nombre}: los códigos de la medición con un solo tope");
             $this->assertFalse($check['pass'], $nombre);
             $this->assertTrue($check['rewrite'], "{$nombre}: en el primer intento, el servidor pide reescribir");
-            $this->assertSame([$caso['labChars'], $caso['labCap']], [$commit['measured'], $commit['cap'] ?? 200], "{$nombre}: medido como en el laboratorio");
-            foreach ($caso['codes'] as $codigo) {
+            $this->assertSame([$caso['labChars'], 320], [$commit['measured'], $commit['cap']], "{$nombre}: medido como en el laboratorio, contra el tope del turno");
+            // Revisión de la puerta 1, menor 3: se cuentan los códigos que DEVUELVE la comprobación, no los de la fixture.
+            foreach (self::codigos($check) as $codigo) {
                 $porCodigo[$codigo] = ($porCodigo[$codigo] ?? 0) + 1;
             }
         }
         ksort($porCodigo);
-        $this->assertSame(['length_over_cap' => 23, 'plans_overview/missing' => 14, 'plans_overview/name_written' => 10], $porCodigo, 'solo defectos de forma: la lista que falta, el nombre a mano y la longitud');
+        // En la medición (contra 200) eran 23 de longitud, 14 de lista que falta y 10 de nombre a mano. Con un solo tope
+        // de 320 (L2), la longitud solo queda en los 9 que pasan de 320; los otros dos códigos no cambian.
+        $this->assertSame(['length_over_cap' => 9, 'plans_overview/missing' => 14, 'plans_overview/name_written' => 10], $porCodigo, 'solo defectos de forma: la lista que falta, el nombre a mano y la longitud');
 
         // Un borrador real con la lista válida (el segundo de 38/171) pasa ya como PRIMER intento.
         $valido = array_values(array_filter($f['finalModel'], static fn (array $c): bool => $c['case'] === '38/171/E-003'))[0];

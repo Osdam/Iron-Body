@@ -1,0 +1,3023 @@
+{
+  "_source": "Medicion de aceptacion de PT-17 con el compilador 7 (24-11-2026, evidencia ops/evidencia-h9/2026-11-24/02b-casos-pt17-compilador-7.jsonl): ejecuciones 43 a 47 del laboratorio sobre la version 4 (profesional 200; 640421de, paquete 200019e4, gpt-4.1-mini, recorrido S2 2026-11-22.1). 25 casos: 20 del turno de planes (E-001 a E-005, cuatro de cada uno) y 5 de la consulta combinada (E-006). Por caso, el bloque engine tal como lo grabo el motor: la estrategia validada, el recorrido, cada borrador con su texto, su medida (chars, ya expandido) y su tope (cap), la comprobacion del servidor (ai/check) y el veredicto del revisor, y lo que habria enviado el commit (final); labChecks, los hallazgos del laboratorio. recommendedPlanId no se grabo: se infiere de la medida de los borradores con PLAN_PRICE (sin ese marcador, el plan por defecto, 3). Solo texto del modelo y del servidor: sin datos personales, sin juez y sin costes.",
+  "engineTarget": {
+    "base": "n8n-29de5119",
+    "compiler": 7,
+    "model": "gpt-4.1-mini",
+    "flowRev": "S2",
+    "flowVersion": "2026-11-22.1",
+    "version": "640421de-6484-4ffa-9ae5-7799068f2f29",
+    "bundleHash": "200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631",
+    "contentHash": "24b29173560672a766571b9edd5718e26f3305c4049e7f65ee68ceacd8f12122",
+    "nodesHash": "1957066f2906e43eb5db8b60f9b5d8dfc64a137fe1392d085d5f758be4f93bf7"
+  },
+  "po": [
+    3,
+    4,
+    8
+  ],
+  "scenarios": {
+    "E-001": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        }
+      ]
+    },
+    "E-002": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        }
+      ]
+    },
+    "E-003": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        }
+      ]
+    },
+    "E-004": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        }
+      ]
+    },
+    "E-005": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        }
+      ]
+    },
+    "E-006": {
+      "turns": [
+        {
+          "role": "prospect",
+          "text": "¿Qué planes tienen y abren los domingos?"
+        }
+      ],
+      "facts": {
+        "paymentState": "none",
+        "handoffRequested": false
+      },
+      "criteria": [
+        {
+          "id": "c1",
+          "kind": "must",
+          "text": "Presentar la lista de planes con el precio de cada uno."
+        },
+        {
+          "id": "c2",
+          "kind": "must",
+          "text": "Responder si abren los domingos."
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case": "43/194/E-001",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y valoración inicial, todo por {{PLAN_1}}. Para orientarle mejor, ¿ha entrenado antes o es principiante?",
+          "chars": 229,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 229 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le explico que el plan que mejor le encaja por lo que me cuenta es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales, guía nutricional y seguimiento continuo. ¿Ha entrenado antes o es principiante para orientarle mejor?",
+          "chars": 241,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 241 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} para acceso básico mensual, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que ofrece acceso total y entrenamiento avanzado. ¿Ha entrenado antes o es principiante para orientarle mejor?",
+          "chars": 272,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde claramente a la pregunta sobre planes y precios con los marcadores adecuados, usa un registro profesional y mantiene naturalidad. La pregunta final es adecuada para orientar mejor sin ser invasiva. Se recomienda mantener este estilo en futuros mensajes."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 272,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 231 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "43/195/E-002",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que tenemos el Plan Valera, que incluye acceso ilimitado, zona de pesas, asesoría con entrenador y valoración inicial, todo por {{PLAN_1}}. ¿Ha entrenado antes o empieza desde cero?",
+          "chars": 207,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 207 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Tenemos dos opciones destacadas: {{PLAN_1}} con acceso ilimitado y asesoría básica, y {{PLAN_3}} con acceso total, sesiones funcionales y guía nutricional. ¿Ha entrenado antes o está empezando?",
+          "chars": 218,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure",
+              "question_discipline"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro formal con tuteo, debe usar solo usted para mantener coherencia. Además, presenta dos planes sin que la persona haya pedido todos, y hace una segunda pregunta cuando ya se hizo una en el mismo mensaje. Para mejorar, pasar todo a usted, limitar la cantidad de planes o esper"
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Por lo que me pregunta, el plan que mejor le explica es el Plan Valera: acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y valoración inicial, todo por {{PLAN_1}}. ¿Ha entrenado antes o está empezando?",
+          "chars": 240,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje usa 'te' y 'le' mezclados, debe pasar todo a usted para mantener registro profesional. Además, hace una pregunta adicional cuando ya se pidió solo información de planes y precios, y el mensaje es muy corto para explicar un plan sin dar más detalles o información general. Se recomienda exp"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [
+          "plans_overview",
+          "length_over_cap"
+        ],
+        "chars": 240,
+        "cap": 200,
+        "withinCap": false,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 225 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-comprobacion-length-over-cap",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «length_over_cap» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "43/196/E-003",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que el Plan Valera ofrece acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y acceso básico a la app por {{PLAN_1}}. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 208,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 208 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "El plan que mejor le encaja por lo que me cuenta es el {{PLAN_3}}: acceso total al gimnasio, sesiones funcionales por agenda, y guía nutricional para mejorar resultados. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 222,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 222 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Tenemos tres planes destacados: {{PLAN_1}} para acceso ilimitado y asesoría básica, {{PLAN_2}} con beneficios similares, y {{PLAN_3}} que incluye acceso total y guía nutricional avanzada. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 271,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje es claro y profesional, pero podría mejorar la naturalidad evitando frases muy estructuradas y el listado breve de planes podría ser más personalizado. Para el próximo intento, incluir un dato fresco como la ubicación o cómo empezar para aportar novedad y mejorar la conexión."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 271,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 230 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "43/197/E-004",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que tenemos el Plan Valera con acceso ilimitado al gimnasio, asesoría semi personalizada y seguimiento, todo por {{PLAN_1}}. Para orientarle mejor, ¿ha entrenado antes o es su primera vez?",
+          "chars": 214,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 214 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le informo que el plan que mejor le puede servir incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo por {{PLAN_3}}. Para orientarle mejor, ¿ha entrenado antes o es su primera vez?",
+          "chars": 233,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 233 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} para acceso básico mensual, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que ofrece acceso total y entrenamiento avanzado. ¿Ha entrenado antes o es su primera vez?",
+          "chars": 252,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure",
+              "sales_judgment"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro informal y formal (usar solo usted). Además, menciona tres planes sin que la persona haya pedido todos, y no aporta información concreta ni precios, solo beneficios muy genéricos. Falta explicar cómo empezar o dar datos concretos para orientar mejor. Se recomienda pasar to"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [],
+        "chars": 252,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 211 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "43/198/E-005",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "DISCOVERY",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que tenemos tres planes principales: el Plan Valera con acceso ilimitado y asesoría básica; el Plan Mensual con beneficios similares; y el Élite, que incluye acceso total, sesiones funcionales y guía nutricional. ¿Le gustaría que le explique cuál se ajusta mejor a su objetivo?",
+          "chars": 287,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 287 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento: tenemos estos planes disponibles y sus beneficios: {{PLAN_1}} para acceso ilimitado básico, {{PLAN_2}} con asesoría semi personalizada, y {{PLAN_3}} que incluye acceso total y guía nutricional. ¿Cuál es su principal objetivo al entrenar?",
+          "chars": 289,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure",
+              "question_discipline",
+              "customer_fit"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro de usted con 'su principal objetivo', que es correcto, pero la pregunta final es más de descubrimiento que de información general y no corresponde a la fase NEW_LEAD sin saludo previo. Además, menciona tres planes sin que la persona haya pedido todos, y el mensaje es largo"
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Buenos días, le doy la bienvenida a Iron Body Neiva. Tenemos varios planes: el {{PLAN_1}} con acceso ilimitado al gimnasio, el {{PLAN_2}} con beneficios similares, y el {{PLAN_3}} que incluye acceso total y guía nutricional. ¿Qué le gustaría saber primero?",
+          "chars": 297,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje es claro y profesional, pero podría mejorar la naturalidad evitando frases muy formales como 'le doy la bienvenida' y el listado de tres planes en una sola frase. Para el próximo intento, se recomienda usar un saludo más cercano y presentar los planes en dos mensajes si es posible, para f"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 297,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 256 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "43/199/E-006",
+      "group": "combinada",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que el gimnasio abre domingos de 8:00 a.m. a 2:00 p.m. Por lo que pregunta, el plan que mejor le encaja es el Élite: acceso total, clases funcionales y seguimiento completo durante todo el proceso. ¿Me cuenta si ya ha entrenado antes para orientarle mejor?",
+          "chars": 266,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 266 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "El gimnasio abre domingos de 8 a.m. a 2 p.m. Tenemos {{PLAN_1}}, ideal para acceso básico; {{PLAN_2}}, para acceso completo y asesoría; y {{PLAN_3}}, que incluye clases y seguimiento personalizado. ¿Ha entrenado antes para recomendarle mejor?",
+          "chars": 283,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje es claro y responde bien la pregunta, pero podría mejorar la naturalidad evitando frases muy estructuradas como 'ideal para acceso básico'. Se recomienda usar un lenguaje un poco más cercano y menos formal para sonar más humano."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 283,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 242 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "44/200/E-001",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Por lo que me pregunta, le cuento que el Plan Valera incluye acceso ilimitado al gimnasio, asesoría semi personalizada, valoración inicial y acceso básico a la app, todo por {{PLAN_1}}. ¿Ha entrenado antes o es principiante?",
+          "chars": 239,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 239 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que tenemos el {{PLAN_1}} con acceso ilimitado y asesoría semi personalizada, y el {{PLAN_3}} que incluye acceso total, entrenamientos guiados y nutrición avanzada por {{PLAN_PRICE}}. ¿Ha entrenado antes o es principiante?",
+          "chars": 254,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/mixed"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 179 de 250.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le explico que el {{PLAN_1}} ofrece acceso ilimitado al gimnasio, zona de pesas y asesoría básica. El {{PLAN_2}} es similar pero con beneficios adicionales para un mes completo. El {{PLAN_3}}, llamado Élite, incluye acceso total, rutinas guiadas y nutrición avanzada por {{PLAN_PRICE}}. ¿Ha entrenado antes o es su primera vez?",
+          "chars": 365,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje presenta tres planes con beneficios y precios marcados, lo cual es adecuado para la pregunta. Sin embargo, podría mejorar la naturalidad evitando frases muy estructuradas y haciendo la pregunta final un poco más abierta para facilitar la conversación. No excede el límite de caracteres y l"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "plans_overview",
+        "codes": [
+          "plans_overview",
+          "length_over_cap"
+        ],
+        "chars": 365,
+        "cap": 320,
+        "withinCap": false,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 327 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el último borrador incumple «plans_overview» y el commit lo descarta."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-comprobacion-length-over-cap",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «length_over_cap» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "44/201/E-002",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le informo que el Plan Valera ofrece acceso ilimitado al gimnasio, zona de pesas y asesoría semi personalizada. ¿Ha entrenado antes o es principiante para orientarle mejor?",
+          "chars": 172,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que tenemos tres planes principales: {{PLAN_1}}, para acceso básico; {{PLAN_2}}, con asesoría semi personalizada; y {{PLAN_3}}, que ofrece acceso total y entrenamiento intensivo. ¿Ha entrenado antes o es principiante para orientarle mejor?",
+          "chars": 290,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje presenta tres planes con beneficios breves y una pregunta útil para orientar mejor, lo cual es adecuado. Para mejorar, podría incluir un dato fresco como la ubicación o cómo empezar para aportar novedad y evitar sensación de plantilla."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 290,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 249 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "44/202/E-003",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "RECOMMENDATION",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico: tenemos el Plan Valera, que incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y valoración inicial, todo por {{PLAN_PRICE}}. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 207,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 207 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que tenemos estos planes: {{PLAN_1}} para acceso ilimitado básico, {{PLAN_2}} con asesoría semi personalizada, y {{PLAN_3}} para entrenamiento intensivo y completo. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 258,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "sales_judgment"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje presenta los planes con beneficios breves y pregunta por experiencia para orientar mejor, lo cual es adecuado. Se podría mejorar incluyendo un dato fresco como la ubicación o cómo empezar para aportar novedad y aumentar el valor del mensaje."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 258,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 217 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "44/203/E-004",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico, el Plan Valera ofrece acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada, valoración inicial y más, todo por {{PLAN_1}}. ¿Me cuenta si ya ha entrenado antes para orientar mejor?",
+          "chars": 226,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 226 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado, zona de pesas y asesoría semi personalizada. ¿Ya ha entrenado antes para orientar mejor su proceso?",
+          "chars": 173,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que tenemos tres planes activos: {{PLAN_1}} para acceso completo y asesoría, {{PLAN_2}} similar y {{PLAN_3}} con acceso total y entrenamiento intensivo. ¿Ha entrenado antes para orientar mejor su proceso?",
+          "chars": 256,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro formal con tuteo ('Le comento' y '¿Ha entrenado antes?') y debe usar solo usted para mantener coherencia. Además, presenta tres planes sin que la persona haya pedido todos, lo que es exceso de información para esta fase. Finalmente, pregunta por experiencia antes de explic"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [],
+        "chars": 256,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 215 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "44/204/E-005",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que el Plan Valera incluye acceso ilimitado al gimnasio, asesoría semi personalizada, valoración inicial y acceso básico a la app por {{PLAN_1}}. ¿Ha entrenado antes en gimnasio?",
+          "chars": 203,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 203 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que el plan que mejor le encaja según lo que busca incluye acceso total al gimnasio, sesiones funcionales, rutinas personalizadas y guía nutricional por {{PLAN_3}}. Para orientarle mejor, ¿ha entrenado antes en gimnasio?",
+          "chars": 240,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 240 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que tenemos tres planes principales: {{PLAN_1}} para acceso ilimitado y asesoría básica, {{PLAN_2}} similar con beneficios completos, y {{PLAN_3}} con acceso total y entrenamiento intensivo. Para recomendarle mejor, ¿ha entrenado antes en gimnasio?",
+          "chars": 300,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje es claro y profesional, pero podría mejorar la naturalidad evitando frases muy estructuradas y explicando brevemente cómo empezar para aportar novedad. Mantener la pregunta única está bien."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 300,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 259 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "44/205/E-006",
+      "group": "combinada",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que abrimos los domingos de 8:00 a.m. a 2:00 p.m. Por lo que me cuenta, lo que mejor le encaja es el Élite: acceso total, sesiones funcionales y guía nutricional. ¿Ha entrenado antes o es nuevo en el gimnasio?",
+          "chars": 220,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 220 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Abrimos domingos de 8 a.m. a 2 p.m. Tenemos estos planes: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría y {{PLAN_3}} con acceso total y guía nutricional. ¿Ha entrenado antes?",
+          "chars": 224,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde claramente la pregunta sobre horarios y planes, usa un registro profesional y mantiene naturalidad. Se sugiere en futuros mensajes incluir un dato fresco de novelty, como la ubicación o número de entrenadores, para enriquecer la información."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 224,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "45/206/E-001",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le informo que el Plan Valera ofrece acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y acceso básico a la app por {{PLAN_PRICE}}. Para orientarle mejor, ¿me cuenta si ya tiene experiencia entrenando?",
+          "chars": 221,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 221 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría y seguimiento, y {{PLAN_3}} que incluye acceso total y entrenamiento intensivo. ¿Ha entrenado antes?",
+          "chars": 229,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro informal y formal (usar 'ha entrenado' está bien, pero debe evitarse '¿Ha entrenado antes?' que suena un poco abrupto). Además, presenta tres planes sin que la persona haya pedido todos, y hace una pregunta adicional cuando ya se pidió solo información de planes y precios."
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Por lo que pregunta sobre planes y mensualidad, le recomiendo el Plan Valera: acceso ilimitado, asesoría semi personalizada y seguimiento en ejercicios, todo por {{PLAN_1}}. ¿Ha tenido experiencia previa entrenando?",
+          "chars": 230,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "sales_judgment",
+              "next_step",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje recomienda un plan sin antes entender el objetivo o experiencia del cliente, y hace una pregunta adicional tras la recomendación, lo que no es adecuado en esta fase. Además, no ofrece un paso siguiente claro para avanzar en la conversación. Se sugiere primero preguntar por el objetivo o e"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [
+          "plans_overview"
+        ],
+        "chars": 188,
+        "cap": 200,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": true
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 215 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "45/207/E-002",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "RECOMMENDATION",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que tenemos el Plan Valera con acceso ilimitado al gimnasio, asesoría semi personalizada y valoración inicial, con mensualidad de {{PLAN_PRICE}}. ¿Ha entrenado antes o es su primera vez?",
+          "chars": 194,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le comento que tenemos tres planes principales: {{PLAN_1}} para acceso ilimitado y asesoría básica, {{PLAN_2}} con beneficios similares y más flexibilidad, y {{PLAN_3}} que ofrece acceso total y entrenamiento intensivo. ¿Ha entrenado antes o es su primera vez?",
+          "chars": 301,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "relevance",
+              "naturalness",
+              "sales_judgment",
+              "next_step",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje responde bien la pregunta sobre planes y precios con marcadores, suena natural y profesional, y termina con una sola pregunta para avanzar. Para mejorar, podría incluir un beneficio fresco del plan 25 o información concreta sobre cómo empezar para aportar novedad y enriquecer la respuesta"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 301,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 260 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "45/208/E-003",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "RECOMMENDATION",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y seguimiento básico por {{PLAN_PRICE}}. Para orientar mejor, ¿ha entrenado antes en gimnasio?",
+          "chars": 202,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 202 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada y {{PLAN_3}} con acceso total y seguimiento avanzado. ¿Ha entrenado antes en gimnasio?",
+          "chars": 234,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro informal con formal (usar 'usted' en todo el mensaje), presenta tres planes sin que la persona haya pedido todos y hace una pregunta adicional cuando ya se pidió solo información de planes y precios. Para mejorar, debe usar un registro formal consistente, presentar solo el"
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le entiendo, quiere saber sobre planes y precios. El plan que mejor le encaja para empezar con acceso total, asesoría y seguimiento es el {{PLAN_3}}: acceso completo al gimnasio y a la app con guía personalizada. ¿Ha entrenado antes en gimnasio?",
+          "chars": 255,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde directamente a la pregunta del cliente con un plan adecuado y una pregunta para continuar la conversación, manteniendo un tono profesional y natural. Se recomienda mantener este estilo en futuros mensajes."
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "plans_overview",
+        "codes": [
+          "plans_overview",
+          "length_over_cap"
+        ],
+        "chars": 255,
+        "cap": 200,
+        "withinCap": false,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 245 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el último borrador incumple «plans_overview» y el commit lo descarta."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-comprobacion-length-over-cap",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «length_over_cap» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "45/209/E-004",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "RECOMMENDATION",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico los planes que tenemos: el Plan Valera ofrece acceso ilimitado al gimnasio, asesoría semi personalizada y acceso básico a la app por {{PLAN_1}}. El Plan Mensual incluye beneficios similares por {{PLAN_2}}. Por lo que me cuenta, para un proceso completo y dinámico, el plan Élite es ideal para usted: acceso total al gimnasio, entrenamientos guiados y nutrición avanzada por {{PLAN_3}}. ¿Me cuenta para qué busca el gimnasio?",
+          "chars": 476,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 476 caracteres y el limite publicado es 320. Reescribelo en unos 250: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 179. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que tenemos varios planes: {{PLAN_1}} con acceso ilimitado y asesoría básica; {{PLAN_2}} con beneficios similares; y {{PLAN_3}}, que incluye acceso total, entrenamientos guiados y nutrición avanzada. Para orientarle mejor, ¿qué busca lograr con el gimnasio?",
+          "chars": 308,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro informal con formal (usar 'Le cuento' y luego '¿qué busca lograr?'), debe pasar todo a usted para mantener profesionalismo. Además, presenta tres planes sin confirmar si la persona quiere todos o solo uno, y hace una pregunta adicional cuando ya se hizo una pregunta en el "
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que el plan que mejor le encaja para un acceso completo y acompañamiento es el {{PLAN_3}}: ofrece acceso total al gimnasio, entrenamientos guiados y nutrición avanzada. Para orientarle mejor, ¿qué busca lograr con su entrenamiento?",
+          "chars": 252,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro formal con tuteo ('le' y 'qué busca lograr'), debe usar solo usted para mantener coherencia. Además, recomienda un plan sin antes preguntar el objetivo, y hace dos preguntas implícitas (recomienda y pregunta objetivo), debe limitarse a una pregunta. Para mejorar, pasar tod"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [
+          "plans_overview"
+        ],
+        "chars": 189,
+        "cap": 200,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": true
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 242 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "45/210/E-005",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico: tenemos el Plan Valera que incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y valoración inicial, todo por {{PLAN_PRICE}}. ¿Ha entrenado antes o es su primera vez para orientarle mejor?",
+          "chars": 226,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 226 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada, y {{PLAN_3}} para entrenamiento intensivo y seguimiento avanzado. ¿Ha entrenado antes o es principiante?",
+          "chars": 253,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "relevance",
+              "naturalness",
+              "sales_judgment",
+              "next_step",
+              "question_discipline",
+              "novelty"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje responde bien la pregunta sobre planes y precios con los marcadores, usa un lenguaje natural y profesional, y termina con una sola pregunta para conocer experiencia. Para mejorar, podría añadir un dato fresco como la ubicación o cómo empezar para aportar novedad sin alargar el mensaje."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 253,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 212 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "45/211/E-006",
+      "group": "combinada",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le informo que el gimnasio abre los domingos de 8:00 a.m. a 2:00 p.m. Por lo que me cuenta, para un acceso total y acompañamiento integral, lo que mejor le encaja es el Plan Élite: acceso total al gimnasio, sesiones funcionales por agenda y guía nutricional, todo incluido en {{PLAN_3}}. ¿Ha entrenado antes o es su primera vez en un gimnasio?",
+          "chars": 353,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 353 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le confirmo que el gimnasio abre los domingos de 8:00 a.m. a 2:00 p.m. Tenemos varios planes, pero por lo que me cuenta, lo que mejor le encaja es el {{PLAN_3}}: acceso total, asesoría y seguimiento personalizado. ¿Ha entrenado antes o es su primera vez en un gimnasio?",
+          "chars": 279,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 279 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "El gimnasio abre domingos de 8 a.m. a 2 p.m. Tenemos estos planes: {{PLAN_1}} para acceso básico por un día, {{PLAN_2}} mensual con acceso ilimitado y {{PLAN_3}} con acceso total y seguimiento personalizado. ¿Ha entrenado antes o es su primera vez?",
+          "chars": 289,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde claramente la pregunta sobre planes y horario dominical, usa un registro profesional y consistente, y termina con una pregunta abierta para continuar la conversación. Se recomienda mantener este estilo para próximos mensajes."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 289,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 248 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "46/212/E-001",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que tenemos varios planes activos: el Plan Valera con acceso ilimitado y asesoría semi personalizada, el Plan Mensual con beneficios similares, y el Élite, que incluye acceso total, sesiones funcionales y guía nutricional, entre otros. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 289,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 289 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le comento que tenemos tres planes principales: {{PLAN_1}} para acceso básico mensual, {{PLAN_2}} con beneficios similares y {{PLAN_3}} que incluye acceso total y guía nutricional. ¿Ha entrenado antes para orientarle mejor?",
+          "chars": 264,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure",
+              "question_discipline"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje usa 'le' y 'ha entrenado' que es correcto para usted, pero la frase '¿Ha entrenado antes para orientarle mejor?' es la segunda pregunta en el mismo mensaje, lo que incumple la regla de una sola pregunta. Además, menciona tres planes sin que la persona haya pedido todos, y el mensaje es la"
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado al gimnasio y asesoría básica, el {{PLAN_2}} con beneficios similares y el {{PLAN_3}} que es el más completo, con acceso total y guía nutricional. ¿Me cuenta si ha entrenado antes para orientarle mejor?",
+          "chars": 301,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure",
+              "question_discipline"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro de usted con 'me cuenta' que es tuteo, debe uniformizar a usted. Además, menciona tres planes con beneficios muy breves y poco claros, sin detallar ni diferenciar bien, lo que baja naturalidad y parece un folleto. Finalmente, hace una pregunta adicional tras listar planes,"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [],
+        "chars": 301,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 260 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "46/213/E-002",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y valoración inicial, todo por {{PLAN_1}}. ¿Ha entrenado antes o es su primera vez para orientarle mejor?",
+          "chars": 230,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 230 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Por lo que pregunta, tenemos el {{PLAN_1}} con acceso ilimitado y asesoría semi personalizada por {{PLAN_PRICE}}. ¿Ha entrenado antes o es su primera vez para orientarle mejor?",
+          "chars": 188,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/mixed"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que tenemos el {{PLAN_1}} con acceso ilimitado, asesoría semi personalizada y valoración inicial por {{PLAN_PRICE}}. ¿Ha entrenado antes o es su primera vez para orientarle mejor?",
+          "chars": 202,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde directamente a la pregunta del cliente con información clara y un solo pregunta para orientar mejor. El registro es formal y profesional, sin tuteo. Se podría mejorar incluyendo un beneficio adicional o un dato fresco para aportar novedad, pero no es obligatorio para aprobar."
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "plans_overview",
+        "codes": [
+          "plans_overview"
+        ],
+        "chars": 139,
+        "cap": 200,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": true
+      },
+      "labChecks": [
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el último borrador incumple «plans_overview» y el commit lo descarta."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "46/214/E-003",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico: tenemos el Plan Valera con acceso ilimitado, asesoría semi personalizada y seguimiento básico por {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+          "chars": 180,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que tenemos tres planes destacados: {{PLAN_1}}, ideal para acceso básico; {{PLAN_2}}, con asesoría y seguimiento; y {{PLAN_3}}, que ofrece acceso total y entrenamiento intensivo. Para recomendarle mejor, ¿qué experiencia tiene entrenando?",
+          "chars": 289,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro formal con tuteo ('Le cuento' y '¿qué experiencia tiene entrenando?'), debe usar solo usted para mantener coherencia. Además, presenta tres planes sin que la persona haya pedido todos, y pregunta experiencia antes de recomendar el plan sugerido por la estrategia, que es el"
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Por lo que pregunta, el plan que mejor le encaja es el Plan Valera: acceso ilimitado al gimnasio, asesoría semi personalizada, valoración inicial y acceso básico a la app. ¿Qué experiencia tiene entrenando?",
+          "chars": 206,
+          "cap": 200,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [],
+            "hardFail": null,
+            "notes": "El mensaje responde directamente a la pregunta del cliente con información concreta del plan recomendado y una pregunta para conocer mejor su experiencia, facilitando la orientación. El registro es formal y profesional, sin tuteos. No hay presión ni repetición, y el mensaje es claro y natural. Para "
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "plans_overview",
+        "codes": [
+          "plans_overview"
+        ],
+        "chars": 171,
+        "cap": 200,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": true
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 206 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el último borrador incumple «plans_overview» y el commit lo descarta."
+        },
+        {
+          "id": "motor-comprobacion-plans-overview",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "Código «plans_overview» en el borrador que iría al commit."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview) y el revisor."
+        }
+      ]
+    },
+    {
+      "case": "46/215/E-004",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que el Plan Valera incluye acceso ilimitado al gimnasio, zona de pesas, asesoría semi personalizada y seguimiento con entrenador, además de acceso básico a la app por {{PLAN_PRICE}}. ¿Ha entrenado antes en algún gimnasio?",
+          "chars": 229,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 229 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Tenemos tres planes principales: {{PLAN_1}} con acceso ilimitado y seguimiento básico, {{PLAN_2}} similar con beneficios adicionales, y {{PLAN_3}} que ofrece acceso total y entrenamiento intensivo. ¿Ha entrenado antes en gimnasio?",
+          "chars": 271,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje presenta los tres planes con beneficios breves y una pregunta clara para conocer experiencia, lo cual es adecuado. Para mejorar, podría evitar la expresión 'seguimiento básico' que no está en los beneficios oficiales y usar términos más naturales. Además, el mensaje es justo en extensión "
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 271,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 230 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "46/216/E-005",
+      "group": "planes",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le explico, tenemos el Plan Valera con acceso ilimitado, asesoría semi personalizada, valoración inicial y acceso básico a la app, todo por {{PLAN_1}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+          "chars": 224,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/name_written",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "NOMBRE DUPLICADO: no escribas el nombre de un plan de la lista; su marcador ya pone el nombre y el precio. DEMASIADO LARGO: mide 224 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le informo que tenemos el {{PLAN_1}} con acceso ilimitado, asesoría semi personalizada y valoración inicial. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+          "chars": 181,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing"
+            ],
+            "issues": [
+              "relevance"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le cuento que tenemos tres planes: {{PLAN_1}} para acceso básico y seguimiento, {{PLAN_2}} similar con beneficios parecidos, y {{PLAN_3}} con acceso total y entrenamiento avanzado. ¿Qué experiencia tiene entrenando para orientarle mejor?",
+          "chars": 278,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro informal y formal (usar 'le' pero pregunta con '¿Qué experiencia tiene...?'), debe uniformizar el trato a usted. Además, presenta tres planes sin que la persona haya pedido todos ni se haya entendido bien su objetivo, lo que es prematuro y largo para esta fase. Finalmente,"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "fallback",
+        "cause": "critic_failed",
+        "codes": [],
+        "chars": 278,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 237 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-respaldo",
+          "source": "engine",
+          "level": "blocking",
+          "detail": "El texto del modelo no saldría: el revisor lo rechazó en el último intento."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el servidor (plans_overview)."
+        }
+      ]
+    },
+    {
+      "case": "46/217/E-006",
+      "group": "combinada",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "NEW_LEAD",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le cuento que el gimnasio abre domingos de 8:00 a.m. a 2:00 p.m. Tenemos el Plan Valera, Plan Mensual y Élite, cada uno con beneficios distintos. ¿Me puede contar si ya ha entrenado antes para orientarle mejor?",
+          "chars": 210,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 210 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Le cuento que abrimos domingos de 8 a.m. a 2 p.m. Los planes que tenemos son {{PLAN_1}}, para acceso básico por día; {{PLAN_2}}, para un mes con asesoría; y {{PLAN_3}}, completo con sesiones y seguimiento. ¿Ha entrenado antes?",
+          "chars": 267,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "naturalness",
+              "progressive_disclosure"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje es claro y profesional, responde bien la pregunta y deja una pregunta abierta para continuar la conversación. Para mejorar, podría evitar listar tres planes completos en un solo mensaje para no saturar; también, podría incluir un dato fresco como la ubicación o un beneficio adicional para"
+          },
+          "rewriteBy": "server"
+        }
+      ],
+      "final": {
+        "draft": 2,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 267,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "lab-longitud",
+          "source": "studio",
+          "level": "warning",
+          "detail": "Tiene 226 caracteres y la longitud máxima es 200."
+        },
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap)."
+        }
+      ]
+    },
+    {
+      "case": "47/218/E-006",
+      "group": "combinada",
+      "strategy": {
+        "intent": "pricing_question",
+        "nextState": "DISCOVERY",
+        "toolsRequested": [],
+        "handoffAllowed": false,
+        "corrections": [],
+        "recommendedPlanId": 3
+      },
+      "path": [
+        "strategist",
+        "composer",
+        "check1",
+        "composer_retry",
+        "check2",
+        "critic_2",
+        "composer_retry_2",
+        "critic_3"
+      ],
+      "drafts": [
+        {
+          "n": 1,
+          "role": "composer",
+          "text": "Le comento que el gimnasio abre domingos de 8 a. m. a 2 p. m. Tenemos el Élite, que ofrece acceso total, sesiones funcionales y guía nutricional por {{PLAN_PRICE}}. Para recomendarle mejor, ¿qué experiencia tiene entrenando?",
+          "chars": 221,
+          "cap": 200,
+          "tuteo": [],
+          "check": {
+            "pass": false,
+            "codes": [
+              "plans_overview/missing",
+              "length_over_cap"
+            ],
+            "issues": [
+              "relevance",
+              "progressive_disclosure"
+            ],
+            "notes": "FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 89 de 160. Si no caben, dos; una pregunta corta o ninguna. DEMASIADO LARGO: mide 221 caracteres y el limite publicado es 200. Reescribelo en unos 160: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 89. Si no caben, dos planes; una pregunta corta o ninguna.",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": null,
+          "rewriteBy": null
+        },
+        {
+          "n": 2,
+          "role": "composer_retry",
+          "text": "Abrimos domingos de 8 a. m. a 2 p. m. Tenemos tres planes: {{PLAN_1}} para acceso básico, {{PLAN_2}} con asesoría semi personalizada y {{PLAN_3}} con acceso total y entrenamiento intensivo. ¿Qué experiencia tiene entrenando?",
+          "chars": 265,
+          "cap": 320,
+          "tuteo": [],
+          "check": {
+            "pass": true,
+            "codes": [],
+            "issues": [],
+            "notes": "",
+            "mayRewrite": true,
+            "reason": null
+          },
+          "critic": {
+            "verdict": "fail",
+            "issues": [
+              "naturalness",
+              "sales_judgment",
+              "question_discipline"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje mezcla registro formal con tuteo ('¿Qué experiencia tiene entrenando?'), debe usar usted consistentemente. Además, pregunta por experiencia sin antes confirmar si la persona quiere esa información, y hace más de una pregunta implícita (planes y experiencia). Se recomienda reformular para "
+          },
+          "rewriteBy": "server"
+        },
+        {
+          "n": 3,
+          "role": "composer_retry_2",
+          "text": "Le comento que abrimos domingos de 8 a. m. a 2 p. m. Tenemos tres planes principales: {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}. Para recomendarle mejor, ¿cuál ha sido su experiencia entrenando?",
+          "chars": 229,
+          "cap": 320,
+          "tuteo": [],
+          "check": null,
+          "critic": {
+            "verdict": "pass",
+            "issues": [
+              "relevance",
+              "naturalness",
+              "context_use",
+              "sales_judgment",
+              "next_step",
+              "question_discipline",
+              "progressive_disclosure",
+              "novelty"
+            ],
+            "hardFail": null,
+            "notes": "El mensaje responde bien la pregunta sobre horarios y planes, usa un registro profesional y natural, y termina con una sola pregunta para continuar la conversación. Para mejorar, podría añadir un beneficio fresco del plan 25 o información sobre la ubicación para aportar novedad y enriquecer la respu"
+          },
+          "rewriteBy": "critic"
+        }
+      ],
+      "final": {
+        "draft": 3,
+        "origin": "model",
+        "cause": null,
+        "codes": [],
+        "chars": 229,
+        "cap": 320,
+        "withinCap": true,
+        "register": "ok",
+        "trimmed": false
+      },
+      "labChecks": [
+        {
+          "id": "motor-reescrituras",
+          "source": "engine",
+          "level": "info",
+          "detail": "Las pidió el servidor (plans_overview, length_over_cap) y el revisor."
+        }
+      ]
+    }
+  ]
+}

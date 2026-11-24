@@ -302,7 +302,8 @@ class UltronA4NotasDelServidorTest extends TestCase
         $m = $this->entrante(self::PANORAMA_CON_PRECIO);
         $decide = $this->decide($m);
         $referencia = 'Claro. Tenemos el {{PLAN_1}}, el {{PLAN_2}} y el {{PLAN_3}}. ¿Cuál le interesa?';
-        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $referencia, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
+        // PT-17, puerta 1, L4 (decisión P-1 del propietario, 24-11-2026): sobre la lista limpia del turno, solo un fallo grave lleva al respaldo (el blando es un aviso: `CriticListTurnVetoTest`).
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, $referencia, null), ['hard_fail' => 'customer_misfit'] + self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
         $fila = $this->ultimaAccion();
         $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el rechazo del revisor da el respaldo, como hoy');
         $this->assertMismaTraza(['pass' => true, 'codes' => [], 'length' => 120], $fila->metadata['discarded_draft_check'] ?? null);

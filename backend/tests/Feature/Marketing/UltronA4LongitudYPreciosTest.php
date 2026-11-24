@@ -454,7 +454,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
     public function test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado(): void
     {
         $this->publica(200);
-        $borrador = 'Te confirmo que el plan Élite, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo mensual de {{PLAN_PRICE}} e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo.';
+        // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: en el turno de lista el tope es 320; el borrador que no se puede recortar, por encima.
+        $borrador = 'Te confirmo que el plan Élite, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo mensual de {{PLAN_PRICE}} e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo. Además tiene guía nutricional para mejorar resultados, acceso completo a la app y el acompañamiento del equipo durante todo el proceso.';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, $borrador, 8);
 
         $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el respaldo de precios, por la rama de la política');
@@ -462,7 +463,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->assertContains('policy_length_exceeded', $fila->metadata['policy_violations']);
         $this->assertStringStartsWith('Te confirmo que el plan Élite', $fila->metadata['policy_discarded_draft']);
         // m-3: la traza dice que el texto se SUSTITUYÓ, con la medida del borrador y la de lo que salió.
-        $this->assertEquals(['cap' => 200, 'action' => 'replaced', 'from' => UltronReplyFitter::measure(str_replace('{{PLAN_PRICE}}', '$180.000 COP', $borrador)), 'to' => UltronReplyFitter::measure(self::PRECIOS_200), 'dropped' => 0], $fila->metadata['length']);
+        $this->assertEquals(['cap' => 200, 'action' => 'replaced', 'from' => UltronReplyFitter::measure(str_replace('{{PLAN_PRICE}}', '$180.000 COP', $borrador)), 'to' => UltronReplyFitter::measure(self::PRECIOS_200), 'dropped' => 0, 'list_cap' => 320], $fila->metadata['length']);
         // F3: el turno no cotiza el plan del modelo, enseña varios.
         $this->assertNull($r['price_source']);
     }

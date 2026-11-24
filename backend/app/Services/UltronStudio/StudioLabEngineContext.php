@@ -180,6 +180,8 @@ final class StudioLabEngineContext
         $catalogo = $this->knowledge->activePlans();
         $politica = CommercialTurnPolicy::decide($intentTurno, $phase, $memory, $catalogo, $resolved, $inbound);
         $panorama = self::plansOverview($sp, $politica, $resolved, $catalogo, $intentTurno, $inbound);
+        // Las pistas de un turno de lista, como `decide` (PT-17, L3).
+        $strategyHints = StrategyContract::conLaLista($strategyHints, $panorama !== null);
 
         $enlaces = $this->readings->only(['rules.paymentLinksEnabled'])['params']['rules.paymentLinksEnabled'] ?? [];
         $decide = [

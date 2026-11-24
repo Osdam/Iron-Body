@@ -25,8 +25,8 @@ use PHPUnit\Framework\TestCase;
  */
 class UltronReplyOriginTest extends TestCase
 {
-    /** La forma cerrada; `server_verdict` y `server_codes`, desde la corrección (1b) del 22-11-2026. */
-    private const CLAVES = ['origin', 'attempt', 'drafts', 'critics', 'checks', 'rewrites', 'fallback_reason', 'policy_codes', 'recovery_reason', 'server_verdict', 'server_codes', 'trimmed', 'server_text', 'traced', 'tokens'];
+    /** La forma cerrada; `server_verdict` y `server_codes`, desde la corrección (1b) del 22-11-2026; `critic_advisory`, desde PT-17, puerta 1, L4 (decisión P-1 del propietario, 24-11-2026). */
+    private const CLAVES = ['origin', 'attempt', 'drafts', 'critics', 'checks', 'rewrites', 'fallback_reason', 'policy_codes', 'recovery_reason', 'server_verdict', 'server_codes', 'critic_advisory', 'trimmed', 'server_text', 'traced', 'tokens'];
 
     /** Un bloque `metadata.regeneration` tal como lo deja `UltronRegenerationTrace`. */
     private static function traza(int $drafts, ?int $critics, array $rewrites, ?array $tokens = null, ?int $checks = 2): array
