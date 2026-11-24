@@ -11,6 +11,7 @@ use App\Services\Voice\NullTelephonyCarrier;
 use App\Services\Voice\NullVoiceAgentDeployer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
@@ -106,6 +107,36 @@ class VoiceCostCapZeroBudgetTest extends TestCase
         DB::table('voice_calls')->where('id', $completada->id)->update(['carrier_cost_micros' => 700000]);   // lo real, mayor que la reserva
 
         $this->assertSame(300 + 610500 + 700000, VoiceCostGuard::committedMicros(self::DAY));
+    }
+
+    /**
+     * La alerta #9 del 24-11-2026. Tras una llamada canaria, `salientes off` dejó el presupuesto en 0 con la llamada ya
+     * comprometida. La primera conciliación echó el freno (E10-8, como debe), pero `voice:reconcile` siguió saliendo con
+     * 1 cada 10 minutos hasta el cambio de día de Bogotá: un ERROR del programador por pasada, sin nada nuevo que decir.
+     *
+     * La regla:
+     * - sale con 1 solo la pasada que ECHA el freno por coste, o la que lo rearma tras soltarlo (E10-6);
+     * - con el freno ya echado, el mismo techo sale con 0;
+     * - el techo se sigue evaluando y diciendo (`costCap` true), y el freno y su incidente no se tocan.
+     */
+    public function test_con_el_freno_por_coste_ya_echado_la_pasada_siguiente_no_vuelve_a_fallar(): void
+    {
+        $this->voiceCall('outbound', 'completed', ['remote' => '+573000000096']);   // su reserva compromete gasto: el techo (0) se pasa
+        $this->assertGreaterThan(0, VoiceCostGuard::committedMicros(self::DAY));
+
+        $this->assertSame(1, Artisan::call('voice:reconcile', ['--json' => true]), 'la pasada que echa el freno es la alarma');
+        $this->assertTrue(json_decode(Artisan::output(), true)['costCap']);
+        $this->assertTrue(VoiceBrake::isOpen());
+        $this->assertSame(['cost_cap:'.self::DAY], VoiceBrakeEntry::query()->pluck('open_key')->all());
+
+        $this->assertSame(0, Artisan::call('voice:reconcile', ['--json' => true]), 'el mismo techo, con el freno ya echado, no es una alarma nueva');
+        $this->assertTrue(json_decode(Artisan::output(), true)['costCap'], 'el techo se sigue evaluando y diciendo');
+        $this->assertTrue(VoiceBrake::isOpen(), 'el freno sigue echado');
+        $this->assertSame(['cost_cap:'.self::DAY], VoiceBrakeEntry::query()->pluck('open_key')->all(), 'ni un freno ni un rearme nuevos');
+
+        $this->assertSame(0, Artisan::call('voice:reconcile', ['--dry-run' => true, '--json' => true]), 'en seco tampoco: no echaría nada');
+        $seco = json_decode(Artisan::output(), true);
+        $this->assertSame([true, true, false], [$seco['dryRun'], $seco['costCap'], $seco['wouldOpenBrake']]);
     }
 
     public function test_la_regla_en_php_de_la_conciliacion_en_seco_es_la_del_sql(): void
