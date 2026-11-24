@@ -34,8 +34,8 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  *      (`tests/fixtures/ultron-studio/pt17b-terceros-borradores-v4.json`,
  *      todos ≤ 300): con el compilador 6 ninguno tiene `length_over_cap` ni
  *      en `ai/check` ni en el commit, ninguno se recorta, y los 23 que traen
- *      la lista se miden contra 320 (el que trae un solo marcador mide 200 y
- *      se mide contra el publicado). Con el sello del compilador 5, los 23 que
+ *      la lista se miden contra 320, y el que trae un solo marcador también
+ *      (PT-17 L2: un solo tope por turno de lista). Con el sello del compilador 5, los 23 que
  *      pasan de 200 siguen fallando, como hoy.
  *  L2. Paridad con el commit: con tope 200, una lista de 310 con su pregunta
  *      sale del modelo entera; una de 330 no se recorta y es respaldo por la
@@ -176,7 +176,8 @@ class StudioLabEnginePlansListCapTest extends TestCase
             $this->assertNotContains(N::LENGTH_OVER_CAP, $commit['codes'], "{$nombre}: el commit no lo descarta por la longitud");
             $this->assertFalse($commit['trimmed'], "{$nombre}: no se le quita la pregunta final");
             $this->assertSame([$mide, $mide, true], [$commit['measured'], $commit['chars'], $commit['withinCap']], "{$nombre}: sale entero");
-            $this->assertSame($lista ? 320 : 200, $commit['cap'], "{$nombre}: el tope que se le aplica");
+            // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: también el que no trae la lista.
+            $this->assertSame(320, $commit['cap'], "{$nombre}: el tope que se le aplica");
         }
         $this->assertSame(23, $conLista, '23 traen la lista; 36/161/E-003 trae un solo marcador (y mide 200)');
 

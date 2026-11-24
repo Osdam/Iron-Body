@@ -259,7 +259,11 @@ class StudioLabEngineCheckParityTest extends TestCase
             'horario que responde: del modelo' => [self::HORARIO, $h, 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Le gustaría conocer los planes?', null, [], 'pass'],
             'horario que aplaza (la política del motor no lo marca): del modelo' => [self::HORARIO, $h, 'Le confirmo el horario en un momento. ¿Qué objetivo tiene?', null, [], 'pass'],
             'saludo que vende: respaldo' => [self::SALUDO, SalesIntents::GREETING, 'Buenas tardes. El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. ¿Se inscribe hoy?', 4, [], 'pass'],
-            'el revisor lo rechaza: respaldo' => [self::PANORAMA, $p, self::TRES, null, [], 'fail'],
+            // PT-17, puerta 1, L4 (decisión P-1 del propietario, 24-11-2026): el rechazo sin fallo grave de la lista limpia del turno es un aviso; con fallo grave, el respaldo de siempre.
+            'el revisor lo rechaza sin fallo grave: del modelo' => [self::PANORAMA, $p, self::TRES, null, [], 'fail'],
+            'el revisor lo rechaza con un fallo grave: respaldo' => [self::PANORAMA, $p, self::TRES, null, [], 'grave'],
+            // P-1 A: sin fallo grave pero por exactitud (una dimensión que veta), también el respaldo.
+            'el revisor lo rechaza por exactitud, sin fallo grave: respaldo' => [self::PANORAMA, $p, self::TRES, null, [], 'veto'],
         ];
     }
 
@@ -280,7 +284,7 @@ class StudioLabEngineCheckParityTest extends TestCase
         config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
         $m = $this->entrante($entrante);
         $token = (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1'], $this->headers())->assertOk()->json('decide_token');
-        $critic = ['verdict' => $veredicto, 'attempt' => $veredicto === 'pass' ? 1 : 3, 'score' => $veredicto === 'pass' ? 0.9 : 0.2, 'notes' => '', 'issues' => [], 'hard_fail' => null];
+        $critic = ['verdict' => $veredicto === 'pass' ? 'pass' : 'fail', 'attempt' => $veredicto === 'pass' ? 1 : 3, 'score' => $veredicto === 'pass' ? 0.9 : 0.2, 'notes' => '', 'issues' => $veredicto === 'veto' ? ['naturalness', 'factuality'] : [], 'hard_fail' => $veredicto === 'grave' ? 'customer_misfit' : null];
         $prediccion = app(StudioLabEngineCheck::class)->predict($this->turnoDe($m, $token), ['reply_draft' => $borrador, 'recommended_plan_id' => $plan, 'critic' => $critic], ['intent' => $intent, 'tools_requested' => $tools]);
 
         $r = $this->postJson('/api/internal/marketing/ai/commit', [
@@ -312,8 +316,11 @@ class StudioLabEngineCheckParityTest extends TestCase
         if (str_contains((string) $this->dataName(), 'entera')) {
             $this->assertSame([false, true, 320], [$prediccion['trimmed'], $prediccion['withinCap'], $prediccion['cap']]);
         }
-        if ($veredicto === 'fail') {
+        if (in_array($veredicto, ['grave', 'veto'], true)) {
             $this->assertSame(StudioLabEngineCheck::CAUSE_CRITIC, $prediccion['cause']);
+        }
+        if ($veredicto === 'fail') {
+            $this->assertSame([null, true], [$prediccion['cause'], $prediccion['criticAdvisory'] ?? null], 'el aviso del revisor');
         }
         $this->assertSame([StudioLabEngineCheck::ORIGIN_MODEL, StudioLabEngineCheck::ORIGIN_FALLBACK], [UltronReplyOrigin::MODEL, UltronReplyOrigin::FALLBACK]);
     }

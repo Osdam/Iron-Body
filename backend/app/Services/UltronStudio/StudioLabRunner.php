@@ -580,7 +580,8 @@ final class StudioLabRunner
         } else {
             $reply = (string) $r['reply'];
             $hallazgos = [
-                ...StudioLabChecks::check($reply, $target),
+                // La longitud, con la medida y el tope que el servidor le aplica a ese texto (PT-17, L2).
+                ...StudioLabChecks::check($reply, $target, is_array($r['engine']['final'] ?? null) ? $r['engine']['final'] : null),
                 ...(new StudioLabEngineChecks)->check($reply, is_array($escenario['facts'] ?? null) ? $escenario['facts'] : StudioLabCatalog::DEFAULT_FACTS),
                 ...$r['findings'],
             ];

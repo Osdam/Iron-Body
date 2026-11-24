@@ -316,7 +316,9 @@ class UltronPlansOverviewTest extends TestCase
         $po = [3, 4];
         $this->assertSame(O::UNKNOWN_MARKER, O::verify('{{PLAN_4}} desde $50.000', $po, $c));
         $this->assertSame(O::PRICE_WRITTEN, O::verify('{{PLAN_1}} {{PLAN_1}} {{PLAN_PRICE}} Plan Valera $50.000', $po, $c));
-        $this->assertSame(O::MIXED, O::verify('{{PLAN_1}} {{PLAN_1}} Plan Valera', $po, $c));
+        // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: habla de UN solo plan (repetido y con su nombre): lo que falta es la lista.
+        $this->assertSame(O::MISSING, O::verify('{{PLAN_1}} {{PLAN_1}} Plan Valera', $po, $c));
+        $this->assertSame(O::MIXED, O::verify('{{PLAN_1}} {{PLAN_2}} {{PLAN_1}} Plan Valera', $po, $c), 'con dos planes, el repetido sigue siendo mixed');
         $this->assertSame(O::NAME_WRITTEN, O::verify('{{PLAN_1}} y el Plan Mensual', $po, $c));
         $this->assertSame(O::DETAILS, [O::MISSING, O::MIXED, O::NAME_WRITTEN, O::UNKNOWN_MARKER, O::NO_LIST, O::PRICE_WRITTEN], 'los seis de §4.4, en su orden');
     }

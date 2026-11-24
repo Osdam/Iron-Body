@@ -194,7 +194,8 @@ class UltronRegenerationCommitTest extends TestCase
         // Y por el camino del revisor que tumba el tercer borrador: el respaldo, con el intento 3 y la traza.
         $m = $this->entranteNuevo(self::PANORAMA_CON_PRECIO);
         $token = $this->decide($m);
-        $this->commit($this->payload($m, $token, self::TRES, ['verdict' => 'fail', 'attempt' => 3, 'score' => 0.2, 'issues' => ['relevance']], self::BLOQUE))->assertOk();
+        // PT-17, puerta 1, L4 (decisión P-1 del propietario, 24-11-2026): sobre la lista limpia del turno, solo un fallo grave lleva al respaldo.
+        $this->commit($this->payload($m, $token, self::TRES, ['verdict' => 'fail', 'attempt' => 3, 'score' => 0.2, 'issues' => ['relevance'], 'hard_fail' => 'customer_misfit'], self::BLOQUE))->assertOk();
         $fila = $this->ultimaAccion();
         $this->assertSame([3, 'fail'], [$fila->metadata['critic']['attempt'], $fila->metadata['critic']['verdict']]);
         $this->assertMismaTraza(self::TRAZA, $fila->metadata['regeneration']);

@@ -52,9 +52,14 @@ use Illuminate\Validation\Rule;
  * recortando (la longitud que no cabe quitando la pregunta final, el tuteo
  * fuera de esa pregunta o sin bloque de Laravel, la lista de planes, el
  * beneficio de otro plan y las seis reglas de política). Desde el compilador
- * 6, un borrador con la lista del turno se mide contra el tope de la lista y
- * no se recorta ({@see UltronReplyFitter::plansListCap()}); `cap` dice el
- * tope que se le aplicó. Es una PREDICCIÓN:
+ * 6, en un turno de lista todo borrador se mide contra el tope de la lista y
+ * no se recorta ({@see UltronReplyFitter::plansListCap()}; PT-17 L2: un solo
+ * tope por turno); `cap` dice el tope que se le aplicó. Un borrador que va a
+ * sustituirse no pasa por el recorte: `trimmed` es false y `chars` es su
+ * medida entera (lo que sale es el respaldo). Y en un turno de lista, el
+ * rechazo BLANDO del revisor sobre la lista limpia del turno es un aviso, no
+ * un respaldo (PT-17 L4, como el commit): sale del modelo con
+ * `criticAdvisory`. Es una PREDICCIÓN:
  * siguen valiendo las once excepciones de `UltronCheckCommitParityTest` (el
  * commit pega o retira texto antes de medir). El texto del respaldo no se
  * genera.
@@ -78,6 +83,9 @@ final class StudioLabEngineCheck
     public const REASON_TIME_BUDGET = 'time_budget';
 
     public const REASON_LEGACY = 'legacy';
+
+    /** «Lista firme» (PT-17 L4): la de `UltronDraftCheck::REASON_LIST_FINAL`, con su riesgo R5 dicho allí. */
+    public const REASON_LIST_FINAL = 'list_final';
 
     /** Lo que dice la predicción del texto final. */
     public const ORIGIN_MODEL = 'model';
@@ -145,6 +153,8 @@ final class StudioLabEngineCheck
         $reason = match (true) {
             $attempt >= StudioLabEngineFlow::MAX_DRAFTS => self::REASON_LAST_ATTEMPT,
             $elapsed > StudioLabEngineFlow::TIME_BUDGET_SECONDS => self::REASON_TIME_BUDGET,
+            // La lista limpia de un turno de lista no se reescribe (PT-17 L4), como `UltronDraftCheck::check()`.
+            $this->listFinal($turn, $draft, $defectos) => self::REASON_LIST_FINAL,
             default => null,
         };
 
@@ -155,10 +165,13 @@ final class StudioLabEngineCheck
      * ¿El texto final lo escribiría el modelo o saldría un respaldo? Con lo
      * que Preparar Commit manda (el borrador, el plan y el veredicto).
      *
+     * Con el aviso del revisor (PT-17 L4), además `criticAdvisory: true`; sin
+     * él, la clave no va (la forma de siempre).
+     *
      * @param  array<string,mixed>  $turn  como en {@see check()}
      * @param  array{reply_draft:string,recommended_plan_id:mixed,critic:array<string,mixed>}  $commit  {@see StudioLabEngineFlow::prepareCommit()}
      * @param  array<string,mixed>  $strategy  la estrategia validada (intención y herramientas)
-     * @return array{origin:string,cause:?string,codes:list<string>,measured:int,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool}
+     * @return array{origin:string,cause:?string,codes:list<string>,measured:int,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool,criticAdvisory?:true}
      */
     public function predict(array $turn, array $commit, array $strategy): array
     {
@@ -170,8 +183,8 @@ final class StudioLabEngineCheck
             'tools_requested' => array_values((array) ($strategy['tools_requested'] ?? [])),
         ];
         $expandido = $this->expanded($turn, $draft);
-        // Con la lista del turno en el borrador (compilador 6), el tope de la lista, como el commit; si no, el publicado.
-        $topeDeLista = UltronReplyFitter::plansListCap($sp, $this->turnList($turn, $draft['intent'], $draft['tools_requested']), $draft['reply_draft']);
+        // En un turno de lista (compilador 6), el tope de la lista, lo traiga o no el borrador (PT-17 L2), como el commit; si no, el publicado.
+        $topeDeLista = UltronReplyFitter::plansListCap($sp, $this->turnList($turn, $draft['intent'], $draft['tools_requested']));
         $tope = $topeDeLista ?? UltronReplyFitter::cap($sp['n'] ?? null);
         $tono = is_string($sp['t'] ?? null) ? $sp['t'] : null;
 
@@ -199,8 +212,9 @@ final class StudioLabEngineCheck
         }
 
         // Lo que sigue sin arreglar: la longitud que no cabe, el tuteo que queda y todo lo demás de la comprobación.
+        $defectos = $this->defects($turn, $draft);
         $codigos = [];
-        foreach ($this->defects($turn, $draft) as $d) {
+        foreach ($defectos as $d) {
             $fatal = match ($d['code']) {
                 UltronRegenerationNotes::LENGTH_OVER_CAP => $descartado,
                 UltronRegenerationNotes::REGISTER_TUTEO => $tuteoQueQueda !== [],
@@ -211,14 +225,22 @@ final class StudioLabEngineCheck
             }
         }
         $revisor = is_array($commit['critic'] ?? null) ? $commit['critic'] : [];
-        $causa = CriticContract::isFail($revisor) ? self::CAUSE_CRITIC : ($codigos[0] ?? null);
+        // PT-17 L4, como el commit: el rechazo blando sobre la lista limpia del turno es un aviso, no un respaldo.
+        $aviso = CriticContract::isSoftFail($revisor) && $this->listFinal($turn, $draft, $defectos);
+        $causa = CriticContract::isFail($revisor) && ! $aviso ? self::CAUSE_CRITIC : ($codigos[0] ?? null);
+        if ($causa !== null) {
+            // Un borrador que va a sustituirse no pasa por el recorte (PT-17 L2): lo que sale es el respaldo, no él.
+            $texto = $expandido;
+            $recortado = false;
+            $marcas = UltronFormalReplies::aplica($tono) ? UltronRegisterDetector::tuteo($texto, $turn['catalog']) : [];
+        }
         $mide = UltronReplyFitter::measure($texto);
 
         return [
             'origin' => $causa === null ? self::ORIGIN_MODEL : self::ORIGIN_FALLBACK,
             'cause' => $causa,
             'codes' => $codigos,
-            // Lo que mide el borrador expandido, antes de cualquier recorte; `chars`, el texto que saldría.
+            // Lo que mide el borrador expandido, antes de cualquier recorte; `chars`, el texto que saldría (el borrador entero si se sustituye).
             'measured' => UltronReplyFitter::measure($expandido),
             'chars' => $mide,
             'cap' => $tope,
@@ -226,7 +248,7 @@ final class StudioLabEngineCheck
             'register' => UltronFormalReplies::aplica($tono) ? ($marcas === [] ? 'ok' : 'tuteo') : 'n/a',
             'tuteo' => array_values(array_map('strval', $marcas)),
             'trimmed' => $recortado,
-        ];
+        ] + ($aviso ? ['criticAdvisory' => true] : []);
     }
 
     /**
@@ -300,8 +322,24 @@ final class StudioLabEngineCheck
 
         return array_slice([
             ...UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools], $expandido, $turn['sp'], $po, $turn['catalog'], $turn['inbound'], $textosDeLaLista),
-            ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy']), UltronReplyFitter::plansListCap($turn['sp'], $po, $raw)),
+            ...UltronDraftDefects::ofPolicy($expandido, $turn['sp'], $turno['policy'], $turn['catalog'], $turno['facts'], $this->withAppLinks($turn, $draft, $turno['policy']), UltronReplyFitter::plansListCap($turn['sp'], $po)),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
+    }
+
+    /**
+     * ¿Es la lista firme del turno (PT-17 L4)? El port de
+     * `UltronDraftCheck::inspect()['list_final']`, con la lista del turno y los
+     * defectos que ya le encontró {@see defects()}.
+     *
+     * @param  array<string,mixed>  $turn
+     * @param  array<string,mixed>  $draft
+     * @param  list<array<string,mixed>>  $defectos
+     */
+    private function listFinal(array $turn, array $draft, array $defectos): bool
+    {
+        $po = $this->turnList($turn, (string) $draft['intent'], array_values((array) ($draft['tools_requested'] ?? [])));
+
+        return UltronDraftDefects::isListFinal((string) $draft['reply_draft'], $turn['sp'], $po, $turn['catalog'], $defectos);
     }
 
     /**

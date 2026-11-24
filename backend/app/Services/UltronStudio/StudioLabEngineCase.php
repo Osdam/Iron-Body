@@ -19,7 +19,8 @@ use InvalidArgumentException;
  *     modelo o un respaldo, el tope y el registro.
  *  4. El bloque `engine` (≤ 16 KB) y los hallazgos del motor (fuente
  *     `engine`): `motor-respaldo` y `motor-comprobacion-<código>` (bloquean),
- *     `motor-reescrituras` (informa).
+ *     `motor-reescrituras` y `motor-aviso-del-revisor` (informan; el segundo,
+ *     PT-17 L4, con `final.criticAdvisory`).
  *
  * NO ESCRIBE NADA y no decide el resultado: devuelve las llamadas (para el
  * coste), el texto final (el del borrador que va, para que el juez y la
@@ -234,7 +235,7 @@ final class StudioLabEngineCase
                 'withinCap' => $final['withinCap'],
                 'register' => $final['register'],
                 'trimmed' => $final['trimmed'],
-            ],
+            ] + (($final['criticAdvisory'] ?? false) === true ? ['criticAdvisory' => true] : []),
             'elapsedMs' => $ms,
         ];
     }
@@ -257,6 +258,11 @@ final class StudioLabEngineCase
         foreach ($final['codes'] as $codigo) {
             $out[] = StudioLabChecks::finding('motor-comprobacion-'.str_replace('_', '-', $codigo), StudioLabChecks::LEVEL_BLOCKING, 'El texto final incumple una comprobación del servidor',
                 "Código «{$codigo}» en el borrador que iría al commit.", null, self::SOURCE);
+        }
+        if (($final['criticAdvisory'] ?? false) === true) {
+            // PT-17 L4: informa, no bloquea; el commit lo anota como `critic_advisory`.
+            $out[] = StudioLabChecks::finding('motor-aviso-del-revisor', StudioLabChecks::LEVEL_INFO, 'El revisor lo rechazó y sale igual',
+                'Rechazo sin fallo grave sobre la lista limpia de un turno de lista: es un aviso, no un respaldo.', null, self::SOURCE);
         }
         $reescrituras = is_array($regeneracion['rewrites'] ?? null) ? $regeneracion['rewrites'] : [];
         if ($reescrituras !== []) {

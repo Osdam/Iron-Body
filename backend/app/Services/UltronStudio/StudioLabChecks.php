@@ -12,9 +12,17 @@ namespace App\Services\UltronStudio;
  * |---------------------|----------|-----------------------------------------------------------------|
  * | `lab-invisibles`    | blocking | lleva caracteres de control o invisibles (Enmiendas 4.2 y 6.2)  |
  * | `lab-vacia`         | blocking | la respuesta queda vacía tras recortarla                        |
- * | `lab-longitud`      | warning  | tiene más caracteres que `persona.maxChars` del objetivo        |
+ * | `lab-longitud`      | warning  | tiene más caracteres que `persona.maxChars` del objetivo (*)    |
  * | `lab-emojis`        | warning  | lleva algún emoji y `persona.emojis` es `false`                 |
  * | `lab-regla-<S-NNN>` | warning  | contiene una frase de una afirmación `forbid text contains`     |
+ *
+ * (*) En el recorrido del motor, con la medida y el tope que el servidor le
+ * aplica a ese texto (`$sent`, el bloque `final` del motor: ya expandido y,
+ * en un turno de lista, contra el tope de la lista). Medido el 24-11-2026
+ * (PT-17, L2): contar el texto con los marcadores sin expandir contra 200
+ * avisaba en 22 de los 25 casos, también de listas que el servidor daba por
+ * buenas. Sin tope del servidor, `persona.maxChars`. En la simulación, como
+ * siempre.
  *
  * `lab-regla-<S-NNN>` es la verificación «lab» que G dejó anunciada: las
  * frases de las reglas del Studio solo se pueden comprobar sobre un texto.
@@ -113,9 +121,10 @@ final class StudioLabChecks
      * (las reglas, las que recibió el actor).
      *
      * @param  array<string,mixed>  $target
+     * @param  array<string,mixed>|null  $sent  en el recorrido del motor, lo que mide el servidor del texto que iría al commit (`{chars, cap}`); null en la simulación
      * @return list<array{id:string,source:string,level:string,title:string,detail:string,quote?:string}>
      */
-    public static function check(string $reply, array $target): array
+    public static function check(string $reply, array $target, ?array $sent = null): array
     {
         $configs = is_array($target['configs'] ?? null) ? $target['configs'] : [];
         $persona = is_array($configs['persona'] ?? null) ? $configs['persona'] : [];
@@ -131,8 +140,10 @@ final class StudioLabChecks
             $out[] = self::finding(self::ID_EMPTY, self::LEVEL_BLOCKING, 'La respuesta está vacía', 'El actor no escribió nada: no hay mensaje que enviar.');
         }
 
-        $maximo = self::integer($persona['maxChars'] ?? null);
-        $largo = mb_strlen($limpia, 'UTF-8');
+        // Del motor, su medida y su tope (PT-17, L2); si no hay tope del servidor, el de la versión.
+        $delServidor = $sent !== null ? self::integer($sent['chars'] ?? null) : null;
+        $maximo = ($delServidor !== null ? self::integer($sent['cap'] ?? null) : null) ?? self::integer($persona['maxChars'] ?? null);
+        $largo = $delServidor ?? mb_strlen($limpia, 'UTF-8');
         if ($maximo !== null && $largo > $maximo) {
             $out[] = self::finding(self::ID_LENGTH, self::LEVEL_WARNING, 'La respuesta es más larga de lo que permite la versión', "Tiene {$largo} caracteres y la longitud máxima es {$maximo}.");
         }

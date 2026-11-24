@@ -22,7 +22,12 @@ namespace App\Services\Marketing\Ultron;
  *  2. si no, con `policy_violations` no vacía Y `policy_discarded_draft` →
  *     RESPALDO de la política del commit (con los códigos de las violaciones);
  *  3. si no, el MODELO; recortado si la longitud (o, desde H4-9, el registro)
- *     le quitó la pregunta final.
+ *     le quitó la pregunta final; y con el AVISO DEL REVISOR
+ *     (`critic_advisory`, PT-17 puerta 1, L4) si el revisor lo rechazó sin
+ *     fallo grave y salió igual porque era la lista limpia de un turno de
+ *     lista: la consulta de la línea base lo cuenta como del modelo (no hay
+ *     `fallback_mode`), y aquí se marca aparte para poder medir cuántas veces
+ *     el servidor no siguió al revisor.
  * Las acciones `*_recovered` (la respuesta repetida o la reventa, que el commit
  * sustituye por su último recurso) son respaldo del último recurso; la consulta
  * de la línea base no las cuenta (no son `reply`), y el informe las mete en el
@@ -104,6 +109,16 @@ final class UltronReplyOrigin
 
     public const SERVER_VERDICTS = [self::SERVER_WOULD_ACCEPT, self::SERVER_WOULD_REJECT, self::SERVER_UNKNOWN];
 
+    /**
+     * EL AVISO DEL REVISOR (PT-17, puerta 1, L4; decisión P-1 del propietario
+     * del 24-11-2026): en un turno de lista, el revisor rechazó SIN fallo
+     * grave la lista limpia del turno y salió el texto del modelo. El commit
+     * lo anota en la fila con esta clave (`metadata.critic_advisory = true`;
+     * el veredicto, en `metadata.critic`) y {@see self::classify()} lo dice
+     * con el mismo nombre, solo en una fila del modelo.
+     */
+    public const CRITIC_ADVISORY = 'critic_advisory';
+
     /** Quién pidió una reescritura. */
     public const BY_SERVER = 'server';
 
@@ -149,7 +164,7 @@ final class UltronReplyOrigin
     /**
      * @param  array<string,mixed>  $metadata  `marketing_ai_actions.metadata`
      * @param  string  $actionType  `marketing_ai_actions.action_type`
-     * @return array{origin:string,attempt:?string,drafts:?int,critics:?int,checks:?int,rewrites:list<array{by:string,codes:list<string>,issues:list<string>}>,fallback_reason:?string,policy_codes:list<string>,recovery_reason:?string,server_verdict:?string,server_codes:list<string>,trimmed:bool,server_text:?string,traced:bool,tokens:?array{input:?int,output:?int}}
+     * @return array{origin:string,attempt:?string,drafts:?int,critics:?int,checks:?int,rewrites:list<array{by:string,codes:list<string>,issues:list<string>}>,fallback_reason:?string,policy_codes:list<string>,recovery_reason:?string,server_verdict:?string,server_codes:list<string>,critic_advisory:bool,trimmed:bool,server_text:?string,traced:bool,tokens:?array{input:?int,output:?int}}
      */
     public static function classify(array $metadata, string $actionType = 'reply'): array
     {
@@ -197,6 +212,8 @@ final class UltronReplyOrigin
                 default => self::SERVER_WOULD_REJECT,
             },
             'server_codes' => $comprobacion['codes'] ?? [],
+            // Solo en una fila del modelo, y solo con la marca del commit: un `fail` suelto en `critic` no lo es.
+            'critic_advisory' => $origin === self::MODEL && ($metadata[self::CRITIC_ADVISORY] ?? null) === true,
             'trimmed' => $origin === self::MODEL && (($metadata['length']['action'] ?? null) === 'trimmed' || ($metadata['register']['action'] ?? null) === 'trimmed'),
             'server_text' => $origin === self::MODEL ? self::textoDelServidor($metadata) : null,
             'traced' => $traza !== null,

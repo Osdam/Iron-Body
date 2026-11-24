@@ -98,6 +98,22 @@ final class UltronDraftCheck
 
     public const REASON_LEGACY = 'legacy';
 
+    /**
+     * «LISTA FIRME» (PT-17, puerta 1, L4; decisión P-1 del propietario del
+     * 24-11-2026): el borrador es la lista limpia de un turno de lista
+     * ({@see UltronDraftDefects::isListFinal()}) y no se pide otro. Sin
+     * tocar n8n: «Decidir Intento 3» solo lanza el tercer borrador con
+     * `may_rewrite === true`, así que un segundo borrador que ya vale no se
+     * pierde porque el revisor lo rechace y el tercero empeore.
+     *
+     * RIESGO R5 DEL DIAGNÓSTICO, aceptado y dicho aquí: dentro del mismo
+     * contrato `ultron-regen/1`, `may_rewrite=false` deja de significar solo
+     * «no queda presupuesto» (el último intento o el tiempo) y pasa a
+     * significar también «este borrador es definitivo». Quien lea el campo
+     * para medir el presupuesto debe mirar `budget.reason`.
+     */
+    public const REASON_LIST_FINAL = 'list_final';
+
     public function __construct(
         private readonly UltronDecideToken $tokens,
         private readonly MarketingKnowledgeBaseService $knowledge,
@@ -125,12 +141,15 @@ final class UltronDraftCheck
             return self::respuesta(self::MODE_LEGACY, $attempt, [], false, ['max_drafts' => self::LEGACY_MAX_DRAFTS, 'elapsed_s' => null, 'reason' => self::REASON_LEGACY]);
         }
 
-        $defectos = $this->inspect($conversationId, $messageId, $sp, $token['extra']['po'] ?? null, (array) $data['draft'])['defects'];
+        $inspeccion = $this->inspect($conversationId, $messageId, $sp, $token['extra']['po'] ?? null, (array) $data['draft']);
+        $defectos = $inspeccion['defects'];
 
         $elapsed = max(0, now()->getTimestamp() - (int) $token['issued_at']);
         $reason = match (true) {
             $attempt >= self::MAX_DRAFTS => self::REASON_LAST_ATTEMPT,
             $elapsed > self::TIME_BUDGET_SECONDS => self::REASON_TIME_BUDGET,
+            // La lista limpia de un turno de lista no se reescribe (L4): ver la nota de R5 en la constante.
+            $inspeccion['list_final'] => self::REASON_LIST_FINAL,
             default => null,
         };
         $respuesta = self::respuesta(self::MODE_STUDIO, $attempt, $defectos, $reason === null, ['max_drafts' => self::MAX_DRAFTS, 'elapsed_s' => $elapsed, 'reason' => $reason]);
@@ -169,10 +188,14 @@ final class UltronDraftCheck
      * separar «lo rechazó el revisor» de «el revisor y el servidor». Las MISMAS
      * lecturas, de solo lectura, que `check()`.
      *
+     * Y si el borrador es la lista firme del turno (`list_final`, PT-17 L4,
+     * {@see UltronDraftDefects::isListFinal()}): con eso `check()` no pide otro
+     * y el commit trata un rechazo blando del revisor como un aviso.
+     *
      * @param  array<string,mixed>  $sp  el `sp` firmado; sin `m = studio`, ningún defecto
      * @param  mixed  $po  la lista firmada tal cual (`x.po`); una forma rara cuenta como «sin lista»
      * @param  array{reply_draft:string,intent:string,recommended_plan_id?:mixed,tools_requested?:list<string>|null}  $draft
-     * @return array{defects:list<array{code:string,detail:?string,issue:string,note:string}>,length:int}
+     * @return array{defects:list<array{code:string,detail:?string,issue:string,note:string}>,length:int,list_final:bool}
      */
     public function inspect(int $conversationId, int $messageId, array $sp, mixed $po, array $draft): array
     {
@@ -217,11 +240,16 @@ final class UltronDraftCheck
                 $inbound,
                 $textosDeLaLista,
             ),
-            // Con la lista del turno en el borrador (compilador 6), el tope de la lista y sin recortar la pregunta final, como el commit.
-            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces, UltronReplyFitter::plansListCap($sp, $poDelTurno, $raw))),
+            // En un turno de lista (compilador 6; PT-17 L2, lo traiga o no el borrador), el tope de la lista y sin recortar la pregunta final, como el commit.
+            ...($politica === null ? [] : UltronDraftDefects::ofPolicy($expandido, $sp, $politica, $catalog, $turno['facts'], $conEnlaces, UltronReplyFitter::plansListCap($sp, $poDelTurno))),
         ], 0, UltronDraftDefects::MAX_DEFECTS);
 
-        return ['defects' => $defectos, 'length' => UltronReplyFitter::measure($expandido)];
+        return [
+            'defects' => $defectos,
+            'length' => UltronReplyFitter::measure($expandido),
+            // Sin la política del turno no se miraron sus reglas: entonces no es firme (falla cerrado).
+            'list_final' => $politica !== null && UltronDraftDefects::isListFinal($raw, $sp, $poDelTurno, $catalog, $defectos),
+        ];
     }
 
     /**

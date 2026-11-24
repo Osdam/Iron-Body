@@ -171,6 +171,41 @@ final class StrategyContract
     }
 
     /**
+     * LAS PISTAS DE UN TURNO DE LISTA (PT-17, puerta 1, L3; causa C1 del
+     * diagnóstico del 24-11-2026). Si `decide` ofrece la lista de planes
+     * (`plans_overview`, firmada en `po`), el turno RESPONDE con esa lista: ni
+     * se recomienda un plan ahora ni se pregunta. Medido con el compilador 7:
+     * toda `pricing_question` traía `should_recommend_now=true` (por
+     * `price_engagement`) y el estratega, que lee «PISTAS… síguelas», pedía un
+     * solo plan mientras el texto de la lista pedía la lista; los 20 primeros
+     * borradores cerraron con una pregunta de descubrimiento. Lo arregla el
+     * servidor, no el prompt: `should_recommend_now=false`,
+     * `question_budget=0`, `may_ask=[]` y `suggested_question=null`.
+     *
+     * Las mismas pistas en `decide` y en el laboratorio (las dos llaman aquí
+     * después de elegir la lista); sin lista, las de siempre, sin tocar. Las
+     * dos que viajan firmadas en el token (`hot_lead_fast_path`,
+     * `lifecycle_mode`) no cambian.
+     *
+     * @param  array<string,mixed>  $hints
+     * @param  bool  $plansOverview  `decide` ofrece la lista en este turno
+     * @return array<string,mixed>
+     */
+    public static function conLaLista(array $hints, bool $plansOverview): array
+    {
+        if (! $plansOverview) {
+            return $hints;
+        }
+
+        return array_replace($hints, [
+            'should_recommend_now' => false,
+            'question_budget' => 0,
+            'may_ask' => [],
+            'suggested_question' => null,
+        ]);
+    }
+
+    /**
      * Una pregunta de descubrimiento comercial, la que no cabe en un saludo.
      * Con `$tono` = «profesional», también la de usted; sin él (la llamada de
      * hoy, Legacy, cualquier otro tono), solo la de tú, como siempre.

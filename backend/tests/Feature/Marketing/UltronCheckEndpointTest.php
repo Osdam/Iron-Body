@@ -137,6 +137,9 @@ class UltronCheckEndpointTest extends TestCase
     private const N_R_TE = 'REESCRIBE DE USTED: la version publicada trata a la persona de usted y el borrador tutea (te). Pasa todo el mensaje a usted sin mezclar (le, su, usted, cuenteme, quiere) y conserva lo que decia.';
 
     /** PT-17b: las mismas notas con las cifras del tope de la lista (320 y su objetivo, 250; quedan 250 − 71 = 179). */
+    /** PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: N-P1 con el tope del turno de lista. */
+    private const N_P1_LISTA = 'FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 179 de 250. Si no caben, dos; una pregunta corta o ninguna.';
+
     private const N_P2_LISTA = 'MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 179 de 250.';
 
     private const N_L_LISTA = 'DEMASIADO LARGO: mide %d caracteres y el limite publicado es 320. Reescribelo en unos 250: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan 71: quedan 179. Si no caben, dos planes; una pregunta corta o ninguna.';
@@ -193,9 +196,10 @@ class UltronCheckEndpointTest extends TestCase
             'defects' => [],
             'issues' => [],
             'notes' => '',
-            'may_rewrite' => true,
+            // PT-17, puerta 1, L4 (decisión P-1 del propietario, 24-11-2026): la lista limpia del turno es firme (riesgo R5: `may_rewrite` también dice «definitivo»).
+            'may_rewrite' => false,
             'rewrite' => false,
-            'budget' => ['max_drafts' => 3, 'elapsed_s' => 0, 'reason' => null],
+            'budget' => ['max_drafts' => 3, 'elapsed_s' => 0, 'reason' => 'list_final'],
         ], $r->json());
     }
 
@@ -315,7 +319,8 @@ class UltronCheckEndpointTest extends TestCase
         $r = $this->check($m, $token, 'Claro. El Plan Valera cuesta {{PLAN_PRICE}} al mes e incluye acceso total al gimnasio. ¿Le gustaría conocer más?', plan: 3)->assertOk();
 
         $this->assertSame([['code' => 'plans_overview', 'detail' => 'missing', 'issue' => 'relevance']], $r->json('defects'));
-        $this->assertSame(self::N_P1, $r->json('notes'));
+        // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: el presupuesto, con el tope del turno (320).
+        $this->assertSame(self::N_P1_LISTA, $r->json('notes'));
         $this->assertSame([false, true, true], [$r->json('pass'), $r->json('may_rewrite'), $r->json('rewrite')]);
     }
 
@@ -368,10 +373,12 @@ class UltronCheckEndpointTest extends TestCase
     {
         return [
             'tuteo' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, self::TRES_DE_TU, null, [['register_tuteo', null, 'naturalness']], self::N_R_TE],
-            'falta la lista' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [['plans_overview', 'missing', 'relevance']], self::N_P1],
+            // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: con el tope del turno («quedan 179 de 250»).
+            'falta la lista' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [['plans_overview', 'missing', 'relevance']], self::N_P1_LISTA],
             // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba «quedan 89 de 160»; con dos marcadores de la lista, las cifras del tope de lista («quedan 179 de 250»).
             'mezcla' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde {{PLAN_PRICE}}. ¿Cuál le interesa?', 3, [['plans_overview', 'mixed', 'relevance']], self::N_P2_LISTA],
-            'repetido' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y otra vez {{PLAN_1}}. ¿Cuál le interesa?', null, [['plans_overview', 'mixed', 'relevance']], self::N_P2],
+            // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: un solo plan, repetido: lo que falta es la lista.
+            'repetido' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y otra vez {{PLAN_1}}. ¿Cuál le interesa?', null, [['plans_overview', 'missing', 'relevance']], self::N_P1_LISTA],
             'nombre a mano' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos el Plan Valera {{PLAN_1}} y {{PLAN_2}}. ¿Cuál le interesa?', null, [['plans_overview', 'name_written', 'relevance']], self::N_P3],
             'marcador inexistente' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [['plans_overview', 'unknown_marker', 'relevance']], self::N_P4_K3],
             'cifra escrita' => [self::PANORAMA_CON_PRECIO, SalesIntents::PRICING_QUESTION, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde $50.000. ¿Cuál le interesa?', null, [['plans_overview', 'price_written', 'factuality']], self::N_P6],
@@ -682,7 +689,8 @@ class UltronCheckEndpointTest extends TestCase
             $logs[] = $e->message.' '.json_encode($e->context, JSON_UNESCAPED_UNICODE);
         });
 
-        $borrador = 'Claro Ramiro Zuluetagüe, te cuento: {{PLAN_1}} incluye entrenador personal dedicado. '.str_repeat('Te escribo al 3209876543 con todo. ', 5);
+        // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: en el turno de lista el tope es 320; para que la nota de la longitud lleve sus números, más de 320.
+        $borrador = 'Claro Ramiro Zuluetagüe, te cuento: {{PLAN_1}} incluye entrenador personal dedicado. '.str_repeat('Te escribo al 3209876543 con todo. ', 8);
         $r = $this->check($m, $token, $borrador)->assertOk();
         foreach (['register_tuteo', 'length_over_cap', 'benefit_misattributed'] as $codigo) {
             $this->assertContains($codigo, array_column($r->json('defects'), 'code'), 'las notas llevan parámetros: marcas, números y un beneficio');
