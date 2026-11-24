@@ -63,6 +63,12 @@ use ReflectionMethod;
  *     cambia el texto de la lista del Strategist; las quince entradas, sus
  *     anclas, sus operaciones y su orden, y los redactores y los revisores,
  *     como en el 6.
+ * 13. Compilador 8 (PT-17, puerta 2, L5; §B.3, «Compilador 8»): la lista la
+ *     escribe el backend. Cambian siete textos del motor (la lista del
+ *     Strategist; el marcador, «Elige el plan…», el precio y la guía de los
+ *     redactores, que ya solo lleva L; los dos del revisor) y el del tope del
+ *     redactor, que suma un sufijo; las quince entradas, sus anclas y su
+ *     orden, como en el 6 y el 7.
  */
 class UltronPromptCompilerTest extends TestCase
 {
@@ -113,22 +119,22 @@ class UltronPromptCompilerTest extends TestCase
 
     /**
      * El parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador
-     * 7»), a mano. La lista del Strategist es la del 7; la sustitución de
-     * «Presentalo…», el marcador y «Elige el plan…» son los del 5; el del
-     * redactor (una guía con `{L}` y `{W}`), el del precio y los dos del
-     * revisor son los del 6, y se suma la frase de `suggested_question`.
+     * 8»), a mano. La sustitución de «Presentalo…» es la del 5 y la frase de
+     * `suggested_question`, la del 6; la lista del Strategist, el marcador,
+     * «Elige el plan…», el del redactor (una guía con `{L}`), el del precio y
+     * los dos del revisor son los del 8.
      */
-    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
+    private const MOTOR_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista, que escribe el backend con el nombre y el precio de cada plan, en su orden. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras ni nombres de plan y en menos de 160 caracteres: que va la lista de planes del backend, lo demas que pregunto en ese mensaje, nombrandolo, y, si cabe, una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const MOTOR_STRATEGIST_PRESENTALO = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
-    private const MOTOR_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de {L} caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas {W} palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.';
+    private const MOTOR_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar y escribe la lista: cada plan de plans_overview.plans, en su orden, con su nombre y su precio oficiales. Tu escribes el resto con tus palabras y pones LISTA_DE_PLANES entre dobles llaves, una sola vez, donde va la lista; si no la pones, el backend la pone antes de tu pregunta final. No escribas nombres de plan, cifras ni marcadores que empiecen por PLAN_. Puedes hablar de los planes sin nombrarlos o por su lugar en la lista (el primero, el segundo, el tercero), con sus benefits. Si pregunto ademas otra cosa, respondela tambien; si pidio una recomendacion, va despues de la lista. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con la lista, no pasa de {L} caracteres. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar, los marcadores y el tope general). Si plans_overview no viene, nada de esto aplica.';
 
-    private const MOTOR_MARCADOR = 'Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
+    private const MOTOR_MARCADOR = 'Cualquier otro marcador hace que el mensaje se rechace, salvo LISTA_DE_PLANES entre dobles llaves cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
 
-    private const MOTOR_ELIGE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).';
+    private const MOTOR_ELIGE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso el backend pone esa lista (LISTA DE PLANES DEL BACKEND).';
 
-    private const MOTOR_PRECIO = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: los pone el marcador de cada plan (LISTA DE PLANES DEL BACKEND).';
+    private const MOTOR_PRECIO = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: la lista con nombres y precios la pone el backend (LISTA DE PLANES DEL BACKEND).';
 
     private const MOTOR_SUGERIDA = 'Si vas a preguntar, usa suggested_question cuando venga, nunca si commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND):';
 
@@ -152,19 +158,19 @@ class UltronPromptCompilerTest extends TestCase
     /** Las quince anclas: ningún texto de parche contiene ninguna. */
     private const ANCLAS = ['COMO SUENAS:', 'FORMA:', 'Emoji opcional y raro, nunca en temas sensibles.', 'naturalness:', 'progressive_disclosure:', 'mas de ~900 caracteres', 'PRINCIPIO:', self::A_COTIZA, self::A_PRESENTALO, self::A_MARCADOR, self::A_ELIGE, self::A_PRECIO, self::A_SUGERIDA, self::A_FIN_COMPOSER, self::A_FIN_CRITIC];
 
-    private const MOTOR_CRITIC = 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.';
+    private const MOTOR_CRITIC = 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva LISTA_DE_PLANES, o PLAN_1, PLAN_2 o PLAN_3, entre dobles llaves, o la persona pidio los planes o los precios en general y el borrador no nombra planes ni precios, el backend pone ahi, o antes de la pregunta final, la lista con el nombre y el precio oficiales de cada plan elegido, en su orden. Esa lista no la juzgas: juzga solo la prosa. Cuenta como el precio de cada plan: no es invented_plan ni invented_price, no esquiva el precio y no es plantilla, folleto ni exceso de planes. En ese borrador NO son defecto: no preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id, ni cerrar con una pregunta corta para elegir o sin pregunta. Un nombre de plan o una cifra escritos a mano los rechaza el backend.';
 
-    private const MOTOR_CRITIC_COMPRUEBA = 'REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.';
+    private const MOTOR_CRITIC_COMPRUEBA = 'VEREDICTO EN LA LISTA DE PLANES: si reply_draft entra en LISTA DE PLANES DEL BACKEND (abajo), el registro (tu/usted), la longitud y la lista ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos. En ese borrador es fail con hard_fail solo un incumplimiento real de seguridad, exactitud o politica de HARD_FAIL o de FALLA TAMBIEN (un plan, clase, servicio, beneficio u horario que no esta en active_plans, gym o knowledge_base es invented_class), y fail sin hard_fail solo si deja sin responder una pregunta directa del mensaje. Lo demas es verdict pass, con la mejora en notes.';
 
     /** La línea base del compilador 2: las cuatro de siempre y ninguna frase (en el orden del contrato). */
     private const BASE = ['persona.emojis' => true, 'persona.maxChars' => 320, 'persona.tone' => 'cercano', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
-    /** Compilador 3: el texto del tope para el redactor, con N y su margen de {@see self::MARGEN}. */
+    /** Compilador 3: el texto del tope para el redactor, con N y su margen de {@see self::MARGEN}; desde el 8, con su sufijo (§B.3, «Compilador 8»). */
     private static function maxComposer(int $n): string
     {
         [$m, $p, $f] = self::MARGEN[$n];
 
-        return "TOPE DE LONGITUD PUBLICADO: el limite es {$n} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {$m} caracteres, que son unas {$p} palabras: como mucho {$f} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.";
+        return "TOPE DE LONGITUD PUBLICADO: el limite es {$n} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {$m} caracteres, que son unas {$p} palabras: como mucho {$f} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.";
     }
 
     private static function maxCritic(int $n): string
@@ -172,12 +178,10 @@ class UltronPromptCompilerTest extends TestCase
         return "TOPE PUBLICADO: un borrador de mas de ~{$n} caracteres falla por progressive_disclosure aunque se haya pedido detalle.";
     }
 
-    /** Compilador 6: la guía del redactor con el tope de la lista de N (L = max(N, 320); W = intdiv(L − 110, 30) · 5, a mano). */
+    /** La guía del redactor con el tope de la lista de N (L = max(N, 320), a mano). Desde el compilador 8 solo lleva L: ya no W. */
     private static function motorComposer(int $n): string
     {
-        $l = max($n, 320);
-
-        return str_replace(['{L}', '{W}'], [(string) $l, (string) (intdiv($l - 110, 30) * 5)], self::MOTOR_COMPOSER);
+        return str_replace('{L}', (string) max($n, 320), self::MOTOR_COMPOSER);
     }
 
     /** @param array<string,mixed> $cambios */
@@ -190,12 +194,12 @@ class UltronPromptCompilerTest extends TestCase
      * El rol sin el parche del motor (va en todo paquete no base; se comprueba en
      * su prueba): quita sus líneas insertadas y devuelve las frases sustituidas a
      * las de la base. Compilador 5: también en el Strategist. Compilador 6: la
-     * guía del redactor es la ÚLTIMA línea (con la L y la W de su tope: tres y
-     * dos cifras) y las dos del revisor, las dos últimas.
+     * guía del redactor es la ÚLTIMA línea (con la L de su tope: tres cifras;
+     * hasta el 7, también la W) y las dos del revisor, las dos últimas.
      */
     private static function sinMotor(string $rol, string $texto): string
     {
-        $guia = '/\n'.str_replace(['\{L\}', '\{W\}'], ['\d{3}', '\d{2}'], preg_quote(self::MOTOR_COMPOSER, '/')).'\z/';
+        $guia = '/\n'.str_replace('\{L\}', '\d{3}', preg_quote(self::MOTOR_COMPOSER, '/')).'\z/';
 
         return match ($rol) {
             'strategist' => str_replace(["\n".self::MOTOR_STRATEGIST, self::MOTOR_STRATEGIST_PRESENTALO], ['', self::A_PRESENTALO], $texto),
@@ -230,13 +234,13 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
         $this->assertSame([], $paquete['patches']);
         $this->assertSame(112216, $paquete['bytes']);
-        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 7], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
+        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 8], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
         $this->assertSame(self::BASE, $paquete['governed']);
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(7, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista; la 7, la lista del estratega coherente con la del servidor');
-        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3, ni el 4, ni el 5, ni el 6, ni el 7 la mueven');
+        $this->assertSame(8, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista; la 7, la lista del estratega coherente con la del servidor; la 8, la lista la escribe el backend');
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3, ni el 4, ni el 5, ni el 6, ni el 7, ni el 8 la mueven');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
     }
@@ -382,7 +386,7 @@ class UltronPromptCompilerTest extends TestCase
         }
 
         foreach (['composer', 'composer_retry'] as $rol) {
-            // Compilador 6: el del tope queda pegado a FORMA: y la guía del motor es la ÚLTIMA línea, con la L y la W de N.
+            // Compilador 6: el del tope queda pegado a FORMA: y la guía del motor es la ÚLTIMA línea, con la L de N (hasta el 7, también la W).
             $this->assertSame(self::maxComposer($n), self::lineaTras($r[$rol], 'FORMA:'), $rol);
             $lineas = explode("\n", $r[$rol]);
             $this->assertSame(self::motorComposer($n), end($lineas), "{$rol}: la guía del motor, la última, con el tope de la lista de {$n}");
@@ -422,9 +426,9 @@ class UltronPromptCompilerTest extends TestCase
     public static function textosDelTopeCompilados(): array
     {
         return [
-            'maxChars=160' => [160, 'TOPE DE LONGITUD PUBLICADO: el limite es 160 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 120 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
-            'maxChars=200' => [200, 'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
-            'maxChars=480' => [480, 'TOPE DE LONGITUD PUBLICADO: el limite es 480 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 380 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
+            'maxChars=160' => [160, 'TOPE DE LONGITUD PUBLICADO: el limite es 160 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 120 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.'],
+            'maxChars=200' => [200, 'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.'],
+            'maxChars=480' => [480, 'TOPE DE LONGITUD PUBLICADO: el limite es 480 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 380 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.'],
         ];
     }
 
@@ -500,37 +504,40 @@ class UltronPromptCompilerTest extends TestCase
      * Antes del parche del motor, el compilador 4 solo movía las huellas de
      * `profesional` (c001 y c304 seguían con las del 3). Con el parche del
      * motor se mueven TODAS las no base; Legacy, no. El compilador 5 las vuelve
-     * a mover todas (el parche del motor cambia), y el 6 y el 7 otra vez. Las de
+     * a mover todas (el parche del motor cambia), y el 6, el 7 y el 8 otra vez. Las de
      * ahora, escritas a mano desde `compile-cases.json` regenerado (derivado
      * en Node, sin PHP).
      */
-    public function test_las_huellas_del_compilador_7_con_el_parche_del_motor(): void
+    public function test_las_huellas_del_compilador_8_con_el_parche_del_motor(): void
     {
         $huella = static fn (array $cambios): string => C::compile(self::con($cambios))['bundleHash'];
 
         $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy: no se mueve');
         $c001 = $huella(['persona.maxChars' => 160]);
-        $this->assertSame('02f7f7f1aba4c7c7aa83355f1e80f063f618c94c6aea546badc46a0d3cd8f12d', $c001, 'cercano · 160');
+        $this->assertSame('342659e804c11e7759a65db96ae448afa9dbbee43445cef7efe8cacedf9d845c', $c001, 'cercano · 160');
+        $this->assertNotSame('02f7f7f1aba4c7c7aa83355f1e80f063f618c94c6aea546badc46a0d3cd8f12d', $c001, 'la del compilador 7');
         $this->assertNotSame('9f30f7969378eb340f586d0fc8de234228170f483ea1a89198333578c2258ec2', $c001, 'la del compilador 6');
         $this->assertNotSame('7b3327dc70fd81246c0ab251347b81d10221194035392336575e2c7274951aba', $c001, 'la del compilador 5');
         $this->assertNotSame('028bc1eda8fa852ff9cd0a268cd30e7be1529088d993259215fe77bfd8b4e585', $c001, 'la del compilador 4 con su motor');
         $this->assertNotSame('bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294', $c001, 'la del compilador 3 y del 4 sin el motor');
         $c304 = $huella(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']);
-        $this->assertSame('13ae735dc4599d1d501f791d1c01866e81b97dce444004b062e58295bc535be6', $c304, 'entusiasta · sin emojis · 480 · venta');
+        $this->assertSame('71fa33f2153e717a1ad23c7bfc88fac8030e955384b8bf04bcf035befd55a340', $c304, 'entusiasta · sin emojis · 480 · venta');
+        $this->assertNotSame('13ae735dc4599d1d501f791d1c01866e81b97dce444004b062e58295bc535be6', $c304, 'la del compilador 7');
         $this->assertNotSame('69af9fd2569200376592fde3f27f787fdc1924c2ea144a3bf2cdcc6988de2d5c', $c304, 'la del compilador 6');
         $this->assertNotSame('c3d77437f10772a4356b338836bb703e44f6dfed52546af370457807d110d1ad', $c304, 'la del compilador 5');
         $this->assertNotSame('10417eaa561c9efcad29a2d96d9e6d7daf42dcbf77e803454d3a2521cdf4a21e', $c304, 'la del compilador 4 con su motor');
         $this->assertNotSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $c304);
         // «profesional + 200» (c074).
         $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
-        $this->assertSame('200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631', $g8['bundleHash'], 'profesional · 200, compilador 7 (la v4, firmada con el 6, ya no la da)');
+        $this->assertSame('8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa', $g8['bundleHash'], 'profesional · 200, compilador 8');
+        $this->assertNotSame('200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631', $g8['bundleHash'], 'la del compilador 7');
         $this->assertNotSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $g8['bundleHash'], 'la del compilador 6: la que firmó la v4');
         $this->assertNotSame('2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0', $g8['bundleHash'], 'la del compilador 5: la que midió el laboratorio');
         $this->assertNotSame('26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075', $g8['bundleHash'], 'la del compilador 4 con su motor: la que firmó la v3');
         $this->assertNotSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'la del 4 sin el motor');
         $this->assertNotSame('af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51', $g8['bundleHash'], 'la del compilador 3');
-        $this->assertSame(122578, $g8['bytes'], '115 446 sin el motor; 117 746 con el del 4 (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); 120 097 con el del 5 (2 351 más); 122 167 con el del 6 (2 070 más); con el del 7, 411 más (la lista del Strategist)');
-        $this->assertSame([120560, 121687], [C::compile(self::con(['persona.maxChars' => 160]))['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']))['bytes']], 'c001 y c304: con el 6, 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope); con el 7, 411 más (la lista del Strategist)');
+        $this->assertSame(123254, $g8['bytes'], '115 446 sin el motor; 117 746 con el del 4 (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); 120 097 con el del 5 (2 351 más); 122 167 con el del 6 (2 070 más); con el del 7, 411 más (la lista del Strategist); con el del 8, 676 más (Strategist −90, Composer +250, Composer Reintento +238 y cada Critic +139)');
+        $this->assertSame([121236, 122363], [C::compile(self::con(['persona.maxChars' => 160]))['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']))['bytes']], 'c001 y c304: con el 6, 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope); con el 7, 411 más (la lista del Strategist); con el 8, 676 más');
     }
 
     // ── 4 · Anclas únicas; la matriz entera compila ───────────────────────────
@@ -721,6 +728,6 @@ class UltronPromptCompilerTest extends TestCase
             $motor('critic_retry', self::A_FIN_CRITIC, self::MOTOR_CRITIC_COMPRUEBA),
         ], $parches);
         $this->assertStringContainsString('no pasa de 320 caracteres', self::motorComposer(320));
-        $this->assertStringContainsString('unas 35 palabras tuyas', self::motorComposer(320));
+        $this->assertStringNotContainsString('palabras tuyas', self::motorComposer(320), 'desde el compilador 8, la guía ya no lleva W');
     }
 }

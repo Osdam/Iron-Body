@@ -69,6 +69,17 @@
  * apartado «Compilador 7». Las quince entradas, sus anclas, sus operaciones y
  * su orden, y todos los textos de los redactores y los revisores, igual que
  * en el 6.
+ *
+ * Compilador 8 (PT-17, puerta 2, L5, 24-11-2026; §B.3, apartado «Compilador
+ * 8»): la lista la escribe el backend. Cambian siete textos del parche del
+ * motor (la lista del Strategist; en los redactores, el marcador, «Elige el
+ * plan…», el precio y la guía; en los revisores, la lista y la frase de lo que
+ * comprueba el backend) y el del tope del redactor (`maxChars.composer`, con
+ * un sufijo). La guía lleva SOLO `{L}` (L = max(N, 320)): ni `{W}` ni «unos
+ * 25». Los ocho tienen que estar escritos tal cual DENTRO del apartado
+ * «Compilador 8», que además dice `UltronPromptCompiler::VERSION = 8` y
+ * `L = max(N, 320)`. Las quince entradas, sus anclas, sus operaciones y su
+ * orden, igual que en el 6 y el 7.
  */
 const fs = require('fs');
 const path = require('path');
@@ -93,8 +104,8 @@ const CONTRACT = 'ultron-prompts/1';
  * no vacías se prueban en PHP (`UltronPromptCompilerPhrasesTest`).
  */
 const PHRASES = 'rules.forbiddenPhrases';
-/** Compilador 3: cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»); el 4, los dos de `tone = profesional` (§B.3, «Compilador 4»); el 5, el 6 y el 7, el parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador 7»). */
-const COMPILER = 7;
+/** Compilador 3: cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»); el 4, los dos de `tone = profesional` (§B.3, «Compilador 4»); el 5, el 6 y el 7, el parche del motor (§B.3, «Compilador 5», «Compilador 6» y «Compilador 7»); el 8, siete textos del parche del motor y el sufijo del tope del redactor (§B.3, «Compilador 8»). */
+const COMPILER = 8;
 
 /** §B.3 / C3: la línea base («como hoy», M1-4), con la lista de frases vacía. */
 const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
@@ -147,24 +158,28 @@ const T = {
   'emojis.false.composer': 'Sin emojis: ninguno, en ningun mensaje.',
   'emojis.false.critic': 'EMOJIS: la version publicada no usa emojis; si el borrador lleva alguno, verdict fail con naturalness.',
   // Compilador 3 (§B.3, «Compilador 3»): sustituye al del compilador 1–2, que sigue en la tabla de §B.3 como histórico.
-  'maxChars.composer': 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.',
+  // Compilador 8 (§B.3, «Compilador 8»): el del 3 con un sufijo (en un turno de lista este tope no aplica); el del 3 sigue en «Compilador 3» como histórico.
+  'maxChars.composer': 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.',
   'maxChars.critic.replace': 'mas de ~{N} caracteres',
   'maxChars.critic.insert': 'TOPE PUBLICADO: un borrador de mas de ~{N} caracteres falla por progressive_disclosure aunque se haya pedido detalle.',
   'goal.venta.strategist': 'OBJETIVO COMERCIAL PUBLICADO: cerrar membresia. Con senales claras de compra (buying_signal strong, hot_lead_fast_path o READY) prioriza recommend y close sobre ofrecer la visita; el dia de cortesia queda para quien desconfia o quiere conocer antes. Nada de esto autoriza presion, descuentos ni salirse de allowed_transitions.',
   'goal.informar.strategist': 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.',
   // Compilador 5, el parche del motor (§B.3, «Compilador 5»): el del redactor sustituye al del 4, que sigue en «Compilador 4» como histórico.
   // Compilador 7 (§B.3, «Compilador 7»): la lista del Strategist sustituye a la del 5 y el 6, que sigue en «Compilador 5» como histórica.
-  'engine.plansOverview.strategist': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.',
+  // Compilador 8 (§B.3, «Compilador 8»): la lista del Strategist sustituye a la del 7, que sigue en «Compilador 7» como histórica.
+  'engine.plansOverview.strategist': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista, que escribe el backend con el nombre y el precio de cada plan, en su orden. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras ni nombres de plan y en menos de 160 caracteres: que va la lista de planes del backend, lo demas que pregunto en ese mensaje, nombrandolo, y, si cabe, una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.',
   'engine.plansOverview.strategist.present': 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.',
   // Compilador 6 (§B.3, «Compilador 6»): el del redactor (al final del prompt; una guía sin frase fija, con `{L}` y `{W}` del tope de la lista) y el del precio sustituyen a los del 5, que siguen en «Compilador 5» como históricos; se suma el de suggested_question.
+  // Compilador 8 (§B.3, «Compilador 8»): la guía (ahora solo con `{L}`), el marcador, «Elige el plan…» y el precio sustituyen a los del 5 y el 6, que siguen en sus apartados como históricos; el de suggested_question, igual.
   'engine.plansOverview.composer.ask': 'Si vas a preguntar, usa suggested_question cuando venga, nunca si commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND):',
-  'engine.plansOverview.composer': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de {L} caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas {W} palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.',
-  'engine.plansOverview.composer.marker': 'Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).',
-  'engine.plansOverview.composer.choose': 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).',
-  'engine.plansOverview.composer.price': 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: los pone el marcador de cada plan (LISTA DE PLANES DEL BACKEND).',
+  'engine.plansOverview.composer': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar y escribe la lista: cada plan de plans_overview.plans, en su orden, con su nombre y su precio oficiales. Tu escribes el resto con tus palabras y pones LISTA_DE_PLANES entre dobles llaves, una sola vez, donde va la lista; si no la pones, el backend la pone antes de tu pregunta final. No escribas nombres de plan, cifras ni marcadores que empiecen por PLAN_. Puedes hablar de los planes sin nombrarlos o por su lugar en la lista (el primero, el segundo, el tercero), con sus benefits. Si pregunto ademas otra cosa, respondela tambien; si pidio una recomendacion, va despues de la lista. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con la lista, no pasa de {L} caracteres. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar, los marcadores y el tope general). Si plans_overview no viene, nada de esto aplica.',
+  'engine.plansOverview.composer.marker': 'Cualquier otro marcador hace que el mensaje se rechace, salvo LISTA_DE_PLANES entre dobles llaves cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).',
+  'engine.plansOverview.composer.choose': 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso el backend pone esa lista (LISTA DE PLANES DEL BACKEND).',
+  'engine.plansOverview.composer.price': 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: la lista con nombres y precios la pone el backend (LISTA DE PLANES DEL BACKEND).',
   // Compilador 6 (§B.3, «Compilador 6»): el del revisor sustituye al del 4 y el 5 (que sigue en «Compilador 4» como histórico) y se suma la frase de lo que ya comprueba el backend.
-  'engine.plansOverview.critic': 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.',
-  'engine.plansOverview.critic.checked': 'REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.',
+  // Compilador 8 (§B.3, «Compilador 8»): los dos sustituyen a los del 6, que siguen en «Compilador 6» como históricos.
+  'engine.plansOverview.critic': 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva LISTA_DE_PLANES, o PLAN_1, PLAN_2 o PLAN_3, entre dobles llaves, o la persona pidio los planes o los precios en general y el borrador no nombra planes ni precios, el backend pone ahi, o antes de la pregunta final, la lista con el nombre y el precio oficiales de cada plan elegido, en su orden. Esa lista no la juzgas: juzga solo la prosa. Cuenta como el precio de cada plan: no es invented_plan ni invented_price, no esquiva el precio y no es plantilla, folleto ni exceso de planes. En ese borrador NO son defecto: no preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id, ni cerrar con una pregunta corta para elegir o sin pregunta. Un nombre de plan o una cifra escritos a mano los rechaza el backend.',
+  'engine.plansOverview.critic.checked': 'VEREDICTO EN LA LISTA DE PLANES: si reply_draft entra en LISTA DE PLANES DEL BACKEND (abajo), el registro (tu/usted), la longitud y la lista ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos. En ese borrador es fail con hard_fail solo un incumplimiento real de seguridad, exactitud o politica de HARD_FAIL o de FALLA TAMBIEN (un plan, clase, servicio, beneficio u horario que no esta en active_plans, gym o knowledge_base es invented_class), y fail sin hard_fail solo si deja sin responder una pregunta directa del mensaje. Lo demas es verdict pass, con la mejora en notes.',
 };
 
 /**
@@ -198,12 +213,16 @@ function sustituir(texto, n) {
 
 /** Compilador 4: los textos que tienen que estar escritos DENTRO del apartado «Compilador 4» de §B.3 (el del revisor del motor ya no: lo sustituye el del 6). */
 const DEL_COMPILADOR_4 = ['tone.profesional.composer', 'tone.profesional.critic'];
-/** Compilador 5: los textos del parche del motor del 5 que siguen en el 6, escritos DENTRO del apartado «Compilador 5» de §B.3. */
-const DEL_COMPILADOR_5 = ['engine.plansOverview.strategist.present', 'engine.plansOverview.composer.marker', 'engine.plansOverview.composer.choose'];
-/** Compilador 6: los cinco textos que cambian o se suman, escritos DENTRO del apartado «Compilador 6» de §B.3. */
-const DEL_COMPILADOR_6 = ['engine.plansOverview.composer.ask', 'engine.plansOverview.composer.price', 'engine.plansOverview.composer', 'engine.plansOverview.critic', 'engine.plansOverview.critic.checked'];
-/** Compilador 7: el único texto que cambia (la lista del Strategist), escrito DENTRO del apartado «Compilador 7» de §B.3. */
-const DEL_COMPILADOR_7 = ['engine.plansOverview.strategist'];
+/** Compilador 5: los textos del parche del motor del 5 que siguen vigentes (desde el 8, solo «Presentalo…»), escritos DENTRO del apartado «Compilador 5» de §B.3. */
+const DEL_COMPILADOR_5 = ['engine.plansOverview.strategist.present'];
+/** Compilador 6: los textos del 6 que siguen vigentes (desde el 8, solo el de suggested_question), escritos DENTRO del apartado «Compilador 6» de §B.3. */
+const DEL_COMPILADOR_6 = ['engine.plansOverview.composer.ask'];
+/** Compilador 7: su único texto (la lista del Strategist) lo sustituye el 8; el apartado sigue, como histórico, con su `VERSION = 7`. */
+const DEL_COMPILADOR_7 = [];
+/** Compilador 8: los siete textos del motor que cambian y el tope del redactor con su sufijo, escritos DENTRO del apartado «Compilador 8» de §B.3. */
+const DEL_COMPILADOR_8 = ['engine.plansOverview.strategist', 'engine.plansOverview.composer.marker', 'engine.plansOverview.composer.choose', 'engine.plansOverview.composer.price', 'engine.plansOverview.composer', 'engine.plansOverview.critic', 'engine.plansOverview.critic.checked', 'maxChars.composer'];
+/** Compilador 8, §B.3 «Compilador 8»: el tope de la guía, sin `W`. */
+const FORMULA_LISTA_8 = '`L = max(N, 320)`';
 
 /** Cómo aparece cada texto en el plan (para la comprobación de transcripción): cada marcador, con su letra. */
 const CON_LETRAS = (texto) => texto.split('{N}').join('N').split('{M}').join('M').split('{P}').join('P').split('{F}').join('F').split('{L}').join('L').split('{W}').join('W');
@@ -244,12 +263,21 @@ function comprobarTextosContraElPlan() {
   for (const clave of DEL_COMPILADOR_6) {
     if (!b3.slice(c6).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 6» de §B.3: transcripción equivocada`);
   }
-  // Compilador 7: su apartado, la versión vigente y su texto dentro de él.
+  // Compilador 7: su apartado, con su versión (desde el 8, histórico: ninguno de sus textos sigue vigente).
   const c7 = b3.indexOf('#### Compilador 7');
-  if (c7 < 0 || !b3.slice(c7).includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  if (c7 < 0 || !b3.slice(c7).includes('`UltronPromptCompiler::VERSION = 7`')) throw new Error('§B.3 no tiene el apartado del compilador 7');
   for (const clave of DEL_COMPILADOR_7) {
     if (!b3.slice(c7).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 7» de §B.3: transcripción equivocada`);
   }
+  // Compilador 8: su apartado, la versión vigente, sus ocho textos y la fórmula de L dentro de él; la guía, solo con L.
+  const c8 = b3.indexOf('#### Compilador 8');
+  if (c8 < 0 || !b3.slice(c8).includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  for (const clave of DEL_COMPILADOR_8) {
+    if (!b3.slice(c8).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 8» de §B.3: transcripción equivocada`);
+  }
+  if (!b3.slice(c8).includes(FORMULA_LISTA_8)) throw new Error(`La fórmula ${FORMULA_LISTA_8} no aparece en el apartado «Compilador 8» de §B.3`);
+  const guia = T['engine.plansOverview.composer'];
+  if (guia.split('{L}').length !== 2 || guia.includes('{W}')) throw new Error('La guía del compilador 8 lleva una sola cifra, {L}, y ninguna {W}');
   for (const f of FORMULAS)if (!b3.includes(f)) throw new Error(`La fórmula ${f} no aparece en §B.3: no es la que este guion implementa`);
   // Compilador 6: las fórmulas del tope de la lista y su tabla, dentro de su apartado.
   for (const f of FORMULAS_LISTA) if (!b3.slice(c6).includes(f)) throw new Error(`La fórmula ${f} no aparece en el apartado «Compilador 6» de §B.3`);
@@ -383,7 +411,7 @@ function parches(g) {
       // «Elige el plan…» solo está en la base de Composer.
       if (role === 'composer') pon(ENGINE, true, [role], 'replace', 'elige', 'engine.plansOverview.composer.choose');
       pon(ENGINE, true, [role], 'replace', 'precio', 'engine.plansOverview.composer.price');
-      // Tras la última línea: el texto de la lista queda el último del prompt, con L y W del tope N.
+      // Tras la última línea: el texto de la lista queda el último del prompt, con L del tope N (el 6 y el 7 llevaban también W).
       pon(ENGINE, true, [role], 'insert_after_line', 'finComposer', 'engine.plansOverview.composer', n);
     }
     // En cada revisor, dos inserciones tras su última línea: quedan la frase de lo que comprueba el backend y después LISTA, la última.

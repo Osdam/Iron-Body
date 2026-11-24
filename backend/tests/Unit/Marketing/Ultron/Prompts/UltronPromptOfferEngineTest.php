@@ -54,7 +54,7 @@ class UltronPromptOfferEngineTest extends TestCase
 
         $this->assertSame('studio', $o['response']['mode']);
         $this->assertStringContainsString('LISTA DE PLANES DEL BACKEND:', $o['response']['roles']['composer']);
-        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 7], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]));
+        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 8], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]));
         // Enmienda A4-6 (PT-17b): con el parche del motor va también `k`, el compilador, tras `o`.
         $this->assertSame(['m', 'r', 'h', 'v', 'c', 'e', 's', 'n', 't', 'o', 'k'], array_keys($o['sp']), 'o tras n y t, y k la última');
         $this->assertArrayNotHasKey('o', $o['response'], 'la respuesta a n8n no cambia: solo la firma');

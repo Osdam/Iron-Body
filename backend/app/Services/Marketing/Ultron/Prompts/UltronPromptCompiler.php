@@ -127,6 +127,26 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * pidió y después de la lista). Los redactores, los revisores, las anclas, el orden, el
  * tope de la lista, la base y la huella Legacy no cambian.
  *
+ * VERSIÓN 8 (PT-17, puerta 2, L5; especificación del arquitecto del
+ * 24-11-2026, §2, con los textos que aprobó el propietario ese día, paso H0):
+ * la lista de planes la escribe el backend y el modelo escribe la prosa.
+ * Cambian siete textos del parche del motor y uno gobernado; las anclas, las
+ * operaciones, el orden, las quince entradas, la base y la huella Legacy, no.
+ * El estratega ({@see self::T_PLANS_STRATEGIST}): un `response_goal` sin
+ * cifras, nombres de plan ni marcadores. Los redactores: el marcador, «Elige
+ * el plan…» y el precio ({@see self::T_PLANS_COMPOSER_MARKER},
+ * {@see self::T_PLANS_COMPOSER_CHOOSE} y {@see self::T_PLANS_COMPOSER_PRICE})
+ * y la guía del final ({@see self::T_PLANS_COMPOSER}), que pide la ranura
+ * `LISTA_DE_PLANES` entre dobles llaves (sin ella, el backend pone la lista
+ * antes de la pregunta final) y lleva una sola cifra, `<L>` (se van `<W>` y
+ * «unos 25»). Los revisores: la lista no se juzga, solo la prosa
+ * ({@see self::T_PLANS_CRITIC}), y en ella el registro, la longitud y la lista
+ * los comprueba el backend y solo es `hard_fail` lo de HARD_FAIL y FALLA
+ * TAMBIEN, P-1 A ({@see self::T_PLANS_CRITIC_CHECKED}). El tope gobernado del
+ * redactor ({@see self::T_MAX_COMPOSER}) suma un sufijo: en un turno de lista
+ * no aplica. {@see self::T_PLANS_STRATEGIST_PRESENT} y
+ * {@see self::T_PLANS_COMPOSER_ASK}, igual que en el 7.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -209,9 +229,15 @@ final class UltronPromptCompiler
      * mismas anclas; los redactores y los revisores, byte a byte los del 6.
      * Lo firmado con el 6 (la v4 en canario) cae a Legacy
      * (`compiler_changed`) hasta publicar una versión nueva; la regla «tope
-     * de lista» sigue valiendo (`sp.k` ≥ 6).
+     * de lista» sigue valiendo (`sp.k` ≥ 6). La 8 (PT-17, puerta 2, L5)
+     * cambia siete textos del parche del motor (la lista la escribe el
+     * backend: la guía de los redactores pide la ranura `LISTA_DE_PLANES` y
+     * solo lleva `<L>`) y el del tope del redactor
+     * ({@see self::T_MAX_COMPOSER}, un sufijo); mismas quince entradas, mismas
+     * anclas. Lo firmado con otro compilador cae a Legacy
+     * (`compiler_changed`) hasta publicar una versión nueva.
      */
-    public const VERSION = 7;
+    public const VERSION = 8;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -400,8 +426,11 @@ final class UltronPromptCompiler
      * caracteres…», que queda escrito como histórico en §B.3): en la prueba
      * real del 12-11-2026 el redactor superó el tope de 200 en 4 de 5
      * borradores. Pendiente de la aprobación del propietario (HUMAN GATE 4-A).
+     * Compilador 8 (PT-17, puerta 2, L5): suma un sufijo tras «…ofrece
+     * ampliar.»; en un turno de lista este tope no aplica y manda la longitud
+     * de la guía de la lista ({@see self::T_PLANS_COMPOSER}), que va al final.
      */
-    private const T_MAX_COMPOSER = 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.';
+    private const T_MAX_COMPOSER = 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar. Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.';
 
     private const T_MAX_CRITIC_900 = 'mas de ~{N} caracteres';
 
@@ -471,23 +500,35 @@ final class UltronPromptCompiler
     //    revisor, igual que en el 6, byte a byte. Ninguna cifra del catálogo
     //    (el 160 es el tope de `response_goal` del commit).
 
-    private const T_PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. PLAN_k es la posicion k de plans_overview.plans, no el plan de id k. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras y en menos de 160 caracteres: se presentan los planes de plans_overview, cada uno con su marcador y un beneficio tal como esta en sus benefits, sin cambiarle el sentido; se contesta tambien lo demas que pregunto en ese mensaje, nombrandolo; y cabe una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
+    //    Compilador 8 (PT-17, puerta 2, L5; textos aprobados por el
+    //    propietario el 24-11-2026, paso H0, copiados byte a byte): la lista la
+    //    escribe el backend. SUSTITUYEN a los del 7 (que quedan escritos como
+    //    históricos en §B.3) el del estratega (el `response_goal`, sin nombres
+    //    de plan ni marcadores; ya no explica `PLAN_k`), el del marcador, el de
+    //    «Elige el plan…», el del precio, la guía del redactor (la ranura
+    //    `LISTA_DE_PLANES` entre dobles llaves y una sola cifra, `<L>`), el del
+    //    revisor (juzga solo la prosa) y la frase de lo que comprueba el
+    //    backend (con el veredicto de P-1 A: `hard_fail` solo para HARD_FAIL y
+    //    FALLA TAMBIEN). El de «Presentalo…» y el de `suggested_question`, igual.
+    //    Ninguna cifra del catálogo: la guía, solo `<L>`; el estratega, el 160.
+
+    private const T_PLANS_STRATEGIST = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend decidio responder con esa lista, que escribe el backend con el nombre y el precio de cada plan, en su orden. En ese turno esto manda sobre las reglas de este apartado, la lista de next_best_action, resolved_reference y strategy_hints (suggested_question, should_recommend_now): el turno RESPONDE con la lista entera; no descubre; una recomendacion no sustituye la lista: solo si se pidio, va tras ella. Entonces next_best_action answer (de allowed_next_actions), conversation_goal recommend, recommendation_goal compare_plans, information_needed [] y recommended_plan_id el que digan las reglas de abajo (nunca null), solo como referencia del contrato: se destaca solo si se pidio. response_goal con tus palabras, sin cifras ni nombres de plan y en menos de 160 caracteres: que va la lista de planes del backend, lo demas que pregunto en ese mensaje, nombrandolo, y, si cabe, una pregunta breve para elegir. Si plans_overview no viene, nada de esto aplica.';
 
     private const T_PLANS_STRATEGIST_PRESENT = 'Presentalo con dos o tres beneficios reales, nunca con adjetivos; si commercial_turn_policy.plans_overview trae planes, no: manda LISTA DE PLANES DEL BACKEND.';
 
-    private const T_PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de <L> caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas <W> palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.';
+    private const T_PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar y escribe la lista: cada plan de plans_overview.plans, en su orden, con su nombre y su precio oficiales. Tu escribes el resto con tus palabras y pones LISTA_DE_PLANES entre dobles llaves, una sola vez, donde va la lista; si no la pones, el backend la pone antes de tu pregunta final. No escribas nombres de plan, cifras ni marcadores que empiecen por PLAN_. Puedes hablar de los planes sin nombrarlos o por su lugar en la lista (el primero, el segundo, el tercero), con sus benefits. Si pregunto ademas otra cosa, respondela tambien; si pidio una recomendacion, va despues de la lista. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con la lista, no pasa de <L> caracteres. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar, los marcadores y el tope general). Si plans_overview no viene, nada de esto aplica.';
 
     private const T_PLANS_COMPOSER_ASK = 'Si vas a preguntar, usa suggested_question cuando venga, nunca si commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND):';
 
-    private const T_PLANS_COMPOSER_MARKER = 'Cualquier otro marcador hace que el mensaje se rechace, salvo PLAN_1 a PLAN_3 cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
+    private const T_PLANS_COMPOSER_MARKER = 'Cualquier otro marcador hace que el mensaje se rechace, salvo LISTA_DE_PLANES entre dobles llaves cuando commercial_turn_policy.plans_overview trae planes (LISTA DE PLANES DEL BACKEND).';
 
-    private const T_PLANS_COMPOSER_CHOOSE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso das esa lista (LISTA DE PLANES DEL BACKEND).';
+    private const T_PLANS_COMPOSER_CHOOSE = 'Elige el plan que mejor encaje, di su nombre y su precio con los marcadores, y si quieres pregunta despues; si commercial_turn_policy.plans_overview trae planes, en vez de eso el backend pone esa lista (LISTA DE PLANES DEL BACKEND).';
 
-    private const T_PLANS_COMPOSER_PRICE = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: los pone el marcador de cada plan (LISTA DE PLANES DEL BACKEND).';
+    private const T_PLANS_COMPOSER_PRICE = 'el precio solo del que se cotiza o, si commercial_turn_policy.plans_overview trae planes, ni nombres ni precios a mano: la lista con nombres y precios la pone el backend (LISTA DE PLANES DEL BACKEND).';
 
-    private const T_PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.';
+    private const T_PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva LISTA_DE_PLANES, o PLAN_1, PLAN_2 o PLAN_3, entre dobles llaves, o la persona pidio los planes o los precios en general y el borrador no nombra planes ni precios, el backend pone ahi, o antes de la pregunta final, la lista con el nombre y el precio oficiales de cada plan elegido, en su orden. Esa lista no la juzgas: juzga solo la prosa. Cuenta como el precio de cada plan: no es invented_plan ni invented_price, no esquiva el precio y no es plantilla, folleto ni exceso de planes. En ese borrador NO son defecto: no preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id, ni cerrar con una pregunta corta para elegir o sin pregunta. Un nombre de plan o una cifra escritos a mano los rechaza el backend.';
 
-    private const T_PLANS_CRITIC_CHECKED = 'REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.';
+    private const T_PLANS_CRITIC_CHECKED = 'VEREDICTO EN LA LISTA DE PLANES: si reply_draft entra en LISTA DE PLANES DEL BACKEND (abajo), el registro (tu/usted), la longitud y la lista ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos. En ese borrador es fail con hard_fail solo un incumplimiento real de seguridad, exactitud o politica de HARD_FAIL o de FALLA TAMBIEN (un plan, clase, servicio, beneficio u horario que no esta en active_plans, gym o knowledge_base es invented_class), y fail sin hard_fail solo si deja sin responder una pregunta directa del mensaje. Lo demas es verdict pass, con la mejora en notes.';
 
     /**
      * Las anclas, para rechazar una frase que contenga alguna (la unicidad no
@@ -774,7 +815,8 @@ final class UltronPromptCompiler
     }
 
     // ── El tope de la lista de planes (compilador 6; plan §B.3, «Compilador 6») ─
-    //    Enteros: 160, 200 y 320 → 320 y 35; 480 → 480 y 60.
+    //    Enteros: 160, 200 y 320 → 320 y 35; 480 → 480 y 60. Desde el
+    //    compilador 8 la guía solo lleva L (§B.3, «Compilador 8»).
 
     /**
      * `<L>` del texto de la lista del redactor ({@see self::T_PLANS_COMPOSER}):
@@ -793,6 +835,10 @@ final class UltronPromptCompiler
      * `<W>`: las palabras del redactor fuera de los marcadores con ese tope,
      * (L − 110) / 6 de cinco en cinco por abajo (unos 25 caracteres por cada
      * marcador ya expandido y unas seis letras por palabra).
+     *
+     * SIN USO desde el compilador 8: la guía ya no lleva `<W>` (la lista la
+     * escribe el backend, así que no hay marcadores que descontar). Se queda
+     * como histórico de §B.3, «Compilador 6»; no se borra.
      */
     public static function plansListWords(int $maxChars): int
     {
@@ -883,7 +929,7 @@ final class UltronPromptCompiler
     /**
      * Los parches del motor ({@see self::ENGINE}), en el orden de la tabla de
      * §2 del diseño de PT-17b (compilador 6): el estratega, como en el 5
-     * (inserción tras `QUE PLAN SE COTIZA`, con el texto del 7, y sustitución
+     * (inserción tras `QUE PLAN SE COTIZA`, con el texto del 8, y sustitución
      * de «Presentalo…»);
      * el redactor (sustituciones de la frase de `suggested_question`, de
      * «Cualquier otro marcador…», de «Elige el plan…» y de «el precio solo del
@@ -893,20 +939,16 @@ final class UltronPromptCompiler
      * inserciones tras su última línea (la lista y la frase de lo que ya
      * comprueba el backend: quedan en orden inverso, esa frase y después
      * LISTA, la última). Cada ancla, una vez en su rol de la base; en un
-     * revisor, el motor solo inserta. El texto de la lista del redactor lleva
-     * `<L>` y `<W>`, que salen del tope gobernado
-     * ({@see self::plansListChars()} y {@see self::plansListWords()}; son
-     * cifras: ninguna sustitución pisa a otra).
+     * revisor, el motor solo inserta. Desde el compilador 8, el texto de la
+     * lista del redactor solo lleva `<L>`, que sale del tope gobernado
+     * ({@see self::plansListChars()}: L = max(N, 320)); `<W>` ya no
+     * ({@see self::plansListWords()} queda sin uso).
      *
      * @return list<array{0:string,1:string,2:string,3:string}> [rol, operación, ancla, texto]
      */
     private static function enginePatches(int $maxChars): array
     {
-        $lista = str_replace(
-            ['<L>', '<W>'],
-            [(string) self::plansListChars($maxChars), (string) self::plansListWords($maxChars)],
-            self::T_PLANS_COMPOSER,
-        );
+        $lista = str_replace('<L>', (string) self::plansListChars($maxChars), self::T_PLANS_COMPOSER);
 
         return [
             ['strategist', self::INSERT_AFTER_LINE, self::A_COTIZA, self::T_PLANS_STRATEGIST],

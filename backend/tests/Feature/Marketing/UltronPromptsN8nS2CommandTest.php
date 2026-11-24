@@ -68,16 +68,17 @@ class UltronPromptsN8nS2CommandTest extends TestCase
      * el selector, las operaciones y «Preparar Commit», no. Compilador 6
      * (Enmienda A4-6, PT-17b): igual, los mismos cinco ficheros. Compilador 7
      * (Enmienda A4-7, PT-17c, solo el texto del estratega): igual, los mismos
-     * cinco ficheros.
+     * cinco ficheros. Compilador 8 (PT-17, puerta 2): igual, los mismos cinco
+     * ficheros.
      */
     private const S1_ANTES = [
-        'LEEME.md' => 'c8210b8b91376a9bfa83b2f28f65e0526959b0e5fa68334f7e169c3e3c60a694',
+        'LEEME.md' => '2fb52a74e12363d4ec100377c238d9acc491dc324a700c482b21c95971c17aa8',
         'elegir-prompts.js' => 'fec89513389e0272a9ab664eccea9ca7b514620ab3fc35a9183635dec9997d10',
-        'fixtures/decide-legacy.json' => '59770ca3c87c6c087adfd33459c5665dd36ddad51b0807b2727d6d5d610f1e8b',
-        'fixtures/decide-studio-frases.json' => '9ebc88765d7e6cbfe1c893809d5d70b8a3900713bd7fd398eae097a097634b71',
-        'fixtures/decide-studio.json' => '0b06919f8deca27144a617cd7cde765506f964ca417d762edbfa110ad1f57d01',
-        'flujo-s1.json' => '69ae49b0e2b5c9871c8e40541ebc4f8002fd8ca67e2440d28f0d668c5e454a68',
-        'huellas.json' => 'd5188efae112d3463c441b5499e51464aa0e530dc9a17684a2838782997d4ba2',
+        'fixtures/decide-legacy.json' => 'cd2ffc8833861413e8225cce82296a92a60057f5bc224dfcc3f740230944adbe',
+        'fixtures/decide-studio-frases.json' => '3e33b92f3eece68b8d4efbc92a2406f140c094a737fb155cff1cb45266794c7e',
+        'fixtures/decide-studio.json' => 'f2315699e02113ae576504c87299cbb9b78b45ca440017d74dd2e73b2dd1ceec',
+        'flujo-s1.json' => '504ea2898a17b157a309dfb2441e242d16fc3c4cd3273ae62c96999a034fda9a',
+        'huellas.json' => 'db3e9eefef3c1d8f9879a8f07a9336e7eb2bdc0bc2ad02dc000b195281285f08',
         'operaciones-mcp.json' => '1e1aca5a7523d17e2cd07192aa70415348aa5996cf9f952899ee4fd2bb491cdc',
         'preparar-commit.js' => '876a3f6a8c50447526a321c7d7ff391c447e09e3a22dc442f7c008e520ac8b45',
     ];
