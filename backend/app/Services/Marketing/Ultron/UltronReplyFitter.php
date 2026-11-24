@@ -444,16 +444,26 @@ final class UltronReplyFitter
      * el plan 3, la pregunta, el plan 2. Sin tope, todo. Null si ni el
      * encabezado con el primer plan caben.
      *
+     * ENTERA (`$whole`; PT-17, puerta 2, L1, comprobación 3 del propietario:
+     * con la lista del servidor, «sale la lista fija entera, nunca una lista
+     * parcial»): todos los planes son obligatorios; solo se sueltan
+     * «También hay…» y, después, la pregunta. Null si ni así cabe.
+     *
      * @param  string[]  $items  «Nombre, $precio» (uno a tres)
+     * @param  bool  $whole  la lista entera o nada
      * @return array{items:int, also:bool, question:bool}|null
      */
-    public static function pricingLayout(string $header, array $items, ?string $also, string $question, ?int $cap): ?array
+    public static function pricingLayout(string $header, array $items, ?string $also, string $question, ?int $cap, bool $whole = false): ?array
     {
         $n = count($items);
         if ($n === 0) {
             return null;
         }
-        $candidatos = [
+        $candidatos = $whole ? [
+            ['items' => $n, 'also' => $also !== null, 'question' => true],
+            ['items' => $n, 'also' => false, 'question' => true],
+            ['items' => $n, 'also' => false, 'question' => false],
+        ] : [
             ['items' => $n, 'also' => $also !== null, 'question' => true],
             ['items' => $n, 'also' => false, 'question' => true],
             ['items' => min($n, 2), 'also' => false, 'question' => true],

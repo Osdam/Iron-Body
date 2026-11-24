@@ -254,9 +254,21 @@ class UltronCheckCommitParityTest extends TestCase
             'nombre a mano' => [self::PANORAMA, $precio, 'Claro. Tenemos el Plan Valera {{PLAN_1}} y {{PLAN_2}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
             'marcador inexistente' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
             'cifra escrita' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}} desde $50.000. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
-            'beneficio de otro plan' => [self::PANORAMA, $precio, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál le interesa?', null, [], true, ['benefit_misattributed']],
-            'beneficio en su plan' => [self::PANORAMA, $precio, 'Claro. {{PLAN_3}} incluye entrenador personal dedicado. También tenemos {{PLAN_1}}. ¿Cuál le interesa?', null, [], true, []],
-            'beneficio de otro plan y tuteo' => [self::PANORAMA, $precio, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál te interesa?', null, [], true, ['register_tuteo', 'benefit_misattributed']],
+            // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres no vale (forma A estricta): los del beneficio llevan la lista entera, en orden, para aislar su causa.
+            'beneficio de otro plan' => [self::PANORAMA, $precio, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}} y {{PLAN_3}}. ¿Cuál le interesa?', null, [], true, ['benefit_misattributed']],
+            'beneficio en su plan' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. {{PLAN_3}} incluye entrenador personal dedicado. ¿Cuál le interesa?', null, [], true, []],
+            'beneficio de otro plan y tuteo' => [self::PANORAMA, $precio, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}} y {{PLAN_3}}. ¿Cuál te interesa?', null, [], true, ['register_tuteo', 'benefit_misattributed']],
+            // PT-17, puerta 2, L1 (la lista la compone Laravel, k ≥ 8): la forma B, la A estricta y la ranura fuera de su turno.
+            'forma B con la ranura' => [self::PANORAMA, $precio, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], false, []],
+            'forma B sin ranura' => [self::PANORAMA, $precio, 'Claro, con gusto. Todos incluyen acceso total al gimnasio. ¿Cuál le interesa más?', null, [], false, []],
+            'forma B que tutea' => [self::PANORAMA, $precio, 'Claro, con gusto. Te comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál te interesa más?', null, [], false, ['register_tuteo']],
+            'forma B que se pasa con la lista dentro' => [self::PANORAMA, $precio, 'Claro, con gusto le cuento. Estos son nuestros planes: {{LISTA_DE_PLANES}}. Todos incluyen acceso a la zona de pesas, a la de cardio y a los vestidores, y puede venir en el horario que mejor le quede durante toda la semana, con el acompañamiento del equipo desde el primer día. ¿Cuál le interesa más?', null, [], false, ['length_over_cap']],
+            'forma B con un nombre a mano' => [self::PANORAMA, $precio, 'Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
+            'forma A con dos de tres' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
+            'forma A fuera de orden' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_2}}, {{PLAN_1}} y {{PLAN_3}}, todos de un mes. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
+            'A y B a la vez' => [self::PANORAMA, $precio, 'Claro. Le comparto {{LISTA_DE_PLANES}}; el más pedido es {{PLAN_1}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
+            'la ranura en un turno de cobro' => [self::PANORAMA, SalesIntents::PAYMENT_LINK_REQUEST, 'Claro. Le comparto {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
+            'la ranura sin lista' => [self::HORARIO, $horario, 'El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. Y estos son los planes: {{LISTA_DE_PLANES}}. ¿Le sirve?', null, [], false, ['plans_overview']],
             // Decisión del lead: un marcador que no es de la lista, siempre (con herramientas; sin pedir el precio).
             'marcador inexistente con herramientas' => [self::PANORAMA, $precio, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. Le dejo también los enlaces de la app.', null, ['app_links_send'], false, ['plans_overview']],
             'marcador inexistente sin pedir el precio' => [self::MEMBRESIAS, SalesIntents::GENERAL_INFO, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [], false, ['plans_overview']],
@@ -495,7 +507,8 @@ class UltronCheckCommitParityTest extends TestCase
         $causas = [];
         if ($r->status() === 422) {
             $codigo = (string) $r->json('code');
-            if ($codigo === 'unknown_placeholder' && preg_grep('/^PLAN_/i', (array) $r->json('detail.unknown')) !== []) {
+            // PT-17, puerta 2, L1: la ranura de la lista fuera de su turno (o con otra caja) también es de la lista.
+            if ($codigo === 'unknown_placeholder' && preg_grep('/^(PLAN_|LISTA_DE_PLANES$)/i', (array) $r->json('detail.unknown')) !== []) {
                 $causas[] = UltronRegenerationNotes::PLANS_OVERVIEW;
             }
             // Una cifra escrita: el guard de contenido o el validador la tumban siempre; con la lista, es del panorama (`price_written`).

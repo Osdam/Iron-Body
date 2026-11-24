@@ -6,27 +6,27 @@ Todo esto existe solo con la versión del Studio aplicada; sin ella (Legacy) no 
 
 ## 1. Las instrucciones del parche del motor
 
-Salen en el paquete de prompts de toda versión del Studio que gobierna algún parámetro (con la línea base no hay parches y no salen), al final de los parches. Le enseñan al redactor a escribir la lista de planes con los marcadores, y al revisor a no tumbarla por «no lleva el marcador de precio». La lista solo viene cuando la persona pide los planes o los precios en general.
+Salen en el paquete de prompts de toda versión del Studio que gobierna algún parámetro (con la línea base no hay parches y no salen), al final de los parches. Con el compilador 8 (PT-17, puerta 2) le dicen al redactor que la lista la escribe el backend: él pone la ranura LISTA_DE_PLANES entre dobles llaves donde va la lista, o nada y el backend la pone antes de su pregunta final; y al revisor, que esa lista no la juzga. La lista solo viene cuando la persona pide los planes o los precios en general.
 
-Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista) y <W> = (L − 110) / 6 palabras, de cinco en cinco por abajo: con un tope de 200, 320 y 35.
+Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista): con un tope de 200, 320. Desde el compilador 8 es su única cifra.
 
 ### Al redactor (`T_PLANS_COMPOSER`)
 
 Va en `composer` y en `composer_retry`, en la línea siguiente a la última de la base (`price_verification true significa…`): la última del prompt.
 
-> LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar. Presentalos con tus palabras, en una o dos frases naturales: cada plan con su marcador PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves (el de su posicion en plans_overview.plans, una sola vez) y un beneficio breve tomado de sus benefits. El backend cambia cada marcador por el nombre y el precio oficiales: no escribas nombres de plan, ni cifras, ni PLAN_NAME ni PLAN_PRICE. Si la persona pregunto ademas otra cosa, respondela tambien en este mensaje. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con nombres y precios, no pasa de <L> caracteres; cada marcador ocupara unos 25, asi que escribe como mucho unas <W> palabras tuyas. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar y el tope general). Si plans_overview no viene, nada de esto aplica.
+> LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios y el backend ya eligio cuales mostrar y escribe la lista: cada plan de plans_overview.plans, en su orden, con su nombre y su precio oficiales. Tu escribes el resto con tus palabras y pones LISTA_DE_PLANES entre dobles llaves, una sola vez, donde va la lista; si no la pones, el backend la pone antes de tu pregunta final. No escribas nombres de plan, cifras ni marcadores que empiecen por PLAN_. Puedes hablar de los planes sin nombrarlos o por su lugar en la lista (el primero, el segundo, el tercero), con sus benefits. Si pregunto ademas otra cosa, respondela tambien; si pidio una recomendacion, va despues de la lista. Puedes abrir con una frase corta y cerrar con UNA pregunta breve que ayude a elegir o a avanzar; suggested_question no es obligatoria aqui. LONGITUD DE ESTE TURNO: el mensaje completo, ya con la lista, no pasa de <L> caracteres. En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar, los marcadores y el tope general). Si plans_overview no viene, nada de esto aplica.
 
 ### Al revisor (`T_PLANS_CRITIC`)
 
 Va en `critic` y en `critic_retry`, la última línea del prompt (tras `Si el borrador explica POR QUE la persona vio otro precio…` y la de abajo).
 
-> LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, la persona pidio los planes o los precios y el backend eligio esos planes; cada marcador pone el nombre y el precio reales. En ese borrador NO son defecto: dar dos o tres planes en una frase con un beneficio corto de cada uno, que es la forma pedida y no plantilla ni folleto (naturalness, progressive_disclosure); darlos sin preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id (sales_judgment, phase_alignment, TECNICA, ni customer_fit por la fase); cerrar con una pregunta corta para elegir, con una sola pregunta aunque lleve una o, o sin pregunta (next_step, question_discipline); su longitud, que el backend mide con los marcadores ya sustituidos. No es invented_plan ni invented_price ni esquiva el precio. Todo lo demas falla como siempre: un nombre o una cifra escritos a mano, un beneficio que no esta en active_plans, mas de una pregunta, y cada regla de FALLA TAMBIEN y de HARD_FAIL.
+> LISTA DE PLANES DEL BACKEND (va al final porque manda sobre todo lo anterior): si reply_draft lleva LISTA_DE_PLANES, o PLAN_1, PLAN_2 o PLAN_3, entre dobles llaves, o la persona pidio los planes o los precios en general y el borrador no nombra planes ni precios, el backend pone ahi, o antes de la pregunta final, la lista con el nombre y el precio oficiales de cada plan elegido, en su orden. Esa lista no la juzgas: juzga solo la prosa. Cuenta como el precio de cada plan: no es invented_plan ni invented_price, no esquiva el precio y no es plantilla, folleto ni exceso de planes. En ese borrador NO son defecto: no preguntar antes objetivo, experiencia u horario, aunque la fase sea NEW_LEAD o DISCOVERY o la estrategia traiga recommended_plan_id, ni cerrar con una pregunta corta para elegir o sin pregunta. Un nombre de plan o una cifra escritos a mano los rechaza el backend.
 
 ### Al revisor, lo que ya comprueba el backend (`T_PLANS_CRITIC_CHECKED`)
 
 Va en `critic` y en `critic_retry`, en la línea siguiente a la última de la base (`Si el borrador explica POR QUE la persona vio otro precio…`), justo antes de la de arriba.
 
-> REGISTRO Y LONGITUD EN LA LISTA DE PLANES: si reply_draft lleva PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves, el registro (tu/usted) y la longitud ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos.
+> VEREDICTO EN LA LISTA DE PLANES: si reply_draft entra en LISTA DE PLANES DEL BACKEND (abajo), el registro (tu/usted), la longitud y la lista ya los comprueba el backend de forma determinista: no falles, no bajes naturalness ni los menciones en notes por ellos. En ese borrador es fail con hard_fail solo un incumplimiento real de seguridad, exactitud o politica de HARD_FAIL o de FALLA TAMBIEN (un plan, clase, servicio, beneficio u horario que no esta en active_plans, gym o knowledge_base es invented_class), y fail sin hard_fail solo si deja sin responder una pregunta directa del mensaje. Lo demas es verdict pass, con la mejora en notes.
 
 ## 2. Las notas de reescritura
 
@@ -130,7 +130,7 @@ Entre llaves, en la plantilla, lo que rellena el servidor; debajo, un ejemplo ya
 
 ## 2 bis. Con la lista y el tope: el esqueleto y el presupuesto
 
-Cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. K es cuántos planes tiene la lista; X, lo que miden juntos sus marcadores ya expandidos (el servidor lo calcula con el catálogo de ese momento; el modelo nunca ve un precio); M, lo que se le pide al redactor; R = M − X, lo que le queda para todo lo demás. Sin tope, o sin lista, salen las de arriba tal cual. El código y el `issue` son los de la nota de arriba. El ejemplo es el turno 2 de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200).
+Con los marcadores (compilador 7 o anterior; con el 8, las de §2 ter), cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. K es cuántos planes tiene la lista; X, lo que miden juntos sus marcadores ya expandidos (el servidor lo calcula con el catálogo de ese momento; el modelo nunca ve un precio); M, lo que se le pide al redactor; R = M − X, lo que le queda para todo lo demás. Sin tope, o sin lista, salen las de arriba tal cual. El código y el `issue` son los de la nota de arriba. El ejemplo es el turno 2 de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200).
 
 ### 2 bis.1 La longitud, con la lista (`length_over_cap`, `progressive_disclosure`)
 
@@ -153,6 +153,55 @@ Cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas 
 - **Plantilla:** «MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_{K} entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan {X} caracteres: quedan {R} de {M}.»
 - **Texto** (228 caracteres): «MARCADOR REPETIDO O MEZCLADO: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME, PLAN_PRICE ni PLAN_DURATION. Ya expandidos ocupan 71 caracteres: quedan 89 de 160.»
 
+## 2 ter. Con la lista del servidor (compilador 8)
+
+Con el compilador 8 la lista la compone Laravel (PT-17, puerta 2, L1): el redactor ya no ve marcadores de plan, y las seis notas de la lista y la de la longitud de un mensaje con la lista salen en esta variante en lugar de las de arriba, con el mismo código y el mismo `issue`. Hablan de la ranura LISTA_DE_PLANES (en palabras: una nota no lleva llaves). N es el tope de la lista del turno; X, lo que mide la lista que compone Laravel con el catálogo de ese momento (el modelo nunca ve un precio); R = N − X, lo que le queda a la prosa (nunca menos de 0); L, lo que mide el mensaje con la lista puesta. El ejemplo es el de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200, así que el de la lista es 320): X = 75 y R = 245.
+
+### 2 ter.1 La lista del servidor: falta la lista (`plans_overview/missing`, `relevance`)
+
+**Cuándo sale:** con la lista del servidor, cuando el borrador cotiza un plan con PLAN_NAME, PLAN_PRICE o PLAN_DURATION en vez de dejar la lista, o cuando con los marcadores PLAN_1 a PLAN_3 no pone todos los de la lista.
+
+- **Plantilla:** «FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa {X} de {N} caracteres: tu texto, como mucho {R}.»
+- **Texto** (266 caracteres): «FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.»
+
+### 2 ter.2 La lista del servidor: las dos formas mezcladas (`plans_overview/mixed`, `relevance`)
+
+**Cuándo sale:** con la lista del servidor, cuando el borrador pone la ranura y además marcadores PLAN_, la repite, la junta con PLAN_NAME, PLAN_PRICE o PLAN_DURATION o la escribe sin sus dos llaves; cuando pone los marcadores PLAN_1 a PLAN_3 fuera de su orden o repetidos; o cuando, por lo demás bien, deja restos con forma de marcador (PLAN_1 sin llaves, una sola llave).
+
+- **Plantilla:** «MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa {X} de {N} caracteres: tu texto, como mucho {R}.»
+- **Texto** (229 caracteres): «MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.»
+
+### 2 ter.3 La lista del servidor: el nombre escrito a mano (`plans_overview/name_written`, `relevance`)
+
+**Cuándo sale:** con la lista del servidor, cuando el borrador escribe a mano el nombre de un plan de la lista (el backend ya lo pone en la lista, con su precio).
+
+- **Texto** (196 caracteres): «NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero).»
+
+### 2 ter.4 La lista del servidor: un marcador que no existe (`plans_overview/unknown_marker`, `relevance`)
+
+**Cuándo sale:** con la lista del servidor, cuando el borrador escribe la ranura con otra caja (en minúsculas) o un PLAN_k que no es de la lista.
+
+- **Texto** (142 caracteres): «MARCADOR INEXISTENTE: en este turno la lista se pide con LISTA_DE_PLANES entre dobles llaves, en mayusculas; no uses otros marcadores de plan.»
+
+### 2 ter.5 La lista del servidor: la ranura sin lista (`plans_overview/no_list`, `relevance`)
+
+**Cuándo sale:** con el compilador 8, en un turno sin lista (no se ofreció, o es un turno de cobro), cuando el borrador usa la ranura, una variante suya o PLAN_1 a PLAN_3. En el commit, la ranura fuera de su turno es un marcador desconocido (422).
+
+- **Texto** (150 caracteres): «SIN LISTA DE PLANES: en este turno no uses LISTA_DE_PLANES ni marcadores PLAN_ con numero. Para un precio usa PLAN_PRICE con el plan de la estrategia.»
+
+### 2 ter.6 La lista del servidor: una cifra escrita (`plans_overview/price_written`, `factuality`)
+
+**Cuándo sale:** con la lista del servidor, cuando el borrador escribe una cifra o un precio (los pone el backend en la lista).
+
+- **Texto** (93 caracteres): «SIN CIFRAS: no escribas precios ni cifras de dinero; el backend pone los precios en la lista.»
+
+### 2 ter.7 La longitud, con la lista del servidor (`length_over_cap`, `progressive_disclosure`)
+
+**Cuándo sale:** con la lista del servidor, cuando el mensaje con la lista ya puesta pasa del tope de la lista del turno: pide acortar la prosa, nunca quitar planes. Si el último borrador sigue sin caber, sale la lista fija entera.
+
+- **Plantilla:** «DEMASIADO LARGO: con la lista mide {L} caracteres y el limite de este turno es {N}. La lista ya ocupa {X}: tu texto, como mucho {R}. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.»
+- **Texto** (221 caracteres): «DEMASIADO LARGO: con la lista mide 339 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.»
+
 ## 3. La expansión de la lista (lo que lee la persona)
 
 Cuando el borrador nombra los planes de la lista con sus marcadores (`{{PLAN_1}}` a `{{PLAN_3}}`), el commit sustituye cada uno por el nombre y el precio del plan leídos del catálogo en ese momento. Si el plan es de un mes (28 a 31 días), sin duración; si no, con la duración en las palabras de la lista fija («7 días», «tres meses», «un año»…) y «1 día» en singular. El nombre sale sin llaves (si alguien escribe una en el CRM, no se convierte en un marcador), y si lo que sale tiene aún forma de marcador, no sale: va el último recurso de siempre.
@@ -162,3 +211,8 @@ Cuando el borrador nombra los planes de la lista con sus marcadores (`{{PLAN_1}}
 - 1 día: «PLAN DÍA (1 día, $10.000 COP)»
 
 Un borrador entero, «Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}. ¿Cuál le interesa más?», sale así (131 caracteres): «Claro. Tenemos Plan Valera ($65.000 COP), Plan Semana (7 días, $45.000 COP) y PLAN DÍA (1 día, $10.000 COP). ¿Cuál le interesa más?»
+
+Con el compilador 8 la lista la compone Laravel: el borrador lleva la ranura `{{LISTA_DE_PLANES}}` o nada, y el commit pone la lista ENTERA, con todos los planes de la lista firmada, en su orden y unidos por «; », con el nombre y el precio leídos del catálogo en ese momento. Va en la ranura o, sin ella, en una frase propia justo antes de la pregunta final (o al final), con el encabezado de la lista fija sin «Claro. »: «Planes de un mes: », «Algunos planes de un mes: », «Nuestros planes: » o «Algunos de nuestros planes: ». Las frases del modelo no se tocan. Si un plan de la lista ya no se vende, no sale una lista a medias: sale la lista fija del catálogo de ese momento, entera.
+
+- Con la ranura, «Claro, con gusto. Estos son: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?» sale así (144 caracteres): «Claro, con gusto. Estos son: Plan Valera ($65.000 COP); Plan Semana (7 días, $45.000 COP); PLAN DÍA (1 día, $10.000 COP). ¿Cuál le interesa más?»
+- Sin ranura, «Claro, con gusto. ¿Cuál le interesa más?» sale así (150 caracteres): «Claro, con gusto. Nuestros planes: Plan Valera ($65.000 COP); Plan Semana (7 días, $45.000 COP); PLAN DÍA (1 día, $10.000 COP). ¿Cuál le interesa más?»

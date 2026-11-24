@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesIntents;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
 use InvalidArgumentException;
 
 /**
@@ -38,6 +39,19 @@ use InvalidArgumentException;
  * La llaman `decide` (la lista que ve el modelo, firmada en `po`), el commit
  * (expandirla y juzgarla), la comprobación `ai/check` (medirla y señalar sus
  * defectos) y `respaldoDePrecios()` (su selección).
+ *
+ * LA LISTA LA COMPONE LARAVEL (PT-17, puerta 2, L1; decisiones P-2 A y
+ * «Ranura A» del propietario, 24-11-2026). Con el compilador 8 (`sp.k` ≥ 8,
+ * {@see self::serverList()}) el modelo ya no escribe la lista: escribe la
+ * prosa y marca con la ranura `{{LISTA_DE_PLANES}}` dónde va (forma B), o no
+ * la marca y el servidor la pone antes de la pregunta final. La lista sale
+ * entera, en el orden firmado de `po`, con los nombres y los precios de las
+ * filas de `Plan` leídas en ese momento ({@see self::compose()},
+ * {@see self::place()} y {@see self::render()}, el único punto que usan
+ * `ai/check`, el commit y el laboratorio). La forma A (`{{PLAN_k}}`) sigue
+ * valiendo, pero estricta: todos los planes y en su orden
+ * ({@see self::verify()}). Legacy y los tokens de antes (`k` ≤ 7) no entran
+ * en nada de esto.
  *
  * PURA: sin base de datos, sin config, sin reloj y sin log. El catálogo
  * (`activePlans()`) y los `Plan` los pasa quien llama. Sin `\p{…}` en las
@@ -81,6 +95,69 @@ final class UltronPlansOverview
     public const PRICE_WRITTEN = 'price_written';
 
     public const DETAILS = [self::MISSING, self::MIXED, self::NAME_WRITTEN, self::UNKNOWN_MARKER, self::NO_LIST, self::PRICE_WRITTEN];
+
+    // ── La lista que compone Laravel (PT-17, puerta 2, L1) ─────────────────
+
+    /**
+     * LA RANURA (forma B): `{{LISTA_DE_PLANES}}`, con esta caja exacta y una
+     * sola vez. La admite la lista blanca de marcadores solo en un turno con
+     * la lista y con `k` ≥ {@see self::SERVER_LIST_SINCE_COMPILER}
+     * (`UltronDraftPlaceholders::allowed()`); fuera de ese turno es un 422.
+     */
+    public const SLOT = 'LISTA_DE_PLANES';
+
+    /** Desde qué compilador (`sp.k`) la lista la compone Laravel ({@see self::serverList()}). */
+    public const SERVER_LIST_SINCE_COMPILER = 8;
+
+    /** Forma A: la lista con sus marcadores `{{PLAN_k}}`. */
+    public const SHAPE_MARKERS = 'markers';
+
+    /** Forma B: la ranura, o ninguna marca de lista. */
+    public const SHAPE_SERVER = 'server';
+
+    /** El separador de la lista: el de la lista fija (`UltronReplyFitter::composePricing()`). */
+    public const SEPARATOR = '; ';
+
+    /*
+     * Los encabezados de la lista fija (`UltronCommitService::respaldoDePrecios()`)
+     * sin «Claro. », aprobados por el propietario (H0): con ellos empieza la
+     * frase de la lista que el servidor pone sin ranura ({@see self::header()}).
+     */
+    public const HEADER_ALL_MONTHLY = 'Planes de un mes: ';
+
+    public const HEADER_SOME_MONTHLY = 'Algunos planes de un mes: ';
+
+    public const HEADER_ALL = 'Nuestros planes: ';
+
+    public const HEADER_SOME = 'Algunos de nuestros planes: ';
+
+    /** La ranura, con o sin espacios dentro de las llaves (como el resto de marcadores) y con su caja exacta. */
+    private const RANURA = '/\{\{\s*LISTA_DE_PLANES\s*\}\}/';
+
+    /** La ranura con cualquier caja: lo que se quita antes de buscar su nombre suelto. */
+    private const RANURA_CON_CUALQUIER_CAJA = '/\{\{\s*LISTA_DE_PLANES\s*\}\}/i';
+
+    /** El nombre de la ranura en cualquier sitio y con cualquier caja (suelto, con una llave o entre dos). */
+    private const NOMBRE_DE_LA_RANURA = '/LISTA_DE_PLANES/i';
+
+    /**
+     * La ranura con una llave pegada delante o detrás (`{{{LISTA_DE_PLANES}}}`;
+     * revisión de seguridad de la puerta 2, M1): la lista saldría entre llaves
+     * sueltas.
+     */
+    private const RANURA_CON_LLAVE_PEGADA = '/\{\s*\{\{\s*LISTA_DE_PLANES\s*\}\}|\{\{\s*LISTA_DE_PLANES\s*\}\}\s*\}/';
+
+    /** Una llave pegada a cualquier marcador (`{{{PLAN_1}}}`; M1): también sería un resto. */
+    private const LLAVE_PEGADA_A_UN_MARCADOR = '/\{\s*\{\{|\}\}\s*\}/';
+
+    /**
+     * Lo que un texto de la lista nunca lleva (revisión de seguridad de la
+     * puerta 2, M2): saltos de línea (`\r`, `\n`, U+000B, U+000C, U+0085,
+     * U+2028 y U+2029) y los controles de dirección (U+202A a U+202E y
+     * U+2066 a U+2069), que cambian lo que se lee. Con `/u` y `\x{…}`, sin
+     * `\p{…}`: el PCRE de producción es el 10.39.
+     */
+    private const CONTROLES_EN_UN_TEXTO = '/[\r\n\x{0B}\x{0C}\x{85}\x{2028}\x{2029}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u';
 
     // ── Qué planes ──────────────────────────────────────────────────────────
 
@@ -182,6 +259,40 @@ final class UltronPlansOverview
             || in_array($intent, [SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PAYMENT_LINK_REQUEST], true);
     }
 
+    /**
+     * ¿La lista la compone Laravel en este turno? Solo con versión del Studio
+     * (`sp.m` = `studio`) compilada con el compilador
+     * {@see self::SERVER_LIST_SINCE_COMPILER} o posterior (`sp.k`, que firma
+     * `decide`). Legacy, la línea base y cualquier token con `k` ≤ 7: no, y
+     * todo sigue como antes de la puerta 2.
+     *
+     * @param  array<string,mixed>  $sp  el `sp` firmado en el token
+     */
+    public static function serverList(array $sp): bool
+    {
+        $k = $sp['k'] ?? null;
+
+        return ($sp['m'] ?? null) === UltronPromptStamp::MODE_STUDIO && is_int($k) && $k >= self::SERVER_LIST_SINCE_COMPILER;
+    }
+
+    /**
+     * La forma de la lista de un borrador SIN expandir:
+     * {@see self::SHAPE_MARKERS} si algún marcador pretende ser de la lista
+     * (`PLAN_` y cifras, con cualquier caja: {@see self::PARECE_DE_LA_LISTA});
+     * si no, {@see self::SHAPE_SERVER} (la ranura o ninguna marca).
+     */
+    public static function shape(string $raw): string
+    {
+        preg_match_all(self::PATTERN, $raw, $m);
+        foreach ($m[1] ?? [] as $nombre) {
+            if (preg_match(self::PARECE_DE_LA_LISTA, $nombre) === 1) {
+                return self::SHAPE_MARKERS;
+            }
+        }
+
+        return self::SHAPE_SERVER;
+    }
+
     // ── Lo que ve el modelo ─────────────────────────────────────────────────
 
     /** `{{PLAN_k}}`, de 1 a {@see self::MAX_PLANS}. */
@@ -223,13 +334,18 @@ final class UltronPlansOverview
      * `Plan::benefitsArray()`), sin recortar en número ni en longitud, y sin la
      * clave si está vacía. No viaja nada que el modelo no reciba ya.
      *
+     * SIN MARCADORES con la lista del servidor (PT-17, puerta 2, L1; causa C3
+     * del diagnóstico): con `k` ≥ 8 el modelo ve un solo sistema, la ranura,
+     * y cada plan sin su `marker` (`$withMarkers` = false). No viaja nada nuevo.
+     *
      * @param  list<int>  $po  la lista firmada
      * @param  array<int,array<string,mixed>>  $activePlans
-     * @return list<array{marker:string,plan_id:int,name:string,duration_days:int,benefits?:list<string>}>
+     * @param  bool  $withMarkers  false con la lista del servidor ({@see self::serverList()})
+     * @return list<array{marker?:string,plan_id:int,name:string,duration_days:int,benefits?:list<string>}>
      *
      * @throws InvalidArgumentException si un id de la lista no está en el catálogo (quien llama la sacó de él)
      */
-    public static function items(array $po, array $activePlans): array
+    public static function items(array $po, array $activePlans, bool $withMarkers = true): array
     {
         $porId = [];
         foreach ($activePlans as $p) {
@@ -241,8 +357,7 @@ final class UltronPlansOverview
             if ($plan === null) {
                 throw new InvalidArgumentException('Un plan de la lista no está en el catálogo.');
             }
-            $items[] = [
-                'marker' => self::marker($i + 1),
+            $items[] = ($withMarkers ? ['marker' => self::marker($i + 1)] : []) + [
                 'plan_id' => (int) $id,
                 'name' => trim((string) ($plan['name'] ?? '')),
                 'duration_days' => (int) ($plan['duration_days'] ?? 0),
@@ -315,6 +430,174 @@ final class UltronPlansOverview
         return ['text' => $texto, 'used' => $usados];
     }
 
+    /**
+     * LA LISTA ENTERA, COMPUESTA POR LARAVEL (PT-17, puerta 2, L1; P-2 A):
+     * el texto de cada plan de `po` ({@see self::item()}: «Nombre ($65.000
+     * COP)», o «Nombre (7 días, $45.000 COP)» si no es de un mes), en el
+     * orden firmado de `po` y unidos por {@see self::SEPARATOR}.
+     *
+     * TODO O NADA: si falta el texto de CUALQUIER plan de `po` (ya no se
+     * vende), null; nunca una lista parcial. Y null también si un texto es
+     * inseguro ({@see self::unsafeListText()}: forma de marcador, como un
+     * nombre del CRM con `PLAN_1`, un salto de línea o un control de
+     * dirección): la lista no puede llevar nada que la red del commit no
+     * dejaría salir ni que cambie lo que se lee. Lo que hay, sale de `$textos`
+     * tal cual: ni se añade ni se quita nada salvo el separador.
+     *
+     * PURA: las mismas entradas dan los mismos bytes, en cualquier orden de
+     * claves de `$textos`.
+     *
+     * @param  list<int>  $po  la lista firmada, con la forma de {@see self::signedList()}
+     * @param  array<int,string>  $textos  plan_id → su texto, leído ahora y solo de planes vendibles
+     *
+     * @throws InvalidArgumentException si `$po` no tiene la forma de la lista firmada
+     */
+    public static function compose(array $po, array $textos): ?string
+    {
+        if (self::signedList($po) === null) {
+            throw new InvalidArgumentException('La lista del turno no tiene la forma de la lista firmada.');
+        }
+        $partes = [];
+        foreach ($po as $id) {
+            $texto = $textos[$id] ?? null;
+            if (! is_string($texto) || trim($texto) === '' || self::unsafeListText($texto)) {
+                return null;
+            }
+            $partes[] = $texto;
+        }
+        $lista = implode(self::SEPARATOR, $partes);
+
+        return self::unsafeListText($lista) ? null : $lista;
+    }
+
+    /**
+     * ¿Un texto de la lista no puede salir? Si tiene forma de marcador
+     * ({@see UltronDraftPlaceholders::looksLikeMarker()}) o un salto de línea
+     * o un control de dirección ({@see self::CONTROLES_EN_UN_TEXTO}). Lo usa
+     * {@see self::compose()} y el commit, para decir qué plan lo tiene (por su
+     * id, sin el nombre).
+     */
+    public static function unsafeListText(string $texto): bool
+    {
+        // Falla cerrado: un texto que no es UTF-8 válido (`preg_match` da false) tampoco sale en la lista.
+        return UltronDraftPlaceholders::looksLikeMarker($texto) || preg_match(self::CONTROLES_EN_UN_TEXTO, $texto) !== 0;
+    }
+
+    /**
+     * El encabezado de la frase de la lista que se inserta sin ranura: los de
+     * la lista fija sin «Claro. ». Si todos los planes de `po` son de un mes,
+     * {@see self::HEADER_SOME_MONTHLY} si hay otro de un mes vendible fuera de
+     * `po` y, si no, {@see self::HEADER_ALL_MONTHLY}; si no, {@see self::HEADER_SOME}
+     * si hay cualquier vendible fuera de `po` y, si no, {@see self::HEADER_ALL}.
+     *
+     * Mira `$activePlans` (el catálogo vendible) y no la política, que en el
+     * punto del commit donde se compone aún no está calculada: así siempre
+     * dice la verdad, aunque a veces diga «Algunos» de más (un plan rechazado
+     * cuenta como fuera de la lista).
+     *
+     * @param  list<int>  $po
+     * @param  array<int,array<string,mixed>>  $activePlans  `activePlans()`: cada plan con `id` y `duration_days`
+     */
+    public static function header(array $po, array $activePlans): string
+    {
+        $po = array_values(array_map('intval', $po));
+        $deUnMes = [];
+        foreach ($activePlans as $p) {
+            $deUnMes[(int) $p['id']] = self::isMonthly((int) ($p['duration_days'] ?? 0));
+        }
+        $fuera = array_values(array_filter(array_keys($deUnMes), fn (int $id): bool => ! in_array($id, $po, true)));
+        $todosDeUnMes = $po !== [] && array_filter($po, fn (int $id): bool => ! ($deUnMes[$id] ?? false)) === [];
+        if ($todosDeUnMes) {
+            return array_filter($fuera, fn (int $id): bool => $deUnMes[$id]) !== [] ? self::HEADER_SOME_MONTHLY : self::HEADER_ALL_MONTHLY;
+        }
+
+        return $fuera !== [] ? self::HEADER_SOME : self::HEADER_ALL;
+    }
+
+    /**
+     * Pone la lista en el borrador.
+     *  - Con UNA ranura ({@see self::SLOT}, con o sin espacios dentro de las
+     *    llaves), la sustituye por la lista y deja el resto byte a byte
+     *    (`slot` = true).
+     *  - Con más de una, null: no se elige.
+     *  - Sin ranura, añade la frase «encabezado + lista + .»: justo antes de la
+     *    última frase ({@see UltronReplyFitter::sentences()}) si esa frase
+     *    acaba en «?»; si no, al final, separada por un espacio (`slot` =
+     *    false). Las frases del modelo no cambian ni de texto ni de orden:
+     *    quitando la frase insertada (y su espacio) queda el borrador tal cual.
+     *
+     * @return array{text:string,slot:bool}|null
+     */
+    public static function place(string $raw, string $lista, string $header): ?array
+    {
+        $ranuras = preg_match_all(self::RANURA, $raw);
+        if ($ranuras > 1) {
+            return null;
+        }
+        if ($ranuras === 1) {
+            // Con un callback: un precio («$65.000») no se lee como una referencia del reemplazo.
+            return ['text' => (string) preg_replace_callback(self::RANURA, static fn (): string => $lista, $raw, 1), 'slot' => true];
+        }
+
+        $frase = $header.$lista.'.';
+        if (trim($raw) === '') {
+            return ['text' => $frase, 'slot' => false];
+        }
+        $frases = UltronReplyFitter::sentences($raw);
+        $ultima = $frases === [] ? null : $frases[count($frases) - 1][0];
+        if ($ultima !== null && str_ends_with(trim($ultima), '?')) {
+            $antes = '';
+            foreach (array_slice($frases, 0, -1) as [$texto, $separador]) {
+                $antes .= $texto.$separador;
+            }
+            $donde = (strlen($raw) - strlen(ltrim($raw))) + strlen($antes);
+            if (substr($raw, $donde, strlen($ultima)) === $ultima) {
+                return ['text' => substr($raw, 0, $donde).$frase.' '.substr($raw, $donde), 'slot' => false];
+            }
+        }
+        $cuerpo = rtrim($raw);
+
+        return ['text' => $cuerpo.' '.$frase.substr($raw, strlen($cuerpo)), 'slot' => false];
+    }
+
+    /**
+     * EL ÚNICO PUNTO CON EL QUE `ai/check`, EL COMMIT Y EL LABORATORIO PONEN LA
+     * LISTA EN EL BORRADOR (PT-17, puerta 2, L1): los tres ven el mismo texto.
+     *  - Sin lista (`po` vacía), el borrador tal cual.
+     *  - Sin la lista del servidor (`$serverList` false: Legacy o `k` ≤ 7), o
+     *    con forma A, la expansión de siempre ({@see self::expand()}), con
+     *    `placed` = al menos dos planes sustituidos.
+     *  - Con forma B, la lista entera ({@see self::compose()}) puesta en su
+     *    sitio ({@see self::place()}), con `used` = `po`. Si no se puede
+     *    componer (falta un plan) o colocar (más de una ranura), el borrador
+     *    tal cual y `placed` = false: quien llama no lo deja salir.
+     *
+     * @param  list<int>  $po  la lista del turno (vacía sin lista o en un turno de cobro)
+     * @param  array<int,string>  $textos  plan_id → su texto ({@see self::item()}), leído ahora
+     * @param  array<int,array<string,mixed>>  $activePlans  `activePlans()`, para el encabezado
+     * @return array{text:string,shape:string,slot:bool,used:list<int>,placed:bool}
+     */
+    public static function render(string $raw, array $po, array $textos, array $activePlans, bool $serverList): array
+    {
+        $po = array_values(array_map('intval', $po));
+        $forma = self::shape($raw);
+        if ($po === []) {
+            return ['text' => $raw, 'shape' => $forma, 'slot' => false, 'used' => [], 'placed' => false];
+        }
+        if (! $serverList || $forma === self::SHAPE_MARKERS) {
+            $r = self::expand($raw, $textos, $po);
+
+            return ['text' => $r['text'], 'shape' => $forma, 'slot' => false, 'used' => $r['used'], 'placed' => count($r['used']) >= self::MIN_MARKERS];
+        }
+        $lista = self::compose($po, $textos);
+        $puesta = $lista === null ? null : self::place($raw, $lista, self::header($po, $activePlans));
+        if ($puesta === null) {
+            return ['text' => $raw, 'shape' => $forma, 'slot' => preg_match(self::RANURA, $raw) === 1, 'used' => $po, 'placed' => false];
+        }
+
+        return ['text' => $puesta['text'], 'shape' => $forma, 'slot' => $puesta['slot'], 'used' => $po, 'placed' => true];
+    }
+
     // ── ¿Vale la lista del borrador? ────────────────────────────────────────
 
     /**
@@ -352,10 +635,132 @@ final class UltronPlansOverview
      * («{{PLAN_1}} y el Plan Mensual») es `name_written`. Solo cambia el
      * detalle (y con él la nota): todos son un defecto, igual que antes.
      *
+     * CON LA LISTA DEL SERVIDOR (`$serverList`, `k` ≥ 8; PT-17, puerta 2, L1),
+     * en este orden de precedencia:
+     *  1. Sin lista (`po` vacía): la ranura, una variante suya (otra caja, o
+     *     su nombre suelto) o un `PLAN_k` → `no_list`.
+     *  2. Un `PLAN_k` fuera de 1..n, o la ranura con otra caja → `unknown_marker`.
+     *  3. Cualquier cifra → `price_written`.
+     *  4. La ranura y algún `PLAN_k` a la vez, la ranura repetida, la ranura
+     *     junto a `PLAN_NAME`, `PLAN_PRICE` o `PLAN_DURATION`, su nombre
+     *     suelto fuera de llaves, o una llave pegada a la ranura
+     *     (`{{{LISTA_DE_PLANES}}}`, M1) → `mixed`.
+     *  5. Forma A, estricta (P-2: ni omitir ni reordenar): lo de siempre (con
+     *     su precedencia, también la de la puerta 1) y, si eso la daba por
+     *     buena, todos los planes de `po` (si faltan, `missing`) y en su orden
+     *     1..n (si no, `mixed`). Así una lista que ya no valía da el mismo
+     *     detalle que antes, y solo cambian las que valían.
+     *  6. Forma B: con `PLAN_NAME`, `PLAN_PRICE` o `PLAN_DURATION` (cotiza un
+     *     plan en vez de dar la lista) → `missing`; el nombre de un plan de la
+     *     lista escrito a mano → `name_written`; si no, null.
+     *  7. Y una lista que por lo demás vale (5 o 6) pero deja restos con forma
+     *     de marcador fuera de las llaves (`PLAN_1` suelto, `{PLAN_1}`) →
+     *     `mixed` ({@see self::dejaRestosDeMarcador()}).
+     * Sin `$serverList`, lo de hoy, byte a byte.
+     *
      * @param  list<int>  $po  la lista firmada (vacía sin lista)
      * @param  array<int,array<string,mixed>>  $activePlans  el catálogo: los nombres de los planes de la lista
+     * @param  bool  $serverList  la lista la compone Laravel ({@see self::serverList()})
      */
-    public static function verify(string $raw, array $po, array $activePlans): ?string
+    public static function verify(string $raw, array $po, array $activePlans, bool $serverList = false): ?string
+    {
+        return $serverList ? self::verificaConLaListaDelServidor($raw, $po, $activePlans) : self::verificaLosMarcadores($raw, $po, $activePlans);
+    }
+
+    /**
+     * {@see self::verify()} con la lista del servidor (`k` ≥ 8), en el orden
+     * de precedencia que dice allí.
+     *
+     * @param  list<int>  $po
+     * @param  array<int,array<string,mixed>>  $activePlans
+     */
+    private static function verificaConLaListaDelServidor(string $raw, array $po, array $activePlans): ?string
+    {
+        $po = array_values(array_map('intval', $po));
+        preg_match_all(self::PATTERN, $raw, $m);
+        $nombres = $m[1] ?? [];
+        $deLaLista = array_values(array_filter($nombres, fn (string $n): bool => preg_match(self::PARECE_DE_LA_LISTA, $n) === 1));
+        $ranuras = count(array_filter($nombres, fn (string $n): bool => $n === self::SLOT));
+        $otraCaja = count(array_filter($nombres, fn (string $n): bool => $n !== self::SLOT && strcasecmp($n, self::SLOT) === 0));
+        $suelto = preg_match(self::NOMBRE_DE_LA_RANURA, (string) preg_replace(self::RANURA_CON_CUALQUIER_CAJA, '', $raw)) === 1;
+
+        // 1. Sin lista.
+        if ($po === []) {
+            return $ranuras + $otraCaja + count($deLaLista) > 0 || $suelto ? self::NO_LIST : null;
+        }
+        // 2. Un marcador de la lista que no existe, o la ranura con otra caja.
+        if ($otraCaja > 0) {
+            return self::UNKNOWN_MARKER;
+        }
+        foreach ($deLaLista as $n) {
+            if (self::posicion($n, count($po)) === null) {
+                return self::UNKNOWN_MARKER;
+            }
+        }
+        // 3. Una cifra.
+        if (SalesAgentDecisionSchema::containsPrice($raw)) {
+            return self::PRICE_WRITTEN;
+        }
+        // 4. Las dos formas a la vez, la ranura repetida o junto a los de un plan, o su nombre suelto.
+        $deUnPlan = array_intersect($nombres, [UltronDraftPlaceholders::PRICE, UltronDraftPlaceholders::NAME, UltronDraftPlaceholders::DURATION]) !== [];
+        if (($ranuras > 0 && $deLaLista !== []) || $ranuras > 1 || ($ranuras > 0 && $deUnPlan) || $suelto
+            || preg_match(self::RANURA_CON_LLAVE_PEGADA, $raw) === 1) {
+            return self::MIXED;
+        }
+        // 5. Forma A, estricta.
+        if ($deLaLista !== []) {
+            $deSiempre = self::verificaLosMarcadores($raw, $po, $activePlans);
+            if ($deSiempre !== null) {
+                return $deSiempre;
+            }
+            $posiciones = array_map(fn (string $n): int => (int) self::posicion($n, count($po)), $deLaLista);
+            if (count(array_unique($posiciones)) < count($po)) {
+                return self::MISSING;
+            }
+            if ($posiciones !== range(1, count($po))) {
+                return self::MIXED;
+            }
+
+            return self::dejaRestosDeMarcador($raw) ? self::MIXED : null;
+        }
+        // 6. Forma B.
+        if ($deUnPlan) {
+            return self::MISSING;
+        }
+        $deLaListaEnElCatalogo = array_values(array_filter($activePlans, fn (array $p): bool => in_array((int) $p['id'], $po, true)));
+        if (CommercialTurnPolicy::plansNamedIn($raw, $deLaListaEnElCatalogo) !== []) {
+            return self::NAME_WRITTEN;
+        }
+
+        return self::dejaRestosDeMarcador($raw) ? self::MIXED : null;
+    }
+
+    /**
+     * ¿Le queda al borrador algo con forma de marcador FUERA de los marcadores
+     * bien escritos (`{{NOMBRE}}`)? Un `PLAN_1` sin llaves, `{PLAN_1}` con
+     * una, `{{PLAN 1}}`, llaves sueltas o una llave pegada a un marcador
+     * (`{{{PLAN_1}}}`, M1, que saldría entre llaves): la red del commit no lo dejaría
+     * salir ({@see UltronDraftPlaceholders::looksLikeMarker()}) y el texto
+     * entero se cambiaría por el último recurso. Con la lista del servidor, una
+     * lista que por lo demás vale y deja esos restos es `mixed` (PT-17, puerta
+     * 2, L1; las sondas S4 y S5 del revisor): `ai/check` pide reescribirla y,
+     * en el turno del panorama, sale la lista fija, como con el compilador 7.
+     * Solo se mira cuando todo lo demás vale: no cambia ningún otro detalle.
+     */
+    private static function dejaRestosDeMarcador(string $raw): bool
+    {
+        return preg_match(self::LLAVE_PEGADA_A_UN_MARCADOR, $raw) === 1
+            || UltronDraftPlaceholders::looksLikeMarker((string) preg_replace(self::PATTERN, '', $raw));
+    }
+
+    /**
+     * {@see self::verify()} sin la lista del servidor: la de siempre (con la
+     * forma A y la regla de la puerta 1), sin cambiar un byte.
+     *
+     * @param  list<int>  $po
+     * @param  array<int,array<string,mixed>>  $activePlans
+     */
+    private static function verificaLosMarcadores(string $raw, array $po, array $activePlans): ?string
     {
         $po = array_values(array_map('intval', $po));
         preg_match_all(self::PATTERN, $raw, $m);

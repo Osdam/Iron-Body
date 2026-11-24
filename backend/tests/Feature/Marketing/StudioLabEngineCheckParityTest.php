@@ -191,6 +191,18 @@ class StudioLabEngineCheckParityTest extends TestCase
             'solo espacios' => [self::PANORAMA, $p, "  \n ", null, [], 1, 0],
             'con espacios alrededor que tutean' => [self::PANORAMA, $p, '  '.self::TRES_DE_TU."\n\n", null, [], 1, 0],
             'herramienta fuera del vocabulario' => [self::PANORAMA, $p, self::TRES, null, ['human_takeover'], 1, 0],
+            // PT-17, puerta 2, L1 (la lista la compone Laravel, k ≥ 8): la forma B, la A estricta y la ranura fuera de su sitio.
+            'forma B con la ranura' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 1, 0],
+            'forma B sin ranura' => [self::PANORAMA, $p, 'Claro, con gusto. Todos incluyen acceso total al gimnasio. ¿Cuál le interesa más?', null, [], 1, 0],
+            'forma B que tutea' => [self::PANORAMA, $p, 'Claro, con gusto. Te comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál te interesa más?', null, [], 1, 0],
+            'forma B que se pasa con la lista dentro' => [self::PANORAMA, $p, 'Claro, con gusto le cuento. Estos son nuestros planes: {{LISTA_DE_PLANES}}. Todos incluyen acceso a la zona de pesas, a la de cardio y a los vestidores, y puede venir en el horario que mejor le quede durante toda la semana, con el acompañamiento del equipo desde el primer día. ¿Cuál le interesa más?', null, [], 1, 0],
+            'forma B con un nombre a mano' => [self::PANORAMA, $p, 'Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', null, [], 1, 0],
+            'forma B con los enlaces de la app' => [self::PANORAMA, $p, 'Claro. Estos son: {{LISTA_DE_PLANES}}. Le dejo los enlaces de la app. ¿Cuál le interesa?', null, ['app_links_send'], 1, 0],
+            'forma A fuera de orden' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_2}}, {{PLAN_1}} y {{PLAN_3}}. ¿Cuál le interesa?', null, [], 1, 0],
+            'A y B a la vez' => [self::PANORAMA, $p, 'Claro. Le comparto {{LISTA_DE_PLANES}}; el más pedido es {{PLAN_1}}. ¿Cuál le interesa?', null, [], 1, 0],
+            'la ranura con otra caja' => [self::PANORAMA, $p, 'Claro. Le comparto {{lista_de_planes}}. ¿Cuál le interesa?', null, [], 1, 0],
+            'la ranura suelta' => [self::PANORAMA, $p, 'Claro. Le comparto LISTA_DE_PLANES. ¿Cuál le interesa?', null, [], 1, 0],
+            'la ranura sin lista' => [self::HORARIO, $h, 'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. Y estos son los planes: {{LISTA_DE_PLANES}}. ¿Le sirve?', null, [], 1, 0],
         ];
     }
 
@@ -251,7 +263,8 @@ class StudioLabEngineCheckParityTest extends TestCase
             'se pasa y ni sin la pregunta cabe: respaldo' => [self::PANORAMA, $p, self::LARGO_360, null, [], 'pass'],
             'se pasa y no cabe: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}, todos de un mes y con acceso total al gimnasio, con duchas, lockers, zona de cardio, zona de pesas y clases grupales de lunes a sábado. Le explico con calma lo que incluye cada uno, para que compare con tranquilidad y elija el que mejor le encaje.', null, [], 'pass'],
             // Y las listas de antes, con lo que da ahora la regla: del modelo, enteras (sin recortar), medidas contra 320.
-            'lista de dos que pasa de 200 y cabe en el tope de lista: del modelo, entera' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes y con acceso total al gimnasio y a las zonas de pesas. Le explico lo que incluye cada uno. ¿Cuál le interesa más de los dos?', null, [], 'pass'],
+            // PT-17, puerta 2, L1: con k ≥ 8 la de dos de tres ya no es una lista válida (forma A estricta, comprobación 4 del propietario): respaldo.
+            'lista de dos de tres que pasa de 200 y cabe en el tope de lista: respaldo (forma A estricta)' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}, los dos de un mes y con acceso total al gimnasio y a las zonas de pesas. Le explico lo que incluye cada uno. ¿Cuál le interesa más de los dos?', null, [], 'pass'],
             'lista de tres que pasa de 200 y cabe en el tope de lista: del modelo, entera' => [self::PANORAMA, $p, self::LARGO, null, [], 'pass'],
             'falta la lista: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, de un mes. ¿Le interesa?', null, [], 'pass'],
             'marcador inexistente: respaldo' => [self::PANORAMA, $p, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', null, [], 'pass'],
@@ -264,6 +277,15 @@ class StudioLabEngineCheckParityTest extends TestCase
             'el revisor lo rechaza con un fallo grave: respaldo' => [self::PANORAMA, $p, self::TRES, null, [], 'grave'],
             // P-1 A: sin fallo grave pero por exactitud (una dimensión que veta), también el respaldo.
             'el revisor lo rechaza por exactitud, sin fallo grave: respaldo' => [self::PANORAMA, $p, self::TRES, null, [], 'veto'],
+            // PT-17, puerta 2, L1 (la lista la compone Laravel, k ≥ 8).
+            'forma B con la ranura: del modelo' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 'pass'],
+            'forma B sin ranura: del modelo' => [self::PANORAMA, $p, 'Claro, con gusto. Todos incluyen acceso total al gimnasio. ¿Cuál le interesa más?', null, [], 'pass'],
+            'forma B que tutea: respaldo' => [self::PANORAMA, $p, 'Claro, con gusto. Te comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál te interesa más?', null, [], 'pass'],
+            'forma B que se pasa con la lista dentro: respaldo' => [self::PANORAMA, $p, 'Claro, con gusto le cuento. Estos son nuestros planes: {{LISTA_DE_PLANES}}. Todos incluyen acceso a la zona de pesas, a la de cardio y a los vestidores, y puede venir en el horario que mejor le quede durante toda la semana, con el acompañamiento del equipo desde el primer día. ¿Cuál le interesa más?', null, [], 'pass'],
+            'forma B con un nombre a mano: respaldo' => [self::PANORAMA, $p, 'Claro. El Plan Valera es el más pedido. Estos son: {{LISTA_DE_PLANES}}. ¿Cuál le interesa?', null, [], 'pass'],
+            'A y B a la vez: respaldo' => [self::PANORAMA, $p, 'Claro. Le comparto {{LISTA_DE_PLANES}}; el más pedido es {{PLAN_1}}. ¿Cuál le interesa?', null, [], 'pass'],
+            'forma B y el revisor la rechaza sin fallo grave: del modelo' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 'fail'],
+            'forma B y el revisor la rechaza con un fallo grave: respaldo' => [self::PANORAMA, $p, 'Claro, con gusto. Le comparto nuestros planes: {{LISTA_DE_PLANES}}. ¿Cuál le interesa más?', null, [], 'grave'],
         ];
     }
 

@@ -134,7 +134,8 @@ class UltronPt17cEstrategiaDeListaFlowTest extends TestCase
             $decide = $this->decide($this->entrante($pregunta));
             $politica = $decide['context']['commercial_turn_policy'];
             $this->assertSame(self::PO, array_column($politica['plans_overview']['plans'], 'plan_id'), "{$pregunta}: la lista");
-            $this->assertSame(['{{PLAN_1}}', '{{PLAN_2}}', '{{PLAN_3}}'], array_column($politica['plans_overview']['plans'], 'marker'), "{$pregunta}: cada marcador, su posición");
+            // PT-17, puerta 2, L1: con el compilador 8 la lista la compone Laravel y `decide` no enseña `marker` (causa C3): un solo sistema, la ranura.
+            $this->assertSame([], array_column($politica['plans_overview']['plans'], 'marker'), "{$pregunta}: sin marcadores");
             $this->assertSame(self::PO, self::cargaDelToken($decide['decide_token'])['x']['po']);
             $this->assertContains('answer', $politica['allowed_next_actions'], "{$pregunta}: la acción del 7 la permite la política");
 

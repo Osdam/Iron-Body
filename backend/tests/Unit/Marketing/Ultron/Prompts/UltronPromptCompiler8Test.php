@@ -10,6 +10,10 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptBase as Base;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler as C;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptException;
 use App\Services\Marketing\Ultron\StrategyContract;
+use App\Services\Marketing\Ultron\UltronDraftDefects;
+use App\Services\Marketing\Ultron\UltronPlansOverview;
+use App\Services\Marketing\Ultron\UltronRegenerationNotes;
+use App\Services\Marketing\Ultron\UltronReplyFitter;
 use App\Services\UltronStudio\StudioLabEngineFlow;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -54,10 +58,10 @@ use ReflectionMethod;
  *  N5.  Ninguna frase modelo ni pregunta de cierre fija en el redactor.
  *  N6.  La línea base y la huella Legacy no se mueven.
  *  N7.  El laboratorio sigue al compilador 8 (`motor-S2-c8-…`).
- *  N8.  PENDIENTE DE L1: que L sea `UltronReplyFitter::plansListCap()` para
- *       un borrador de forma B (la ranura) y uno de forma A (`PLAN_k`) se fija
- *       cuando se integren `UltronPlansOverview::compose()` y la condición de
- *       la ranura en `plansListCap()`. Aquí solo L = max(N, 320) (N3 y N4).
+ *  N8.  L, la cifra de la guía, es `UltronReplyFitter::plansListCap()` del
+ *       turno con la lista, para un borrador de forma B (la ranura) y para uno
+ *       de forma A (`PLAN_k`): con L caracteres pasan los dos y con L + 1 los
+ *       dos reciben la nota de la longitud con ese tope (PT-17, puerta 2, L1).
  *  N9.  Devolviendo los siete textos y el sufijo a los del 7, los 306 casos
  *       dan la huella de la rejilla del 7, fijada antes del cambio; sin
  *       devolverlos, la del 8 que da Node.
@@ -651,6 +655,69 @@ class UltronPromptCompiler8Test extends TestCase
         $this->assertNotSame('motor-S2-c7-2026-11-22.1', StudioLabEngineFlow::promptVersion());
     }
 
+    // ── N8 ──────────────────────────────────────────────────────────────────
+
+    /**
+     * L ES EL TOPE DE LA LISTA DEL TURNO, PARA LAS DOS FORMAS (PT-17, puerta
+     * 2, L1). La cifra que la guía le da al redactor («ya con la lista, no
+     * pasa de L») es {@see UltronReplyFitter::plansListCap()} del turno con
+     * la lista y el sello del 8, con cualquier tope publicado (también el de
+     * la línea base, que no se firma). Y es la misma para la forma B (la
+     * ranura) y la A (`PLAN_k`): las dos se ponen con
+     * {@see UltronPlansOverview::render()} y dan los mismos bytes (P6), así
+     * que con L caracteres pasan las dos y con L + 1 las dos reciben la nota de
+     * la longitud con ese tope ({@see UltronDraftDefects::of()}).
+     */
+    public function test_n8_l_es_el_tope_de_la_lista_del_turno_para_la_forma_a_y_la_b(): void
+    {
+        $po = [3, 4, 8];
+        $textos = [3 => 'Plan Valera ($65.000 COP)', 4 => 'Plan Mensual ($80.000 COP)', 8 => 'Élite ($180.000 COP)'];
+        $catalogo = [
+            ['id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => []],
+            ['id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30, 'benefits' => []],
+            ['id' => 8, 'name' => 'Élite', 'duration_days' => 30, 'benefits' => []],
+        ];
+        $formas = ['B' => '{{'.UltronPlansOverview::SLOT.'}}', 'A' => '{{PLAN_1}}; {{PLAN_2}}; {{PLAN_3}}'];
+        foreach ([160, 200, C::BASELINE[C::MAX_CHARS], 480] as $n) {
+            $l = C::plansListChars($n);
+            // El `sp` que firma `decide`: sin `n` con el tope de la línea base.
+            $sp = ['m' => 'studio', 't' => 'profesional', 'o' => 1, 'k' => C::VERSION] + ($n === C::BASELINE[C::MAX_CHARS] ? [] : ['n' => $n]);
+            $this->assertTrue(UltronPlansOverview::serverList($sp));
+            $this->assertSame($l, UltronReplyFitter::plansListCap($sp, $po), "{$n}: el tope de la lista del turno");
+            $guia = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::MAX_CHARS => $n]))['roles']['composer'];
+            $this->assertStringContainsString('el mensaje completo, ya con la lista, no pasa de '.$l.' caracteres.', $guia, "{$n}: la cifra de la guía");
+
+            foreach ([$l, $l + 1] as $largo) {
+                $salen = [];
+                foreach ($formas as $forma => $lista) {
+                    $raw = self::conLista($lista, $largo, $textos);
+                    $r = UltronPlansOverview::render($raw, $po, $textos, $catalogo, true);
+                    $this->assertTrue($r['placed'], "{$n} · {$forma}");
+                    $this->assertSame($largo, UltronReplyFitter::measure($r['text']), "{$n} · {$forma}: mide {$largo} con la lista puesta");
+                    $d = UltronDraftDefects::of(['reply_draft' => $raw, 'intent' => SalesIntents::PRICING_QUESTION, 'tools_requested' => []], $r['text'], $sp, $po, $catalogo, '¿Qué planes tienen y cuánto cuestan?', $textos);
+                    $this->assertSame($largo > $l ? [UltronRegenerationNotes::LENGTH_OVER_CAP] : [], array_column($d, 'code'), "{$n} · {$forma} · {$largo}");
+                    if ($largo > $l) {
+                        $this->assertStringContainsString('con la lista mide '.$largo.' caracteres y el limite de este turno es '.$l.'.', $d[0]['note'], "{$n} · {$forma}");
+                    }
+                    $salen[$forma] = $r['text'];
+                }
+                $this->assertSame($salen['B'], $salen['A'], "{$n} · {$largo}: la forma A y la B dan los mismos bytes");
+            }
+        }
+    }
+
+    /** Un borrador de usted con la lista en `$lista` que, puesta la lista, mide exactamente `$largo`. */
+    private static function conLista(string $lista, int $largo, array $textos): string
+    {
+        $puesta = implode(UltronPlansOverview::SEPARATOR, $textos);
+        $hueco = 'Claro. @ Estos son nuestros planes: @@. ¿Cuál le interesa más?';
+        $sinRelleno = UltronReplyFitter::measure(str_replace(['@@', '@'], [$puesta, ''], $hueco));
+        // Prosa neutra (sin nombres de plan, sin cifras, de usted), cortada a lo que falta: cada carácter cuenta uno.
+        $relleno = mb_substr(str_repeat('Todos incluyen acceso total al gimnasio y acompañamiento del equipo. ', 12), 0, $largo - $sinRelleno);
+
+        return str_replace(['@@', '@'], [$lista, $relleno], $hueco);
+    }
+
     // ── N9 ──────────────────────────────────────────────────────────────────
 
     /**
@@ -838,14 +905,15 @@ class UltronPromptCompiler8Test extends TestCase
     /**
      * LA RANURA. La guía le pide al redactor `LISTA_DE_PLANES` entre dobles
      * llaves, una sola vez, donde va la lista (forma B); si no la pone, el
-     * backend pone la lista antes de su pregunta final. El literal es el de
-     * la ranura que compone Laravel; la constante
-     * `UltronPlansOverview::SLOT` llega con L1, y entonces esta prueba la
-     * nombra. Ningún texto lleva llaves: la ranura se describe, no se escribe.
+     * backend pone la lista antes de su pregunta final. Es la ranura que
+     * compone Laravel: la constante {@see UltronPlansOverview::SLOT} (PT-17,
+     * puerta 2, L1). Ningún texto lleva llaves: la ranura se describe, no se
+     * escribe.
      */
     public function test_n12_la_guia_pide_la_ranura_lista_de_planes(): void
     {
-        $ranura = 'LISTA_DE_PLANES';
+        $ranura = UltronPlansOverview::SLOT;
+        $this->assertSame('LISTA_DE_PLANES', $ranura);
         $this->assertSame(1, substr_count(self::PLANS_COMPOSER, $ranura), 'la guía nombra la ranura una vez');
         $this->assertStringContainsString('Tu escribes el resto con tus palabras y pones LISTA_DE_PLANES entre dobles llaves, una sola vez, donde va la lista; si no la pones, el backend la pone antes de tu pregunta final.', self::PLANS_COMPOSER);
         $this->assertStringContainsString('No escribas nombres de plan, cifras ni marcadores que empiecen por PLAN_.', self::PLANS_COMPOSER);

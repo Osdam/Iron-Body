@@ -49,6 +49,13 @@ use InvalidArgumentException;
  * lista ({@see self::listBudget()}; 22-11-2026). Los códigos no cambian.
  * Sin versión del Studio (`sp.m` ≠ `studio`), ninguno: Legacy no cambia.
  *
+ * CON LA LISTA DEL SERVIDOR (`k` ≥ 8; PT-17, puerta 2, L1;
+ * {@see UltronPlansOverview::serverList()}): (a) es la regla estricta de
+ * {@see UltronPlansOverview::verify()} SIEMPRE que haya lista, sin la
+ * condición de herramientas o precio, y sus notas y la de (c) son las de la
+ * ranura ({@see UltronRegenerationNotes::serverNote()}), con lo que ocupa la
+ * lista compuesta ({@see self::serverListBudget()}).
+ *
  * Y DETRÁS, LAS REGLAS DE POLÍTICA CORREGIBLES (ola 4b, decisión L-3 del lead;
  * {@see self::ofPolicy()}): las seis de {@see UltronRegenerationNotes::POLICY_CODES}
  * que {@see CommercialTurnPolicy::violations()} marca con la política del
@@ -97,6 +104,9 @@ final class UltronDraftDefects
         $defectos = [];
         // El tope de ESTE turno: el de la lista si el servidor la ofreció (PT-17, L2, {@see UltronReplyFitter::plansListCap()}); si no, el publicado.
         $tope = UltronReplyFitter::plansListCap($sp, $po) ?? UltronReplyFitter::cap($sp['n'] ?? null);
+        // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), (a) y (c) van con sus reglas y sus notas.
+        $servidor = UltronPlansOverview::serverList($sp);
+        $deLaLista = $servidor && $po !== [] && $tope !== null ? self::serverListBudget($po, $listTexts, $tope) : null;
 
         /*
          * EL PRESUPUESTO DE LA LISTA (corrección (1) del turno 2 de la tercera
@@ -106,7 +116,7 @@ final class UltronDraftDefects
          * expandidos. Sin una de las dos cosas, las notas de siempre.
          */
         $presupuesto = null;
-        if ($po !== [] && $tope !== null) {
+        if (! $servidor && $po !== [] && $tope !== null) {
             $textos = [];
             foreach (array_slice($po, 0, UltronPlansOverview::MAX_PLANS) as $i => $id) {
                 $textos[] = $listTexts[$id] ?? UltronPlansOverview::marker($i + 1);
@@ -117,7 +127,26 @@ final class UltronDraftDefects
         // (a) La lista de planes.
         $conHerramientas = (array) ($draft['tools_requested'] ?? []) !== [];
         $detalle = null;
-        if ($po === []) {
+        if ($servidor) {
+            /*
+             * Con la lista del servidor, la estricta SIEMPRE que haya lista,
+             * sin la condición de herramientas o precio: se pide reescribirla
+             * en todo turno de lista. Lo que hace después el commit depende de
+             * si ve el panorama: en el turno de lista sin herramientas (la
+             * persona pidió los planes), una lista que no vale no sale (salta
+             * el panorama y sale la lista fija); con herramientas, o si el
+             * commit no ve el panorama, el texto sale como esté y solo lo para
+             * la red de marcadores si lleva algo con forma de marcador (revisión
+             * de seguridad de la puerta 2, M3). Sin lista, solo `no_list`. Las
+             * notas, las de la ranura, con lo que ocupa la lista compuesta si
+             * falta o va mezclada.
+             */
+            $delServidor = UltronPlansOverview::verify($raw, $po, $catalog, true);
+            if ($delServidor !== null) {
+                $params = in_array($delServidor, [UltronPlansOverview::MISSING, UltronPlansOverview::MIXED], true) ? ($deLaLista ?? []) : [];
+                $defectos[] = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $delServidor, $params, false, true);
+            }
+        } elseif ($po === []) {
             $detalle = UltronPlansOverview::verify($raw, [], $catalog);
         } elseif (! $conHerramientas && (
             (string) ($draft['intent'] ?? '') === SalesIntents::PRICING_QUESTION
@@ -145,12 +174,14 @@ final class UltronDraftDefects
             }
         }
 
-        // (c) La longitud; con la lista, con su presupuesto.
+        // (c) La longitud; con la lista, con su presupuesto (con la lista del servidor, su nota: no se quitan planes).
         if ($tope !== null && UltronReplyFitter::measure($expanded) > $tope) {
             $params = ['L' => UltronReplyFitter::measure($expanded), 'N' => $tope, 'M' => UltronPromptCompiler::composerTargetChars($tope)];
-            $defectos[] = $presupuesto === null
-                ? self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params)
-                : self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params + ['X' => $presupuesto['X'], 'R' => $presupuesto['R']], true);
+            $defectos[] = match (true) {
+                $deLaLista !== null => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, ['L' => $params['L']] + $deLaLista, false, true),
+                $presupuesto !== null => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params + ['X' => $presupuesto['X'], 'R' => $presupuesto['R']], true),
+                default => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params),
+            };
         }
 
         // (d) El beneficio de otro plan: el primero, con el marcador si la frase nombra el plan por él.
@@ -256,6 +287,11 @@ final class UltronDraftDefects
      * respaldo; {@see CriticContract::isSoftFail()}), en producción y en el
      * laboratorio. Pura.
      *
+     * Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), la lista
+     * válida es la de la regla estricta (la ranura, o ninguna marca, o la
+     * forma A entera y en su orden): {@see UltronPlansOverview::verify()} con
+     * `serverList`.
+     *
      * @param  string  $raw  el borrador SIN expandir
      * @param  array<string,mixed>  $sp  el `sp` firmado en el token
      * @param  list<int>  $po  la lista del turno (vacía sin lista o en un turno de cobro)
@@ -267,7 +303,7 @@ final class UltronDraftDefects
         return $defects === []
             && $po !== []
             && UltronReplyFitter::plansListCap($sp, $po) !== null
-            && UltronPlansOverview::verify($raw, $po, $catalog) === null;
+            && UltronPlansOverview::verify($raw, $po, $catalog, UltronPlansOverview::serverList($sp)) === null;
     }
 
     /**
@@ -303,19 +339,47 @@ final class UltronDraftDefects
     }
 
     /**
+     * LO QUE OCUPA LA LISTA QUE COMPONE LARAVEL (PT-17, puerta 2, L1), para
+     * las notas con la lista del servidor: `X` = la medida de la lista
+     * compuesta ({@see UltronPlansOverview::compose()}), `N` = el tope de la
+     * lista del turno y `R` = max(0, N − X), lo que queda para la prosa. Si
+     * la lista no se puede componer (un plan ya no se vende), la de los que
+     * quedan: la nota es una ayuda y el commit dará la lista fija igual.
+     * Revela lo mismo que {@see self::listBudget()} (la medida agregada de la
+     * lista con sus precios, nunca la cifra de ninguno).
+     *
+     * @param  list<int>  $po  la lista del turno
+     * @param  array<int,string>  $listTexts  plan_id → su texto, de los vendibles ahora
+     * @return array{X:int,N:int,R:int}
+     */
+    public static function serverListBudget(array $po, array $listTexts, int $tope): array
+    {
+        $compuesta = UltronPlansOverview::signedList($po) === null ? null : UltronPlansOverview::compose($po, $listTexts);
+        $compuesta ??= implode(UltronPlansOverview::SEPARATOR, array_values(array_filter(array_map(static fn (int $id): ?string => $listTexts[$id] ?? null, $po))));
+        $x = UltronReplyFitter::measure($compuesta);
+
+        return ['X' => $x, 'N' => $tope, 'R' => max(0, $tope - $x)];
+    }
+
+    /**
      * Si la nota lanza (un parámetro que no es el de su entrada), el defecto va
      * igual, sin nota: n8n sabe por qué reescribir por el código y el `issue`,
      * y la puerta no responde 500 (C6). El código y el detalle son constantes
      * de aquí, así que `issue()` no puede lanzar.
      *
+     * Con `$delServidor` (la lista del servidor, `k` ≥ 8), la nota de la
+     * ranura ({@see UltronRegenerationNotes::serverNote()}).
+     *
      * @return array{code:string,detail:?string,issue:string,note:string}
      */
-    private static function defecto(string $code, ?string $detail, array $params, bool $conPresupuesto = false): array
+    private static function defecto(string $code, ?string $detail, array $params, bool $conPresupuesto = false, bool $delServidor = false): array
     {
         try {
-            $nota = $conPresupuesto
-                ? UltronRegenerationNotes::budgetNote($code, $detail, $params)
-                : UltronRegenerationNotes::note($code, $detail, $params);
+            $nota = match (true) {
+                $delServidor => UltronRegenerationNotes::serverNote($code, $detail, $params),
+                $conPresupuesto => UltronRegenerationNotes::budgetNote($code, $detail, $params),
+                default => UltronRegenerationNotes::note($code, $detail, $params),
+            };
         } catch (InvalidArgumentException) {
             // A propósito: la nota es una ayuda; el defecto se dice sin ella (quien llama lo deja en el log).
             $nota = '';

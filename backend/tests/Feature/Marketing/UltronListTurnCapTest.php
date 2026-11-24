@@ -150,7 +150,8 @@ class UltronListTurnCapTest extends TestCase
     public function test_2_ai_check_al_borrador_de_un_solo_plan_le_dice_que_falta_la_lista_con_el_tope_de_la_lista(): void
     {
         $m = $this->entrante(self::PANORAMA);
-        $token = $this->decide($m, true)['decide_token'];
+        // PT-17, puerta 2, L1: estas notas son las de los marcadores (compiladores ≤ 7); con 8, las de la ranura con el mismo tope (UltronListaDelServidorTest).
+        $token = $this->conCompilador($this->decide($m, true), (int) $this->conversation->id, (int) $m->id, 7);
         $faltaLaLista = 'FALTA LA LISTA DE PLANES: una frase con PLAN_1 a PLAN_3 entre dobles llaves, cada uno una vez y, en su mencion, para quien es; sin PLAN_NAME ni PLAN_PRICE. Ya expandidos ocupan 71 caracteres: quedan 179 de 250. Si no caben, dos; una pregunta corta o ninguna.';
 
         // El nombre y el marcador del mismo plan (229): falta la lista, sin la longitud de 200.
@@ -201,8 +202,9 @@ class UltronListTurnCapTest extends TestCase
         $this->assertSame(self::PO, $turno['po']);
 
         $p = $lab->predict($turno, ['reply_draft' => self::UN_PLAN, 'recommended_plan_id' => null, 'critic' => self::APROBADO], ['intent' => SalesIntents::PRICING_QUESTION, 'tools_requested' => []]);
+        // PT-17, puerta 2, L1: con k = 8 la predicción añade la forma de la lista (`list`, aditivo).
         $this->assertSame(
-            ['origin' => StudioLabEngineCheck::ORIGIN_FALLBACK, 'cause' => N::PLANS_OVERVIEW, 'codes' => [N::PLANS_OVERVIEW], 'measured' => 229, 'chars' => 229, 'cap' => 320, 'withinCap' => true, 'register' => 'ok', 'tuteo' => [], 'trimmed' => false],
+            ['origin' => StudioLabEngineCheck::ORIGIN_FALLBACK, 'cause' => N::PLANS_OVERVIEW, 'codes' => [N::PLANS_OVERVIEW], 'measured' => 229, 'chars' => 229, 'cap' => 320, 'withinCap' => true, 'register' => 'ok', 'tuteo' => [], 'trimmed' => false, 'list' => ['shape' => O::SHAPE_MARKERS, 'slot' => false]],
             $p,
             'un solo tope, y el respaldo no recorta el borrador',
         );

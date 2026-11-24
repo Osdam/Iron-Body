@@ -40,6 +40,12 @@ use PHPUnit\Framework\TestCase;
  *     antes, copiados aquí a mano). Si una falla, se acorta la redacción; el
  *     límite no se sube.
  *  5. ASCII imprimible y sin llaves; cada variante declara sus huecos.
+ *  6. CON LA LISTA DEL SERVIDOR (PT-17, puerta 2, L1; las notas de §1.4 que
+ *     aprobó el propietario): la nota de la lista y la de la longitud caben
+ *     ENTERAS en toda combinación de las dos, también en el peor caso (P1 +
+ *     longitud: 491 con un borrador de hasta 4 000 caracteres, el máximo del
+ *     endpoint; 493 con las cifras de arriba); y en las demás combinaciones se
+ *     cuenta lo que pasa con los textos aprobados, que son más largos.
  *
  * Pura: los `Plan` son instancias en memoria; sin base de datos ni config.
  */
@@ -351,6 +357,202 @@ class UltronRegenerationBudgetNotesTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('/[{}]/', $nota);
             $this->assertMatchesRegularExpression('/^[\x20-\x7E]+$/', $nota, 'ASCII imprimible, sin tildes: cruza al modelo');
             $this->assertLessThanOrEqual(N::MAX_NOTES, mb_strlen($nota), 'cada una cabe sola');
+        }
+    }
+
+    // ── 6. Con la lista del servidor (PT-17, puerta 2, L1) ──────────────────
+
+    /**
+     * (a) La nota de la lista y la de la longitud con la lista del servidor,
+     * con las cifras más largas posibles: X = 999, N = 480 (el tope máximo),
+     * R = 480 y L con 4 cifras (el borrador llega con 4 000 caracteres como
+     * mucho, `UltronController::check()`) o con las 6 de arriba. En cada
+     * combinación de las dos, todas entran ENTERAS en `merge()` y caben en los
+     * 500 que corta n8n; la peor, P1 + longitud, mide 491 (la cifra de la
+     * especificación, §1.4) y 493 con L de 6 cifras. Sin lista (`no_list`), la
+     * longitud es la nota de siempre: no hay lista que medir.
+     */
+    public function test_con_la_lista_del_servidor_la_lista_y_la_longitud_caben_enteras_en_el_peor_caso(): void
+    {
+        $servidor = ['X' => 999, 'N' => 480, 'R' => 480];
+        foreach ([9999 => 491, self::PEOR['L'] => 493] as $l => $peor) {
+            $longitud = N::serverNote(N::LENGTH_OVER_CAP, null, ['L' => $l] + $servidor);
+            $lista = [
+                null,
+                N::serverNote(N::PLANS_OVERVIEW, O::MISSING, $servidor),
+                N::serverNote(N::PLANS_OVERVIEW, O::MIXED, $servidor),
+                N::serverNote(N::PLANS_OVERVIEW, O::NAME_WRITTEN),
+                N::serverNote(N::PLANS_OVERVIEW, O::UNKNOWN_MARKER),
+                N::serverNote(N::PLANS_OVERVIEW, O::PRICE_WRITTEN),
+            ];
+            $vistas = 0;
+            foreach ($lista as $primera) {
+                foreach ([null, $longitud] as $segunda) {
+                    $notas = array_values(array_filter([$primera, $segunda], 'is_string'));
+                    if ($notas === []) {
+                        continue;
+                    }
+                    $mezcla = N::merge($notas);
+                    $this->assertSame(implode(' ', $notas), $mezcla, 'ninguna se pierde: '.mb_substr($mezcla, 0, 40));
+                    $this->assertLessThanOrEqual(N::MAX_NOTES, mb_strlen($mezcla));
+                    $this->assertMatchesRegularExpression('/^[\x20-\x7E]+$/', $mezcla, 'ASCII: el corte de n8n (UTF-16) mide lo mismo');
+                    $vistas++;
+                }
+            }
+            $this->assertSame(11, $vistas);
+            $this->assertSame($peor, mb_strlen(N::merge([$lista[1], $longitud])), "P1 + longitud con L = {$l}");
+            $this->assertLessThan($peor, mb_strlen(N::merge([$lista[2], $longitud])), 'P2 + longitud, menos');
+        }
+        // Sin lista: la del servidor sola, y con la longitud de siempre.
+        $sinLista = N::serverNote(N::PLANS_OVERVIEW, O::NO_LIST);
+        $deSiempre = N::note(N::LENGTH_OVER_CAP, null, ['L' => self::PEOR['L'], 'N' => self::PEOR['N'], 'M' => self::PEOR['M']]);
+        $this->assertSame($sinLista.' '.$deSiempre, N::merge([$sinLista, $deSiempre]));
+        $this->assertLessThanOrEqual(N::MAX_NOTES, mb_strlen($sinLista.' '.$deSiempre));
+    }
+
+    /**
+     * (b) Las demás combinaciones (la lista, el trato, la longitud, el
+     * beneficio y hasta cuatro de la política, como en 4 b), con las notas del
+     * servidor frente a las de los marcadores. La de la lista va primero y
+     * nunca se pierde, ni la de la longitud cuando va con ella sin el trato.
+     * Los textos aprobados son más largos (NOMBRE DUPLICADO: 196 frente a
+     * 106; MARCADOR INEXISTENTE: 142 frente a 96), así que en 69 combinaciones
+     * (34 con NOMBRE DUPLICADO y 35 con MARCADOR INEXISTENTE, todas con dos o
+     * más de la política y sin el trato, la longitud ni el beneficio) se queda
+     * fuera una nota de la POLÍTICA que con los marcadores entraba: la de menos
+     * prioridad, que vuelve a pedir la comprobación siguiente. Se cuenta aquí
+     * para que no crezca sin verse.
+     */
+    public function test_con_la_lista_del_servidor_las_demas_combinaciones_se_cuentan(): void
+    {
+        $marcas = UltronRegisterDetector::MARCAS;
+        usort($marcas, fn (string $a, string $b) => mb_strlen($b) <=> mb_strlen($a));
+        $comunes = [
+            'R' => N::note(N::REGISTER_TUTEO, null, ['MARCAS' => array_slice($marcas, 0, UltronRegisterDetector::MAX_MARCAS)]),
+            'B' => N::note(N::BENEFIT_MISATTRIBUTED, null, ['PLAN' => str_repeat('p', 60), 'BENEFICIO' => str_repeat('b', 60)]),
+        ];
+        foreach (N::POLICY_CODES as $c) {
+            $comunes[$c] = N::note($c);
+        }
+        $marcadores = $comunes + [
+            O::NAME_WRITTEN => N::note(N::PLANS_OVERVIEW, O::NAME_WRITTEN),
+            O::UNKNOWN_MARKER => N::note(N::PLANS_OVERVIEW, O::UNKNOWN_MARKER, ['K' => 3]),
+            O::PRICE_WRITTEN => N::note(N::PLANS_OVERVIEW, O::PRICE_WRITTEN),
+            O::NO_LIST => N::note(N::PLANS_OVERVIEW, O::NO_LIST),
+            O::MISSING => N::budgetNote(N::PLANS_OVERVIEW, O::MISSING, array_intersect_key(self::PEOR, array_flip(['K', 'X', 'R', 'M']))),
+            O::MIXED => N::budgetNote(N::PLANS_OVERVIEW, O::MIXED, array_intersect_key(self::PEOR, array_flip(['K', 'X', 'R', 'M']))),
+            'L' => N::budgetNote(N::LENGTH_OVER_CAP, null, array_intersect_key(self::PEOR, array_flip(['L', 'N', 'M', 'X', 'R']))),
+        ];
+        $servidor = ['X' => 999, 'N' => 480, 'R' => 480];
+        $delServidor = $comunes + [
+            O::NAME_WRITTEN => N::serverNote(N::PLANS_OVERVIEW, O::NAME_WRITTEN),
+            O::UNKNOWN_MARKER => N::serverNote(N::PLANS_OVERVIEW, O::UNKNOWN_MARKER),
+            O::PRICE_WRITTEN => N::serverNote(N::PLANS_OVERVIEW, O::PRICE_WRITTEN),
+            O::NO_LIST => N::serverNote(N::PLANS_OVERVIEW, O::NO_LIST),
+            O::MISSING => N::serverNote(N::PLANS_OVERVIEW, O::MISSING, $servidor),
+            O::MIXED => N::serverNote(N::PLANS_OVERVIEW, O::MIXED, $servidor),
+            'L' => N::serverNote(N::LENGTH_OVER_CAP, null, ['L' => self::PEOR['L']] + $servidor),
+        ];
+        $entran = function (array $codigos, array $textos): array {
+            $out = [];
+            $hasta = '';
+            foreach ($codigos as $c) {
+                $con = $hasta === '' ? $textos[$c] : $hasta.' '.$textos[$c];
+                $cabe = mb_strlen($con) <= N::MAX_NOTES;
+                $hasta = $cabe ? $con : $hasta;
+                $out[] = $cabe ? 1 : 0;
+            }
+
+            return $out;
+        };
+        $politica = [[]];
+        foreach (N::POLICY_CODES as $p) {
+            foreach ($politica as $s) {
+                if (count($s) < 4) {
+                    $politica[] = [...$s, $p];
+                }
+            }
+        }
+        $combinaciones = 0;
+        $pierdenConMarcadores = 0;
+        $pierdenConElServidor = 0;
+        $peores = [];
+        foreach ([null, O::MISSING, O::MIXED, O::NAME_WRITTEN, O::UNKNOWN_MARKER, O::PRICE_WRITTEN, O::NO_LIST] as $a) {
+            foreach ([false, true] as $tuteo) {
+                foreach ([false, true] as $largo) {
+                    foreach ([false, true] as $beneficio) {
+                        foreach ($politica as $p) {
+                            $codigos = [...array_filter([$a, $tuteo ? 'R' : null, $largo ? 'L' : null, $beneficio ? 'B' : null]), ...$p];
+                            if ($codigos === []) {
+                                continue;
+                            }
+                            $combinaciones++;
+                            $vMarcadores = $entran($codigos, $marcadores);
+                            $vServidor = $entran($codigos, $delServidor);
+                            $pierdenConMarcadores += in_array(0, $vMarcadores, true) ? 1 : 0;
+                            $pierdenConElServidor += in_array(0, $vServidor, true) ? 1 : 0;
+                            if ($vServidor < $vMarcadores) {
+                                // La primera nota que cambia de suerte: una de la política.
+                                $i = 0;
+                                while ($vServidor[$i] === $vMarcadores[$i]) {
+                                    $i++;
+                                }
+                                $this->assertContains($codigos[$i], N::POLICY_CODES, 'lo que se pierde es de la política: '.implode(' + ', $codigos));
+                                $peores[] = $codigos;
+                            }
+                            if ($a !== null) {
+                                $this->assertSame(1, $vServidor[0], 'la de la lista nunca se pierde: '.implode(' + ', $codigos));
+                            }
+                            if ($a !== null && $a !== O::NO_LIST && $largo && ! $tuteo) {
+                                $this->assertSame(1, $vServidor[1], 'ni la longitud que va con ella: '.implode(' + ', $codigos));
+                            }
+                            // Lo que entra es exactamente lo que deja `merge()`.
+                            $this->assertSame(N::merge(array_map(fn (string $c) => $delServidor[$c], $codigos)), implode(' ', array_map(fn (string $c) => $delServidor[$c], array_values(array_intersect_key($codigos, array_filter($vServidor))))));
+                        }
+                    }
+                }
+            }
+        }
+        $this->assertSame(3191, $combinaciones);
+        $this->assertSame([3066, 3074], [$pierdenConMarcadores, $pierdenConElServidor]);
+        $this->assertCount(69, $peores);
+        $this->assertSame([O::NAME_WRITTEN => 34, O::UNKNOWN_MARKER => 35], array_count_values(array_column($peores, 0)), 'con NOMBRE DUPLICADO o MARCADOR INEXISTENTE');
+        foreach ($peores as $codigos) {
+            $this->assertGreaterThanOrEqual(2, count(array_intersect($codigos, N::POLICY_CODES)), 'y dos o más de la política: '.implode(' + ', $codigos));
+            $this->assertSame([], array_intersect($codigos, ['R', 'L', 'B']), 'sin el trato, la longitud ni el beneficio: '.implode(' + ', $codigos));
+        }
+    }
+
+    public function test_las_notas_del_servidor_declaran_sus_huecos_y_no_llevan_llaves(): void
+    {
+        $this->assertSame([
+            ['plans_overview', 'missing'], ['plans_overview', 'mixed'], ['plans_overview', 'name_written'], ['plans_overview', 'unknown_marker'],
+            ['plans_overview', 'no_list'], ['plans_overview', 'price_written'], ['length_over_cap', null],
+        ], array_map(fn (array $e) => [$e[0], $e[1]], N::serverEntries()), 'las siete de §1.4, en su orden');
+        foreach (N::serverEntries() as [$code, $detail, $params, $plantilla]) {
+            preg_match_all('/\{([A-Z]+)\}/', $plantilla, $m);
+            $huecos = array_values(array_unique($m[1]));
+            sort($huecos);
+            sort($params);
+            $this->assertSame($params, $huecos, $code.'/'.$detail);
+            $nota = N::serverNote($code, $detail, array_intersect_key(['X' => PHP_INT_MAX, 'N' => 480, 'R' => 0, 'L' => PHP_INT_MAX], array_flip($params)));
+            $this->assertDoesNotMatchRegularExpression('/[{}]/', $nota);
+            $this->assertMatchesRegularExpression('/^[\x20-\x7E]+$/', $nota, 'ASCII imprimible, sin tildes: cruza al modelo');
+            $this->assertStringNotContainsString('PLAN_1', $nota, 'con la lista del servidor el modelo no ve marcadores de la lista');
+        }
+        foreach ([
+            'sin variante' => [N::REGISTER_TUTEO, null, ['MARCAS' => ['te']]],
+            'falta R' => [N::PLANS_OVERVIEW, O::MISSING, ['X' => 75, 'N' => 320]],
+            'los de la nota de siempre' => [N::LENGTH_OVER_CAP, null, ['L' => 340, 'N' => 320, 'M' => 250]],
+            'X como texto' => [N::PLANS_OVERVIEW, O::MIXED, ['X' => '75', 'N' => 320, 'R' => 245]],
+            'con huecos que no tiene' => [N::PLANS_OVERVIEW, O::NAME_WRITTEN, ['X' => 75]],
+        ] as $nombre => [$code, $detail, $params]) {
+            try {
+                N::serverNote($code, $detail, $params);
+                $this->fail("{$nombre}: no lanzó");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
         }
     }
 

@@ -189,7 +189,8 @@ class UltronPlansListCapFlowTest extends TestCase
         // 332: reescribir por la longitud, con la nota del tope de la lista.
         $r = $this->check($m, $token, self::LISTA_332)->assertOk()->json();
         $this->assertSame([false, [N::LENGTH_OVER_CAP], true], [$r['pass'], array_column($r['defects'], 'code'), $r['rewrite']], '332 con la lista');
-        $this->assertStringContainsString('mide 332 caracteres y el limite publicado es 320', $r['notes']);
+        // PT-17, puerta 2, L1: con k = 8, la nota de la longitud de la lista del servidor (§1.4), con el mismo tope de la lista.
+        $this->assertStringContainsString('con la lista mide 332 caracteres y el limite de este turno es 320', $r['notes']);
 
         // El sello del compilador 5 (el mismo token sin `k`, re-firmado): la de 310 se mide contra 200, como hoy.
         $r = $this->check($m, self::sinElCompilador($token), $de310)->assertOk()->json();
@@ -281,7 +282,8 @@ class UltronPlansListCapFlowTest extends TestCase
         // 450 con la lista: reescribir por la longitud, con la nota del tope de la lista.
         $r = $this->check($m, $token, self::LISTA_450)->assertOk()->json();
         $this->assertSame([false, [N::LENGTH_OVER_CAP], true], [$r['pass'], array_column($r['defects'], 'code'), $r['rewrite']], '450 con la lista');
-        $this->assertStringContainsString('mide 450 caracteres y el limite publicado es 320', $r['notes']);
+        // PT-17, puerta 2, L1: con k = 8, la nota de la longitud de la lista del servidor (§1.4), con el mismo tope de la lista.
+        $this->assertStringContainsString('con la lista mide 450 caracteres y el limite de este turno es 320', $r['notes']);
     }
 
     public function test_con_320_el_commit_saca_la_lista_de_310_entera_y_la_de_450_es_respaldo_con_su_causa(): void

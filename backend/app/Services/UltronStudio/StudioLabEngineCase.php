@@ -235,7 +235,9 @@ final class StudioLabEngineCase
                 'withinCap' => $final['withinCap'],
                 'register' => $final['register'],
                 'trimmed' => $final['trimmed'],
-            ] + (($final['criticAdvisory'] ?? false) === true ? ['criticAdvisory' => true] : []),
+            ] + (($final['criticAdvisory'] ?? false) === true ? ['criticAdvisory' => true] : [])
+                // PT-17, puerta 2, L1: con la lista del servidor, la forma de la lista (aditivo; el guion de aceptación no lo necesita).
+                + (is_array($final['list'] ?? null) ? ['list' => $final['list']] : []),
             'elapsedMs' => $ms,
         ];
     }

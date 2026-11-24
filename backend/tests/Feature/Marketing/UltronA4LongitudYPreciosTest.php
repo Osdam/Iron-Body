@@ -269,7 +269,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
     {
         Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => false]);
         $this->publica(200);
-        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        // PT-17, puerta 2, L1: el respaldo de la rendición con el compilador de estos textos (≤ 7); con 8 el rechazo blando de la forma B es un aviso (L4).
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, compilador: 7);
         // F5 (I-4): «1 día», en singular (antes «1 días», que esta prueba fijaba como correcto).
         // G5 (I-6): nombra 3 de 8 vendibles → «Algunos de nuestros planes»; el encabezado, 11 caracteres más
         // largo, ya no deja sitio a «También hay planes de varios meses.» a 200 (el encabezado ya dice que hay más).
@@ -288,7 +289,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
         // Documenta (plan §2.2 c): si PROMO X4 se mueve delante, sale él.
         Plan::query()->whereKey(14)->update(['sort_order' => 0]);
         $this->publica(200);
-        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        // PT-17, puerta 2, L1: con el compilador de estos textos (≤ 7); con 8 el rechazo blando de la forma B es un aviso (L4).
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, compilador: 7);
         $this->assertStringStartsWith('Claro. Algunos planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.', $r['reply_final']);
     }
 
@@ -456,7 +458,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->publica(200);
         // PT-17, puerta 1, L2 (diagnóstico del 24-11-2026): un solo tope por turno de lista: en el turno de lista el tope es 320; el borrador que no se puede recortar, por encima.
         $borrador = 'Te confirmo que el plan Élite, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo mensual de {{PLAN_PRICE}} e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo. Además tiene guía nutricional para mejorar resultados, acceso completo a la app y el acompañamiento del equipo durante todo el proceso.';
-        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, $borrador, 8);
+        // PT-17, puerta 2, L1: la medida del borrador de los compiladores ≤ 7; con 8 lleva dentro la lista que pone Laravel (UltronListaDelServidorTest, comprobación 3).
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, $borrador, 8, compilador: 7);
 
         $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el respaldo de precios, por la rama de la política');
         $fila = $this->ultimaAccion();
@@ -683,7 +686,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
         foreach ([200, 160] as $tope) {
             $this->nuevaConversacion();
             $this->publica($tope);
-            $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Cuánto vale el plan día? ¿Qué planes tienen?');
+            // PT-17, puerta 2, L1: a 160 suelta el tercero (D-6, compiladores ≤ 7); con 8 la lista fija sale entera (comprobación 3; el texto, en la evidencia).
+            $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Cuánto vale el plan día? ¿Qué planes tienen?', compilador: 7);
             $this->assertSame([
                 200 => 'Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?',
                 // G5: con el encabezado largo, a 160 el tercero ya no cabe (antes medía 160 justos).
@@ -693,7 +697,7 @@ class UltronA4LongitudYPreciosTest extends TestCase
 
         $this->nuevaConversacion();
         $this->publica(200);
-        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?');
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?', compilador: 7);
         $this->assertSame('Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
         $this->assertStringNotContainsString('Planes de un mes', $r['reply_final']);
     }
@@ -859,7 +863,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
             if ($tope !== null) {
                 $this->publica($tope);
             }
-            $r = $this->criticoCaido($intent, $texto, $tope !== null);
+            // PT-17, puerta 2, L1: los textos aprobados son los de los compiladores ≤ 7. Con 8 cambian dos (a 160, la lista fija entera en vez de soltar el tercero; comprobación 3): hay que regenerarlos y aprobarlos aparte.
+            $r = $this->criticoCaido($intent, $texto, $tope !== null, compilador: 7);
 
             return $r['reply_final'] === null ? '— (no se contesta)' : '('.UltronReplyFitter::measure($r['reply_final']).') «'.str_replace("\n", ' ⏎ ', $r['reply_final']).'»';
         };
@@ -1059,22 +1064,29 @@ class UltronA4LongitudYPreciosTest extends TestCase
         ];
     }
 
-    /** Dos rechazos del revisor: el turno sale por `safeFallback()`. */
-    private function criticoCaido(string $intent, string $texto, bool $negocia = true): array
+    /**
+     * Dos rechazos del revisor: el turno sale por `safeFallback()`. Con
+     * `$compilador`, el token firmado como lo firmaba ese compilador (PT-17,
+     * puerta 2, L1): con `k` ≥ 8 el borrador sin marcas de lista es la forma
+     * B, la lista limpia del turno, y el rechazo blando es un aviso (L4).
+     */
+    private function criticoCaido(string $intent, string $texto, bool $negocia = true, ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, $negocia);
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        return $this->commit($this->payload($m, $decide['decide_token'], self::propuesta($intent, 'Te confirmo que el plan Élite es el que mejor te encaja. ¿Quieres que te ayude a concretar tu inscripción?', 8), self::CRITICO_CAIDO))->assertOk()->json();
+        return $this->commit($this->payload($m, $token, self::propuesta($intent, 'Te confirmo que el plan Élite es el que mejor te encaja. ¿Quieres que te ayude a concretar tu inscripción?', 8), self::CRITICO_CAIDO))->assertOk()->json();
     }
 
-    /** Un borrador que el revisor aprobó: el turno sale por el camino normal. */
-    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = [], bool $negocia = true): array
+    /** Un borrador que el revisor aprobó: el turno sale por el camino normal. Con `$compilador`, como en {@see criticoCaido()}. */
+    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = [], bool $negocia = true, ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, $negocia);
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta($intent, $borrador, $plan, $herramientas), ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9]));
+        $r = $this->commit($this->payload($m, $token, self::propuesta($intent, $borrador, $plan, $herramientas), ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9]));
 
         // Un 422 también es una salida (la rendición de n8n cuelga de él): se devuelve con su código.
         return $r->status() === 422 ? ['status' => 422, 'error' => $r->json('error') ?? $r->json('code') ?? $r->json()] : $r->assertOk()->json();

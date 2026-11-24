@@ -207,11 +207,13 @@ class StudioLabEnginePlansListCapTest extends TestCase
 
         [$check, $commit] = $this->pasa($turno, $de310);
         $this->assertSame([true, [], false], [$check['pass'], $check['defects'], $check['rewrite']], '310: ai/check');
-        $this->assertSame(['origin' => StudioLabEngineCheck::ORIGIN_MODEL, 'cause' => null, 'codes' => [], 'measured' => 310, 'chars' => 310, 'cap' => 320, 'withinCap' => true, 'register' => 'ok', 'tuteo' => [], 'trimmed' => false], $commit, '310: sale entero, con su pregunta');
+        // PT-17, puerta 2, L1: con k = 8 la predicción añade la forma de la lista (`list`, aditivo).
+        $this->assertSame(['origin' => StudioLabEngineCheck::ORIGIN_MODEL, 'cause' => null, 'codes' => [], 'measured' => 310, 'chars' => 310, 'cap' => 320, 'withinCap' => true, 'register' => 'ok', 'tuteo' => [], 'trimmed' => false, 'list' => ['shape' => O::SHAPE_MARKERS, 'slot' => false]], $commit, '310: sale entero, con su pregunta');
 
         [$check, $commit] = $this->pasa($turno, $de330);
         $this->assertSame([false, [N::LENGTH_OVER_CAP], true], [$check['pass'], array_column($check['defects'], 'code'), $check['rewrite']], '330: ai/check pide reescribir');
-        $this->assertStringContainsString('mide 330 caracteres y el limite publicado es 320', $check['notes']);
+        // PT-17, puerta 2, L1: con k = 8, la nota de la longitud de la lista del servidor (§1.4), con el mismo tope de la lista.
+        $this->assertStringContainsString('con la lista mide 330 caracteres y el limite de este turno es 320', $check['notes']);
         $this->assertSame([StudioLabEngineCheck::ORIGIN_FALLBACK, N::LENGTH_OVER_CAP, [N::LENGTH_OVER_CAP], false, 320], [$commit['origin'], $commit['cause'], $commit['codes'], $commit['trimmed'], $commit['cap']], '330: no se recorta y es respaldo por la longitud');
 
         // En el último intento, `ai/check` ya no deja reescribir: la misma longitud, sin reescritura (los intentos no cambian).
@@ -251,7 +253,8 @@ class StudioLabEnginePlansListCapTest extends TestCase
 
         [$check, $commit] = $this->pasa($turno, $de450);
         $this->assertSame([false, [N::LENGTH_OVER_CAP], true], [$check['pass'], array_column($check['defects'], 'code'), $check['rewrite']], '450: ai/check pide reescribir');
-        $this->assertStringContainsString('mide 450 caracteres y el limite publicado es 320', $check['notes']);
+        // PT-17, puerta 2, L1: con k = 8, la nota de la longitud de la lista del servidor (§1.4), con el mismo tope de la lista.
+        $this->assertStringContainsString('con la lista mide 450 caracteres y el limite de este turno es 320', $check['notes']);
         $this->assertSame([StudioLabEngineCheck::ORIGIN_FALLBACK, N::LENGTH_OVER_CAP, false, 320], [$commit['origin'], $commit['cause'], $commit['trimmed'], $commit['cap']], '450: respaldo por la longitud, sin recorte');
 
         // Sin lista en el turno, 450 sin marcadores no se mide (la línea base, como hoy).

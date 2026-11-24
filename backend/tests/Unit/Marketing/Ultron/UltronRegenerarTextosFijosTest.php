@@ -29,8 +29,13 @@ use ReflectionClassConstant;
  *  2 bis. las tres variantes con el presupuesto de la lista (22-11-2026: la
  *     falta de la lista, la mezclada o repetida y la longitud, con la lista y
  *     el tope), con los números del turno 2 de la prueba real;
+ *  2 ter. las siete variantes con la lista del servidor (PT-17, puerta 2, L1;
+ *     compilador 8: las seis de la lista y la longitud con la lista, que
+ *     aprobó el propietario el 24-11-2026), con los números de la misma
+ *     prueba con el tope de la lista (X = 75, N = 320, R = 245);
  *  3. el formato de la expansión de la lista, con tres ejemplos del catálogo de
- *     prueba («Nombre ($65.000 COP)», uno con duración y «1 día»).
+ *     prueba («Nombre ($65.000 COP)», uno con duración y «1 día»), y la lista
+ *     que compone Laravel con el compilador 8 (en la ranura y sin ella).
  *
  * Cada nota del código está en el documento (ninguna se queda fuera) y ninguna
  * lleva llaves. Pura: sin base de datos (los `Plan` son instancias en memoria),
@@ -84,6 +89,27 @@ class UltronRegenerarTextosFijosTest extends TestCase
         ];
     }
 
+    /**
+     * Las variantes con la lista del servidor (PT-17, puerta 2, L1), en el
+     * orden de `UltronRegenerationNotes::serverEntries()`, con los números de
+     * la prueba real con el tope de la lista (X = 25 + 2 + 26 + 2 + 20 = 75;
+     * N = 320; R = 245; un mensaje de 339 con la lista).
+     *
+     * @return array<string, array{string, string, array<string,mixed>}>
+     */
+    private static function notasDelServidor(): array
+    {
+        return [
+            'plans_overview/missing' => ['La lista del servidor: falta la lista', 'Con la lista del servidor, cuando el borrador cotiza un plan con PLAN_NAME, PLAN_PRICE o PLAN_DURATION en vez de dejar la lista, o cuando con los marcadores PLAN_1 a PLAN_3 no pone todos los de la lista.', ['X' => 75, 'N' => 320, 'R' => 245]],
+            'plans_overview/mixed' => ['La lista del servidor: las dos formas mezcladas', 'Con la lista del servidor, cuando el borrador pone la ranura y además marcadores PLAN_, la repite, la junta con PLAN_NAME, PLAN_PRICE o PLAN_DURATION o la escribe sin sus dos llaves; cuando pone los marcadores PLAN_1 a PLAN_3 fuera de su orden o repetidos; o cuando, por lo demás bien, deja restos con forma de marcador (PLAN_1 sin llaves, una sola llave).', ['X' => 75, 'N' => 320, 'R' => 245]],
+            'plans_overview/name_written' => ['La lista del servidor: el nombre escrito a mano', 'Con la lista del servidor, cuando el borrador escribe a mano el nombre de un plan de la lista (el backend ya lo pone en la lista, con su precio).', []],
+            'plans_overview/unknown_marker' => ['La lista del servidor: un marcador que no existe', 'Con la lista del servidor, cuando el borrador escribe la ranura con otra caja (en minúsculas) o un PLAN_k que no es de la lista.', []],
+            'plans_overview/no_list' => ['La lista del servidor: la ranura sin lista', 'Con el compilador 8, en un turno sin lista (no se ofreció, o es un turno de cobro), cuando el borrador usa la ranura, una variante suya o PLAN_1 a PLAN_3. En el commit, la ranura fuera de su turno es un marcador desconocido (422).', []],
+            'plans_overview/price_written' => ['La lista del servidor: una cifra escrita', 'Con la lista del servidor, cuando el borrador escribe una cifra o un precio (los pone el backend en la lista).', []],
+            'length_over_cap' => ['La longitud, con la lista del servidor', 'Con la lista del servidor, cuando el mensaje con la lista ya puesta pasa del tope de la lista del turno: pide acortar la prosa, nunca quitar planes. Si el último borrador sigue sin caber, sale la lista fija entera.', ['L' => 339, 'N' => 320, 'X' => 75, 'R' => 245]],
+        ];
+    }
+
     /** Del catálogo de prueba (el de producción del 18-11): uno de un mes, uno con duración y el de un día. */
     private const EJEMPLOS = [['Plan Valera', 65000, 30], ['Plan Semana', 45000, 7], ['PLAN DÍA', 10000, 1]];
 
@@ -116,9 +142,10 @@ class UltronRegenerarTextosFijosTest extends TestCase
         // 1. El parche del motor.
         $md .= "## 1. Las instrucciones del parche del motor\n\n";
         $md .= 'Salen en el paquete de prompts de toda versión del Studio que gobierna algún parámetro (con la línea base no hay parches y no salen), al final de los parches. ';
-        $md .= "Le enseñan al redactor a escribir la lista de planes con los marcadores, y al revisor a no tumbarla por «no lleva el marcador de precio». La lista solo viene cuando la persona pide los planes o los precios en general.\n\n";
-        // Compilador 6 (Enmienda A4-6): van al FINAL de cada prompt (tras su última línea); <L> y <W> los pone el compilador con el tope publicado.
-        $md .= "Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista) y <W> = (L − 110) / 6 palabras, de cinco en cinco por abajo: con un tope de 200, 320 y 35.\n\n";
+        // PT-17, puerta 2: con el compilador 8 la lista la compone Laravel (L1) y la guía lleva una sola cifra (L5).
+        $md .= "Con el compilador 8 (PT-17, puerta 2) le dicen al redactor que la lista la escribe el backend: él pone la ranura LISTA_DE_PLANES entre dobles llaves donde va la lista, o nada y el backend la pone antes de su pregunta final; y al revisor, que esa lista no la juzga. La lista solo viene cuando la persona pide los planes o los precios en general.\n\n";
+        // Compilador 6 (Enmienda A4-6): van al FINAL de cada prompt (tras su última línea); <L> lo pone el compilador con el tope publicado.
+        $md .= "Desde el compilador 6 (Enmienda A4-6) van al final de cada prompt. En el del redactor, <L> = el tope publicado y nunca menos de 320 (la cifra con la que el servidor mide la respuesta con la lista): con un tope de 200, 320. Desde el compilador 8 es su única cifra.\n\n";
         foreach ([
             ['Al redactor (`T_PLANS_COMPOSER`)', 'en `composer` y en `composer_retry`, en la línea siguiente a la última de la base (`'.self::constante('A_FIN_COMPOSER').'…`): la última del prompt', self::constante('T_PLANS_COMPOSER')],
             ['Al revisor (`T_PLANS_CRITIC`)', 'en `critic` y en `critic_retry`, la última línea del prompt (tras `'.self::constante('A_FIN_CRITIC').'…` y la de abajo)', self::constante('T_PLANS_CRITIC')],
@@ -159,7 +186,7 @@ class UltronRegenerarTextosFijosTest extends TestCase
         $claves = array_map(fn (array $e): string => $e[1] === null ? $e[0] : $e[0].'/'.$e[1], N::budgetEntries());
         $this->assertSame($claves, array_keys($conPresupuesto), 'cada variante con el presupuesto, en su orden');
         $md .= "## 2 bis. Con la lista y el tope: el esqueleto y el presupuesto\n\n";
-        $md .= 'Cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. ';
+        $md .= 'Con los marcadores (compilador 7 o anterior; con el 8, las de §2 ter), cuando el turno tiene la lista de planes Y un tope publicado, tres de las notas de arriba salen en esta variante en lugar de la suya: llevan, en palabras, cómo escribir la lista (una frase con los marcadores, cada uno una vez y con «para quién es» en su mención; si no caben, dos; una pregunta corta o ninguna) y cuánto ocupan los marcadores una vez expandidos. ';
         $md .= 'K es cuántos planes tiene la lista; X, lo que miden juntos sus marcadores ya expandidos (el servidor lo calcula con el catálogo de ese momento; el modelo nunca ve un precio); M, lo que se le pide al redactor; R = M − X, lo que le queda para todo lo demás. ';
         $md .= "Sin tope, o sin lista, salen las de arriba tal cual. El código y el `issue` son los de la nota de arriba. El ejemplo es el turno 2 de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200).\n\n";
         $plantillas = [];
@@ -174,6 +201,31 @@ class UltronRegenerarTextosFijosTest extends TestCase
             $md .= '### 2 bis.'.(++$i).' '.$titulo.' (`'.$clave.'`, `'.N::issue($code, $detail)."`)\n\n";
             $md .= '**Cuándo sale:** '.mb_strtolower(mb_substr($cuando, 0, 1)).mb_substr($cuando, 1)."\n\n";
             $md .= "- **Plantilla:** «{$plantillas[$clave]}»\n";
+            $md .= "- **Texto** ({$this->medida($ejemplo)}): «{$ejemplo}»\n\n";
+        }
+
+        // 2 ter. Con la lista del servidor (PT-17, puerta 2, L1; compilador 8).
+        $delServidor = self::notasDelServidor();
+        $claves = array_map(fn (array $e): string => $e[1] === null ? $e[0] : $e[0].'/'.$e[1], N::serverEntries());
+        $this->assertSame($claves, array_keys($delServidor), 'cada variante con la lista del servidor, en su orden');
+        $md .= "## 2 ter. Con la lista del servidor (compilador 8)\n\n";
+        $md .= 'Con el compilador 8 la lista la compone Laravel (PT-17, puerta 2, L1): el redactor ya no ve marcadores de plan, y las seis notas de la lista y la de la longitud de un mensaje con la lista salen en esta variante en lugar de las de arriba, con el mismo código y el mismo `issue`. Hablan de la ranura LISTA_DE_PLANES (en palabras: una nota no lleva llaves). ';
+        $md .= 'N es el tope de la lista del turno; X, lo que mide la lista que compone Laravel con el catálogo de ese momento (el modelo nunca ve un precio); R = N − X, lo que le queda a la prosa (nunca menos de 0); L, lo que mide el mensaje con la lista puesta. ';
+        $md .= "El ejemplo es el de la prueba real del 22-11 (Plan Valera, Plan Mensual y Élite; tope 200, así que el de la lista es 320): X = 75 y R = 245.\n\n";
+        $plantillas = [];
+        foreach (N::serverEntries() as [$code, $detail, , $plantilla]) {
+            $plantillas[$detail === null ? $code : $code.'/'.$detail] = $plantilla;
+        }
+        $i = 0;
+        foreach ($delServidor as $clave => [$titulo, $cuando, $params]) {
+            [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
+            $ejemplo = N::serverNote($code, $detail, $params);
+            $this->assertDoesNotMatchRegularExpression('/[{}]/', $ejemplo, $clave);
+            $md .= '### 2 ter.'.(++$i).' '.$titulo.' (`'.$clave.'`, `'.N::issue($code, $detail)."`)\n\n";
+            $md .= '**Cuándo sale:** '.mb_strtolower(mb_substr($cuando, 0, 1)).mb_substr($cuando, 1)."\n\n";
+            if ($plantillas[$clave] !== $ejemplo) {
+                $md .= "- **Plantilla:** «{$plantillas[$clave]}»\n";
+            }
             $md .= "- **Texto** ({$this->medida($ejemplo)}): «{$ejemplo}»\n\n";
         }
 
@@ -192,6 +244,17 @@ class UltronRegenerarTextosFijosTest extends TestCase
         }
         $expandido = UltronPlansOverview::expand($borrador, $textos, [1, 2, 3])['text'];
         $md .= "\nUn borrador entero, «{$borrador}», sale así ({$this->medida($expandido)}): «{$expandido}»\n";
+
+        // Con el compilador 8: la lista que compone Laravel (PT-17, puerta 2, L1).
+        $md .= "\nCon el compilador 8 la lista la compone Laravel: el borrador lleva la ranura `{{".UltronPlansOverview::SLOT.'}}` o nada, y el commit pone la lista ENTERA, con todos los planes de la lista firmada, en su orden y unidos por «'.UltronPlansOverview::SEPARATOR.'», con el nombre y el precio leídos del catálogo en ese momento. ';
+        $md .= 'Va en la ranura o, sin ella, en una frase propia justo antes de la pregunta final (o al final), con el encabezado de la lista fija sin «Claro. »: «'.UltronPlansOverview::HEADER_ALL_MONTHLY.'», «'.UltronPlansOverview::HEADER_SOME_MONTHLY.'», «'.UltronPlansOverview::HEADER_ALL.'» o «'.UltronPlansOverview::HEADER_SOME.'». Las frases del modelo no se tocan. ';
+        $md .= "Si un plan de la lista ya no se vende, no sale una lista a medias: sale la lista fija del catálogo de ese momento, entera.\n\n";
+        $activos = array_map(fn (int $k): array => ['id' => $k, 'duration_days' => self::EJEMPLOS[$k - 1][2]], [1, 2, 3]);
+        foreach (['Con la ranura' => 'Claro, con gusto. Estos son: {{'.UltronPlansOverview::SLOT.'}}. ¿Cuál le interesa más?', 'Sin ranura' => 'Claro, con gusto. ¿Cuál le interesa más?'] as $caso => $conLista) {
+            $puesta = UltronPlansOverview::render($conLista, [1, 2, 3], $textos, $activos, true);
+            $this->assertTrue($puesta['placed'], $caso);
+            $md .= "- {$caso}, «{$conLista}» sale así ({$this->medida($puesta['text'])}): «{$puesta['text']}»\n";
+        }
 
         $doc = dirname(__DIR__, 4).'/'.self::DOC;
         if (getenv('A4_REGENERAR') === 'escribir') {

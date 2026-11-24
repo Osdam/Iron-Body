@@ -206,7 +206,7 @@ class UltronCheckEndpointTest extends TestCase
     public function test_un_borrador_que_tutea_y_se_pasa_pide_reescritura_con_sus_notas(): void
     {
         // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba tuteo + longitud con la lista de 241 contra 200; esa lista cabe en el tope aplicable (320) y ahora solo da el tuteo, y tuteo + longitud se afirman con una lista de 339.
-        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO, compilador: 7);
         Carbon::setTestNow(Carbon::parse('2026-11-18 22:47:09', 'UTC'));
         $cabe = $this->check($m, $token, str_replace('¿Cuál le interesa más?', '¿Cuál te interesa más?', self::LARGO))->assertOk();
         $this->assertSame([['code' => 'register_tuteo', 'detail' => null, 'issue' => 'naturalness']], $cabe->json('defects'));
@@ -314,7 +314,7 @@ class UltronCheckEndpointTest extends TestCase
      */
     public function test_el_borrador_del_18_11_recibe_la_nota_de_la_lista(): void
     {
-        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO, compilador: 7);
 
         $r = $this->check($m, $token, 'Claro. El Plan Valera cuesta {{PLAN_PRICE}} al mes e incluye acceso total al gimnasio. ¿Le gustaría conocer más?', plan: 3)->assertOk();
 
@@ -390,7 +390,7 @@ class UltronCheckEndpointTest extends TestCase
     #[DataProvider('defectos')]
     public function test_cada_codigo_con_su_nota_literal(string $entrante, string $intent, string $borrador, ?int $plan, array $esperados, string $nota): void
     {
-        [$m, $token] = $this->turno($entrante);
+        [$m, $token] = $this->turno($entrante, compilador: 7);
 
         $r = $this->check($m, $token, $borrador, intent: $intent, plan: $plan)->assertOk();
 
@@ -404,7 +404,7 @@ class UltronCheckEndpointTest extends TestCase
     public function test_la_longitud_se_mide_expandida_con_su_nota_literal(): void
     {
         // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba length_over_cap para la lista de 228 contra 200; con la lista el tope aplicable es 320, así que el borrador es uno que sin expandir cabe en 320 y expandido no, con la nota de 320.
-        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO, compilador: 7);
         $this->assertLessThanOrEqual(320, mb_strlen(self::LARGO_320), 'sin expandir cabría');
 
         $r = $this->check($m, $token, self::LARGO_320)->assertOk();
@@ -418,14 +418,15 @@ class UltronCheckEndpointTest extends TestCase
         $this->beneficiosDistintos();
         [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
 
-        $r = $this->check($m, $token, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál le interesa?')->assertOk();
+        // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres es `missing` (forma A estricta): la lista, entera y en orden, para aislar el beneficio.
+        $r = $this->check($m, $token, 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}} y {{PLAN_3}}. ¿Cuál le interesa?')->assertOk();
 
         $this->assertSame([['code' => 'benefit_misattributed', 'detail' => null, 'issue' => 'factuality']], $r->json('defects'));
         $this->assertSame(['factuality'], $r->json('issues'));
         $this->assertSame(self::N_B, $r->json('notes'));
 
         // El mismo beneficio en su plan: pasa.
-        $this->assertTrue($this->check($m, $token, 'Claro. {{PLAN_3}} incluye entrenador personal dedicado. También tenemos {{PLAN_1}}. ¿Cuál le interesa?')->assertOk()->json('pass'));
+        $this->assertTrue($this->check($m, $token, 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. {{PLAN_3}} incluye entrenador personal dedicado. ¿Cuál le interesa?')->assertOk()->json('pass'));
     }
 
     /**
@@ -437,7 +438,7 @@ class UltronCheckEndpointTest extends TestCase
      */
     public function test_un_marcador_que_no_es_de_la_lista_se_senala_siempre(): void
     {
-        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO, compilador: 7);
         $borrador = 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. Le dejo también los enlaces de la app. ¿Cuál le interesa?';
 
         $r = $this->check($m, $token, $borrador, tools: ['app_links_send'])->assertOk();
@@ -447,13 +448,13 @@ class UltronCheckEndpointTest extends TestCase
         $this->assertSame([], $r->json('defects'), 'con herramientas y marcadores de la lista, nada');
 
         // Sin pedir el precio («¿qué membresías tienen?»: intención desconocida) y con dos planes nombrados.
-        [$m, $token] = $this->turno('¿Qué membresías tienen?');
+        [$m, $token] = $this->turno('¿Qué membresías tienen?', compilador: 7);
         $r = $this->check($m, $token, 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_4}}. ¿Cuál le interesa?', intent: SalesIntents::GENERAL_INFO)->assertOk();
         $this->assertSame([['code' => 'plans_overview', 'detail' => 'unknown_marker', 'issue' => 'relevance']], $r->json('defects'), 'sin pedir el precio');
         $this->assertSame(self::N_P4_K3, $r->json('notes'));
 
         // Turno de cobro: con la lista ofrecida, los marcadores de la lista pasan a no valer.
-        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
+        [$m, $token] = $this->turno(self::PANORAMA_CON_PRECIO, compilador: 7);
         foreach ([[SalesIntents::PAYMENT_LINK_REQUEST, []], [SalesIntents::HIGH_INTENT_CLOSE, []], [SalesIntents::PRICING_QUESTION, ['payment_link_send']]] as [$intent, $tools]) {
             $r = $this->check($m, $token, self::TRES, intent: $intent, tools: $tools)->assertOk();
             $this->assertSame([['code' => 'plans_overview', 'detail' => 'no_list', 'issue' => 'relevance']], $r->json('defects'), $intent);
@@ -719,8 +720,9 @@ class UltronCheckEndpointTest extends TestCase
     public function test_no_es_un_oraculo_de_las_guardas(): void
     {
         foreach ([
-            OutboundContentGuard::CODE_URL_IN_REPLY => 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. Vea todo en ironbody.co/planes. ¿Cuál le interesa?',
-            OutboundContentGuard::CODE_CARD_DATA_REQUEST => 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. Mándeme los 16 dígitos de su tarjeta y lo dejamos listo.',
+            // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres es `missing`: la lista entera, para que la comprobación pase y el que tumba sea el commit.
+            OutboundContentGuard::CODE_URL_IN_REPLY => 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}. Vea todo en ironbody.co/planes. ¿Cuál le interesa?',
+            OutboundContentGuard::CODE_CARD_DATA_REQUEST => 'Claro. Tenemos {{PLAN_1}}, {{PLAN_2}} y {{PLAN_3}}. Mándeme los 16 dígitos de su tarjeta y lo dejamos listo.',
         ] as $codigo => $borrador) {
             $this->nuevaConversacion();
             $this->publica();
@@ -883,12 +885,21 @@ class UltronCheckEndpointTest extends TestCase
 
     // ── Andamio ──────────────────────────────────────────────────────────────
 
-    /** Un turno con su `decide` negociado: el mensaje y el token. @return array{MarketingMessage,string} */
-    public function turno(string $texto, bool $negocia = true): array
+    /**
+     * Un turno con su `decide` negociado: el mensaje y el token. Con
+     * `$compilador`, el token firmado como lo firmaba ese compilador (PT-17,
+     * puerta 2, L1): las notas literales de §7.2 son las de los marcadores,
+     * `k` ≤ 7; las de la lista del servidor (`k` ≥ 8) las fija
+     * `UltronListaDelServidorTest`.
+     *
+     * @return array{MarketingMessage,string}
+     */
+    public function turno(string $texto, bool $negocia = true, ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
+        $decide = $this->decide($m, $negocia);
 
-        return [$m, $this->decide($m, $negocia)['decide_token']];
+        return [$m, $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador)];
     }
 
     private function cuerpo(MarketingMessage $m, string $token, string $borrador, int $attempt = 1, string $intent = SalesIntents::PRICING_QUESTION, ?int $plan = null, array $tools = []): array

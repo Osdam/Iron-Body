@@ -186,6 +186,8 @@ class UltronA4NotasDelServidorTest extends TestCase
         $m = $this->entrante(self::PANORAMA_CON_PRECIO);
         $decide = $this->decide($m);
         $this->assertSame(self::PO, (self::cargaDelToken($decide['decide_token'])['x'] ?? [])['po'] ?? null);
+        // PT-17, puerta 2, L1: las notas y el esqueleto de los marcadores son de los compiladores ≤ 7; con 8, las de la ranura (UltronListaDelServidorTest).
+        $decide['decide_token'] = $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, 7);
 
         // PT-17b (regla «tope de lista», decisión del propietario del 23-11-2026): afirmaba `mixed` + `length_over_cap` para el borrador 3 (251); ahora solo `mixed`, con las cifras del tope de la lista, y `mixed` + exceso se afirma con el borrador 3 alargado (344).
         $r = $this->check($m, $decide['decide_token'], self::BORRADOR_3, 2)->assertOk();
@@ -236,9 +238,10 @@ class UltronA4NotasDelServidorTest extends TestCase
     {
         $this->publica('profesional', 200);
 
-        // El revisor aprueba.
+        // El revisor aprueba. PT-17, puerta 2, L1: el borrador 3 se escribió con los marcadores (compilador ≤ 7); con 8 la traza lleva además la forma de la lista.
         $m = $this->entrante(self::PANORAMA_CON_PRECIO);
         $decide = $this->decide($m);
+        $decide['decide_token'] = $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, 7);
         $aprobado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3, null), self::APROBADO))->assertOk()->json();
         $filaAprobada = $this->ultimaAccion();
         $this->assertSame(self::PRECIOS_200, $aprobado['reply_final']);
@@ -253,6 +256,7 @@ class UltronA4NotasDelServidorTest extends TestCase
         $this->publica('profesional', 200);
         $m = $this->entrante(self::PANORAMA_CON_PRECIO);
         $decide = $this->decide($m);
+        $decide['decide_token'] = $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, 7);
         $rechazado = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::BORRADOR_3, null), self::RECHAZADO_3, self::REGENERACION))->assertOk()->json();
         $fila = $this->ultimaAccion();
 
@@ -351,13 +355,15 @@ class UltronA4NotasDelServidorTest extends TestCase
         $decide = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO));
         $planes = $decide['context']['commercial_turn_policy']['plans_overview']['plans'];
 
-        $this->assertSame([[3, '{{PLAN_1}}'], [4, '{{PLAN_2}}'], [8, '{{PLAN_3}}']], array_map(fn (array $p) => [$p['plan_id'], $p['marker']], $planes));
+        // PT-17, puerta 2, L1: con el compilador 8 la lista la compone Laravel y `decide` no enseña `marker` (causa C3); el orden y los beneficios, los mismos.
+        $this->assertSame([3, 4, 8], array_column($planes, 'plan_id'));
+        $this->assertSame([], array_column($planes, 'marker'));
         $this->assertSame(self::BENEFICIOS_DE_PRODUCCION[8], $planes[2]['benefits'], 'el tercero, los del Élite (id 8)');
         $this->assertNotContains('Acceso ilimitado al gimnasio', $planes[2]['benefits'], 'no los del plan id 3');
         $this->assertSame(self::BENEFICIOS_DE_PRODUCCION[3], $planes[0]['benefits']);
         $activos = array_column($decide['context']['active_plans'], null, 'id');
         foreach ($planes as $p) {
-            $this->assertSame($activos[$p['plan_id']]['benefits'], $p['benefits'], 'los mismos que en active_plans: '.$p['marker']);
+            $this->assertSame($activos[$p['plan_id']]['benefits'], $p['benefits'], 'los mismos que en active_plans: '.$p['plan_id']);
         }
         $this->assertDoesNotMatchRegularExpression('/\d{2,3}[.,]?\d{3}|\$/', json_encode($decide['context']['commercial_turn_policy'], JSON_UNESCAPED_UNICODE), 'ninguna cifra de dinero');
 

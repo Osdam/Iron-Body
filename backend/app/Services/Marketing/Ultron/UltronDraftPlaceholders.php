@@ -67,11 +67,20 @@ final class UltronDraftPlaceholders
      * sueltos. Sin distinguir mayúsculas: nada de eso es español que lea una
      * persona. Una llave suelta en un texto («{lunes a viernes}») no lo es.
      * Sin `\p{…}` (PCRE 10.39) y sin cuantificadores anidados.
+     *
+     * Y la ranura de la lista, `LISTA_DE_PLANES`, con llaves o sin ellas
+     * (PT-17, puerta 2, L1): la ranura nunca puede salir por WhatsApp.
+     *
+     * SIN `\b` (revisión de seguridad de la puerta 2, B1): el `_` es un
+     * carácter de palabra, así que con `\b` no saltaban `_LISTA_DE_PLANES_`
+     * (la cursiva de WhatsApp), `laLISTA_DE_PLANES`, `LISTA_DE_PLANES2` ni
+     * `_PLAN_1_`. Ninguna de estas palabras con guion bajo es español que
+     * lea una persona: dentro de otra palabra también es un marcador.
      */
-    private const FORMA_DE_MARCADOR = '/\{\{|\}\}|\{\s*PLAN_|\bPLAN_(?:[0-9]+|PRICE|NAME|DURATION)\b|\bAPP_LINKS\b/i';
+    private const FORMA_DE_MARCADOR = '/\{\{|\}\}|\{\s*PLAN_|PLAN_(?:[0-9]+|PRICE|NAME|DURATION)|APP_LINKS|LISTA_DE_PLANES/i';
 
-    /** Para quitarlo: cualquier llave y cualquier palabra `PLAN_…` o `APP_LINKS`. */
-    private const RESTOS_DE_MARCADOR = '/[{}]+|\bPLAN_[A-Z0-9_]*|\bAPP_LINKS\b/i';
+    /** Para quitarlo: cualquier llave y cualquier `PLAN_…`, `APP_LINKS` o `LISTA_DE_PLANES`, también dentro de otra palabra (B1). */
+    private const RESTOS_DE_MARCADOR = '/[{}]+|PLAN_[A-Z0-9_]*|APP_LINKS|LISTA_DE_PLANES/i';
 
     public function __construct(
         private readonly SalesConversationReplyService $replies = new SalesConversationReplyService,
@@ -100,26 +109,35 @@ final class UltronDraftPlaceholders
      * marcadores desconocidos, como cualquier otro inventado. Los sustituye
      * {@see UltronPlansOverview::expand()}, no {@see self::resolve()}.
      *
+     * Y con la lista del servidor (`$conRanura`: `k` ≥ 8; PT-17, puerta 2,
+     * L1), la ranura `{{LISTA_DE_PLANES}}` también vale, con su caja exacta y
+     * SOLO con lista: sin ella, o con otra caja, es un marcador desconocido.
+     *
      * @param  int  $planesDeLaLista  cuántos planes tiene la lista firmada del turno; 0 sin lista
+     * @param  bool  $conRanura  la lista la compone Laravel ({@see UltronPlansOverview::serverList()})
      * @return string[]
      */
-    public function unknown(string $draft, int $planesDeLaLista = 0): array
+    public function unknown(string $draft, int $planesDeLaLista = 0, bool $conRanura = false): array
     {
-        return array_values(array_diff($this->found($draft), $this->allowed($planesDeLaLista)));
+        return array_values(array_diff($this->found($draft), $this->allowed($planesDeLaLista, $conRanura)));
     }
 
     /**
      * Los marcadores admitidos en un turno con `n` planes en la lista: la
-     * lista blanca de siempre y, solo con lista, `PLAN_1`…`PLAN_n`. Sin lista,
-     * exactamente {@see self::ALLOWED}.
+     * lista blanca de siempre y, solo con lista, `PLAN_1`…`PLAN_n` y, si la
+     * compone Laravel (`$conRanura`), la ranura {@see UltronPlansOverview::SLOT}.
+     * Sin lista, exactamente {@see self::ALLOWED}.
      *
      * @return string[]
      */
-    public function allowed(int $planesDeLaLista = 0): array
+    public function allowed(int $planesDeLaLista = 0, bool $conRanura = false): array
     {
         $n = min(max($planesDeLaLista, 0), UltronPlansOverview::MAX_PLANS);
+        if ($n === 0) {
+            return self::ALLOWED;
+        }
 
-        return $n === 0 ? self::ALLOWED : [...self::ALLOWED, ...array_map(fn (int $k): string => 'PLAN_'.$k, range(1, $n))];
+        return [...self::ALLOWED, ...array_map(fn (int $k): string => 'PLAN_'.$k, range(1, $n)), ...($conRanura ? [UltronPlansOverview::SLOT] : [])];
     }
 
     /**

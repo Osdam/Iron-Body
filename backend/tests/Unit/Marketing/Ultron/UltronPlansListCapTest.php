@@ -64,10 +64,15 @@ class UltronPlansListCapTest extends TestCase
     /** La consulta combinada: la lista y, además, el horario que también preguntó. */
     private const COMBINADA = 'Abrimos de lunes a viernes de 5 a. m. a 10 p. m. y los sabados en la mañana. En planes tenemos {{PLAN_1}} y {{PLAN_2}}, los dos con acceso total. ¿Cuál le sirve más?';
 
-    /** El sello de un turno del Studio con el compilador 6 y un tope. */
+    /**
+     * El sello de un turno del Studio con el compilador 6 y un tope. PT-17,
+     * puerta 2, L1: con el 7, el último con la lista de marcadores; con 8 las
+     * notas son las de la lista del servidor (las fija UltronListaDelServidorTest)
+     * y el tope de la lista, el mismo (N8 de UltronPromptCompiler8Test).
+     */
     private static function sp(int $n, array $mas = []): array
     {
-        return array_replace(['m' => 'studio', 'r' => null, 'h' => str_repeat('a', 64), 'v' => null, 'c' => null, 'e' => null, 's' => null, 'n' => $n, 't' => 'profesional', 'o' => 1, 'k' => C::VERSION], $mas);
+        return array_replace(['m' => 'studio', 'r' => null, 'h' => str_repeat('a', 64), 'v' => null, 'c' => null, 'e' => null, 's' => null, 'n' => $n, 't' => 'profesional', 'o' => 1, 'k' => 7], $mas);
     }
 
     /**

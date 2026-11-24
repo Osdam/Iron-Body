@@ -48,6 +48,8 @@ class UltronDraftPlaceholdersTest extends TestCase
             'en minúsculas' => 'Tenemos plan_1 y plan_2.',
             'pegado a la puntuación' => '¿PLAN_2?',
             'en un nombre del catálogo' => 'Tenemos Plan PLAN_PRICE ($65.000 COP).',
+            // PT-17, puerta 2 (revisión de seguridad, B1): sin `\b`, dentro de otra palabra también es un marcador (antes no lo era).
+            'una palabra que empieza igual' => 'Le mando PLAN_PRICES_X y PLAN_10X por error de copia.',
         ] as $caso => $texto) {
             $this->assertTrue(M::looksLikeMarker($texto), $caso);
         }
@@ -57,7 +59,6 @@ class UltronDraftPlaceholdersTest extends TestCase
             'el plan del día' => 'El PLAN DÍA cuesta $10.000 COP.',
             'un plan con número' => 'El Plan 1 y el Plan 2 son de un mes.',
             'una llave suelta' => 'Horario {lunes a viernes}: de 5:00 a. m. a 10:00 p. m.',
-            'una palabra que empieza igual' => 'Le mando PLAN_PRICES_X y PLAN_10X por error de copia.',
             'los enlaces de verdad' => "Android: https://play.google.com/store/apps/details?id=com.ironbody\niPhone: https://apps.apple.com/app/id1",
             'vacío' => '',
         ] as $caso => $texto) {

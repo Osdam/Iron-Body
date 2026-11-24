@@ -287,6 +287,11 @@ class UltronDecideService
      * sustituye cada marcador por el plan de esa posición, así que el modelo
      * solo puede nombrar planes que eligió el servidor.
      *
+     * Con el compilador 8 (`sp.k` ≥ 8; PT-17, puerta 2, L1) la lista la
+     * compone Laravel: los mismos planes, en el mismo orden y firmados igual,
+     * pero SIN `marker` ({@see UltronPlansOverview::items()}): el modelo pone
+     * la ranura `{{LISTA_DE_PLANES}}` o nada.
+     *
      * Solo si se cumplen las tres cosas; si no, null y el turno sale como hoy:
      *  - la oferta de prompts es del Studio y lleva el parche del motor que
      *    enseña los marcadores (`sp.o = 1`, {@see UltronPromptOffer}): una
@@ -319,7 +324,8 @@ class UltronDecideService
         }
 
         return ['po' => $po, 'overview' => [
-            'plans' => UltronPlansOverview::items($po, $activePlans),
+            // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), sin `marker`: el modelo ve un solo sistema, la ranura (causa C3).
+            'plans' => UltronPlansOverview::items($po, $activePlans, ! UltronPlansOverview::serverList($sp)),
             'price_asked' => $intent === SalesIntents::PRICING_QUESTION || CommercialTurnPolicy::preguntaPorPrecio($inbound),
         ]];
     }

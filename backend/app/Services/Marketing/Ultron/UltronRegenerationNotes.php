@@ -43,6 +43,11 @@ use InvalidArgumentException;
  * lista y su presupuesto ya expandido ({@see self::budgetNote()}); el código y
  * el `issue` no cambian.
  *
+ * CON LA LISTA DEL SERVIDOR (PT-17, puerta 2, L1; `k` ≥ 8): los seis detalles
+ * de la lista y la longitud de un borrador con la lista tienen otra variante
+ * ({@see self::serverNote()}), que habla de la ranura LISTA_DE_PLANES y de lo
+ * que ocupa la lista que compone Laravel; el código y el `issue`, los mismos.
+ *
  * LOS PARÁMETROS NO LLEVAN TEXTO DE LA PERSONA: marcas de tuteo de la lista
  * cerrada de {@see UltronRegisterDetector::MARCAS}, números, y textos del
  * catálogo (el nombre de un plan o un beneficio) sin llaves, sin saltos de
@@ -172,6 +177,47 @@ final class UltronRegenerationNotes
 
     private const N_L_PRESUPUESTO = 'DEMASIADO LARGO: mide {L} caracteres y el limite publicado es {N}. Reescribelo en unos {M}: primero la respuesta, sin relleno. Los marcadores de la lista ya ocupan {X}: quedan {R}. Si no caben, dos planes; una pregunta corta o ninguna.';
 
+    // ── Con la lista del servidor (PT-17, puerta 2, L1; compilador 8) ──────
+
+    /*
+     * LAS NOTAS CUANDO LA LISTA LA COMPONE LARAVEL (`k` ≥ 8,
+     * {@see UltronPlansOverview::serverList()}): las mismas claves y el mismo
+     * `issue` que las de arriba, pero hablan de la ranura LISTA_DE_PLANES (en
+     * palabras: una nota no puede escribir llaves) y no de los marcadores
+     * PLAN_1 a PLAN_3, que el modelo ya no ve. {N} es el tope de la lista del
+     * turno ({@see UltronReplyFitter::plansListCap()}); {X}, lo que mide la
+     * lista compuesta ({@see UltronPlansOverview::compose()}); {R} = max(0,
+     * N − X); {L}, la medida del mensaje con la lista. Textos aprobados por el
+     * propietario el 24-11-2026 (H0), copiados byte a byte de la
+     * especificación de la puerta 2 (§1.4). La peor mezcla (falta la lista +
+     * longitud) cabe en {@see self::MAX_NOTES}: lo fija
+     * `UltronRegenerationBudgetNotesTest`.
+     */
+    private const N_S_P1 = 'FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa {X} de {N} caracteres: tu texto, como mucho {R}.';
+
+    private const N_S_P2 = 'MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa {X} de {N} caracteres: tu texto, como mucho {R}.';
+
+    private const N_S_P3 = 'NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero).';
+
+    private const N_S_P4 = 'MARCADOR INEXISTENTE: en este turno la lista se pide con LISTA_DE_PLANES entre dobles llaves, en mayusculas; no uses otros marcadores de plan.';
+
+    private const N_S_P5 = 'SIN LISTA DE PLANES: en este turno no uses LISTA_DE_PLANES ni marcadores PLAN_ con numero. Para un precio usa PLAN_PRICE con el plan de la estrategia.';
+
+    private const N_S_P6 = 'SIN CIFRAS: no escribas precios ni cifras de dinero; el backend pone los precios en la lista.';
+
+    private const N_S_L = 'DEMASIADO LARGO: con la lista mide {L} caracteres y el limite de este turno es {N}. La lista ya ocupa {X}: tu texto, como mucho {R}. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.';
+
+    /** Las notas con la lista del servidor: `código` o `código/detalle` → [texto, [parámetro => tipo]], en el orden de §1.4. El `issue` es el de su entrada en {@see self::ENTRIES}. */
+    private const DEL_SERVIDOR = [
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::MISSING => [self::N_S_P1, ['X' => self::INT, 'N' => self::INT, 'R' => self::INT]],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::MIXED => [self::N_S_P2, ['X' => self::INT, 'N' => self::INT, 'R' => self::INT]],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::NAME_WRITTEN => [self::N_S_P3, []],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::UNKNOWN_MARKER => [self::N_S_P4, []],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::NO_LIST => [self::N_S_P5, []],
+        self::PLANS_OVERVIEW.'/'.UltronPlansOverview::PRICE_WRITTEN => [self::N_S_P6, []],
+        self::LENGTH_OVER_CAP => [self::N_S_L, ['L' => self::INT, 'N' => self::INT, 'X' => self::INT, 'R' => self::INT]],
+    ];
+
     /** Las tres variantes con el presupuesto de la lista: `código` o `código/detalle` → [texto, [parámetro => tipo]]. El `issue` es el de su entrada en {@see self::ENTRIES}. */
     private const CON_PRESUPUESTO = [
         self::LENGTH_OVER_CAP => [self::N_L_PRESUPUESTO, ['L' => self::INT, 'N' => self::INT, 'M' => self::INT, 'X' => self::INT, 'R' => self::INT]],
@@ -270,6 +316,30 @@ final class UltronRegenerationNotes
     }
 
     /**
+     * La nota CON LA LISTA DEL SERVIDOR (`k` ≥ 8; PT-17, puerta 2, L1) de un
+     * código y su detalle ({@see self::DEL_SERVIDOR}): los seis de la lista y
+     * la de la longitud de un borrador con la lista, con sus parámetros
+     * exactos y los mismos tipos que {@see self::note()}. Mismo código y mismo
+     * `issue` que la nota de siempre. Quien llama la pide solo con
+     * {@see UltronPlansOverview::serverList()} ({@see UltronDraftDefects::of()}).
+     *
+     * @param  array<string,mixed>  $params
+     *
+     * @throws InvalidArgumentException código o detalle desconocidos, una nota sin esa variante o parámetros que no son los suyos
+     */
+    public static function serverNote(string $code, ?string $detail, array $params = []): string
+    {
+        self::entrada($code, $detail);
+        $clave = $detail === null ? $code : $code.'/'.$detail;
+        if (! isset(self::DEL_SERVIDOR[$clave])) {
+            throw new InvalidArgumentException("La nota de {$code} no tiene variante con la lista del servidor.");
+        }
+        [$plantilla, $tipos] = self::DEL_SERVIDOR[$clave];
+
+        return self::rellena($code, $plantilla, $tipos, $params);
+    }
+
+    /**
      * Una plantilla con sus parámetros: exactamente los que declara, cada uno
      * con su tipo ({@see self::note()}).
      *
@@ -350,6 +420,23 @@ final class UltronRegenerationNotes
     {
         $out = [];
         foreach (self::CON_PRESUPUESTO as $clave => [$plantilla, $tipos]) {
+            [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
+            $out[] = [$code, $detail, array_keys($tipos), $plantilla];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Las notas con la lista del servidor ({@see self::DEL_SERVIDOR}), con la
+     * misma forma que {@see self::entries()} y en el orden de §1.4.
+     *
+     * @return list<array{0:string,1:?string,2:list<string>,3:string}>
+     */
+    public static function serverEntries(): array
+    {
+        $out = [];
+        foreach (self::DEL_SERVIDOR as $clave => [$plantilla, $tipos]) {
             [$code, $detail] = array_pad(explode('/', $clave, 2), 2, null);
             $out[] = [$code, $detail, array_keys($tipos), $plantilla];
         }

@@ -276,7 +276,8 @@ final class StudioLabEngineContext
         }
 
         return ['po' => $po, 'overview' => [
-            'plans' => UltronPlansOverview::items($po, $activePlans),
+            // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), sin marcadores: como `decide`.
+            'plans' => UltronPlansOverview::items($po, $activePlans, ! UltronPlansOverview::serverList($sp)),
             'price_asked' => $intent === SalesIntents::PRICING_QUESTION || CommercialTurnPolicy::preguntaPorPrecio($inbound),
         ]];
     }

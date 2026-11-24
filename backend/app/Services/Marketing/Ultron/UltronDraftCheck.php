@@ -229,7 +229,7 @@ final class UltronDraftCheck
         $conEnlaces = ! $modoMemoria && in_array(SalesIntents::TOOL_APP_LINKS_SEND, $tools, true);
 
         $textosDeLaLista = $this->textosDeLaLista($poDelTurno);
-        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $textosDeLaLista, $politica);
+        $expandido = $this->expandido($raw, $draft['recommended_plan_id'] ?? null, $tools, $poDelTurno, $textosDeLaLista, $politica, $sp, $catalog);
         $defectos = array_slice([
             ...UltronDraftDefects::of(
                 ['reply_draft' => $raw, 'intent' => $intent, 'tools_requested' => $tools],
@@ -270,18 +270,25 @@ final class UltronDraftCheck
      *    del enlace de pago, que aquí no se acuña. En modo memoria (ola 4b),
      *    ninguno: el commit quita el marcador y la herramienta.
      *
+     * Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), la lista se
+     * pone con {@see UltronPlansOverview::render()}, el mismo punto que el
+     * commit y el laboratorio: la ranura (o, sin ella, antes de la pregunta
+     * final) pasa a la lista entera.
+     *
      * @param  list<string>  $tools
      * @param  list<int>  $po
      * @param  array<int,string>  $textosDeLaLista  {@see self::textosDeLaLista()}
      * @param  array<string,mixed>|null  $politica  la política del turno, si se pudo leer
+     * @param  array<string,mixed>  $sp  el `sp` firmado
+     * @param  array<int,array<string,mixed>>  $catalog  `activePlans()`
      */
-    private function expandido(string $raw, mixed $planId, array $tools, array $po, array $textosDeLaLista, ?array $politica = null): string
+    private function expandido(string $raw, mixed $planId, array $tools, array $po, array $textosDeLaLista, ?array $politica = null, array $sp = [], array $catalog = []): string
     {
         $texto = $raw;
 
         if ($po !== []) {
-            // Solo se sustituyen los marcadores que lleva el borrador: los demás textos de la lista no cambian nada.
-            $texto = UltronPlansOverview::expand($texto, $textosDeLaLista, $po)['text'];
+            // Solo se sustituyen los marcadores que lleva el borrador (forma A); con la forma B, la lista entera en su sitio.
+            $texto = UltronPlansOverview::render($texto, $po, $textosDeLaLista, $catalog, UltronPlansOverview::serverList($sp))['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {

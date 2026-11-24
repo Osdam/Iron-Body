@@ -3,6 +3,7 @@
 namespace Tests\Unit\Marketing\Ultron\Prompts;
 
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
+use App\Services\Marketing\Ultron\UltronDecideToken;
 use App\Services\Marketing\Ultron\UltronPublishedConfig as Lector;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -151,5 +152,27 @@ trait PromptPublications
         [$cuerpo] = explode('.', $token);
 
         return json_decode((string) base64_decode(strtr($cuerpo, '-_', '+/')), true, 32, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * El token de una respuesta de `decide` firmado otra vez, con el mismo
+     * firmador, como lo firmaba un compilador anterior (`sp.k`): el token de
+     * antes del despliegue que llega a `ai/check` o al commit después
+     * (PT-17, puerta 2, L1: con `k` ≤ 7 la lista la escriben los marcadores
+     * del modelo; con 8, Laravel). Sin `sp` (Legacy), el token tal cual.
+     *
+     * @param  array<string,mixed>  $decide  la respuesta de `decide`
+     */
+    protected function conCompilador(array $decide, int $conversationId, int $messageId, int $compilador): string
+    {
+        $x = (array) (self::cargaDelToken((string) $decide['decide_token'])['x'] ?? []);
+        if (! is_array($x['sp'] ?? null)) {
+            return (string) $decide['decide_token'];
+        }
+        $x['sp']['k'] = $compilador;
+
+        return app(UltronDecideToken::class)->issue(
+            $conversationId, $messageId, $decide['commercial_phase'], $decide['allowed_transitions'], $decide['knowledge_version'], $x,
+        )['token'];
     }
 }

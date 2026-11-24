@@ -142,8 +142,12 @@ class StudioLabEnginePt17C7ReplayTest extends TestCase
     {
         $f = self::fixture();
         $paquete = self::paquete($f['engineTarget']['version']);
-        $this->assertSame([200, 'profesional', 1, C::VERSION], [$paquete['sp']['n'], $paquete['sp']['t'], $paquete['sp']['o'], $paquete['sp']['k']], 'el sello de la v4 con el compilador de hoy');
-        $this->assertSame($f['engineTarget']['bundleHash'], $paquete['bundleHash'], 'el mismo paquete de prompts que se midió');
+        // PT-17, puerta 2: la medición se hizo con el compilador 7, y se reproduce con SU sello (`k` = 7: los marcadores; con el 8 la lista la compone Laravel).
+        $this->assertSame([200, 'profesional', 1, 7], [$paquete['sp']['n'], $paquete['sp']['t'], $paquete['sp']['o'], $paquete['sp']['k']], 'el sello de la v4 con el compilador de la medición');
+        // El paquete que se midió es el del 7 (`200019e4…`, la huella que UltronPromptCompiler8Test fija como «la del 7, que el 8 ya no da»). Hoy compila
+        // el 8 y no se puede volver a compilar el del 7; la reproducción no lo necesita: los nodos del modelo devuelven lo grabado (R1 lo vigila).
+        $this->assertSame([7, '200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631'], [$f['engineTarget']['compiler'], $f['engineTarget']['bundleHash']], 'el paquete que se midió');
+        $this->assertNotSame($f['engineTarget']['bundleHash'], $paquete['bundleHash'], 'el de hoy es el del compilador '.C::VERSION);
 
         $reproducidos = $this->reproducirTodos();
         $this->assertCount(25, $reproducidos);
@@ -274,12 +278,19 @@ class StudioLabEnginePt17C7ReplayTest extends TestCase
         return json_decode((string) file_get_contents(self::FIXTURE), true, 32, JSON_THROW_ON_ERROR);
     }
 
-    /** @return array{roles:array<string,string>,sp:array<string,mixed>,bundleHash:string} el paquete que firma el Studio para la v4 con el compilador de hoy */
+    /**
+     * El paquete que firma el Studio para la v4 con el compilador de hoy, con
+     * el sello (`sp.k`) del de la medición (PT-17, puerta 2: el 7).
+     *
+     * @return array{roles:array<string,string>,sp:array<string,mixed>,bundleHash:string}
+     */
     private static function paquete(string $version): array
     {
         $parte = self::parteV2($version, self::V4);
+        $paquete = StudioPromptBundle::rolesFor($parte['governed'], $version, $parte['contentHash']);
+        $paquete['sp']['k'] = (int) self::fixture()['engineTarget']['compiler'];
 
-        return StudioPromptBundle::rolesFor($parte['governed'], $version, $parte['contentHash']);
+        return $paquete;
     }
 
     /**

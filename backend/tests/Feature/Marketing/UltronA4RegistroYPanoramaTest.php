@@ -578,7 +578,8 @@ class UltronA4RegistroYPanoramaTest extends TestCase
         $this->nuevaConversacion();
         $this->publica('profesional', 320);
         $dos = 'Tenemos el Plan Valera y el Plan Mensual, los dos de un mes, y también el Trimestre. ¿Sobre cuál le cuento más?';
-        $r = $this->aprobado(SalesIntents::GENERAL_INFO, '¿Qué planes tienen?', $dos, null);
+        // PT-17, puerta 2, L1: la disyunción de los nombres es de los compiladores ≤ 7; con 8 los nombres a mano no valen (`name_written`, P-2 A; UltronListaDelServidorTest).
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, '¿Qué planes tienen?', $dos, null, compilador: 7);
         $this->assertSame($dos, $r['reply_final']);
         $this->assertArrayNotHasKey('policy_violations', $this->ultimaAccion()->metadata);
     }
@@ -856,12 +857,13 @@ class UltronA4RegistroYPanoramaTest extends TestCase
         );
 
         // Los mismos tres, pero el tope suelta el tercero (un nombre largo): queda uno sin nombrar y vuelve «Algunos».
+        // PT-17, puerta 2, L1: soltar un plan es de los compiladores ≤ 7; con 8 la lista fija sale entera (comprobación 3, UltronListaDelServidorTest).
         Plan::query()->whereKey(8)->update(['name' => 'Élite Total con Entrenador Personal y Nutrición']);
         $this->nuevaConversacion();
         $this->publica('profesional', 160);
         $this->assertSame(
             'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?',
-            $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Qué planes tienen y cuánto cuestan?')['reply_final'],
+            $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Qué planes tienen y cuánto cuestan?', compilador: 7)['reply_final'],
         );
     }
 
@@ -1480,7 +1482,8 @@ class UltronA4RegistroYPanoramaTest extends TestCase
             160 => 'Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?'] as $tope => $sale) {
             $this->nuevaConversacion();
             $this->publica('profesional', $tope);
-            $this->assertSame($sale, $this->caidoCon(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?', [])['reply_final'], (string) $tope);
+            // PT-17, puerta 2, L1: a 160 suelta el tercero (D-6, compiladores ≤ 7); con 8 la lista fija sale entera (comprobación 3).
+            $this->assertSame($sale, $this->caidoCon(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?', [], compilador: 7)['reply_final'], (string) $tope);
         }
 
         // Con TODOS los vendibles nombrados (tres, mixtos), «Nuestros planes».
@@ -1731,14 +1734,15 @@ class UltronA4RegistroYPanoramaTest extends TestCase
         return $this->commit($this->payload($m, $decide['decide_token'], array_merge(self::propuesta($intent, $borrador, $plan), $extra), self::APROBADO))->assertOk()->json();
     }
 
-    /** Dos rechazos del revisor, con campos de la propuesta a medida. */
-    private function caidoCon(string $intent, string $texto, array $extra): array
+    /** Dos rechazos del revisor, con campos de la propuesta a medida. Con `$compilador`, como en {@see criticoCaido()}. */
+    private function caidoCon(string $intent, string $texto, array $extra, ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, true);
         $propuesta = array_merge(self::propuesta($intent, 'Te confirmo que el plan Élite es el que mejor te encaja. ¿Quieres que te ayude a concretar tu inscripción?', 8), $extra);
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        return $this->commit($this->payload($m, $decide['decide_token'], $propuesta, self::CRITICO_CAIDO))->assertOk()->json();
+        return $this->commit($this->payload($m, $token, $propuesta, self::CRITICO_CAIDO))->assertOk()->json();
     }
 
     /** La cortesía de R7 con otro entrante (el día y la hora, y algo más). */
@@ -1934,21 +1938,24 @@ class UltronA4RegistroYPanoramaTest extends TestCase
     }
 
     /** Dos rechazos del revisor: el turno sale por `safeFallback()` (el borrador, de tú, no sale). */
-    private function criticoCaido(string $intent, string $texto, bool $negocia = true): array
+    private function criticoCaido(string $intent, string $texto, bool $negocia = true, ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, $negocia);
+        // Con `$compilador`, el token firmado como lo firmaba ese compilador (PT-17, puerta 2, L1).
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        return $this->commit($this->payload($m, $decide['decide_token'], self::propuesta($intent, 'Te confirmo que el plan Élite es el que mejor te encaja. ¿Quieres que te ayude a concretar tu inscripción?', 8), self::CRITICO_CAIDO))->assertOk()->json();
+        return $this->commit($this->payload($m, $token, self::propuesta($intent, 'Te confirmo que el plan Élite es el que mejor te encaja. ¿Quieres que te ayude a concretar tu inscripción?', 8), self::CRITICO_CAIDO))->assertOk()->json();
     }
 
-    /** Un borrador que el revisor aprobó: el turno sale por el camino normal. */
-    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = []): array
+    /** Un borrador que el revisor aprobó: el turno sale por el camino normal. Con `$compilador`, como en {@see criticoCaido()}. */
+    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = [], ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, true);
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        return $this->commit($this->payload($m, $decide['decide_token'], self::propuesta($intent, $borrador, $plan, $herramientas), self::APROBADO))->assertOk()->json();
+        return $this->commit($this->payload($m, $token, self::propuesta($intent, $borrador, $plan, $herramientas), self::APROBADO))->assertOk()->json();
     }
 
     /** La persona da el día y la hora, el revisor aprueba y el modelo pide la cortesía (R7 de A4). */

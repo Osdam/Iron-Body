@@ -140,10 +140,11 @@ class UltronA4ListaDelModeloTest extends TestCase
         $this->assertSame(1, $this->spDe($decide)['o'] ?? null, 'el paquete ofrecido lleva el parche del motor');
         $this->assertSame([
             // 22-11-2026, corrección (3): cada uno con los beneficios de su plan, los de `active_plans`.
+            // PT-17, puerta 2, L1: con el compilador 8 (`sp.k` = 8) la lista la compone Laravel y `decide` ya no enseña `marker` (causa C3).
             'plans' => [
-                ['marker' => '{{PLAN_1}}', 'plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
-                ['marker' => '{{PLAN_2}}', 'plan_id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
-                ['marker' => '{{PLAN_3}}', 'plan_id' => 8, 'name' => 'Élite', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
+                ['plan_id' => 3, 'name' => 'Plan Valera', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
+                ['plan_id' => 4, 'name' => 'Plan Mensual', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
+                ['plan_id' => 8, 'name' => 'Élite', 'duration_days' => 30, 'benefits' => ['Acceso total al gimnasio']],
             ],
             'price_asked' => true,
         ], $decide['context']['commercial_turn_policy']['plans_overview']);
@@ -231,7 +232,8 @@ class UltronA4ListaDelModeloTest extends TestCase
         $fila = $this->ultimaAccion();
         $this->assertArrayNotHasKey('policy_violations', $fila->metadata, 'sin policy_plans_overview aunque se pregunte el precio');
         $this->assertArrayNotHasKey('plan_price_realigned', $fila->metadata, 'con dos nombres o más y sin PLAN_PRICE no se realinea');
-        $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => true, 'detail' => null], $fila->metadata['plans_overview']);
+        // PT-17, puerta 2, L1: con k ≥ 8 la traza añade la forma de la lista (`markers`) y si traía la ranura.
+        $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => true, 'detail' => null, 'shape' => 'markers', 'slot' => false], $fila->metadata['plans_overview']);
         // La longitud, medida sobre el texto YA EXPANDIDO (el borrador sin expandir mide mucho menos).
         $this->assertSame(UltronReplyFitter::measure(self::TRES_EXPANDIDO), $fila->metadata['length']['from']);
         $this->assertSame(UltronReplyFitter::measure(self::TRES_EXPANDIDO), $fila->metadata['length']['to']);
@@ -246,7 +248,8 @@ class UltronA4ListaDelModeloTest extends TestCase
     public function test_la_lista_del_modelo_con_dos_marcadores(): void
     {
         $this->publica('profesional', 200);
-        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::DOS, null);
+        // PT-17, puerta 2, L1: dos de tres valen con los marcadores (compilador ≤ 7); con 8, la forma A es estricta (UltronListaDelServidorTest, comprobación 4).
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::DOS, null, compilador: 7);
 
         $this->assertSame(self::DOS_EXPANDIDO, $r['reply_final']);
         $fila = $this->ultimaAccion();
@@ -260,20 +263,21 @@ class UltronA4ListaDelModeloTest extends TestCase
     public function test_el_plan_del_modelo_fuera_de_la_lista_no_cuenta_como_entregado(): void
     {
         $this->publica('profesional', 200);
-        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::DOS, 5);
+        // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres no vale (forma A estricta): la lista entera, que es lo que se prueba aquí.
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::TRES, 5);
 
-        $this->assertSame(self::DOS_EXPANDIDO, $r['reply_final']);
+        $this->assertSame(self::TRES_EXPANDIDO, $r['reply_final']);
         $this->assertNull($r['price_source']);
-        $this->assertArrayNotHasKey('plan_price_realigned', $this->ultimaAccion()->metadata, 'con dos nombres y sin PLAN_PRICE no se realinea');
+        $this->assertArrayNotHasKey('plan_price_realigned', $this->ultimaAccion()->metadata, 'con varios nombres y sin PLAN_PRICE no se realinea');
         $this->assertSame(5, $this->ultimaAccion()->metadata['recommended_plan_id'], 'el plan del modelo no se mueve');
-        $this->assertSame([3, 4], array_column((array) $this->memoria()->get('prices_delivered'), 'plan_id'), 'el Trimestre no se dio');
+        $this->assertSame([3, 4, 8], array_column((array) $this->memoria()->get('prices_delivered'), 'plan_id'), 'el Trimestre no se dio');
 
         // Si el plan del modelo está en la lista, sí salió.
         $this->nuevaConversacion();
         $this->publica('profesional', 200);
-        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::DOS, 3);
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::TRES, 3);
         $this->assertSame(3, $r['price_source']['plan_id'] ?? null);
-        $this->assertSame([3, 4], array_column((array) $this->memoria()->get('prices_delivered'), 'plan_id'));
+        $this->assertSame([3, 4, 8], array_column((array) $this->memoria()->get('prices_delivered'), 'plan_id'));
     }
 
     public function test_el_precio_cambiado_entre_decide_y_commit_sale_el_nuevo(): void
@@ -284,9 +288,10 @@ class UltronA4ListaDelModeloTest extends TestCase
         Plan::query()->whereKey(4)->update(['price' => 87500]);
         Plan::query()->whereKey(3)->update(['name' => 'Plan Ónix']);
 
-        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::DOS, null), self::APROBADO))->assertOk()->json();
+        // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres no vale (forma A estricta): la lista entera.
+        $r = $this->commit($this->payload($m, $decide['decide_token'], self::propuesta(SalesIntents::PRICING_QUESTION, self::TRES, null), self::APROBADO))->assertOk()->json();
 
-        $this->assertSame('Claro. Tenemos Plan Ónix ($65.000 COP) y Plan Mensual ($87.500 COP), los dos de un mes. ¿Cuál le interesa?', $r['reply_final']);
+        $this->assertSame('Claro. Tenemos Plan Ónix ($65.000 COP), Plan Mensual ($87.500 COP) y Élite ($180.000 COP), todos de un mes. ¿Cuál le interesa más?', $r['reply_final']);
         $this->assertTrue($this->ultimaAccion()->metadata['plans_overview']['valid']);
     }
 
@@ -315,7 +320,7 @@ class UltronA4ListaDelModeloTest extends TestCase
         $this->assertStringNotContainsString('Mensual', (string) $this->ultimoSaliente()?->body);
         $fila = $this->ultimaAccion();
         $this->assertContains(CommercialTurnPolicy::VIOLACION_PANORAMA, $fila->metadata['policy_violations']);
-        $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'not_sellable'], $fila->metadata['plans_overview']);
+        $this->assertMismaTraza(['offered' => self::PO, 'used' => self::PO, 'valid' => false, 'detail' => 'not_sellable', 'shape' => 'markers', 'slot' => false], $fila->metadata['plans_overview']);
         $this->assertStringNotContainsString('$80.000', (string) $fila->metadata['policy_discarded_draft'], 'ni la evidencia escribe el precio de un plan que ya no se vende');
         $this->assertNull($r['price_source']);
     }
@@ -439,7 +444,8 @@ class UltronA4ListaDelModeloTest extends TestCase
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, self::DOS, null, [SalesIntents::TOOL_STAFF_REVIEW]);
 
         $this->assertSame(self::DOS_EXPANDIDO, $r['reply_final'], 'con una herramienta en el turno no hay panorama (G1.2)');
-        $this->assertTrue($this->ultimaAccion()->metadata['plans_overview']['valid']);
+        // PT-17, puerta 2, L1: con k ≥ 8 dos de tres no es una lista válida (forma A estricta), y aun así sale: sin panorama no se sustituye.
+        $this->assertSame([false, UltronPlansOverview::MISSING], [$this->ultimaAccion()->metadata['plans_overview']['valid'], $this->ultimaAccion()->metadata['plans_overview']['detail']]);
     }
 
     // ── El turno de cobro (P-3, cambio 5) ───────────────────────────────────
@@ -490,7 +496,7 @@ class UltronA4ListaDelModeloTest extends TestCase
         $this->assertSame('Claro. Élite ($180.000 COP) es el que preguntó; también tenemos Plan Valera ($65.000 COP) y Plan Mensual ($80.000 COP). ¿Cuál le interesa?', $r['reply_final']);
         $fila = $this->ultimaAccion();
         $this->assertArrayNotHasKey('policy_violations', $fila->metadata);
-        $this->assertMismaTraza(['offered' => [8, 3, 4], 'used' => [8, 3, 4], 'valid' => true, 'detail' => null], $fila->metadata['plans_overview']);
+        $this->assertMismaTraza(['offered' => [8, 3, 4], 'used' => [8, 3, 4], 'valid' => true, 'detail' => null, 'shape' => 'markers', 'slot' => false], $fila->metadata['plans_overview']);
         $this->assertSame(8, $r['price_source']['plan_id'] ?? null, 'el plan de la política, que salió');
     }
 
@@ -500,7 +506,8 @@ class UltronA4ListaDelModeloTest extends TestCase
     {
         $this->beneficiosDistintos();
         $this->publica('profesional', 200);
-        $borrador = 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}}. ¿Cuál le interesa?';
+        // PT-17, puerta 2, L1: con k ≥ 8 la lista de dos de tres no vale (forma A estricta): la lista entera, para aislar el beneficio.
+        $borrador = 'Claro. {{PLAN_1}} incluye entrenador personal dedicado. También tenemos {{PLAN_2}} y {{PLAN_3}}. ¿Cuál le interesa?';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, $borrador, null);
 
         $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'el respaldo de la intención: la lista fija');
@@ -513,9 +520,9 @@ class UltronA4ListaDelModeloTest extends TestCase
         // El mismo beneficio, en su plan: sale el borrador.
         $this->nuevaConversacion();
         $this->publica('profesional', 200);
-        $bien = 'Claro. {{PLAN_3}} incluye entrenador personal dedicado. También tenemos {{PLAN_1}}. ¿Cuál le interesa?';
+        $bien = 'Claro. Tenemos {{PLAN_1}} y {{PLAN_2}}. {{PLAN_3}} incluye entrenador personal dedicado. ¿Cuál le interesa?';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PANORAMA_CON_PRECIO, $bien, null);
-        $this->assertSame('Claro. Élite ($180.000 COP) incluye entrenador personal dedicado. También tenemos Plan Valera ($65.000 COP). ¿Cuál le interesa?', $r['reply_final']);
+        $this->assertSame('Claro. Tenemos Plan Valera ($65.000 COP) y Plan Mensual ($80.000 COP). Élite ($180.000 COP) incluye entrenador personal dedicado. ¿Cuál le interesa?', $r['reply_final']);
         $this->assertArrayNotHasKey('benefits', $this->ultimaAccion()->metadata);
     }
 
@@ -983,13 +990,18 @@ class UltronA4ListaDelModeloTest extends TestCase
         ];
     }
 
-    /** Un borrador que el revisor aprobó: el turno sale por el camino normal. */
-    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = []): array
+    /**
+     * Un borrador que el revisor aprobó: el turno sale por el camino normal.
+     * Con `$compilador`, el token firmado como lo firmaba ese compilador
+     * (PT-17, puerta 2, L1: con `k` ≤ 7 la lista la escriben los marcadores).
+     */
+    private function aprobado(string $intent, string $texto, string $borrador, ?int $plan, array $herramientas = [], ?int $compilador = null): array
     {
         $m = $this->entrante($texto);
         $decide = $this->decide($m, true);
+        $token = $compilador === null ? $decide['decide_token'] : $this->conCompilador($decide, (int) $this->conversation->id, (int) $m->id, $compilador);
 
-        return $this->commit($this->payload($m, $decide['decide_token'], self::propuesta($intent, $borrador, $plan, $herramientas), self::APROBADO))->assertOk()->json();
+        return $this->commit($this->payload($m, $token, self::propuesta($intent, $borrador, $plan, $herramientas), self::APROBADO))->assertOk()->json();
     }
 
     private function commit(array $payload)

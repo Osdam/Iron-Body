@@ -4,7 +4,6 @@ namespace Tests\Unit\UltronStudio;
 
 use App\Models\MarketingKnowledgeItem;
 use App\Models\Plan;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler as C;
 use App\Services\Marketing\Ultron\UltronPlansOverview as O;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
 use App\Services\UltronStudio\StudioLabEngineCheck;
@@ -115,12 +114,19 @@ class StudioLabEnginePt17cBorradoresRealesTest extends TestCase
         return json_decode((string) file_get_contents(self::FIXTURE), true, 16, JSON_THROW_ON_ERROR);
     }
 
-    /** @return array<string,mixed> el `sp` que el Studio firma para la v4 con el compilador de hoy */
+    /**
+     * El `sp` que el Studio firma para la v4, con el sello del compilador 7
+     * (PT-17, puerta 2, L1: estos borradores se escribieron con los
+     * marcadores; con el 8 la lista la compone Laravel y las reglas son otras,
+     * que fija UltronListaDelServidorTest).
+     *
+     * @return array<string,mixed>
+     */
     private static function sp(): array
     {
         $parte = self::parteV2(self::VERSION, self::V4);
 
-        return StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
+        return ['k' => 7] + StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
     }
 
     /** @return array<string,mixed> el turno de ese mensaje con el sello de la v4 */
@@ -177,7 +183,7 @@ class StudioLabEnginePt17cBorradoresRealesTest extends TestCase
         $f = self::fixture();
         $this->assertCount(5, $f['combinedSecond']);
         $turno = $this->turno($f['scenarios']['E-006']);
-        $this->assertSame([200, C::VERSION], [$turno['sp']['n'], $turno['sp']['k']], 'el sello de la v4 con el compilador de hoy');
+        $this->assertSame([200, 7], [$turno['sp']['n'], $turno['sp']['k']], 'el sello de la v4 con el compilador 7, el de los marcadores');
         $this->assertSame($f['po'], $turno['po'], 'a la combinada el servidor le ofrece la lista');
 
         foreach ($f['combinedSecond'] as $caso) {

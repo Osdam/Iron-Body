@@ -166,12 +166,15 @@ final class StudioLabEngineCheck
      * que Preparar Commit manda (el borrador, el plan y el veredicto).
      *
      * Con el aviso del revisor (PT-17 L4), además `criticAdvisory: true`; sin
-     * él, la clave no va (la forma de siempre).
+     * él, la clave no va (la forma de siempre). Con la lista del servidor
+     * (`k` ≥ 8; PT-17, puerta 2, L1) y la lista en el turno, además `list`:
+     * la forma del borrador (`markers` o `server`) y si traía la ranura; sin
+     * ella, la clave no va.
      *
      * @param  array<string,mixed>  $turn  como en {@see check()}
      * @param  array{reply_draft:string,recommended_plan_id:mixed,critic:array<string,mixed>}  $commit  {@see StudioLabEngineFlow::prepareCommit()}
      * @param  array<string,mixed>  $strategy  la estrategia validada (intención y herramientas)
-     * @return array{origin:string,cause:?string,codes:list<string>,measured:int,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool,criticAdvisory?:true}
+     * @return array{origin:string,cause:?string,codes:list<string>,measured:int,chars:int,cap:?int,withinCap:bool,register:string,tuteo:list<string>,trimmed:bool,criticAdvisory?:true,list?:array{shape:string,slot:bool}}
      */
     public function predict(array $turn, array $commit, array $strategy): array
     {
@@ -248,7 +251,27 @@ final class StudioLabEngineCheck
             'register' => UltronFormalReplies::aplica($tono) ? ($marcas === [] ? 'ok' : 'tuteo') : 'n/a',
             'tuteo' => array_values(array_map('strval', $marcas)),
             'trimmed' => $recortado,
-        ] + ($aviso ? ['criticAdvisory' => true] : []);
+        ] + ($aviso ? ['criticAdvisory' => true] : []) + $this->listShape($turn, $draft);
+    }
+
+    /**
+     * La forma de la lista del borrador (PT-17, puerta 2, L1), solo con la
+     * lista del servidor y la lista en el turno: `markers` o `server` y si
+     * trae la ranura. Lo mismo que el commit anota en `metadata.plans_overview`.
+     *
+     * @param  array<string,mixed>  $turn
+     * @param  array<string,mixed>  $draft
+     * @return array{list?:array{shape:string,slot:bool}}
+     */
+    private function listShape(array $turn, array $draft): array
+    {
+        $po = $this->turnList($turn, (string) $draft['intent'], array_values((array) ($draft['tools_requested'] ?? [])));
+        if (! UltronPlansOverview::serverList($turn['sp']) || $po === []) {
+            return [];
+        }
+        $r = UltronPlansOverview::render((string) $draft['reply_draft'], $po, $this->listTexts($po), $turn['catalog'], true);
+
+        return ['list' => ['shape' => $r['shape'], 'slot' => $r['slot']]];
     }
 
     /**
@@ -392,8 +415,8 @@ final class StudioLabEngineCheck
         $planId = $draft['recommended_plan_id'] ?? null;
 
         if ($po !== []) {
-            // Solo se sustituyen los marcadores que lleva el borrador: los demás textos de la lista no cambian nada.
-            $texto = UltronPlansOverview::expand($texto, $listTexts ?? $this->listTexts($po), $po)['text'];
+            // El mismo punto que el motor (PT-17, puerta 2, L1): forma A, sus marcadores; forma B, la lista entera en su sitio.
+            $texto = UltronPlansOverview::render($texto, $po, $listTexts ?? $this->listTexts($po), $turn['catalog'], UltronPlansOverview::serverList($turn['sp']))['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {

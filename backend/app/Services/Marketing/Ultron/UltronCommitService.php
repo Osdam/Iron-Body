@@ -163,6 +163,15 @@ class UltronCommitService
      */
     private const LISTA_NO_VENDIBLE = 'not_sellable';
 
+    /**
+     * Traza: con la lista del servidor (`k` ≥ 8), el texto de un plan de la
+     * lista no puede salir (un control de dirección, un salto de línea o forma
+     * de marcador en su nombre del CRM; {@see UltronPlansOverview::unsafeListText()}).
+     * El plan SÍ se vende: no es `not_sellable` (revisión de seguridad de la
+     * puerta 2, M2). Se trata igual: la lista del modelo no sale.
+     */
+    private const LISTA_NOMBRE_NO_SEGURO = 'unsafe_plan_name';
+
     /** Traza: `decide` ofreció la lista pero el turno es de cobro, y en un turno de cobro la lista no vale (P-3, cambio 5). */
     private const LISTA_EN_COBRO = 'money_turn';
 
@@ -464,7 +473,7 @@ class UltronCommitService
          * bloquea exactamente igual que cualquier otro commit.
          */
         if ($rendicion = $this->recoveryReason($payload)) {
-            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion, $studio, $studioPrompts, $turno);
+            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion, $studio, $studioPrompts, $turno, (array) ($token['extra'] ?? []));
         }
 
         // ── Camino del critic fallido ─────────────────────────────────────────
@@ -558,14 +567,23 @@ class UltronCommitService
         // La misma regla que la comprobación (`ai/check`): una sola, en la lista.
         $cobroPropuesto = UltronPlansOverview::isMoneyTurn((string) ($proposal['intent'] ?? ''), (array) ($proposal['tools_requested'] ?? []));
         $listaDelTurno = $cobroPropuesto ? [] : $listaOfrecida;
+        /*
+         * LA LISTA LA COMPONE LARAVEL (PT-17, puerta 2, L1): con versión del
+         * Studio compilada con el 8 o posterior (`sp.k`). Entonces la ranura
+         * `{{LISTA_DE_PLANES}}` también es un marcador válido, pero SOLO en un
+         * turno con la lista y con su caja exacta: sin lista (o en un turno de
+         * cobro) o con otra caja, es desconocido (422) como cualquier otro.
+         */
+        $spFirmado = is_array($token['extra']['sp'] ?? null) ? $token['extra']['sp'] : [];
+        $listaDelServidor = $turno['studio'] && UltronPlansOverview::serverList($spFirmado);
 
-        $placeholdersDesconocidos = $this->placeholders->unknown($draft, count($listaDelTurno));
+        $placeholdersDesconocidos = $this->placeholders->unknown($draft, count($listaDelTurno), $listaDelServidor);
         if ($placeholdersDesconocidos !== []) {
             throw UltronCommitException::make(
                 'unknown_placeholder',
                 'La respuesta usa marcadores que no existen.',
                 422,
-                ['unknown' => $placeholdersDesconocidos, 'allowed' => $this->placeholders->allowed(count($listaDelTurno))],
+                ['unknown' => $placeholdersDesconocidos, 'allowed' => $this->placeholders->allowed(count($listaDelTurno), $listaDelServidor)],
             );
         }
 
@@ -690,7 +708,7 @@ class UltronCommitService
          * lista. Todo lo que viene detrás (estilo, novedad, política, longitud,
          * registro, guardas) ve el texto que va a salir.
          */
-        $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida);
+        $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida, $listaDelServidor, (int) $conversation->id);
         /*
          * EL TOPE DE LA LISTA (Enmienda A4-6 del H5, PT-17b; decisión B del
          * propietario). Con el compilador 6 (`sp.k`), un tope publicado (el
@@ -1867,7 +1885,22 @@ class UltronCommitService
          * pregunte el precio. Si no vale, salta como hoy y sale la lista fija.
          */
         $listaValida = ($lista['trace']['valid'] ?? false) === true;
-        if ($panorama && ! $listaValida && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION
+        if ($listaDelServidor && $lista !== null) {
+            /*
+             * CON LA LISTA DEL SERVIDOR (`k` ≥ 8; PT-17, puerta 2, L1, §1.5
+             * «no omite»): en un turno de lista sin herramientas (el panorama)
+             * sale la lista entera o la fija. Con el panorama, una lista que no
+             * vale salta SIEMPRE, sin la disyunción del precio o de los
+             * nombres; sin él (con herramientas), sale como esté y solo la para
+             * la red de marcadores (M3). Solo con la lista
+             * FIRMADA (revisión de seguridad de la puerta 2, I1): si `decide`
+             * no la ofreció, no hay lista que componer y el panorama se juzga
+             * como antes, con la disyunción de abajo.
+             */
+            if ($panorama && ! $listaValida) {
+                $incumple[] = CommercialTurnPolicy::VIOLACION_PANORAMA;
+            }
+        } elseif ($panorama && ! $listaValida && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION
             || CommercialTurnPolicy::preguntaPorPrecio((string) $message->body)
             || count(array_unique(CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo))) < 2)) {
             $incumple[] = CommercialTurnPolicy::VIOLACION_PANORAMA;
@@ -1878,15 +1911,25 @@ class UltronCommitService
          * sin sustituir ({@see listaDelModelo()}) y el texto va por la rama de
          * la política, que da la lista fija del catálogo de ahora.
          */
-        if (($lista['trace']['detail'] ?? null) === self::LISTA_NO_VENDIBLE && ! in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true)) {
+        if (in_array($lista['trace']['detail'] ?? null, [self::LISTA_NO_VENDIBLE, self::LISTA_NOMBRE_NO_SEGURO], true) && ! in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true)) {
             $incumple[] = CommercialTurnPolicy::VIOLACION_PANORAMA;
         }
-        $pideLaLista = in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true);
+        /*
+         * Y con la lista del servidor, el borrador del panorama que no cabe en
+         * el tope de la lista (con la lista dentro) también se sustituye por la
+         * lista fija entera (comprobación 3 del propietario: «si el último
+         * borrador sigue sin caber, sale la lista fija entera»). No es otra
+         * violación: la causa es la longitud (lo que `ai/check` señaló), pero
+         * lo que sale en su lugar es la lista, no el respaldo de la intención.
+         */
+        $pideLaLista = in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true)
+            || ($listaDelServidor && $lista !== null && $panorama && in_array(self::VIOLACION_LONGITUD, $incumple, true));
 
         // D-6: con la versión aplicada, a quien pregunta precios (o pide el panorama) y se le descarta el borrador se le dan los precios.
+        // Con la lista del servidor en un turno de lista, ENTERA (PT-17, puerta 2, L1, comprobación 3): si no cabe en el publicado, con el tope de la lista.
         $precios = null;
         if ($incumple !== [] && $turno['studio'] && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION || $pideLaLista)) {
-            $precios = $this->respaldoDePrecios($policy, $turno['tope']);
+            $precios = $this->respaldoDePrecios($policy, $turno['tope'], $listaDelServidor ? $topeDeLista : null);
         }
 
         $sustituidoPorLaPolitica = false;
@@ -2014,7 +2057,7 @@ class UltronCommitService
             }
 
             // El borrador con un marcador sin plan vendible no puede salir ni como último recurso de esta rama.
-            if ($alternativa === null && ($lista['trace']['detail'] ?? null) === self::LISTA_NO_VENDIBLE) {
+            if ($alternativa === null && in_array($lista['trace']['detail'] ?? null, [self::LISTA_NO_VENDIBLE, self::LISTA_NOMBRE_NO_SEGURO], true)) {
                 $alternativa = $this->ultimoRecurso($conversation, (string) $sanitized['intent'], $turno['tope'], $turno['tono']);
             }
 
@@ -2044,7 +2087,9 @@ class UltronCommitService
         }
 
         // La respuesta con la lista que pasó su tope (compilador 6) se controla con ese tope (aquí y antes de enviar); un respaldo, con el publicado.
-        $topeDelTexto = $topeDeLista !== null && in_array($longitud['action'] ?? null, ['fit', 'trimmed'], true) ? $topeDeLista : null;
+        // Y la lista fija entera que solo cabía en el tope de la lista (PT-17, puerta 2, L1), con ese tope: si no, se cambiaría por el último recurso.
+        $topeDelTexto = $topeDeLista !== null && (in_array($longitud['action'] ?? null, ['fit', 'trimmed'], true)
+            || (($precios['tope_de_lista'] ?? false) === true && $replyFinal === $precios['texto'])) ? $topeDeLista : null;
 
         /*
          * 13.ter) RETOMAR LO QUE SE ESTABA HACIENDO.
@@ -2273,7 +2318,7 @@ class UltronCommitService
                 // como n8n manda lo que no aplica), fue el 2.
                 'critic' => CriticContract::forMetadata(array_replace(['attempt' => 2], array_filter((array) ($payload['critic'] ?? []), fn ($v) => $v !== null))),
             ] + ($comprobacion === null ? [] : ['discarded_draft_check' => $comprobacion]),
-        ], $turno);
+        ], $turno, $firmado);
     }
 
     /**
@@ -2414,6 +2459,7 @@ class UltronCommitService
      *    la única métrica que mide si el Critic sirve.
      *
      * @param  array{reason:string,attempt:int}  $rendicion
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`): el `sp` y la lista `po` de este turno
      * @return array<string,mixed>
      */
     private function handleRecovery(
@@ -2425,6 +2471,7 @@ class UltronCommitService
         ?array $studio,
         ?array $studioPrompts,
         array $turno = self::TURNO_LEGACY,
+        array $firmado = [],
     ): array {
         ChannelLog::warning('ultron.commit.recovery', [
             'conversation_id' => (int) $conversation->id,
@@ -2438,7 +2485,7 @@ class UltronCommitService
             'origin' => 'ultron_recovery_fallback',
             'log' => 'ultron.commit.recovered',
             'metadata' => ['recovery' => $rendicion],
-        ], $turno);
+        ], $turno, $firmado);
     }
 
     /**
@@ -2453,6 +2500,7 @@ class UltronCommitService
      * @param  array<string,mixed>|null  $studioPrompts  el sello de los prompts ({@see UltronPromptStamp})
      * @param  array{flag:string,origin:string,log:string,metadata:array<string,mixed>}  $causa
      * @param  array{studio:bool,tope:?int,tono:?string}  $turno  la versión, el tope y el tono de este turno ({@see turnoDelStudio()})
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`): el `sp` y la lista `po`, para la lista fija entera ({@see topeDeLaListaEntera()})
      * @return array<string,mixed>
      */
     private function safeFallback(
@@ -2464,6 +2512,7 @@ class UltronCommitService
         ?array $studioPrompts,
         array $causa,
         array $turno = self::TURNO_LEGACY,
+        array $firmado = [],
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
         $lead = $conversation->lead;
@@ -2493,9 +2542,11 @@ class UltronCommitService
         // nunca en un turno con herramientas (G1.2): aquí solo corre el no contactar, y con él no hay lista.
         $conOptOut = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
             || in_array(SalesIntents::TOOL_MARK_DNC, (array) ($proposal['tools_requested'] ?? []), true);
+        // Con la lista del servidor en un turno de lista, la fija va ENTERA y con el tope de la lista (PT-17, puerta 2, L1, comprobación 3).
+        $topeDeLaLista = $this->topeDeLaListaEntera($turno, $firmado, $intent, (array) ($proposal['tools_requested'] ?? []), (int) $conversation->id);
         $precios = $turno['studio'] && ($intent === SalesIntents::PRICING_QUESTION
                 || (! $conOptOut && $this->pideElPanoramaEnElRespaldo($conversation, (string) $message->body, $intent)))
-            ? $this->respaldoDePrecios($this->politicaDePrecios($conversation, (string) $message->body), $turno['tope'])
+            ? $this->respaldoDePrecios($this->politicaDePrecios($conversation, (string) $message->body), $turno['tope'], $topeDeLaLista)
             : null;
 
         $semantico = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
@@ -2515,9 +2566,12 @@ class UltronCommitService
          * de la antirrepetición: los dos miran el texto que va a salir.
          */
         $longitud = null;
+        // La lista fija entera que solo cabía en el tope de la lista: lo lleva la traza y se controla con él antes de enviar.
+        $listaFijaEntera = $esDePrecios && ($precios['tope_de_lista'] ?? false) === true;
         if ($turno['tope'] !== null && $curado !== null && trim($curado) !== '') {
             if ($esDePrecios) {
-                $longitud = ['action' => $precios['soltadas'] > 0 ? 'fitted' : 'fit', 'from' => $precios['desde'], 'dropped' => $precios['soltadas']];
+                $longitud = ['action' => $precios['soltadas'] > 0 ? 'fitted' : 'fit', 'from' => $precios['desde'], 'dropped' => $precios['soltadas']]
+                    + ($listaFijaEntera ? ['list_cap' => $topeDeLaLista] : []);
             } else {
                 $desde = UltronReplyFitter::measure($curado);
                 $ajustado = $intent === SalesIntents::SCHEDULE_QUESTION && $semantico === null
@@ -2774,7 +2828,8 @@ class UltronCommitService
             ];
         }
 
-        $curado = $this->antesDeEnviar($conversation, $action, (string) $curado, $intent, $turno, $longitud);
+        $curado = $this->antesDeEnviar($conversation, $action, (string) $curado, $intent, $turno, $longitud,
+            $listaFijaEntera && $curado === $precios['texto'] ? $topeDeLaLista : null);
         $send = $this->dispatcher->dispatchWhatsapp(
             $lead->fresh(),
             $conversation->channel,
@@ -5835,6 +5890,30 @@ class UltronCommitService
     }
 
     /**
+     * EL TOPE DE LA LISTA FIJA ENTERA en los caminos de la rendición
+     * ({@see safeFallback()}; PT-17, puerta 2, L1, comprobación 3 del
+     * propietario: «sale la lista fija entera, nunca una lista parcial»). Con
+     * la lista del servidor (`k` ≥ 8, {@see UltronPlansOverview::serverList()})
+     * y un turno de lista (la lista firmada, sin cobro en la propuesta), el
+     * tope de la lista del turno ({@see UltronReplyFitter::plansListCap()}),
+     * el mismo que en el camino normal; si no, null y el respaldo de precios
+     * de siempre, con el tope publicado.
+     *
+     * @param  array{studio:bool,tope:?int,tono:?string}  $turno
+     * @param  array<string,mixed>  $firmado  la carga del token (`x`)
+     * @param  list<string>|array<int,mixed>  $tools  las herramientas de la propuesta
+     */
+    private function topeDeLaListaEntera(array $turno, array $firmado, string $intent, array $tools, int $conversationId): ?int
+    {
+        $sp = is_array($firmado['sp'] ?? null) ? $firmado['sp'] : [];
+        if (! ($turno['studio'] ?? false) || ! UltronPlansOverview::serverList($sp) || UltronPlansOverview::isMoneyTurn($intent, $tools)) {
+            return null;
+        }
+
+        return UltronReplyFitter::plansListCap($sp, $this->listaFirmada($firmado['po'] ?? null, $conversationId));
+    }
+
+    /**
      * La lista de planes que firmó `decide` (`po`, en la carga del token), o
      * vacía. Está firmada, así que nadie la reescribe por el camino; aun así
      * solo vale con la forma que emite `decide`: de
@@ -5887,18 +5966,36 @@ class UltronCommitService
      * aparición y sin repetir (también el que ya no se vende); `valid`; y
      * `detail`, null o el motivo. Sin textos.
      *
+     * LA LISTA LA COMPONE LARAVEL (`$delServidor`: `k` ≥ 8; PT-17, puerta 2,
+     * L1). Con la forma B (la ranura, o ninguna marca de lista), los
+     * vendibles de TODA la lista, en una consulta, y
+     * {@see UltronPlansOverview::render()}: la lista entera, en el orden
+     * firmado, en la ranura o antes de la pregunta final; `textos` lleva
+     * todos sus planes (la memoria). El detalle es `not_sellable` si no se
+     * puede componer (falta un plan) y, si no, el de la regla estricta
+     * ({@see UltronPlansOverview::verify()}) o `missing` si no se pudo colocar;
+     * vale solo sin detalle y colocada. La forma A, con la regla estricta
+     * (todos sus planes y en su orden). La traza añade `shape` y `slot`. Y si
+     * el texto de un plan no puede salir (un control o un salto de línea en su
+     * nombre; {@see UltronPlansOverview::unsafeListText()}), el detalle es
+     * `unsafe_plan_name`, con un aviso que dice sus id y nunca el nombre
+     * (revisión de seguridad de la puerta 2, M2).
+     *
      * @param  list<int>  $po  la lista del turno (vacía en un turno de cobro)
      * @param  list<int>  $ofrecida  la lista firmada por `decide`
-     * @return array{text:string,textos:array<int,string>,trace:array{offered:list<int>,used:list<int>,valid:bool,detail:?string}}
+     * @param  bool  $delServidor  la lista la compone Laravel ({@see UltronPlansOverview::serverList()})
+     * @param  int  $conversationId  para el aviso
+     * @return array{text:string,textos:array<int,string>,trace:array{offered:list<int>,used:list<int>,valid:bool,detail:?string,shape?:string,slot?:bool}}
      */
-    private function listaDelModelo(string $borrador, array $po, array $ofrecida): array
+    private function listaDelModelo(string $borrador, array $po, array $ofrecida, bool $delServidor = false, int $conversationId = 0): array
     {
         if ($po === []) {
             return ['text' => $borrador, 'textos' => [], 'trace' => ['offered' => $ofrecida, 'used' => [], 'valid' => false, 'detail' => self::LISTA_EN_COBRO]];
         }
 
-        // Qué planes de la lista nombra el borrador: la misma lectura de los marcadores que hace la expansión.
-        $nombra = UltronPlansOverview::expand($borrador, array_fill_keys($po, ''), $po)['used'];
+        $formaB = $delServidor && UltronPlansOverview::shape($borrador) === UltronPlansOverview::SHAPE_SERVER;
+        // Qué planes de la lista hay que leer: con la forma B, todos; si no, los que nombra el borrador (la misma lectura de los marcadores que hace la expansión).
+        $nombra = $formaB ? $po : UltronPlansOverview::expand($borrador, array_fill_keys($po, ''), $po)['used'];
         $vendibles = $nombra === [] ? collect() : Plan::query()->sellable()->whereIn('id', $nombra)->get()->keyBy('id');
         $textos = [];
         foreach ($nombra as $id) {
@@ -5906,14 +6003,28 @@ class UltronCommitService
                 $textos[$id] = UltronPlansOverview::item($vendibles->get($id));
             }
         }
-        $detalle = count($textos) < count($nombra)
-            ? self::LISTA_NO_VENDIBLE
-            : UltronPlansOverview::verify($borrador, $po, $this->knowledge->activePlans());
+        $activos = $this->knowledge->activePlans();
+        $puesta = UltronPlansOverview::render($borrador, $po, $textos, $activos, $delServidor);
+        // Con la lista del servidor, el texto de un plan que no puede salir (M2): el aviso dice cuál, por su id y sin el nombre.
+        $inseguros = $delServidor ? array_keys(array_filter($textos, UltronPlansOverview::unsafeListText(...))) : [];
+        if ($inseguros !== []) {
+            ChannelLog::warning('ultron.commit.plans_overview_unsafe_name', ['conversation_id' => $conversationId, 'plan_ids' => $inseguros]);
+        }
+        $detalle = match (true) {
+            count($textos) < count($nombra) => self::LISTA_NO_VENDIBLE,
+            $inseguros !== [] => self::LISTA_NOMBRE_NO_SEGURO,
+            // Forma B: si la lista no se puede componer entera, la del catálogo de ahora (todo o nada, P-2).
+            $formaB && UltronPlansOverview::compose($po, $textos) === null => self::LISTA_NO_VENDIBLE,
+            $formaB => UltronPlansOverview::verify($borrador, $po, $activos, true) ?? ($puesta['placed'] ? null : UltronPlansOverview::MISSING),
+            default => UltronPlansOverview::verify($borrador, $po, $activos, $delServidor),
+        };
 
         return [
-            'text' => UltronPlansOverview::expand($borrador, $textos, $po)['text'],
+            'text' => $puesta['text'],
             'textos' => $textos,
-            'trace' => ['offered' => $ofrecida, 'used' => $nombra, 'valid' => $detalle === null, 'detail' => $detalle],
+            // `used`: los que nombra con sus marcadores (también el que ya no se vende) o, con la forma B, todos los de la lista.
+            'trace' => ['offered' => $ofrecida, 'used' => $nombra, 'valid' => $detalle === null && (! $formaB || $puesta['placed']), 'detail' => $detalle]
+                + ($delServidor ? ['shape' => $puesta['shape'], 'slot' => $puesta['slot']] : []),
         ];
     }
 
@@ -5941,10 +6052,22 @@ class UltronCommitService
      * cifras las tumba siempre. Neutro (sin tú ni usted): la versión puede ser
      * «profesional».
      *
+     * ENTERA (`$topeDeLaLista`; PT-17, puerta 2, L1, comprobación 3 del
+     * propietario: «sale la lista fija entera, nunca una lista parcial»). Con
+     * la lista del servidor (`k` ≥ 8) en un turno de lista, quien llama pasa
+     * el tope de la lista del turno ({@see UltronReplyFitter::plansListCap()})
+     * y la lista sale con TODOS sus planes o no sale (null): solo pueden
+     * soltarse «También hay…» y la pregunta. Se ajusta primero al tope
+     * publicado, como siempre (con el catálogo de hoy sale el mismo texto que
+     * aprobó el propietario), y solo si la lista entera no cabe en él, al de
+     * la lista (`tope_de_lista` = true: quien llama la controla con ese tope).
+     * Si ni así cabe, null.
+     *
      * @param  array<string,mixed>  $policy  la política del turno ({@see CommercialTurnPolicy::decide()}): `hard_required_plan` y `forbidden_plan_ids`
-     * @return array{texto:string,esqueleto:string,planes:array<int,string>,desde:int,soltadas:int}|null
+     * @param  int|null  $topeDeLaLista  con la lista del servidor, el tope de la lista del turno: la lista entera o null
+     * @return array{texto:string,esqueleto:string,planes:array<int,string>,desde:int,soltadas:int,tope_de_lista:bool}|null
      */
-    private function respaldoDePrecios(array $policy, ?int $tope): ?array
+    private function respaldoDePrecios(array $policy, ?int $tope, ?int $topeDeLaLista = null): ?array
     {
         // La selección vive en `UltronPlansOverview` («regenerar antes de sustituir», ola 1): la misma para esta lista y para la del modelo.
         $activos = $this->knowledge->activePlans();
@@ -6028,11 +6151,23 @@ class UltronCommitService
         $pregunta = '¿Sobre cuál amplío la información?';
         $lista = array_values($items);
         $deLaListaEntera = $encabezadoPara(count($lista));
-        $encabezado = $deLaListaEntera;
-        $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope);
-        if ($layout !== null && $encabezadoPara($layout['items']) !== $encabezado) {
-            $encabezado = $encabezadoPara($layout['items']);
-            $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope);
+        $entera = $topeDeLaLista !== null;
+        $ajusta = function (?int $tope) use ($deLaListaEntera, $encabezadoPara, $lista, $tambien, $pregunta, $entera): array {
+            $encabezado = $deLaListaEntera;
+            $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope, $entera);
+            if ($layout !== null && $encabezadoPara($layout['items']) !== $encabezado) {
+                $encabezado = $encabezadoPara($layout['items']);
+                $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope, $entera);
+            }
+
+            return [$encabezado, $layout];
+        };
+        [$encabezado, $layout] = $ajusta($tope);
+        // La lista entera que no cabe en el tope publicado, con el de la lista (comprobación 3): antes eso que soltar un plan.
+        $conElDeLaLista = false;
+        if ($layout === null && $entera && $tope !== null) {
+            [$encabezado, $layout] = $ajusta($topeDeLaLista);
+            $conElDeLaLista = $layout !== null;
         }
         if ($layout === null) {
             return null;
@@ -6046,6 +6181,7 @@ class UltronCommitService
             'planes' => array_slice($items, 0, $layout['items'], true),
             'desde' => UltronReplyFitter::measure(UltronReplyFitter::composePricing($deLaListaEntera, $lista, $tambien, $pregunta, $entero)),
             'soltadas' => $soltadas,
+            'tope_de_lista' => $conElDeLaLista,
         ];
     }
 
