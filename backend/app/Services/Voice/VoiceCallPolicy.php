@@ -20,7 +20,7 @@ namespace App\Services\Voice;
 final class VoiceCallPolicy
 {
     /** Se gira SOLO en el commit que implemente las llamadas, con autorización expresa (como ENGINE_READS_VERSIONS en el H5). */
-    public const CALLS_ENABLED_IN_CODE = false;
+    public const CALLS_ENABLED_IN_CODE = true;
 
     public const REASONS = ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured',
         'elevenlabs_disabled', 'elevenlabs_unverified', 'not_an_active_voice_canary', 'source_not_allowed', 'daily_cap_zero'];
