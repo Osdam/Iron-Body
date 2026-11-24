@@ -88,7 +88,10 @@ class VoiceReconcileCommand extends Command
             }
         }
         $derivaDelNumero = in_array($resumen['number']['result'] ?? null, VoiceReconciler::NUMBER_BRAKING, true);
+        // Alerta #9 (24-11-2026): el techo es una alarma cuando ESTA pasada echa o rearma su freno. Con el freno ya echado,
+        // el mismo techo sale con 0 (el resumen sigue diciendo `costCap`). Si no, el programador anota un ERROR cada 10 min.
+        $techoNuevo = $resumen['costCap'] && $conciliacion->costBrakeArmedThisPass();
 
-        return $resumen['unknown'] === 0 && ! $resumen['costCap'] && ! in_array('drift', $resumen['drift'], true) && ! $derivaDelNumero ? self::SUCCESS : self::FAILURE;
+        return $resumen['unknown'] === 0 && ! $techoNuevo && ! in_array('drift', $resumen['drift'], true) && ! $derivaDelNumero ? self::SUCCESS : self::FAILURE;
     }
 }

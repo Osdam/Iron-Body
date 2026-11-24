@@ -129,11 +129,15 @@ final class VoiceReconciler
     /** @var array<string, true> las claves del freno que esta pasada en seco ya abriría (una vez cada una, como `open()`) */
     private array $plannedKeys = [];
 
+    /** Si ESTA pasada echó o rearmó el freno por coste (en seco: si lo haría). Lo fija {@see costCap()}; ver {@see costBrakeArmedThisPass()}. */
+    private bool $costBrakeArmed = false;
+
     /** @return array<string, mixed> el resumen (recuentos y resultados, sin datos personales) */
     public function run(TelephonyCarrier $carrier, VoiceAgentDeployer $deployer, DateTimeInterface $since, bool $dryRun = false): array
     {
         $this->dryRun = $dryRun;
         $this->simulated = [];
+        $this->costBrakeArmed = false;
         $resumen = ['staleRequested' => $this->staleRequested(), 'carrier' => null, 'known' => 0, 'legs' => 0, 'unknown' => 0, 'pages' => 0,
             'truncated' => false, 'drift' => [], 'stuckDialing' => 0, 'costCap' => false, 'ambiguous' => ['resolved' => 0, 'held' => []]];
 
@@ -812,10 +816,21 @@ final class VoiceReconciler
         if ($comprometido <= 0 || $comprometido <= $presupuesto) {
             return false;
         }
-        $this->brake('cost_cap', 'cost_cap:'.$dia, ['day' => $dia, 'committedMicros' => $comprometido, 'budgetMicros' => $presupuesto],
+        $this->costBrakeArmed = $this->brake('cost_cap', 'cost_cap:'.$dia, ['day' => $dia, 'committedMicros' => $comprometido, 'budgetMicros' => $presupuesto],
             static fn (VoiceBrakeEntry $abierta): bool => $comprometido > (int) ($abierta->evidence['committedMicros'] ?? 0));
 
         return true;
+    }
+
+    /**
+     * Alerta #9 del 24-11-2026: si la última pasada ECHÓ o REARMÓ el freno por coste (en seco: si lo haría). El techo
+     * se evalúa siempre y `costCap` lo dice en el resumen. Pero con el freno ya echado, o soltado por una persona sin
+     * más gasto, el mismo techo no es una alarma nueva, y `voice:reconcile` no sale con 1 por él en cada pasada
+     * hasta el cambio de día de Bogotá.
+     */
+    public function costBrakeArmedThisPass(): bool
+    {
+        return $this->costBrakeArmed;
     }
 
     /**
