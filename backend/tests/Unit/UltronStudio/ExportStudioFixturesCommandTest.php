@@ -119,7 +119,7 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertTrue($formas['examples']['preview']['publishable']);
         $this->assertSame(['declaration', null], [$formas['examples']['preview']['effect'], $formas['examples']['preview']['prompts']]);
         $this->assertSame('prompts', $formas['examples']['previewPrompts']['effect']);
-        $this->assertSame('8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa', $formas['examples']['previewPrompts']['prompts']['bundleHash'], 'el cambio de aceptación (G8), con la huella real del compilador 8 (con el 1 y el 2, 702890f7…; con el 3, af9e0d23…; con el 4 sin el motor, 7b09b89c…; con el 4 y su motor, 26d57565…; con el 5, 2eb9be6f…; con el 6, 962902ab…; con el 7, 200019e4…)');
+        $this->assertSame('863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505', $formas['examples']['previewPrompts']['prompts']['bundleHash'], 'el cambio de aceptación profesional/200 firmado con c9; la fixture histórica c8 permanece separada');
         $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'current', 'lastTurns'], array_keys($formas['examples']['engine']['prompts']));
         $this->assertSame('prompts_off', $formas['examples']['engine']['prompts']['current']['reason']);
         $this->assertSame('studio', $formas['examples']['enginePrompts']['prompts']['current']['mode']);

@@ -34,6 +34,7 @@ use PHPUnit\Framework\TestCase;
  *  7. el selector generado para n8n acepta, con su SHA-256 en JS, los 306
  *     paquetes del contrato y cae a Legacy sin lanzar ante todo lo demás (Node).
  */
+/** Contrato histórico c8 explícito: las firmas y los bytes grabados no se actualizan a c9. */
 class UltronPromptCompileCasesTest extends TestCase
 {
     private const FIXTURE = __DIR__.'/../../../../fixtures/ultron-prompts/compile-cases.json';
@@ -74,7 +75,7 @@ class UltronPromptCompileCasesTest extends TestCase
 
         $this->assertSame(Base::CONTRACT, $f['contract']);
         $this->assertSame(Base::ID, $f['base']);
-        $this->assertSame(Compiler::VERSION, $f['compiler']);
+        $this->assertSame(8, $f['compiler']);
         $this->assertSame(Base::ROLES, $f['roles']);
         $this->assertSame(self::porClave(Compiler::BASELINE), self::porClave($f['baseline']));
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $f['legacyBundleHash'], 'La huella Legacy derivada fuera de PHP es la constante del código.');
@@ -95,7 +96,7 @@ class UltronPromptCompileCasesTest extends TestCase
     public function test_el_compilador_da_los_bytes_que_salen_del_contrato(array $caso): void
     {
         $f = self::fixture();
-        $c = Compiler::compile($caso['governed']);
+        $c = Compiler::compile($caso['governed'], 8);
 
         foreach (Base::ROLES as $rol) {
             // Los roles que no cambian tienen que ser la base, byte a byte.
@@ -104,7 +105,7 @@ class UltronPromptCompileCasesTest extends TestCase
         }
         $this->assertSame($caso['expect']['bundleHash'], $c['bundleHash'], "{$caso['name']}: la huella del paquete.");
         $this->assertSame($caso['expect']['bytes'], $c['bytes']);
-        $this->assertSame([Base::CONTRACT, Base::ID, Compiler::VERSION], [$c['contract'], $c['base'], $c['compiler']]);
+        $this->assertSame([Base::CONTRACT, Base::ID, 8], [$c['contract'], $c['base'], $c['compiler']]);
         $this->assertSame(self::porClave($caso['governed']), self::porClave($c['governed']));
 
         $this->assertSame($caso['changedRoles'], Compiler::changedRoles($caso['governed']), 'changedRoles()');
@@ -131,7 +132,7 @@ class UltronPromptCompileCasesTest extends TestCase
 
         // El orden ENTRE roles no es contrato; dentro de un rol, sí (es el de aplicación).
         $this->assertSame($esperado, $porRol, "{$caso['name']}: los parches de la vista previa no son los del contrato.");
-        $this->assertSame($parches, Compiler::compile($caso['governed'])['patches'], 'La vista previa y la compilación enumeran los mismos parches.');
+        $this->assertSame($parches, Compiler::compile($caso['governed'], 8)['patches'], 'La vista previa y la compilación enumeran los mismos parches.');
     }
 
     /** Determinismo (E2): mismas entradas en otro orden = mismo resultado, en los 306 casos. */
@@ -145,8 +146,8 @@ class UltronPromptCompileCasesTest extends TestCase
             foreach ($claves as $k) {
                 $barajado[$k] = $caso['governed'][$k];
             }
-            $this->assertSame($caso['expect']['bundleHash'], Compiler::compile(array_reverse($caso['governed'], true))['bundleHash'], $caso['name']);
-            $this->assertSame($caso['expect']['bundleHash'], Compiler::compile($barajado)['bundleHash'], $caso['name']);
+            $this->assertSame($caso['expect']['bundleHash'], Compiler::compile(array_reverse($caso['governed'], true), 8)['bundleHash'], $caso['name']);
+            $this->assertSame($caso['expect']['bundleHash'], Compiler::compile($barajado, 8)['bundleHash'], $caso['name']);
         }
     }
 
@@ -167,7 +168,7 @@ class UltronPromptCompileCasesTest extends TestCase
     public function test_maxchars_decimal_no_compila(): void
     {
         $this->expectException(UltronPromptException::class);
-        Compiler::compile(['persona.maxChars' => 200.0] + Compiler::BASELINE);
+        Compiler::compile(['persona.maxChars' => 200.0] + Compiler::BASELINE, 8);
     }
 
     /** El fixture es el que sale HOY del contrato (§B.3 del plan) y de la base: nadie lo editó a mano ni se quedó viejo. */

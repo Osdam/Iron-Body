@@ -432,7 +432,7 @@ class UltronCommitPromptsTest extends TestCase
     {
         $decide = $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
-        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk();
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []), $this->headers())->assertOk();
 
         $payload = array_replace_recursive([
             'source_type' => 'inbound_message',

@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -68,6 +69,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronCheckEndpointTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -1032,9 +1034,11 @@ class UltronCheckEndpointTest extends TestCase
 
     private function decide(MarketingMessage $m, bool $negocia): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
-        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []), $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     private function headers(): array

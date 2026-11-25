@@ -1,0 +1,446 @@
+{
+  "generatedAtUtc": "2026-11-25T02:02:59.559269+00:00",
+  "branch": "fix/pt17-contrato-inicial",
+  "base": "e750dd2c77972a4055dcbd7524d533ed10af84bb",
+  "verdict": "NOT READY",
+  "reason": "La guarda H9 de diferencias contra origin/main sigue roja y no se dispensó. La aceptación comercial y el runtime remoto no están certificados.",
+  "tests": {
+    "log": "backend/storage/test-results/pt17-c9-final-combined.xml",
+    "stdout": "backend/storage/test-results/pt17-c9-final-combined.txt",
+    "tests": 8443,
+    "assertions": 492742,
+    "errors": 0,
+    "failures": 1,
+    "skipped": 279,
+    "seconds": 423.795665,
+    "passed": 8163,
+    "failedCases": [
+      "Tests\\Feature\\UltronStudio\\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros"
+    ]
+  },
+  "phpSyntax": {
+    "files": 77,
+    "errors": []
+  },
+  "pint": {
+    "tool": "pint",
+    "result": "passed"
+  },
+  "protected": {
+    "paths": {
+      "n8n/flujos/ultron-studio-s1": 9,
+      "n8n/flujos/ultron-studio-s2": 17,
+      "backend/resources/ultron-prompts": 7,
+      "backend/app/Services/Voice": 49,
+      "backend/app/Services/Telephony": 41,
+      "backend/app/Services/UltronStudio/StudioVoiceCompiler.php": 1,
+      "backend/app/Services/UltronStudio/StudioVoicePublications.php": 1,
+      "backend/app/Services/UltronStudio/StudioVoicePublishing.php": 1,
+      "backend/app/Models/Plan.php": 1,
+      "backend/config": 41,
+      "backend/routes": 7,
+      "backend/database": 369
+    },
+    "totalFiles": 544,
+    "differences": [],
+    "newFiles": []
+  },
+  "dependencies": {
+    "lockedPackages": 136,
+    "installedPackages": 136,
+    "versionDifferences": []
+  },
+  "versions": {
+    "compiler": 9,
+    "bytes": 142394,
+    "bundleHash": "863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505",
+    "flowVersion": "motor-S3-c9-2026-11-24.1",
+    "nodesHash": "ece291bc216b66a972590c95fa63ff7e03767e37b2bb0616dcaafb4d90d00cc4",
+    "judgeHash": "e88cbee7f41baa7b9701a333aa6bd08dfed7814af7cac0e685128f8a6c82fdae",
+    "legacyHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902"
+  },
+  "s3": {
+    "path": "n8n/flujos/ultron-studio-s3/flujo-s3.json",
+    "sha256": "51b6d1c2bf0c8224e92c2b684e29b2a7758007bf9f0579f8bea1f4a8ee84daa3",
+    "nodes": 53,
+    "active": false,
+    "verification": {
+      "ok": true,
+      "flowRev": "S3",
+      "sourceSemanticHash": "0555d4c755d4b350b445cba69401eaa9245b4934d3547cd77e2b70a5f5a1f515",
+      "expectedSemanticHash": "1402711fe8034dc281a379f281bae2f12168e811659ec03c1f01c03e36762592",
+      "differences": [],
+      "runtimeVerified": false
+    }
+  },
+  "historicalFixtures": {
+    "pt17c-borradores-reales-c6.json": "17137c596745c2b973a43d02b47538a9be3bff09e993fe276d7ce92f5a6ebfc5",
+    "pt17-borradores-reales-c7.json": "48c1f290c14b340e878b887b376a8f3bb8552dd59886a1ac1a6981013630f5fe",
+    "pt17b-terceros-borradores-v4.json": "075220afd3ac0ff6cfdb3d63c5603523d1ecbb8878b6983575500d98f536431a"
+  },
+  "c8Evidence": {
+    "cases": 25,
+    "fileSha256": "4511c892b1e6e3eed0158384f7a8ef7dd911dca2b5b7a4d58e1e0aca07cc86ad",
+    "sourceSha256": "335d8fe19c6fc2775dd0d4a96062ff7134a440cd68693191a7e51a25cb51cd88",
+    "textsSha256": "f5cd9bfe0a7de62ac8a067e7c51867476be9c4c1ed91448aca69a0f39d922e37",
+    "firstValidOf20": 0,
+    "finalModelValidOf20": 12
+  },
+  "commercialAcceptance": {
+    "status": "not_measured",
+    "samples": 20,
+    "minFinalModelValid": 17,
+    "minFirstValid": 12,
+    "maxCharacters": 320,
+    "maxSevereErrors": 0,
+    "maxTrims": 0,
+    "maxUnjustifiedFallbacks": 0
+  },
+  "stagedFiles": [],
+  "fileManifest": [
+    {
+      "path": "backend/app/Console/Commands/Marketing/UltronPromptsN8n.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Http/Controllers/Api/Internal/UltronController.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronListTurnPrompts.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronCommitService.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDecideService.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftCheck.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftDefects.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListCriticGate.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListTurnContract.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronPlansOverview.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineCase.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineCheck.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineContext.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineFlow.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineModelClient.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineTransport.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabOpenAiClient.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabPrompts.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabRunner.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabRuns.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioListN8nFlow.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/docs/ultron-studio/ops/motores/generar-flujo-s3.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/docs/ultron-studio/ops/motores/verificar-flujo-s3.cjs",
+      "status": "new"
+    },
+    {
+      "path": "backend/docs/ultron-studio/plans/informes-motores/cierre-tecnico-pt17-c9.md",
+      "status": "new"
+    },
+    {
+      "path": "backend/docs/ultron-studio/plans/informes-motores/pt17-c9-verificacion-local.json",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/CriticListTurnVetoTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StrategyHintsListTurnTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StudioLabEngineCheckParityTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StudioLabEngineContextParityTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4NotasDelServidorTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckEndpointTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckListFinalTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCommitPromptsTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronDecidePromptsTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnCapTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnExplicitSlotTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnShapesTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListaDelServidorTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPlansListCapFlowTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPromptsTraceCommandTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPt17cEstrategiaDeListaFlowTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioLabEngineInvariantsTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioLabEngineRunnerTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationV2Test.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioStatusCatalogTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Support/HistoricalListTurn.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronInitialListPromptsTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompileCasesTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompiler8Test.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptEnginePatchTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptOfferEngineTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPublishedConfigPhrasesTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListCriticGateTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListTurnContractTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListTurnExplicitSlotTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineFlowParityTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineJudgeTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineListaDelServidorTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEnginePlansListCapTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEnginePt17C8CorpusTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineTransportTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabIsolationTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioListN8nFlowTest.php",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php",
+      "status": "modified"
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/pt17-borradores-reales-c8.README.md",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/pt17-borradores-reales-c8.json",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/tools/ejecutar-s3-node.cjs",
+      "status": "new"
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/tools/recorrer-s3-lab.cjs",
+      "status": "new"
+    },
+    {
+      "path": "n8n/flujos/ultron-studio-s3/LEEME.md",
+      "status": "new"
+    },
+    {
+      "path": "n8n/flujos/ultron-studio-s3/flujo-s3.json",
+      "status": "new"
+    }
+  ]
+}

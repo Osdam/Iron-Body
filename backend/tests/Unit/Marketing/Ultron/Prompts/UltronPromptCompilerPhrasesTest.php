@@ -60,6 +60,7 @@ use PHPUnit\Framework\TestCase;
  *     margen del PHP (Node, con `parches-m1.cjs` del 8 y los textos fijos de
  *     las frases leídos de §B.3), y las mismas en PHP.
  */
+/** Contrato histórico c8 explícito: las firmas y los bytes grabados no se actualizan a c9. */
 class UltronPromptCompilerPhrasesTest extends TestCase
 {
     /**
@@ -180,7 +181,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     private static function invalida(array $governed): UltronPromptException
     {
         try {
-            C::compile($governed);
+            C::compile($governed, 8);
         } catch (UltronPromptException $e) {
             return $e;
         }
@@ -192,7 +193,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     public function test_sin_frases_no_hay_parche_y_legacy_es_la_base_byte_a_byte(): void
     {
         $this->assertSame([], C::BASELINE[C::PHRASES]);
-        $base = C::compile(C::BASELINE);
+        $base = C::compile(C::BASELINE, 8);
 
         $this->assertSame(Base::roles(), $base['roles']);
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $base['bundleHash']);
@@ -203,7 +204,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
 
     public function test_la_huella_de_profesional_y_200_es_la_de_los_textos_del_compilador_8(): void
     {
-        $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8);
 
         // La huella es la de los cinco textos, no la de la versión del compilador: el 2
         // no la movió (sin frases no hay parche); el 3 sí, porque cambia el texto del tope,
@@ -224,7 +225,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
 
     public function test_las_frases_entran_una_vez_en_cada_uno_de_los_cuatro_roles_con_el_texto_fijo(): void
     {
-        $p = C::compile(self::frases(['gratis', 'te lo regalo']));
+        $p = C::compile(self::frases(['gratis', 'te lo regalo']), 8);
         $lista = '"gratis", "te lo regalo".';
 
         $this->assertSame(self::DOS_FRASES_HASH, $p['bundleHash']);
@@ -267,7 +268,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
 
     public function test_con_los_otros_parches_las_frases_quedan_las_primeras_bajo_su_ancla(): void
     {
-        $r = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false, 'persona.maxChars' => 200, 'strategy.goal' => 'venta', C::PHRASES => ['oiga']]))['roles'];
+        $r = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false, 'persona.maxChars' => 200, 'strategy.goal' => 'venta', C::PHRASES => ['oiga']]), 8)['roles'];
 
         foreach (['composer', 'composer_retry'] as $rol) {
             $l = explode("\n", $r[$rol]);
@@ -291,7 +292,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     {
         $frases = ['2x1', 'gratis', 'te lo regalo', 'vergüenza ajena', '¡ya mismo!', '¿qué esperas?', 'ñapa', 'último día, ok. sí-no'];
         sort($frases, SORT_STRING);
-        $p = C::compile(self::frases($frases));
+        $p = C::compile(self::frases($frases), 8);
 
         $lista = implode(', ', array_map(static fn (string $f): string => '"'.$f.'"', $frases)).'.';
         $this->assertStringContainsString(self::COMPOSER.$lista, $p['roles']['composer']);
@@ -304,7 +305,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     public function test_doce_frases_compilan_y_trece_no_se_recortan(): void
     {
         $doce = array_map(static fn (int $i): string => sprintf('frase %02d', $i), range(1, 12));
-        $this->assertCount(12, C::compile(self::frases($doce))['governed'][C::PHRASES]);
+        $this->assertCount(12, C::compile(self::frases($doce), 8)['governed'][C::PHRASES]);
 
         $trece = array_map(static fn (int $i): string => sprintf('frase %02d', $i), range(1, 13));
         $e = self::invalida(self::frases($trece));
@@ -443,7 +444,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     {
         $frases = ['emoji opcional y raro, nunca en temas sensibles.', 'forma', 'naturalness', 'principio'];
         sort($frases, SORT_STRING);
-        $p = C::compile(self::frases($frases));
+        $p = C::compile(self::frases($frases), 8);
 
         $this->assertSame([...array_fill(0, 4, C::PHRASES), ...array_fill(0, 15, C::ENGINE)], array_column($p['patches'], 'parameter'));
         foreach ($p['patches'] as $parche) {
@@ -477,7 +478,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
     {
         // 12 frases de 60 caracteres de 2 bytes (la ñ), distintas y ordenadas.
         $frases = array_map(static fn (int $i): string => sprintf('%02d', $i).str_repeat('ñ', 58), range(1, 12));
-        $p = C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 160, 'strategy.goal' => 'venta', C::PHRASES => $frases]));
+        $p = C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 160, 'strategy.goal' => 'venta', C::PHRASES => $frases]), 8);
 
         foreach ($p['patches'] as $parche) {
             $tope = $parche['parameter'] === C::PHRASES ? C::MAX_PHRASES_PATCH_BYTES : C::MAX_PATCH_BYTES;
@@ -511,7 +512,7 @@ class UltronPromptCompilerPhrasesTest extends TestCase
         $frases = array_map(static fn (string $l): string => str_repeat('ñ', 59).$l, ['á', 'é', 'í', 'ó', 'ú', 'ü', 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ü']);
         sort($frases, SORT_STRING);
         $this->assertSame([12, 60, 120], [count($frases), mb_strlen($frases[0], 'UTF-8'), strlen($frases[0])]);
-        $p = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false, 'persona.maxChars' => 160, 'strategy.goal' => 'venta', C::PHRASES => $frases]));
+        $p = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false, 'persona.maxChars' => 160, 'strategy.goal' => 'venta', C::PHRASES => $frases]), 8);
 
         $deFrases = array_values(array_filter($p['patches'], static fn (array $x): bool => $x['parameter'] === C::PHRASES));
         // Texto fijo + 12 × (120 + 2 comillas) + 11 separadores «, » + el punto final.
@@ -528,8 +529,8 @@ class UltronPromptCompilerPhrasesTest extends TestCase
         $g = self::con(['persona.tone' => 'profesional', C::PHRASES => ['gratis', 'oiga']]);
         $g[C::PHRASES] = ['gratis', 'oiga'];
 
-        $this->assertSame(C::compile($g), C::compile(array_reverse($g, true)));
-        $this->assertSame(C::compile($g)['bundleHash'], C::compile($g)['bundleHash']);
-        $this->assertNotSame(C::compile($g)['bundleHash'], C::compile(array_replace($g, [C::PHRASES => ['gratis']]))['bundleHash'], 'otra lista, otra huella');
+        $this->assertSame(C::compile($g, 8), C::compile(array_reverse($g, true), 8));
+        $this->assertSame(C::compile($g, 8)['bundleHash'], C::compile($g, 8)['bundleHash']);
+        $this->assertNotSame(C::compile($g, 8)['bundleHash'], C::compile(array_replace($g, [C::PHRASES => ['gratis']]), 8)['bundleHash'], 'otra lista, otra huella');
     }
 }

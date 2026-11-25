@@ -39,6 +39,9 @@ final class UltronPromptsN8nFlow
     /** La revisión del flujo que se observa en el sello (`observed.flowRev`). */
     public const FLOW_REV = 'S1';
 
+    /** S1/S2 reproduce their committed c8 artifacts; c9 has a separate S3 generator. */
+    public const COMPILER = 8;
+
     /** El flujo de producción y la versión de la que parte S1. */
     public const WORKFLOW_ID = 'YspRwsXnqt33NouP';
 
@@ -249,7 +252,7 @@ JS;
         $flujo['connections'][self::GATE]['main'] = $salidas;
         $flujo['connections'][self::SELECTOR] = ['main' => [[['node' => UltronPromptBase::NODES['strategist'], 'type' => 'main', 'index' => 0]]]];
         $flujo['versionId'] = null;
-        $flujo['_generado'] = ['from' => self::SOURCE_VERSION, 'flowRev' => self::FLOW_REV, 'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION, 'nota' => 'Solo para el comprobador. NUNCA se importa en n8n.'];
+        $flujo['_generado'] = ['from' => self::SOURCE_VERSION, 'flowRev' => self::FLOW_REV, 'base' => UltronPromptBase::ID, 'compiler' => self::COMPILER, 'nota' => 'Solo para el comprobador. NUNCA se importa en n8n.'];
 
         $huellas = [
             'flowRev' => self::FLOW_REV,
@@ -257,7 +260,7 @@ JS;
             'sourceVersionId' => self::SOURCE_VERSION,
             'contract' => UltronPromptBase::CONTRACT,
             'base' => UltronPromptBase::ID,
-            'compiler' => UltronPromptCompiler::VERSION,
+            'compiler' => self::COMPILER,
             'legacyBundleHash' => UltronPromptBase::LEGACY_BUNDLE_HASH,
             'baseSha256' => UltronPromptBase::SHA256,
             'baseBytes' => UltronPromptBase::BYTES,
@@ -296,12 +299,12 @@ JS;
         $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [
             UltronPromptCompiler::TONE => 'profesional',
             UltronPromptCompiler::MAX_CHARS => 200,
-        ]));
+        ]), self::COMPILER);
         $conFrases = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [
             UltronPromptCompiler::TONE => 'profesional',
             UltronPromptCompiler::MAX_CHARS => 200,
             UltronPromptCompiler::PHRASES => self::FIXTURE_PHRASES,
-        ]));
+        ]), self::COMPILER);
         $comun = [
             'ok' => true,
             'commercial_phase' => 'NEW_LEAD',
@@ -314,7 +317,7 @@ JS;
         return [
             'studio' => $comun + ['studio_prompts' => [
                 'contract' => UltronPromptBase::CONTRACT, 'mode' => 'studio', 'reason' => null,
-                'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION,
+                'base' => UltronPromptBase::ID, 'compiler' => self::COMPILER,
                 'bundle_hash' => $paquete['bundleHash'],
                 'version' => 'f0000000-0000-4000-8000-0000000000f1', 'content_hash' => str_repeat('c', 64),
                 'entry' => 'e0000000-0000-4000-8000-0000000000e1', 'seq' => 7,
@@ -322,7 +325,7 @@ JS;
             ]],
             'studioPhrases' => $comun + ['studio_prompts' => [
                 'contract' => UltronPromptBase::CONTRACT, 'mode' => 'studio', 'reason' => null,
-                'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION,
+                'base' => UltronPromptBase::ID, 'compiler' => self::COMPILER,
                 'bundle_hash' => $conFrases['bundleHash'],
                 'version' => 'f0000000-0000-4000-8000-0000000000f2', 'content_hash' => str_repeat('d', 64),
                 'entry' => 'e0000000-0000-4000-8000-0000000000e2', 'seq' => 8,
@@ -330,7 +333,7 @@ JS;
             ]],
             'legacy' => $comun + ['studio_prompts' => [
                 'contract' => UltronPromptBase::CONTRACT, 'mode' => 'legacy', 'reason' => 'prompts_off',
-                'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION,
+                'base' => UltronPromptBase::ID, 'compiler' => self::COMPILER,
                 'bundle_hash' => null, 'version' => null, 'content_hash' => null, 'entry' => null, 'seq' => null, 'roles' => null,
             ]],
         ];

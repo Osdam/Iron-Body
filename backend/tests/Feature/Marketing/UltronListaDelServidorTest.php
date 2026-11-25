@@ -13,7 +13,6 @@ use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\CommercialTurnPolicy;
 use App\Services\Marketing\Ultron\ConversationMemory;
 use App\Services\Marketing\Ultron\ConversationMemoryService;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronDecideToken;
 use App\Services\Marketing\Ultron\UltronDraftPlaceholders;
@@ -27,6 +26,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -35,7 +35,8 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  * endpoints `decide` → `ai/check` → `commit` con las clases reales (P-2 A y
  * «Ranura A», 24-11-2026; especificación `12-pt17-puerta-2-especificacion.md`
  * §1). La versión publicada es la de la canaria («profesional», 200), así que
- * `decide` firma `sp.k` = 8: la lista la compone Laravel.
+ * Se reproduce un turno con el paquete y el token del compilador 8 emitidos
+ * antes del despliegue del 9 (HistoricalListTurn), no una oferta actual del 8.
  *
  *  1. Nunca llega al cliente un marcador sin resolver: la ranura solo vale con
  *     `k` ≥ 8, en el turno de lista y con su caja exacta; en otro caso, 422 en
@@ -55,6 +56,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronListaDelServidorTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -151,12 +153,12 @@ class UltronListaDelServidorTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_decide_firma_el_compilador_8_y_ofrece_la_lista_sin_marcadores(): void
+    public function test_el_turno_historico_del_compilador_8_lleva_la_lista_sin_marcadores(): void
     {
         $decide = $this->decide($this->entrante(self::PANORAMA_CON_PRECIO));
 
         $sp = $this->cargaDe($decide)['sp'];
-        $this->assertSame(UltronPromptCompiler::VERSION, $sp['k']);
+        $this->assertSame(8, $sp['k'], 'historical c8 turn emitted before the c9 deployment');
         $this->assertTrue(O::serverList($sp));
         $this->assertSame(self::PO, $this->cargaDe($decide)['po']);
         $this->assertSame([
@@ -398,11 +400,14 @@ class UltronListaDelServidorTest extends TestCase
      */
     public function test_3_si_ni_la_lista_fija_entera_cabe_no_sale_una_parcial(): void
     {
+        // The c8 token predates both deployment and this catalog change;
+        // c9 correctly refuses to generate a contract for an oversized list.
+        [$message, $token] = $this->turno(self::PANORAMA_CON_PRECIO);
         foreach ([3, 4, 8] as $id) {
             Plan::query()->whereKey($id)->update(['name' => str_repeat('Plan con un nombre larguísimo de verdad ', 3).$id]);
         }
 
-        $r = $this->aprobado(self::PANORAMA_CON_PRECIO, self::CON_RANURA);
+        $r = $this->commit($this->payload($message, $token, self::propuesta(SalesIntents::PRICING_QUESTION, self::CON_RANURA, null), self::APROBADO))->assertOk()->json();
 
         $nombrados = array_filter([3, 4, 8], fn (int $id): bool => str_contains((string) $r['reply_final'], 'larguísimo de verdad '.$id));
         $this->assertSame([], array_values($nombrados), 'ni uno: nunca una lista parcial');
@@ -507,7 +512,7 @@ class UltronListaDelServidorTest extends TestCase
         $m = $this->entrante('¿Qué planes tienen?');
         $decide = $this->decide($m);
         $x = $this->cargaDe($decide);
-        $this->assertSame([UltronPromptCompiler::VERSION, 160], [$x['sp']['k'] ?? null, $x['sp']['n'] ?? null], 'el sello del 8, con tope 160');
+        $this->assertSame([8, 160], [$x['sp']['k'] ?? null, $x['sp']['n'] ?? null], 'el sello del 8, con tope 160');
         unset($x['po']);
         $token = app(UltronDecideToken::class)->issue((int) $this->conversation->id, (int) $m->id, $decide['commercial_phase'], $decide['allowed_transitions'], $decide['knowledge_version'], $x)['token'];
         $borrador = 'Tenemos el Plan Valera y el Plan Mensual, los dos de un mes. ¿Cuál le interesa más?';
@@ -836,9 +841,11 @@ class UltronListaDelServidorTest extends TestCase
 
     private function decide(MarketingMessage $m): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
-            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1',
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1',
         ], $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     /** Un turno con su `decide` negociado: el mensaje y el token. @return array{MarketingMessage,string} */

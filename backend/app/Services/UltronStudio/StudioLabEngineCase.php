@@ -97,9 +97,10 @@ final class StudioLabEngineCase
         $inicio = $clockMs();
         $llamadas = [];
         $respuestas = [];
+        $auditC9 = (int) ($bundle['sp']['k'] ?? StudioLabEngineFlow::COMPILER) >= 9;
 
         $recorrido = StudioLabEngineFlow::walk($ctx['decide'], $bundle['roles'], $ctx['inbound'],
-            function (string $nodo, string $sistema, string $usuario) use ($client, $clockMs, $deadlineMs, &$llamadas): array {
+            function (string $nodo, string $sistema, string $usuario) use ($client, $clockMs, $deadlineMs, $auditC9, &$llamadas): array {
                 $plazo = self::callTimeout($clockMs(), $deadlineMs);
                 if ($plazo === null) {
                     // NB4: el caso agotó su plazo. Este nodo no se llama ni se cobra; el recorrido para con `timeout`.
@@ -109,6 +110,10 @@ final class StudioLabEngineCase
                 $llamadas[] = ['node' => $nodo, 'role' => self::PATH[$nodo], 'result' => $r, 'inputBytes' => strlen($sistema) + strlen($usuario), 'maxTokens' => StudioLabEngineFlow::NODES[$nodo]['maxTokens']];
                 if (($r['class'] ?? null) !== null || ! is_array($r['output'] ?? null)) {
                     return ['ok' => false, 'class' => $r['class'] ?? StudioLabModelClient::CLASS_INVALID_OUTPUT];
+                }
+                if ($auditC9 && in_array($nodo, StudioLabEngineFlow::COMPOSERS, true)
+                    && is_string($r['output']['reply_draft'] ?? null) && mb_strlen($r['output']['reply_draft']) > self::TEXT_MAX) {
+                    return ['ok' => false, 'class' => StudioLabModelClient::CLASS_INVALID_OUTPUT];
                 }
                 $uso = is_array($r['usage'] ?? null) ? ['input_tokens' => $r['usage']['inputTokens'], 'output_tokens' => $r['usage']['outputTokens']] : null;
 
@@ -132,6 +137,10 @@ final class StudioLabEngineCase
 
         $estrategia = (array) ($recorrido['ran'][StudioLabEngineFlow::VALIDATE]['strategy'] ?? []);
         $commit = $recorrido['commit'];
+        if ((int) ($bundle['sp']['k'] ?? StudioLabEngineFlow::COMPILER) >= 9 && mb_strlen((string) $commit['reply_draft']) > self::TEXT_MAX) {
+            // c9 conserva la misma salida para métricas, auditoría y juez: nunca corta un texto para hacerlo parecer válido.
+            return ['status' => 'error', 'class' => StudioLabModelClient::CLASS_INVALID_OUTPUT, 'calls' => $llamadas, 'reply' => null, 'engine' => null, 'findings' => [], 'turn' => $ctx['turn']];
+        }
         $final = $this->check->predict($ctx['turn'], $commit, $estrategia);
         $engine = $this->block($recorrido, $respuestas, $ctx['turn'], $estrategia, $commit, $final, $ms);
 
@@ -143,7 +152,11 @@ final class StudioLabEngineCase
             'engine' => $engine,
             'findings' => self::findings($final, $commit['regeneration'] ?? null),
             'turn' => $ctx['turn'],
-        ];
+        ] + ((int) ($bundle['sp']['k'] ?? StudioLabEngineFlow::COMPILER) >= 9 ? ['judgment' => [
+            'candidate_rendered' => $this->check->judgeText($ctx['turn'], (string) $commit['reply_draft'], $estrategia, $commit['recommended_plan_id'] ?? null),
+            'prediction' => $final,
+            'authorized_facts' => StudioLabPrompts::engineJudgeFacts((array) ($ctx['decide']['context'] ?? []), $ctx['turn']),
+        ]] : []);
     }
 
     /**

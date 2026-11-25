@@ -12,7 +12,6 @@ use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\ConversationMemoryService;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler as C;
 use App\Services\Marketing\Ultron\ReferenceResolver;
 use App\Services\Marketing\Ultron\UltronDecideToken;
 use App\Services\Marketing\Ultron\UltronPlansOverview as O;
@@ -24,6 +23,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -57,6 +57,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronListTurnCapTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -135,7 +136,7 @@ class UltronListTurnCapTest extends TestCase
         $this->assertSame([229, 188, 366, 101], [self::mide(self::UN_PLAN), self::mide(self::UN_PLAN_PRECIO), self::mide(self::UN_PLAN_LARGO), self::mide(self::DOS_UNO_A_MANO)], 'lo que miden los textos ya expandidos');
 
         $sp = self::cargaDelToken($this->decide($this->entrante(self::PANORAMA), true)['decide_token'])['x']['sp'];
-        $this->assertSame([200, C::VERSION], [$sp['n'], $sp['k']]);
+        $this->assertSame([200, 8], [$sp['n'], $sp['k']], 'historical c8 list cap');
         // En el turno de lista, 320, lo traiga o no el borrador.
         $this->assertSame(320, F::plansListCap($sp, self::PO));
         // Sin lista (no se ofreció, o un turno de cobro), Legacy o el compilador 5: ninguno, como hoy.
@@ -312,9 +313,11 @@ class UltronListTurnCapTest extends TestCase
     /** @return array<string,mixed> */
     private function decide(MarketingMessage $m, bool $negocia): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
-        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []), $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     private function check(MarketingMessage $m, string $token, string $borrador, int $attempt = 1): TestResponse

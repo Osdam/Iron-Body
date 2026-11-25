@@ -323,11 +323,13 @@ class UltronDecideService
             return null;
         }
 
+        $renderContract = UltronListTurnContract::build($sp, $po, $activePlans, $intent);
+
         return ['po' => $po, 'overview' => [
             // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), sin `marker`: el modelo ve un solo sistema, la ranura (causa C3).
             'plans' => UltronPlansOverview::items($po, $activePlans, ! UltronPlansOverview::serverList($sp)),
             'price_asked' => $intent === SalesIntents::PRICING_QUESTION || CommercialTurnPolicy::preguntaPorPrecio($inbound),
-        ]];
+        ] + ($renderContract === null ? [] : ['render_contract' => $renderContract])];
     }
 
     public function phaseContext(MarketingConversation $conversation, MarketingMessage $message): array
@@ -386,7 +388,7 @@ class UltronDecideService
      *                                  y el token son exactamente los de siempre.
      * @return array<string,mixed>
      */
-    public function decide(MarketingConversation $conversation, MarketingMessage $message, bool $negotiatePrompts = false): array
+    public function decide(MarketingConversation $conversation, MarketingMessage $message, bool $negotiatePrompts = false, ?string $generationContract = null): array
     {
         $lead = $conversation->lead;
 
@@ -450,6 +452,9 @@ class UltronDecideService
          * Sin negociar no se llama: ni una consulta, ni una clave de más.
          */
         $prompts = $negotiatePrompts ? $this->promptOffer->forConversation((int) $conversation->id) : null;
+        if ($prompts !== null) {
+            $prompts = UltronPromptOffer::forRuntime($prompts, $generationContract);
+        }
         /*
          * Y LA PREGUNTA SUGERIDA, EN EL REGISTRO PUBLICADO (apartado 4 del
          * cierre V2, H4-9, T-5): con la versión ofrecida en «profesional», de

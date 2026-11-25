@@ -304,6 +304,12 @@ final class UltronPlansOverview
         return ($sp['m'] ?? null) === UltronPromptStamp::MODE_STUDIO && is_int($k) && $k >= self::SERVER_LIST_SINCE_COMPILER;
     }
 
+    /** The initial contract removes both implicit insertion and PLAN_k in c9. */
+    public static function requiresExplicitSlot(array $sp): bool
+    {
+        return self::serverList($sp) && $sp['k'] >= UltronListTurnContract::SINCE_COMPILER;
+    }
+
     /**
      * La forma de la lista de un borrador SIN expandir:
      * {@see self::SHAPE_MARKERS} si algún marcador pretende ser de la lista
@@ -643,12 +649,20 @@ final class UltronPlansOverview
      * @param  array<int,array<string,mixed>>  $activePlans  `activePlans()`, para el encabezado
      * @return array{text:string,shape:string,slot:bool,used:list<int>,placed:bool}
      */
-    public static function render(string $raw, array $po, array $textos, array $activePlans, bool $serverList): array
+    public static function render(string $raw, array $po, array $textos, array $activePlans, bool $serverList, bool $requireSlot = false): array
     {
         $po = array_values(array_map('intval', $po));
         $forma = self::shape($raw);
         if ($po === []) {
             return ['text' => $raw, 'shape' => $forma, 'slot' => false, 'used' => [], 'placed' => false];
+        }
+        if ($serverList && $requireSlot) {
+            $slot = '{{'.self::SLOT.'}}';
+            $exact = substr_count($raw, $slot) === 1 && preg_match('/(?<!\{)\{\{LISTA_DE_PLANES\}\}(?!\})/', $raw) === 1;
+            $list = $exact && $forma === self::SHAPE_SERVER ? self::compose($po, $textos) : null;
+
+            return ['text' => $list === null ? $raw : str_replace($slot, $list, $raw), 'shape' => $forma,
+                'slot' => $exact, 'used' => $po, 'placed' => $list !== null];
         }
         if (! $serverList || $forma === self::SHAPE_MARKERS) {
             $r = self::expand($raw, $textos, $po);
@@ -739,9 +753,24 @@ final class UltronPlansOverview
      * @param  bool  $serverList  la lista la compone Laravel ({@see self::serverList()})
      * @param  array<int,array<string,mixed>>|null  $knownPlans  con la lista del servidor, los planes que conoce el servidor, se vendan o no (id y nombre; `MarketingKnowledgeBaseService::knownPlans()`): para la regla 6 cuentan los que no están en `$activePlans`; sin ellos, solo los de la lista
      */
-    public static function verify(string $raw, array $po, array $activePlans, bool $serverList = false, ?array $knownPlans = null): ?string
+    public static function verify(string $raw, array $po, array $activePlans, bool $serverList = false, ?array $knownPlans = null, bool $requireSlot = false): ?string
     {
-        return $serverList ? self::verificaConLaListaDelServidor($raw, $po, $activePlans, $knownPlans ?? []) : self::verificaLosMarcadores($raw, $po, $activePlans);
+        $detail = $serverList ? self::verificaConLaListaDelServidor($raw, $po, $activePlans, $knownPlans ?? []) : self::verificaLosMarcadores($raw, $po, $activePlans);
+        if (! $serverList || ! $requireSlot || $po === [] || in_array($detail, [self::NO_LIST, self::UNKNOWN_MARKER, self::PRICE_WRITTEN], true)) {
+            return $detail;
+        }
+        $count = substr_count($raw, '{{'.self::SLOT.'}}');
+        if ($count === 0) {
+            return self::MISSING;
+        }
+        preg_match_all(self::PATTERN, $raw, $markers);
+        $appMarkers = count(array_filter($markers[1], static fn (string $name): bool => strcasecmp($name, UltronDraftPlaceholders::APP_LINKS) === 0));
+        if ($count !== 1 || self::shape($raw) !== self::SHAPE_SERVER || $appMarkers > 1
+            || $appMarkers !== substr_count($raw, '{{'.UltronDraftPlaceholders::APP_LINKS.'}}')) {
+            return self::MIXED;
+        }
+
+        return $detail;
     }
 
     /**

@@ -22,6 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -52,6 +53,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class CriticListTurnVetoTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -229,8 +231,9 @@ class CriticListTurnVetoTest extends TestCase
             'conversation_id' => $this->conversation->id, 'direction' => MarketingMessage::DIRECTION_INBOUND, 'sender_type' => MarketingMessage::SENDER_LEAD,
             'body' => $texto, 'meta_message_id' => 'wamid.l4.'.$this->mundo.'.'.uniqid(), 'status' => 'received',
         ]);
-        $decide = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []),
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []),
             $this->headers())->assertOk()->json();
+        $decide = $this->historicalListTurn($decide, $m);
 
         return [$m, (string) $decide['decide_token']];
     }

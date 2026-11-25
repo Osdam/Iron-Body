@@ -10,10 +10,10 @@ use App\Models\Plan;
 use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\UltronStudio\StudioLabEngineContext;
 use App\Services\UltronStudio\StudioLabEngineFlow;
-use App\Services\UltronStudio\StudioPromptBundle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -42,6 +42,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class StrategyHintsListTurnTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -178,8 +179,9 @@ class StrategyHintsListTurnTest extends TestCase
             'conversation_id' => $c->id, 'direction' => MarketingMessage::DIRECTION_INBOUND, 'sender_type' => MarketingMessage::SENDER_LEAD,
             'body' => $texto, 'meta_message_id' => 'wamid.l3.'.$n.'.'.uniqid(), 'status' => 'received',
         ]);
-        $real = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $c->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []),
+        $real = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $c->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []),
             ['Authorization' => 'Bearer '.self::SECRET])->assertOk()->json();
+        $real = $this->historicalListTurn($real, $m);
         if ($negocia) {
             $this->assertSame('studio', $real['studio_prompts']['mode'], 'decide ofrece la versión');
         }
@@ -191,7 +193,7 @@ class StrategyHintsListTurnTest extends TestCase
     private function laboratorio(string $texto): array
     {
         $parte = self::parteV2(self::VERSION, self::GOBERNADO);
-        $sp = StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
+        $sp = self::historicalListBundle($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
 
         return app(StudioLabEngineContext::class)->build(['turns' => [['role' => 'prospect', 'text' => $texto]], 'facts' => ['paymentState' => 'none', 'handoffRequested' => false]], $sp);
     }

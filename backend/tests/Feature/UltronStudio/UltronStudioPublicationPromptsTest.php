@@ -44,7 +44,7 @@ class UltronStudioPublicationPromptsTest extends TestCase
     use StudioFixtures;
 
     /** «profesional + 200» con el compilador 8 (compile-cases.json, c074); con los compiladores 1 y 2 era `702890f7…311c`, con el 3, `af9e0d23…4d51`, con el 4 sin el motor, `7b09b89c…cc35`, con el 4 y su motor (lo que firmó la v3), `26d57565…1075`, con el 5 (lo que midió el laboratorio en la v4), `2eb9be6f…09c0`, con el 6 (lo que firmó la v4), `962902ab…73a4` y con el 7, `200019e4…3631`. */
-    private const G8_HASH = '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa';
+    private const G8_HASH = '863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505';
 
     private const LEGACY_HASH = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902';
 
@@ -140,7 +140,7 @@ class UltronStudioPublicationPromptsTest extends TestCase
         );
         $p = $vista['prompts'];
         $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'bundleHash', 'shortHash', 'baseline', 'bytes', 'changes', 'carried', 'error', 'phrases'], array_keys($p));
-        $this->assertSame(['canary', 'n8n-29de5119', 8, self::LEGACY_HASH, self::G8_HASH, '8200e50e', false, 123254], [$p['key'], $p['base'], $p['compiler'], $p['legacyBundleHash'], $p['bundleHash'], $p['shortHash'], $p['baseline'], $p['bytes']]);
+        $this->assertSame(['canary', 'n8n-29de5119', 9, self::LEGACY_HASH, self::G8_HASH, '863bc1f6', false, 142394], [$p['key'], $p['base'], $p['compiler'], $p['legacyBundleHash'], $p['bundleHash'], $p['shortHash'], $p['baseline'], $p['bytes']]);
         $this->assertSame(['list' => [], 'rules' => [], 'max' => 12, 'problems' => []], $p['phrases'], 'sin reglas S-NNN no entra ninguna frase');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($p['changes'], 'param'));
         $this->assertStringStartsWith('REGISTRO PUBLICADO: profesional.', $p['changes'][0]['patches'][0]['text']);
@@ -154,7 +154,7 @@ class UltronStudioPublicationPromptsTest extends TestCase
         $this->assertSame(D::CONTRACT_V2, $cabeza['column']);
         $this->assertSame(D::CONTRACT_V2, $cabeza['contract']);
         $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH, 'compiler' => 8], $cabeza['canary']['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH, 'compiler' => 9], $cabeza['canary']['prompts']);
         $this->assertNull($cabeza['rest']);
         $this->assertSame(['nuevo', $vista['previewHash']], ['nuevo', StudioPublication::query()->sole()->acknowledged['previewHash']]);
 
@@ -371,8 +371,8 @@ class UltronStudioPublicationPromptsTest extends TestCase
             $this->assertSame('applied', $t['state']);
             $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/', $t['at']);
             $this->assertSame(['state' => 'applied', 'version8' => 'b0000000'], $t['declared']);
-            $this->assertSame(['mode' => 'studio', 'reason' => null, 'version8' => 'b0000000', 'bundle8' => '8200e50e'], $t['offered']);
-            $this->assertSame(['mode' => 'studio', 'bundle8' => '8200e50e', 'flowRev' => 'S1'], $t['observed']);
+            $this->assertSame(['mode' => 'studio', 'reason' => null, 'version8' => 'b0000000', 'bundle8' => '863bc1f6'], $t['offered']);
+            $this->assertSame(['mode' => 'studio', 'bundle8' => '863bc1f6', 'flowRev' => 'S1'], $t['observed']);
         }
 
         // Nada de ids ni textos: ni la conversación, ni la ejecución, ni el

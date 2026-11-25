@@ -110,7 +110,7 @@ class StudioLabEngineListaDelServidorTest extends TestCase
     public function test_con_el_compilador_8_el_caso_lleva_la_forma_de_la_lista_y_mide_la_lista_puesta(string $borrador, string $forma, string $puesta, bool $ranura): void
     {
         $paquete = self::paquete();
-        $this->assertSame([C::VERSION, true], [$paquete['sp']['k'], O::serverList($paquete['sp'])]);
+        $this->assertSame([8, true], [$paquete['sp']['k'], O::serverList($paquete['sp'])]);
 
         $caso = $this->corre($paquete, $borrador);
 
@@ -140,7 +140,14 @@ class StudioLabEngineListaDelServidorTest extends TestCase
     {
         $parte = self::parteV2(self::VERSION, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]);
 
-        return StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash']);
+        $historical = C::compile($parte['governed'], 8);
+        $bundle = StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash']);
+        $bundle['roles'] = $historical['roles'];
+        $bundle['bundleHash'] = $historical['bundleHash'];
+        $bundle['sp']['k'] = 8;
+        $bundle['sp']['h'] = $historical['bundleHash'];
+
+        return $bundle;
     }
 
     /**

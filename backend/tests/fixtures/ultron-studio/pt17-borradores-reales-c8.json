@@ -1,0 +1,3337 @@
+{
+  "source": "docs/ultron-studio/ops/evidencia-h9/2026-11-24/pt17-medicion-c8/casos-c8.jsonl",
+  "sourceSha256": "335d8fe19c6fc2775dd0d4a96062ff7134a440cd68693191a7e51a25cb51cd88",
+  "description": "Recorded c8 outputs, copied without repairs. Historical evidence, not c9 generation or acceptance results.",
+  "textsSha256": "f5cd9bfe0a7de62ac8a067e7c51867476be9c4c1ed91448aca69a0f39d922e37",
+  "cases": [
+    {
+      "sourceLine": 1,
+      "run": "68380359",
+      "scenarioCode": "E-001",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos estos planes activos: Plan Valera, Plan Mensual y Élite, cada uno con acceso a gimnasio y beneficios especiales. El Plan Valera cuesta {{PLAN_PRICE}}. ¿Ha entrenado antes para orientarle mejor?",
+            "chars": 315,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Claro, le comparto los planes disponibles y su costo mensual: {{LISTA_DE_PLANES}}. Para orientarle mejor, ¿ha entrenado antes o es su primera vez en un gimnasio?",
+            "chars": 217,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta sobre planes y precios, usa un registro profesional y mantiene naturalidad. La pregunta final es adecuada para conocer mejor al cliente y orientar la recomendación. Se podría mejorar incluyendo un beneficio fresco del plan 25 o información sobre la ubicac"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 217,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 9992
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Claro, le comparto los planes disponibles y su costo mensual: {{LISTA_DE_PLANES}}.",
+          "reason": "La respuesta intenta presentar los planes con sus precios, pero usa el marcador {{LISTA_DE_PLANES}} que no es un marcador válido en la configuración, donde sólo se permiten {{PLAN_NAME}} y {{PLAN_PRICE}} para nombrar planes y precios. Por tanto, no presenta correctamente la lista de planes con preci"
+        }
+      ]
+    },
+    {
+      "sourceLine": 2,
+      "run": "68380359",
+      "scenarioCode": "E-002",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 2)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado al gimnasio y asesoría semi personalizada. También está el Plan Élite, que incluye sesiones funcionales y guía nutricional. ¿Ha entrenado antes en gimnasio?",
+            "chars": 342,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 342 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comento que tenemos tres planes activos: el primero, el segundo y el tercero, cuyos detalles y precios están listados a continuación. ¿Ha entrenado antes en gimnasio para orientarle mejor?",
+            "chars": 294,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": {
+              "verdict": "fail",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure",
+                "next_step"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje usa 'le' correctamente pero es muy genérico y parece plantilla. Además, menciona tres planes sin detalle y sin que el usuario haya pedido todos, lo que es exceso de información. La pregunta final es adecuada pero podría ser más natural y cercana. Se recomienda reducir la lista de planes a"
+            },
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comento que tenemos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado al gimnasio y asesoría con entrenador, y el Plan Élite con acceso total y entrenamientos guiados. ¿Ha entrenado antes en gimnasio para orientarle mejor?",
+            "chars": 339,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "fail",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure",
+                "question_discipline"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje mezcla registro de usted con 'orientarle' y 'ha entrenado', que es correcto, pero la pregunta final es la segunda en el mismo mensaje, baja naturalidad y disciplina. Además, menciona tres planes con detalle, lo que excede el tope de disclosure para esta fase. Para mejorar, reduzca la cant"
+            },
+            "rewriteBy": "critic"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "critic_failed",
+          "codes": [
+            "plans_overview",
+            "length_over_cap"
+          ],
+          "chars": 339,
+          "cap": 320,
+          "withinCap": false,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 13107
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "\"Plan Valera y el Plan Mensual... Plan Élite\" sin precios",
+          "reason": "La respuesta menciona los planes pero no presenta el precio de cada uno con los marcadores {{PLAN_PRICE}} como se requiere."
+        }
+      ]
+    },
+    {
+      "sourceLine": 3,
+      "run": "68380359",
+      "scenarioCode": "E-003",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 3)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado y asesoría semi personalizada, y el Plan Élite con entrenamiento intensivo y app completa. ¿Ha entrenado antes en gimnasio?",
+            "chars": 309,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero).",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le explico que tenemos tres planes activos: el primero con acceso ilimitado al gimnasio y asesoría básica, el segundo similar pero con beneficios adicionales, y el tercero con acceso total, entrenamientos intensivos y guía nutricional. ¿Ha entrenado antes en gimnasio?",
+            "chars": 371,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 371 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comento que tenemos tres planes activos: Plan Valera y Plan Mensual con acceso ilimitado al gimnasio y asesoría básica, y el plan Élite con acceso total y guía nutricional. ¿Ha entrenado antes en gimnasio?",
+            "chars": 311,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta sobre planes y precios, usa un registro profesional y mantiene naturalidad. Se sugiere en futuros mensajes incluir algún dato fresco como la ubicación o cómo empezar para aportar novedad y enriquecer la conversación."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 311,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8247
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comento que tenemos tres planes activos: Plan Valera y Plan Mensual con acceso ilimitado al gimnasio y asesoría básica, y el plan Élite con acceso total y guía nutricional.",
+          "reason": "Menciona nombres concretos de planes, no usa los marcadores {{PLAN_NAME}} ni muestra precios con {{PLAN_PRICE}}; no presenta precios, incumpliendo el criterio."
+        }
+      ]
+    },
+    {
+      "sourceLine": 4,
+      "run": "68380359",
+      "scenarioCode": "E-004",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 4)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le entiendo, quiere saber sobre planes y precios. Tenemos el Plan Valera, Plan Mensual y Élite, con acceso al gimnasio y varios beneficios. ¿Ha entrenado antes o busca algo específico?",
+            "chars": 287,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero).",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le cuento que tenemos varios planes con mensualidad: el primero ofrece acceso ilimitado al gimnasio y asesoría básica, el segundo es similar pero con beneficios extendidos, y el tercero incluye entrenamiento intensivo, sesiones funcionales y guía nutricional. ¿Ha entrenado antes o busca algo específico para su entrenamiento?",
+            "chars": 429,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 429 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Claro, le comento que tenemos estos planes con mensualidad: Plan Valera, Plan Mensual y Élite. Le paso la lista con sus precios y beneficios para que los revise: LISTA_DE_PLANES. ¿Ha entrenado antes o qué busca lograr con el entrenamiento?",
+            "chars": 342,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta sobre planes y precios, usa un registro profesional y deja una pregunta abierta para continuar la conversación. Se recomienda mantener el tono formal y evitar mezclar tuteo y usted en futuros mensajes."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview",
+            "length_over_cap"
+          ],
+          "chars": 342,
+          "cap": 320,
+          "withinCap": false,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8099
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "\"Plan Valera, Plan Mensual y Élite\" y \"LISTA_DE_PLANES\"",
+          "reason": "Se mencionan planes con nombres normales, no con marcadores {{PLAN_NAME}} ni {{PLAN_PRICE}}, y no se incluyen precios reales ni marcadores. Además, 'LISTA_DE_PLANES' parece un placeholder no resuelto, incumpliendo la necesidad de presentar la lista con precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 5,
+      "run": "68380359",
+      "scenarioCode": "E-005",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 5)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado y asesoría semi personalizada, y el Plan Élite con acceso total y seguimiento avanzado. La mensualidad del Plan Valera es {{PLAN_PRICE}}. ¿Me cuenta si ya ha entrenado antes?",
+            "chars": 357,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 357 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes que tenemos: {{LISTA_DE_PLANES}}. ¿Ha entrenado antes o es su primera vez en un gimnasio?",
+            "chars": 168,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente la pregunta del cliente con la lista de planes y una pregunta relevante para continuar la conversación. El registro es profesional y consistente con el uso de usted. La longitud es adecuada y no hay presión ni repetición. Se podría mejorar añadiendo un dato fresco como"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 168,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 7243
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos: {{LISTA_DE_PLANES}}.",
+          "reason": "El texto muestra un marcador genérico {{LISTA_DE_PLANES}} en vez de presentar explícitamente la lista de planes con su precio, por lo que no cumple con presentar la lista de planes con precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 6,
+      "run": "68380359",
+      "scenarioCode": "E-006",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y por el horario del domingo",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y abren los domingos?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          },
+          {
+            "id": "c2",
+            "kind": "must",
+            "text": "Responder si abren los domingos.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le informo que abrimos los domingos de 8:00 a.m. a 2:00 p.m. Tenemos el Plan Valera con acceso ilimitado al gimnasio y asesoría semi personalizada por {{PLAN_PRICE}}. ¿Ha entrenado antes en un gimnasio?",
+            "chars": 302,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le confirmo que abrimos los domingos de 8:00 a.m. a 2:00 p.m. Estos son algunos planes disponibles: {{LISTA_DE_PLANES}}. ¿Ha entrenado antes en un gimnasio?",
+            "chars": 212,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente la pregunta sobre horarios y planes, usa un registro profesional y deja una pregunta abierta para continuar la conversación. Se podría mejorar incluyendo un beneficio fresco del plan 25 o la ubicación para aportar novedad, pero no es obligatorio para aprobar."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 212,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6343
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Estos son algunos planes disponibles: {{LISTA_DE_PLANES}}.",
+          "reason": "Usa un marcador genérico {{LISTA_DE_PLANES}} que no es un marcador esperado o permitido para presentar planes y precios; no presenta lista con precios específicos."
+        },
+        {
+          "id": "c2",
+          "verdict": "pass",
+          "evidence": "Le confirmo que abrimos los domingos de 8:00 a.m. a 2:00 p.m.",
+          "reason": "Responde claramente a la pregunta de si abren los domingos con un horario concreto."
+        }
+      ]
+    },
+    {
+      "sourceLine": 7,
+      "run": "8fa77656",
+      "scenarioCode": "E-001",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos varios planes: Plan Valera con acceso ilimitado y asesoría básica por {{PLAN_PRICE}}, Plan Mensual con beneficios similares y Élite, que incluye acceso total y guía nutricional por {{PLAN_PRICE}}. ¿Me cuenta si ya ha entrenado antes para recomendarle mejor?",
+            "chars": 376,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 376 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}. ¿Ha entrenado antes para recomendarle el plan que mejor se adapte a su experiencia?",
+            "chars": 210,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta sobre planes y precios, y añade una pregunta útil para entender mejor la experiencia del cliente, facilitando una recomendación adecuada. El registro es formal y profesional, sin tuteo ni lenguaje robótico. La longitud es adecuada y no hay presión ni cont"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 210,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6464
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}.",
+          "reason": "La respuesta menciona un marcador genérico {{LISTA_DE_PLANES}} que no corresponde al marcador válido {{PLAN_NAME}} y {{PLAN_PRICE}} para planes y precios; no presenta una lista concreta con plan y precio respectivos."
+        }
+      ]
+    },
+    {
+      "sourceLine": 8,
+      "run": "8fa77656",
+      "scenarioCode": "E-002",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 2)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le explico nuestros planes y precios: Plan Valera, mensual, con acceso ilimitado y asesoría, cuesta PLAN_PRICE. Plan Mensual, con beneficios similares, cuesta PLAN_PRICE. El Élite, más completo y con entrenamiento intensivo, cuesta PLAN_PRICE. ¿Me cuenta si ya ha entrenado antes para guiarle mejor?",
+            "chars": 402,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 402 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes disponibles junto con sus precios en la lista. Para orientarle mejor, ¿ha entrenado antes o es su primera vez en un gimnasio?",
+            "chars": 251,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "relevance",
+                "empathy",
+                "naturalness",
+                "context_use",
+                "sales_judgment",
+                "pressure_control",
+                "next_step",
+                "question_discipline",
+                "phase_alignment",
+                "reference_resolution",
+                "novelty",
+                "customer_fit",
+                "progressive_disclosure",
+                "factuality",
+                "tool_consistency",
+                "memory_consistency",
+                "payment_safety",
+                "url_safety",
+                "app_factuality",
+                "membership_factuality"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente la pregunta del cliente con la lista de planes y precios, y añade una pregunta útil para orientar mejor la recomendación. El registro es formal y consistente con el tono profesional. No hay presión ni urgencia, y el mensaje es breve y claro. Se evita repetir informació"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 251,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8546
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes disponibles junto con sus precios en la lista.",
+          "reason": "Se menciona compartir la lista de planes y precios, pero no se entrega la lista real ni se usan los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}} para mostrarlos."
+        }
+      ]
+    },
+    {
+      "sourceLine": 9,
+      "run": "8fa77656",
+      "scenarioCode": "E-003",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 3)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos varios planes con mensualidades diferentes. El Plan Valera ofrece acceso ilimitado y asesoría por {{PLAN_PRICE}}. El Plan Mensual incluye acceso y seguimiento por {{PLAN_PRICE}}. Para un entrenamiento completo, el plan Élite es {{PLAN_PRICE}}. ¿Qué experiencia tiene entrenando para recomendarle mejor?",
+            "chars": 418,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 418 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le cuento que estos son los planes que ofrecemos con sus mensualidades respectivas: {{LISTA_DE_PLANES}}. Para recomendarle el plan ideal, ¿me puede contar si tiene experiencia entrenando?",
+            "chars": 243,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta del cliente con la lista de planes y precios, y añade una pregunta útil para orientar la recomendación. El registro es formal y profesional, sin tuteo. Se mantiene natural y no repite información. Para mejorar, podría incluir un beneficio fresco del gimna"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 243,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 8912
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "\"{{LISTA_DE_PLANES}}\" no es un marcador válido; no presenta lista con precios.",
+          "reason": "El actor utiliza \"{{LISTA_DE_PLANES}}\" que no es un marcador definido para presentar planes ni precios, incumpliendo el criterio de mostrar lista con precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 10,
+      "run": "8fa77656",
+      "scenarioCode": "E-004",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 4)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "DISCOVERY",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le explico: tenemos el Plan Valera y el Plan Mensual, ambos con acceso ilimitado y asesoría semi personalizada. El Plan Valera cuesta PLAN_PRICE y el Mensual, PLAN_PRICE. También está el Plan Élite, con beneficios avanzados, a PLAN_PRICE. ¿Ha entrenado antes en gimnasio?",
+            "chars": 374,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 374 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comento que tenemos tres planes principales: el primero y el segundo ofrecen acceso ilimitado al gimnasio con asesoría básica, y el tercero incluye acceso total y entrenamiento intensivo. ¿Ha entrenado antes en gimnasio?",
+            "chars": 326,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 326 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comento que tenemos estos planes: Plan Valera, Plan Mensual y Élite, con mensualidades que varían según el nivel de acceso y beneficios. ¿Ha entrenado antes en gimnasio?",
+            "chars": 275,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta y es claro, pero podría mejorar la naturalidad evitando la frase 'Le comento que tenemos estos planes' y ser un poco más cercano. Además, menciona tres planes sin detalle, lo que es aceptable pero podría mejorarse añadiendo un beneficio fresco o información concr"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 275,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 7238
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comento que tenemos estos planes: Plan Valera, Plan Mensual y Élite, con mensualidades que varían según el nivel de acceso y beneficios.",
+          "reason": "No se presentan los precios con el marcador {{PLAN_PRICE}} ni cantidad alguna, solo se menciona que varían. No cumple el requisito de listar los precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 11,
+      "run": "8fa77656",
+      "scenarioCode": "E-005",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 5)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Claro, tenemos varios planes. Por ejemplo, el Plan Valera ofrece acceso ilimitado al gimnasio, asesoría semi personalizada y más por {{PLAN_PRICE}} al mes. ¿Ha entrenado antes en un gimnasio o sería su primera vez?",
+            "chars": 314,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Por supuesto, estos son los planes disponibles con sus precios mensuales: {{LISTA_DE_PLANES}}. Para orientarle mejor, ¿ha entrenado antes en un gimnasio o sería su primera vez?",
+            "chars": 232,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente a la pregunta sobre planes y precios, usa un registro profesional y mantiene naturalidad. La pregunta final es adecuada para orientar mejor sin ser invasiva. Se podría mejorar incluyendo un beneficio fresco del gimnasio para aportar novedad, como la ubicación o número "
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 232,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6249
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "pass",
+          "evidence": "estos son los planes disponibles con sus precios mensuales: {{LISTA_DE_PLANES}}",
+          "reason": "La respuesta presenta la lista de planes con su marcador de precios, cumpliendo el criterio must."
+        }
+      ]
+    },
+    {
+      "sourceLine": 12,
+      "run": "8fa77656",
+      "scenarioCode": "E-006",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y por el horario del domingo",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y abren los domingos?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          },
+          {
+            "id": "c2",
+            "kind": "must",
+            "text": "Responder si abren los domingos.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le comento que en Iron Body Neiva abrimos domingos de 8:00 a. m. a 2:00 p. m. Tenemos el Plan Valera con acceso ilimitado al gimnasio, asesoría semi personalizada y otros beneficios por {{PLAN_PRICE}}. ¿Ha entrenado antes o busca algo específico?",
+            "chars": 346,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 346 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le confirmo que abrimos domingos de 8:00 a.m. a 2:00 p.m. Estos son los planes disponibles: {{LISTA_DE_PLANES}}. ¿Ha entrenado antes para recomendarle lo mejor?",
+            "chars": 216,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "relevance",
+                "naturalness",
+                "next_step",
+                "question_discipline",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente la pregunta sobre horarios y planes, usa un tono profesional y cercano, y formula solo una pregunta para continuar la conversación. Se recomienda en futuros mensajes incluir algún dato adicional fresco como la ubicación o cómo empezar para aportar más valor sin exceder"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 216,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 7342
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Estos son los planes disponibles: {{LISTA_DE_PLANES}}.",
+          "reason": "Usa marcador {{LISTA_DE_PLANES}} que no es un marcador válido según la configuración (debe usar {{PLAN_NAME}} y {{PLAN_PRICE}} para nombrar planes y precios). No presenta lista de planes con precios."
+        },
+        {
+          "id": "c2",
+          "verdict": "pass",
+          "evidence": "Le confirmo que abrimos domingos de 8:00 a.m. a 2:00 p.m.",
+          "reason": "Responde claramente y con información verificada sobre la apertura en domingo."
+        }
+      ]
+    },
+    {
+      "sourceLine": 13,
+      "run": "017686e6",
+      "scenarioCode": "E-001",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos varios planes: Plan Valera, Plan Mensual y Élite, todos con acceso al gimnasio y beneficios distintos. La mensualidad del Plan Valera es {{PLAN_PRICE}}. ¿Me comenta si ya ha entrenado antes para recomendarle mejor?",
+            "chars": 336,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 336 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le cuento que estos son los planes que tenemos: {{LISTA_DE_PLANES}}. ¿Me comenta si ya ha entrenado antes para orientarle mejor?",
+            "chars": 184,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta con la lista de planes y una pregunta útil para orientar la recomendación. El registro es formal y no hay mezcla de tuteo y usted. Se podría mejorar añadiendo un dato fresco como la ubicación o un beneficio concreto para aportar novedad, pero no es obligatorio pa"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 184,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6389
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le cuento que estos son los planes que tenemos: {{LISTA_DE_PLANES}}.",
+          "reason": "La respuesta no presenta la lista explícita de planes con precios, solo menciona un marcador inválido {{LISTA_DE_PLANES}} que no está definido ni permitido según la configuración que solo menciona {{PLAN_NAME}} y {{PLAN_PRICE}}."
+        }
+      ]
+    },
+    {
+      "sourceLine": 14,
+      "run": "017686e6",
+      "scenarioCode": "E-002",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 2)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le explico: tenemos varios planes, como el Plan Valera con acceso ilimitado al gimnasio y asesoría semi personalizada por {{PLAN_PRICE}}, o el Plan Élite con acceso total y seguimiento completo por {{PLAN_PRICE}}. ¿Ha entrenado antes para recomendarle mejor?",
+            "chars": 355,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 355 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}. Para orientarle mejor, ¿ha entrenado antes o es su primera vez en un gimnasio?",
+            "chars": 205,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde claramente la pregunta sobre planes y precios, y añade una pregunta útil para orientar mejor sin ser invasivo ni repetitivo. El registro es profesional y consistente con la política de tuteo. Se mantiene natural y humano, sin presionar ni repetir información. Para mejorar, podría"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 205,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6096
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}.",
+          "reason": "Menciona un marcador {{LISTA_DE_PLANES}} que no está definido en configuración ni reglas; para este criterio se requiere lista con nombre y precio usando {{PLAN_NAME}} y {{PLAN_PRICE}}. La respuesta no presenta lista legible ni precios con los marcadores indicados."
+        }
+      ]
+    },
+    {
+      "sourceLine": 15,
+      "run": "017686e6",
+      "scenarioCode": "E-003",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 3)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le comparto tres planes disponibles: Plan Valera y Plan Mensual, que incluyen acceso ilimitado y asesoría básica, y el plan Élite, con acceso total y seguimiento avanzado. ¿Me cuenta si ya tiene experiencia entrenando para recomendarle mejor?",
+            "chars": 345,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 345 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comento que contamos con tres planes principales: el primero y segundo ofrecen acceso ilimitado al gimnasio y asesoría básica, mientras que el tercero incluye acceso total y seguimiento avanzado. Para recomendarle el más adecuado, ¿me cuenta si ya tiene experiencia entrenando?",
+            "chars": 383,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 383 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comento que tenemos tres planes principales: Plan Valera y Plan Mensual con acceso ilimitado y asesoría básica, y Élite con acceso total y seguimiento avanzado. ¿Ya tiene experiencia entrenando?",
+            "chars": 300,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "fail",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure",
+                "customer_fit"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje mezcla tuteo y usted, debe usar solo usted para mantener registro profesional. Además, menciona tres planes sin que la persona haya pedido todos, y no incluye precios ni detalles concretos, lo que limita la utilidad. Finalmente, la persona ya mostró interés claro en precios y mensualidad,"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "critic_failed",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 300,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 15160
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comento que tenemos tres planes principales: Plan Valera y Plan Mensual con acceso ilimitado y asesoría básica, y Élite con acceso total y seguimiento avanzado.",
+          "reason": "No se presenta ninguna mensualidad ni el precio de los planes con los marcadores {{PLAN_PRICE}} como exige el criterio, solo se describen nombres y características."
+        }
+      ]
+    },
+    {
+      "sourceLine": 16,
+      "run": "017686e6",
+      "scenarioCode": "E-004",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 4)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos varios planes: Plan Valera, Plan Mensual y Élite. Por ejemplo, el Plan Valera incluye acceso ilimitado al gimnasio y asesoría semi personalizada con entrenador, por {{PLAN_PRICE}}. ¿Ha entrenado antes o busca algo específico?",
+            "chars": 347,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 347 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}. ¿Ha entrenado antes o busca algo específico para recomendarle mejor?",
+            "chars": 195,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta con la lista de planes y precios y añade una pregunta útil para entender mejor al cliente. Para mejorar, podría evitar la expresión 'Le comparto' que suena un poco formal y poco natural en WhatsApp, y podría incluir un dato fresco como la ubicación o cómo empezar"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 195,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6548
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos y sus precios: {{LISTA_DE_PLANES}}.",
+          "reason": "Usa el marcador {{LISTA_DE_PLANES}} que no está permitido ni definido en la configuración; debe listar los planes con el marcador {{PLAN_NAME}} y sus precios con {{PLAN_PRICE}} para cumplir el criterio."
+        }
+      ]
+    },
+    {
+      "sourceLine": 17,
+      "run": "017686e6",
+      "scenarioCode": "E-005",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 5)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le comento que tenemos estos planes activos: Plan Valera, Plan Mensual y Élite. Por ejemplo, el Plan Valera ofrece acceso ilimitado al gimnasio y asesoría semi personalizada, con una mensualidad de {{PLAN_PRICE}}. ¿Me cuenta si ya tiene experiencia entrenando para recomendarle el que mejor se adapte?",
+            "chars": 401,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 401 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comento que disponemos de estos planes activos con sus precios: {{LISTA_DE_PLANES}}. Para orientarle mejor, ¿me puede contar si tiene experiencia entrenando?",
+            "chars": 216,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "naturalness"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje es claro, responde la pregunta y deja un paso siguiente con una pregunta útil. Sin embargo, la frase 'Para orientarle mejor' suena un poco formal y podría hacerse más natural sin perder profesionalismo. No hay mezcla de tuteo y usted, ni errores de contexto o factualidad."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 216,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6473
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comento que disponemos de estos planes activos con sus precios: {{LISTA_DE_PLANES}}",
+          "reason": "Aunque menciona una lista de planes, usa el marcador {{LISTA_DE_PLANES}} que no está definido en la configuración ni es el marcador correcto para planes ni precios como {{PLAN_NAME}} y {{PLAN_PRICE}}; por tanto, no presenta la lista de planes con sus precios según regla 3 del conocimiento."
+        }
+      ]
+    },
+    {
+      "sourceLine": 18,
+      "run": "017686e6",
+      "scenarioCode": "E-006",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y por el horario del domingo",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y abren los domingos?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          },
+          {
+            "id": "c2",
+            "kind": "must",
+            "text": "Responder si abren los domingos.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le comento que el gimnasio abre los domingos de 8:00 a.m. a 2:00 p.m. Tenemos varios planes, entre ellos el Plan Valera que incluye acceso ilimitado, asesoría y seguimiento con entrenador, y acceso básico a la app. ¿Ya ha entrenado antes para recomendarle mejor?",
+            "chars": 365,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 365 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le informo que el gimnasio abre los domingos de 8:00 a. m. a 2:00 p. m. Tenemos varios planes, el primero ofrece acceso ilimitado y asesoría, el segundo acceso mensual y el tercero acceso total con entrenamientos guiados. ¿Ha entrenado antes para recomendarle mejor?",
+            "chars": 369,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 369 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le cuento que Iron Body Neiva abre domingos de 8 a.m. a 2 p.m. Tenemos tres planes principales: el Plan Valera, Plan Mensual y Plan Élite, con beneficios variados según su interés. ¿Ha entrenado antes para recomendarle mejor?",
+            "chars": 328,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "naturalness"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta con información concreta y una pregunta útil para continuar. Sin embargo, podría mejorar la naturalidad evitando la expresión 'planes principales' y usando un lenguaje más cercano y menos formal. Además, sería mejor mencionar la ubicación para aportar novedad y a"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview",
+            "length_over_cap"
+          ],
+          "chars": 328,
+          "cap": 320,
+          "withinCap": false,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8055
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "\"Tenemos tres planes principales: el Plan Valera, Plan Mensual y Plan Élite\"",
+          "reason": "La respuesta menciona planes por nombre pero no muestra precios ni usa marcadores {{PLAN_PRICE}}, por lo que no cumple con presentar precio para cada plan."
+        },
+        {
+          "id": "c2",
+          "verdict": "pass",
+          "evidence": "\"Iron Body Neiva abre domingos de 8 a.m. a 2 p.m.\"",
+          "reason": "Responde claramente que el gimnasio abre los domingos y especifica horario."
+        }
+      ]
+    },
+    {
+      "sourceLine": 19,
+      "run": "177cc12d",
+      "scenarioCode": "E-001",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le informo que tenemos varios planes. El Plan Valera ofrece acceso ilimitado al gimnasio y asesoría básica por {{PLAN_PRICE}}. El Plan Mensual es similar, con beneficios parecidos. Para un acceso completo y entrenamiento avanzado, el plan Élite es ideal, con un costo de {{PLAN_PRICE}}. ¿Me cuenta si ya ha entrenado antes para recomendarle mejor?",
+            "chars": 444,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 444 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes que tenemos y sus precios para la mensualidad: LISTA_DE_PLANES ¿Ha entrenado antes o es su primera vez en un gimnasio?",
+            "chars": 244,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/mixed"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comparto los planes que tenemos con sus precios: LISTA_DE_PLANES. Para orientarle mejor, ¿ha entrenado antes o esta empezando en un gimnasio?",
+            "chars": 247,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "next_step",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta con la lista de planes y una pregunta para orientar mejor. Se recomienda evitar preguntar experiencia en este momento si la estrategia no lo justifica, pero no es un defecto grave. El mensaje es claro, profesional y natural, sin tuteo ni robotismo."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 247,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 11043
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos con sus precios: LISTA_DE_PLANES.",
+          "reason": "Aunque menciona compartir los planes con precios, 'LISTA_DE_PLANES' no es un marcador válido según las reglas, no se presentan los planes con los marcadores correctos {{PLAN_NAME}} y {{PLAN_PRICE}}."
+        }
+      ]
+    },
+    {
+      "sourceLine": 20,
+      "run": "177cc12d",
+      "scenarioCode": "E-002",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 2)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos varios planes. El Plan Valera le da acceso ilimitado y asesoría con entrenador por {{PLAN_PRICE}}. También está el Plan Mensual con beneficios similares y el Élite, que incluye acceso total y guía nutricional. ¿Ha entrenado antes en gimnasio?",
+            "chars": 364,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 364 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le informo que tenemos estos planes disponibles: {{LISTA_DE_PLANES}}. Para orientarle mejor, ¿ha entrenado antes en gimnasio?",
+            "chars": 181,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta del cliente, usa un registro profesional y mantiene naturalidad. La pregunta final es adecuada para orientar mejor sin ser repetitiva ni presionante. Se podría mejorar añadiendo un beneficio fresco del plan 25 o información sobre la ubicación para aportar novedad"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 181,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 6676
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le informo que tenemos estos planes disponibles: {{LISTA_DE_PLANES}}",
+          "reason": "No presenta la lista concreta de planes con su precio individual usando los marcadores PLAN_NAME y PLAN_PRICE, solo un marcador genérico {{LISTA_DE_PLANES}} sin precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 21,
+      "run": "177cc12d",
+      "scenarioCode": "E-003",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 3)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le comparto los planes y sus mensualidades: Plan Valera con acceso ilimitado y asesoría semi personalizada por {{PLAN_PRICE}}; Plan Mensual con beneficios similares por {{PLAN_PRICE}}; y el plan Élite con acceso total y seguimiento completo por {{PLAN_PRICE}}. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+            "chars": 412,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 412 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le comparto los planes disponibles y sus mensualidades LISTA_DE_PLANES. Para guiarle mejor, ¿qué experiencia tiene entrenando?",
+            "chars": 229,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/mixed"
+              ],
+              "issues": [
+                "relevance"
+              ],
+              "notes": "MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comparto los planes disponibles y sus mensualidades LISTA_DE_PLANES. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+            "chars": 232,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "next_step",
+                "question_discipline"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta con la lista de planes y precios, y añade una pregunta útil para orientar la recomendación. Se recomienda mantener el registro formal y evitar preguntas adicionales en este turno para no sobrecargar."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "plans_overview",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 232,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 7398
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes disponibles y sus mensualidades LISTA_DE_PLANES.",
+          "reason": "Usa un marcador genérico LISTA_DE_PLANES que no corresponde a los marcadores autorizados {{PLAN_NAME}} y {{PLAN_PRICE}} para mostrar planes y precios; por tanto, no presenta la lista de planes con su precio como pide el criterio."
+        }
+      ]
+    },
+    {
+      "sourceLine": 22,
+      "run": "177cc12d",
+      "scenarioCode": "E-004",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 4)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos tres planes principales: Plan Valera, Plan Mensual y Élite. El Plan Valera ofrece acceso ilimitado al gimnasio y asesoría básica con entrenador por {{PLAN_PRICE}}. El Plan Mensual es similar, con beneficios completos por {{PLAN_PRICE}}. Élite incluye acceso total al gimnasio, sesiones funcionales y guía nutricional por {{PLAN_PRICE}}. ¿Me puede contar si ya tiene experiencia entrenando o qué busca lograr?",
+            "chars": 524,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/missing",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "FALTA LA LISTA DE PLANES: pon LISTA_DE_PLANES entre dobles llaves una sola vez, donde va la lista; el backend escribe cada plan con su nombre y su precio. Sin nombres de plan, cifras ni marcadores PLAN_. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 524 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le cuento que tenemos estos planes activos: {{LISTA_DE_PLANES}}. Para ayudarle mejor, ¿me cuenta si ya tiene experiencia entrenando o qué busca lograr con el gimnasio?",
+            "chars": 223,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": false,
+              "reason": "list_final"
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "naturalness"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje cumple con responder la pregunta y es adecuado para la fase NEW_LEAD. Sin embargo, para mejorar naturalness, se podría evitar la frase 'Para ayudarle mejor' que suena un poco formal y distante, y usar un lenguaje un poco más cercano sin perder el trato de usted."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 223,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": true
+          }
+        },
+        "elapsedMs": 8149
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "\"{{LISTA_DE_PLANES}}\" no aparece en la respuesta.",
+          "reason": "La respuesta menciona un marcador {{LISTA_DE_PLANES}} diferente al esperado {{PLAN_NAME}} y no despliega lista de planes con sus precios; por tanto, no presenta la lista de planes con precio de cada uno."
+        }
+      ]
+    },
+    {
+      "sourceLine": 23,
+      "run": "177cc12d",
+      "scenarioCode": "E-005",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y la mensualidad (copia 5)",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y cuánto cuesta la mensualidad?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le cuento que tenemos el Plan Valera y el Plan Mensual, ambos con asesoría y acceso a gimnasio y app, y el Plan Élite con acceso total y guía nutricional; la mensualidad es PLAN_PRICE para el Plan Valera. ¿Qué experiencia tiene entrenando?",
+            "chars": 342,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 342 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le cuento que tenemos tres planes: el primero ofrece acceso básico y asesoría, el segundo es mensual con beneficios similares, y el tercero incluye acceso total y guía nutricional; la mensualidad varía según el plan, desde PLAN_PRICE. ¿Qué experiencia tiene entrenando?",
+            "chars": 372,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/mixed",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "MARCADORES MEZCLADOS: usa solo LISTA_DE_PLANES entre dobles llaves, una sola vez; sin marcadores que empiecen por PLAN_. El backend pone la lista entera, en su orden. La lista ocupa 75 de 320 caracteres: tu texto, como mucho 245. DEMASIADO LARGO: con la lista mide 372 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le comparto los planes que tenemos y sus precios mensuales LISTA_DE_PLANES. Para orientarle mejor, ¿qué experiencia tiene entrenando?",
+            "chars": 236,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "fail",
+              "issues": [
+                "progressive_disclosure",
+                "phase_alignment"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje es demasiado largo para la fase NEW_LEAD y la estrategia indica solo informar precios y planes sin preguntar experiencia aún. Para aprobar, entregue solo la lista de planes con precios y cierre con una pregunta abierta sobre dudas o interés, sin indagar experiencia en este momento."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "critic_failed",
+          "codes": [
+            "plans_overview"
+          ],
+          "chars": 236,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8656
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Le comparto los planes que tenemos y sus precios mensuales LISTA_DE_PLANES.",
+          "reason": "No se presenta la lista de planes con precios especificados usando los marcadores como {{PLAN_NAME}} y {{PLAN_PRICE}}. La expresión 'LISTA_DE_PLANES' parece un marcador o texto genérico y no cumple con mostrar la lista real con precios."
+        }
+      ]
+    },
+    {
+      "sourceLine": 24,
+      "run": "177cc12d",
+      "scenarioCode": "E-006",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y por el horario del domingo",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y abren los domingos?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          },
+          {
+            "id": "c2",
+            "kind": "must",
+            "text": "Responder si abren los domingos.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "composer_retry_2",
+          "critic_3"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le informo que Iron Body Neiva abre domingos de 8:00 a.m. a 2:00 p.m. Entre los planes destacados están Plan Valera, Plan Mensual y Élite, todos con acceso completo al gimnasio y beneficios específicos. Para guiarle mejor, ¿qué experiencia tiene entrenando?",
+            "chars": 360,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 360 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le confirmo que el gimnasio abre los domingos de 8:00 a. m. a 2:00 p. m. Tenemos tres planes principales: el primero con acceso ilimitado al gimnasio; el segundo similar con algunos beneficios adicionales; y el tercero, el más completo, que incluye acceso total y entrenamiento personalizado. ¿Ha entrenado antes en gimnasio?",
+            "chars": 428,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "length_over_cap"
+              ],
+              "issues": [
+                "progressive_disclosure"
+              ],
+              "notes": "DEMASIADO LARGO: con la lista mide 428 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": "server"
+          },
+          {
+            "n": 3,
+            "role": "composer_retry_2",
+            "text": "Le confirmo que el gimnasio abre los domingos de 8:00 a. m. a 2:00 p. m. Tenemos estos planes: Plan Valera, Plan Mensual y Élite, cada uno con beneficios que se ajustan a diferentes necesidades. ¿Ha entrenado antes en gimnasio para orientarle mejor?",
+            "chars": 352,
+            "cap": 320,
+            "tuteo": [],
+            "check": null,
+            "critic": {
+              "verdict": "fail",
+              "issues": [
+                "naturalness",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje mezcla el trato de usted con 'orientarle', que es correcto, pero la pregunta final '¿Ha entrenado antes en gimnasio para orientarle mejor?' suena poco natural y formal; se recomienda reformular para sonar más cercano y natural. Además, menciona tres planes sin que la persona haya pedido d"
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 3,
+          "origin": "fallback",
+          "cause": "critic_failed",
+          "codes": [
+            "plans_overview",
+            "length_over_cap"
+          ],
+          "chars": 352,
+          "cap": 320,
+          "withinCap": false,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 9761
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Tenemos estos planes: Plan Valera, Plan Mensual y Élite, cada uno con beneficios que se ajustan a diferentes necesidades.",
+          "reason": "No se usaron marcadores {{PLAN_NAME}} ni {{PLAN_PRICE}} para presentar la lista con precios; no se muestran precios."
+        },
+        {
+          "id": "c2",
+          "verdict": "pass",
+          "evidence": "Le confirmo que el gimnasio abre los domingos de 8:00 a. m. a 2:00 p. m.",
+          "reason": "Responde claramente y proporciona horario de domingo solicitado."
+        }
+      ]
+    },
+    {
+      "sourceLine": 25,
+      "run": "d96052c8",
+      "scenarioCode": "E-006",
+      "scenario": {
+        "category": "precio",
+        "title": "Pregunta por los planes y por el horario del domingo",
+        "description": null,
+        "turns": [
+          {
+            "role": "prospect",
+            "text": "¿Qué planes tienen y abren los domingos?"
+          }
+        ],
+        "facts": {
+          "paymentState": "none",
+          "handoffRequested": false
+        },
+        "criteria": [
+          {
+            "id": "c1",
+            "kind": "must",
+            "text": "Presentar la lista de planes con el precio de cada uno.",
+            "rules": []
+          },
+          {
+            "id": "c2",
+            "kind": "must",
+            "text": "Responder si abren los domingos.",
+            "rules": []
+          }
+        ]
+      },
+      "engine": {
+        "flowRev": "S2",
+        "path": [
+          "strategist",
+          "composer",
+          "check1",
+          "composer_retry",
+          "check2",
+          "critic_2"
+        ],
+        "strategy": {
+          "intent": "pricing_question",
+          "nextState": "NEW_LEAD",
+          "toolsRequested": [],
+          "handoffAllowed": false,
+          "corrections": []
+        },
+        "drafts": [
+          {
+            "n": 1,
+            "role": "composer",
+            "text": "Le confirmo que Iron Body Neiva abre domingos de 8:00 a. m. a 2:00 p. m. Tenemos varios planes, como Plan Valera, Plan Mensual y Élite, con acceso completo al gimnasio. ¿Me cuenta si ya tiene experiencia entrenando para recomendarle mejor?",
+            "chars": 342,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": false,
+              "codes": [
+                "plans_overview/name_written",
+                "length_over_cap"
+              ],
+              "issues": [
+                "relevance",
+                "progressive_disclosure"
+              ],
+              "notes": "NOMBRE DUPLICADO: no escribas el nombre de ningun plan de la lista; el backend ya lo pone, con su precio, en la lista. Si hablas de uno, nombralo por su lugar (el primero, el segundo, el tercero). DEMASIADO LARGO: con la lista mide 342 caracteres y el limite de este turno es 320. La lista ya ocupa 75: tu texto, como mucho 245. Primero la respuesta; una pregunta corta o ninguna. No quites planes: la lista va entera.",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": null,
+            "rewriteBy": null
+          },
+          {
+            "n": 2,
+            "role": "composer_retry",
+            "text": "Le confirmo que abrimos domingos de 8:00 a. m. a 2:00 p. m. Tenemos varios planes activos; la lista se la envío enseguida. Para orientar mejor, ¿tiene experiencia entrenando?",
+            "chars": 277,
+            "cap": 320,
+            "tuteo": [],
+            "check": {
+              "http": 200,
+              "pass": true,
+              "codes": [],
+              "issues": [],
+              "notes": "",
+              "mayRewrite": true,
+              "reason": null
+            },
+            "critic": {
+              "verdict": "pass",
+              "issues": [
+                "next_step",
+                "progressive_disclosure"
+              ],
+              "hardFail": null,
+              "notes": "El mensaje responde bien la pregunta sobre horarios y planes, y termina con una pregunta útil para orientar mejor. Para mejorar, podría añadir un dato fresco como la ubicación o número de entrenadores para aportar novedad sin exceder el límite de detalle."
+            },
+            "rewriteBy": "server"
+          }
+        ],
+        "final": {
+          "draft": 2,
+          "origin": "model",
+          "cause": null,
+          "codes": [],
+          "chars": 277,
+          "cap": 320,
+          "withinCap": true,
+          "register": "ok",
+          "trimmed": false,
+          "list": {
+            "shape": "server",
+            "slot": false
+          }
+        },
+        "elapsedMs": 8002
+      },
+      "recordedJudge": [
+        {
+          "id": "c1",
+          "verdict": "fail",
+          "evidence": "Tenemos varios planes activos; la lista se la envío enseguida.",
+          "reason": "No presenta la lista de planes ni los precios; solo indica que la enviará luego, por lo que no cumple el criterio must."
+        },
+        {
+          "id": "c2",
+          "verdict": "pass",
+          "evidence": "Le confirmo que abrimos domingos de 8:00 a. m. a 2:00 p. m.",
+          "reason": "Responde explícitamente y confirma el horario de apertura el domingo, cumpliendo este criterio."
+        }
+      ]
+    }
+  ]
+}

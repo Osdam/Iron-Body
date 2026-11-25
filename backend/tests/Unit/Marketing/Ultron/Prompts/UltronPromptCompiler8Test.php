@@ -74,6 +74,7 @@ use ReflectionMethod;
  *       su lugar.
  *  N14. P-1 A: la frase exacta del veredicto del revisor.
  */
+/** Contrato histórico c8 explícito: las firmas y los bytes grabados no se actualizan a c9. */
 class UltronPromptCompiler8Test extends TestCase
 {
     // ── Las anclas (las quince del 7, sin cambios) ──────────────────────────
@@ -330,7 +331,7 @@ class UltronPromptCompiler8Test extends TestCase
 
     public function test_n1_la_v5_compila_con_la_guia_de_la_ranura_al_final_de_los_redactores_y_el_bloque_al_final_de_los_revisores(): void
     {
-        $c = C::compile(self::v5());
+        $c = C::compile(self::v5(), 8);
         $r = $c['roles'];
         $base = Base::roles();
         $gobernado = self::soloGobernado(self::v5());
@@ -415,7 +416,7 @@ class UltronPromptCompiler8Test extends TestCase
         // La huella: la de Node; no la del 7.
         $this->assertSame([self::V5_C8_HASH, self::V5_C8_BYTES], [$c['bundleHash'], $c['bytes']]);
         $this->assertNotSame(self::V4_C7_HASH, $c['bundleHash'], 'la del compilador 7');
-        $this->assertSame(8, C::VERSION);
+        $this->assertSame(9, C::VERSION);
         $this->assertSame(8, $c['compiler']);
     }
 
@@ -430,7 +431,7 @@ class UltronPromptCompiler8Test extends TestCase
         $this->assertSame(C::PHRASE_ANCHOR, C::phraseViolation('y '.self::A_FIN_CRITIC));
         $this->assertSame(C::PHRASE_ANCHOR, C::phraseViolation(self::A_FIN_CRITIC.'.'));
         try {
-            C::compile(array_replace(C::BASELINE, [C::PHRASES => [self::A_FIN_CRITIC]]));
+            C::compile(array_replace(C::BASELINE, [C::PHRASES => [self::A_FIN_CRITIC]]), 8);
             $this->fail('la frase con el ancla del revisor tenía que lanzar');
         } catch (UltronPromptException $e) {
             $this->assertSame(UltronPromptException::INVALID_PHRASES, $e->reason, 'se rechaza la frase, antes de llegar al ancla repetida');
@@ -496,7 +497,7 @@ class UltronPromptCompiler8Test extends TestCase
                     }
                 }
             }
-            $c = C::compile($g);
+            $c = C::compile($g, 8);
             $this->assertSame($roles, $c['roles'], $nombre);
             // Los textos del motor quedan los últimos del prompt, con cualquier otro parche; la guía, con la L de su tope.
             foreach (['composer', 'composer_retry'] as $rol) {
@@ -581,7 +582,7 @@ class UltronPromptCompiler8Test extends TestCase
         $this->assertSame(' Si commercial_turn_policy.plans_overview trae planes, este tope no aplica a ese mensaje: manda LONGITUD DE ESTE TURNO, al final del prompt.', self::SUFIJO_TOPE);
         $this->assertStringContainsString('En este turno esto manda sobre lo anterior que choque (orden del mensaje, recomendar un solo plan, preguntar antes de informar, los marcadores y el tope general).', self::PLANS_COMPOSER);
         // Y son los del compilador: la v5 los lleva, cada uno en su rol.
-        $roles = C::compile(self::v5())['roles'];
+        $roles = C::compile(self::v5(), 8)['roles'];
         foreach ([[self::PLANS_STRATEGIST, 'strategist'], [self::COMPOSER_MARCADOR, 'composer_retry'], [self::COMPOSER_ELIGE, 'composer'], [self::PLANS_COMPOSER_PRICE, 'composer'], [self::lista(200), 'composer_retry'], [self::PLANS_CRITIC, 'critic_retry'], [self::PLANS_CRITIC_CHECKED, 'critic'], [self::tope(200), 'composer']] as [$t, $rol]) {
             $this->assertSame(1, substr_count($roles[$rol], $t), $rol);
         }
@@ -616,7 +617,7 @@ class UltronPromptCompiler8Test extends TestCase
         }
         $this->assertSame(305 * 9, $vistos, 'las nueve entradas del motor de los redactores, en los 305 casos');
         // Ni en lo compilado de la v5: ni la plantilla ni su pregunta en ningún rol.
-        foreach (C::compile(self::v5())['roles'] as $rol => $texto) {
+        foreach (C::compile(self::v5(), 8)['roles'] as $rol => $texto) {
             $this->assertStringNotContainsString('Claro, tenemos', $texto, $rol);
             $this->assertStringNotContainsString('Cual revisamos', $texto, $rol);
             $this->assertStringNotContainsString(self::PLANTILLA_DEL_DISENO, $texto, $rol);
@@ -632,7 +633,7 @@ class UltronPromptCompiler8Test extends TestCase
 
     public function test_n6_la_linea_base_es_la_base_y_su_huella_es_legacy(): void
     {
-        $c = C::compile(C::BASELINE);
+        $c = C::compile(C::BASELINE, 8);
         $this->assertSame([], C::patches(C::BASELINE));
         $this->assertSame([], $c['patches']);
         $this->assertSame(Base::roles(), $c['roles']);
@@ -645,11 +646,11 @@ class UltronPromptCompiler8Test extends TestCase
 
     // ── N7 ──────────────────────────────────────────────────────────────────
 
-    public function test_n7_el_laboratorio_frente_al_motor_sigue_al_compilador_8(): void
+    public function test_n7_el_laboratorio_sigue_al_compilador_actual_y_distingue_la_medicion_8(): void
     {
         $this->assertSame(C::VERSION, StudioLabEngineFlow::COMPILER);
-        $this->assertSame(8, StudioLabEngineFlow::COMPILER);
-        $this->assertSame('motor-S2-c8-2026-11-22.1', StudioLabEngineFlow::promptVersion());
+        $this->assertSame(9, StudioLabEngineFlow::COMPILER);
+        $this->assertSame('motor-S3-c9-2026-11-24.1', StudioLabEngineFlow::promptVersion());
         $this->assertTrue(StudioLabEngineFlow::isEnginePromptVersion(StudioLabEngineFlow::promptVersion()));
         // Lo medido con el 7 lleva otro nombre: nunca se compara con lo del 8.
         $this->assertNotSame('motor-S2-c7-2026-11-22.1', StudioLabEngineFlow::promptVersion());
@@ -681,10 +682,10 @@ class UltronPromptCompiler8Test extends TestCase
         foreach ([160, 200, C::BASELINE[C::MAX_CHARS], 480] as $n) {
             $l = C::plansListChars($n);
             // El `sp` que firma `decide`: sin `n` con el tope de la línea base.
-            $sp = ['m' => 'studio', 't' => 'profesional', 'o' => 1, 'k' => C::VERSION] + ($n === C::BASELINE[C::MAX_CHARS] ? [] : ['n' => $n]);
+            $sp = ['m' => 'studio', 't' => 'profesional', 'o' => 1, 'k' => 8] + ($n === C::BASELINE[C::MAX_CHARS] ? [] : ['n' => $n]);
             $this->assertTrue(UltronPlansOverview::serverList($sp));
             $this->assertSame($l, UltronReplyFitter::plansListCap($sp, $po), "{$n}: el tope de la lista del turno");
-            $guia = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::MAX_CHARS => $n]))['roles']['composer'];
+            $guia = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::MAX_CHARS => $n]), 8)['roles']['composer'];
             $this->assertStringContainsString('el mensaje completo, ya con la lista, no pasa de '.$l.' caracteres.', $guia, "{$n}: la cifra de la guía");
 
             foreach ([$l, $l + 1] as $largo) {
@@ -735,7 +736,7 @@ class UltronPromptCompiler8Test extends TestCase
         $del7 = [];
         $cambian = 0;
         foreach ($casos as $caso) {
-            $roles = C::compile($caso['governed'])['roles'];
+            $roles = C::compile($caso['governed'], 8)['roles'];
             $del8[] = $caso['id'].':'.Base::bundleHash($roles);
             [$de, $a] = self::delOchoAlSiete($caso['governed'][C::MAX_CHARS]);
             $devueltos = array_map(static fn (string $t): string => str_replace($de, $a, $t), $roles);
@@ -921,7 +922,7 @@ class UltronPromptCompiler8Test extends TestCase
         $this->assertStringContainsString('salvo LISTA_DE_PLANES entre dobles llaves cuando commercial_turn_policy.plans_overview trae planes', self::COMPOSER_MARCADOR);
         $this->assertStringContainsString('si reply_draft lleva LISTA_DE_PLANES, o PLAN_1, PLAN_2 o PLAN_3, entre dobles llaves', self::PLANS_CRITIC);
         // Lo compila el 8 en los dos redactores y en los dos revisores; nunca con llaves.
-        $roles = C::compile(self::v5())['roles'];
+        $roles = C::compile(self::v5(), 8)['roles'];
         foreach (['composer', 'composer_retry', 'critic', 'critic_retry'] as $rol) {
             $this->assertStringContainsString($ranura, $roles[$rol], $rol);
             $this->assertStringNotContainsString('{{'.$ranura, $roles[$rol], "{$rol}: la ranura no va escrita con llaves");
@@ -962,7 +963,7 @@ class UltronPromptCompiler8Test extends TestCase
         // Los dos, dentro del tope de un texto de parche y en su sitio de la v5.
         $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($t));
         $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen(self::lista(480)));
-        $v5 = C::compile(self::v5())['roles'];
+        $v5 = C::compile(self::v5(), 8)['roles'];
         $this->assertSame($t, self::lineaTras($v5['strategist'], self::A_COTIZA));
         $this->assertSame(1, substr_count($v5['composer'], self::lista(200)));
     }
@@ -997,7 +998,7 @@ class UltronPromptCompiler8Test extends TestCase
         }
         // «(abajo)»: en lo compilado, LISTA DE PLANES DEL BACKEND va justo debajo de esta frase.
         foreach (['critic', 'critic_retry'] as $rol) {
-            $lineas = explode("\n", C::compile(self::v5())['roles'][$rol]);
+            $lineas = explode("\n", C::compile(self::v5(), 8)['roles'][$rol]);
             $this->assertSame([self::PLANS_CRITIC_CHECKED, self::PLANS_CRITIC], array_slice($lineas, -2), $rol);
             $this->assertStringStartsWith('LISTA DE PLANES DEL BACKEND', end($lineas), $rol);
         }

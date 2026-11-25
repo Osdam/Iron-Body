@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use ReflectionClassConstant;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -49,6 +50,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronPt17cEstrategiaDeListaFlowTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -140,7 +142,7 @@ class UltronPt17cEstrategiaDeListaFlowTest extends TestCase
             $this->assertContains('answer', $politica['allowed_next_actions'], "{$pregunta}: la acción del 7 la permite la política");
 
             $estratega = $decide['studio_prompts']['roles']['strategist'];
-            $this->assertSame(['studio', UltronPromptCompiler::VERSION], [$decide['studio_prompts']['mode'], $decide['studio_prompts']['compiler']]);
+            $this->assertSame(['studio', 8], [$decide['studio_prompts']['mode'], $decide['studio_prompts']['compiler']], 'historical strategy regression with the pre-c9 package');
             $this->assertSame(1, substr_count($estratega, $texto7), "{$pregunta}: el estratega lleva el texto del 7");
             $this->assertStringContainsString('next_best_action answer (de allowed_next_actions)', $estratega);
             $this->assertStringNotContainsString('next_best_action recommend_plan, conversation_goal recommend, recommendation_goal compare_plans', $estratega, 'ni el del 6');
@@ -267,9 +269,11 @@ class UltronPt17cEstrategiaDeListaFlowTest extends TestCase
 
     private function decide(MarketingMessage $m): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
-            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1',
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1',
         ], $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     private function payload(MarketingMessage $m, string $token, array $propuesta, int $intento): array

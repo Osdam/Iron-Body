@@ -23,11 +23,11 @@ use App\Services\Marketing\Ultron\UltronReplyFitter;
 use App\Services\Marketing\Ultron\UltronReplyOrigin;
 use App\Services\UltronStudio\StudioLabEngineCheck;
 use App\Services\UltronStudio\StudioLabEngineContext;
-use App\Services\UltronStudio\StudioPromptBundle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -108,6 +108,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronListTurnShapesTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -758,7 +759,7 @@ class UltronListTurnShapesTest extends TestCase
     {
         $parte = self::parteV2(self::VERSION, self::V4);
 
-        return StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
+        return self::historicalListBundle($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
     }
 
     /** @return array{m:mixed,n:mixed,t:mixed,o:mixed,k:mixed} lo del `sp` que fija la especificación, en su orden */
@@ -826,9 +827,11 @@ class UltronListTurnShapesTest extends TestCase
 
     private function decide(MarketingMessage $m): string
     {
-        return (string) $this->postJson('/api/internal/marketing/ai/decide', [
-            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1',
-        ], $this->headers())->assertOk()->json('decide_token');
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1',
+        ], $this->headers())->assertOk()->json();
+
+        return (string) $this->historicalListTurn($decide, $m)['decide_token'];
     }
 
     private function commit(MarketingMessage $m, string $token, string $borrador): TestResponse

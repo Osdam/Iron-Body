@@ -1,0 +1,1090 @@
+{
+  "schema": "pt17-h9-documentary-amendment/1",
+  "amendmentId": "PT17-C9-H9-1",
+  "recordedAtUtc": "2026-11-25T02:18:13.902412+00:00",
+  "branch": "fix/pt17-contrato-inicial",
+  "base": {
+    "ref": "origin/main",
+    "commit": "e750dd2c77972a4055dcbd7524d533ed10af84bb",
+    "head": "e750dd2c77972a4055dcbd7524d533ed10af84bb",
+    "remoteFetched": false
+  },
+  "authorization": {
+    "authority": "propietario",
+    "source": "Mensaje del usuario en esta sesión original: APRUEBO LA ENMIENDA DOCUMENTAL H9 — PT-17 C9.",
+    "scope": "Exclusivamente documental, limitada a los cambios actuales de los 14 archivos protegidos enumerados. Los otros 72 archivos solo forman parte del inventario del paquete; no reciben una excepción H9.",
+    "verbatim": "APRUEBO LA ENMIENDA DOCUMENTAL H9 — PT-17 C9.\n\nAutorizo registrar formalmente una excepción documental de alcance cerrado, exclusivamente para los 14 archivos protegidos identificados en tu revisión y los cambios concretos del compilador 9.\n\nCONDICIONES:\n\n1. Documenta los 14 archivos, sus modificaciones, la referencia base e identificadores verificables de los cambios.\n2. Incorpora el manifiesto completo de los 86 archivos del paquete.\n3. Registra la autorización en la documentación correspondiente de H5/PT-17 y la bitácora H9, siguiendo el precedente de c8.\n4. Conserva intactos `OutreachIsolationTest`, todas las guardas H9 y la referencia `origin/main`.\n5. No conviertas el fallo actual de H9 en una excepción general ni lo declares aprobado.\n6. No amplíes la autorización a otros archivos o cambios futuros.\n7. Verifica que la documentación corresponda exactamente al contenido actual del worktree.\n\nDespués entrega una comprobación de la enmienda, el inventario firmado y el estado de preparación para la siguiente fase.\n\nPROHIBIDO: commit, push, merge, deploy, SSH, cambios de producción, activación de S3 y llamadas pagadas al LLM.\n\nEsta autorización es exclusivamente documental. No autoriza integrar ni desplegar.\n\nCuando termines, indica claramente qué condiciones faltan para autorizar la integración controlada.",
+    "verbatimSha256": "378fb3c17647c59c41a85d8cb94aacd9bcfac336bf3a650c4b9d292e1ebca867",
+    "identitySignature": null,
+    "identitySignatureNote": "La autorización se transcribe de la conversación; SHA-256 sella integridad de contenido, no autentica criptográficamente la identidad del propietario."
+  },
+  "scope": {
+    "protectedFiles": 14,
+    "trackedModifiedProtectedFiles": 11,
+    "untrackedNewProtectedFiles": 3,
+    "packageFiles": 86,
+    "packageModifiedFiles": 61,
+    "packageNewFiles": 25,
+    "documentaryFilesOutsideOriginalPackage": [
+      "backend/docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md",
+      "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "backend/docs/ultron-studio/plans/informes-motores/enmienda-h9-pt17-c9.md",
+      "backend/docs/ultron-studio/plans/informes-motores/pt17-c9-manifiesto-autorizado.json",
+      "backend/docs/ultron-studio/plans/informes-motores/pt17-c9-enmienda.sha256"
+    ],
+    "futureChangesAuthorized": false,
+    "integrationAuthorized": false,
+    "deploymentAuthorized": false
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "JSON UTF-8 con claves ordenadas, ensure_ascii=False, separators=(',', ':') y orden de arrays conservado; añadir un único byte LF (0x0A) al final antes de calcular SHA-256. Aplica a packageManifestSha256 y protectedChangesSha256.",
+    "packageManifestSha256": "9a719435456bd4b0a195ead7840be87da1dba4b60e757c66d89139f930e3bbaf",
+    "protectedChangesSha256": "91e67bdfb44d79a60b48b50dc7481aa1f478b44bf7a8939c182bbe5cc55c159c",
+    "previousReviewAlgorithm": "UTF-8 JSON compacto de [{path,sha256}] ordenado por path; claves path,sha256 en ese orden; sin LF final.",
+    "previousReviewedProtectedSha256": "43a3e1f95612c675214931b7be345492f8df9cec395e5a8f94b49f922782def5",
+    "diffCommand": [
+      "git",
+      "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--binary",
+      "--full-index",
+      "--no-renames",
+      "--no-color",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      "--unified=3",
+      "--diff-algorithm=myers",
+      "--no-indent-heuristic",
+      "origin/main",
+      "--",
+      "<path>"
+    ],
+    "newFileDiffNote": "Los nuevos no están en la base; baseGitBlob/baseSha256/gitDiffSha256 son null y worktreeSha256 identifica sus bytes completos."
+  },
+  "protectedChanges": [
+    {
+      "path": "backend/app/Http/Controllers/Api/Internal/UltronController.php",
+      "status": "modified",
+      "bytes": 30021,
+      "baseGitBlob": "69e6a83fc31a7d88735081faad608183990a6fe4",
+      "baseSha256": "f2f1fa63ea07a1204c0b4e1e281c358288a41b7d450b2990c89feaf539a94c61",
+      "worktreeSha256": "e64ad3e9ed6b8ff7b089ab6f266d9de86fd4609b52214e71f01bd31f49973ac4",
+      "gitDiffSha256": "6964eeffd3967db9c9cdfde84813fa3d90d53bfff4a598f0567c0b114488b18b",
+      "change": "decide(): transmite generation_contract sin cambiar rutas ni permisos."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronListTurnPrompts.php",
+      "status": "new",
+      "bytes": 9914,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "7f7da5f47dbebc1b18fab675c8792e10e4de8ff31149c8d95829323966f7d56f",
+      "gitDiffSha256": null,
+      "change": "pack(), select() y listInstructions(): variantes firmadas e instrucciones exclusivas de lista, sin cotización individual contradictoria."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php",
+      "status": "modified",
+      "bytes": 61284,
+      "baseGitBlob": "66bd74045d08c8b908636025e7299c4b0dcbbcd1",
+      "baseSha256": "3cf63bbe53182d9318b9c86b1b190a40d51ff4a4cbdf60ce9ca9076cfcdf65d5",
+      "worktreeSha256": "b96bc99422156ab5874fc8aca2efd0041e292414bbedd8075a79d884de11fa47",
+      "gitDiffSha256": "3a21fe93181be67562c36dc6cb81f26cd2c20d1bd23ce2fd60d8952b53972bdf",
+      "change": "VERSION=9; compile() firma variantes de roles y conserva la reproducción explícita del compilador 8."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php",
+      "status": "modified",
+      "bytes": 14301,
+      "baseGitBlob": "b90916b0d96fb9096c427cc7ae192951fe3f483b",
+      "baseSha256": "cf02237c0391f5b3cfee101c21e0226b2394a7cf2c90f80c6f1fcab78014bfdf",
+      "worktreeSha256": "69ca2d4ea96c887e9e8825982abe8aa5a56a35170ac1248c3887f589d9419729",
+      "gitDiffSha256": "3dfe046a7c4b119349273ff0480ab950b0a7c0f957b8de8747ae51e75c8de27f",
+      "change": "forRuntime(): exige la negociación del contrato c9 para ofrecer variantes y falla cerrado a Legacy ante consumidores incompatibles."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php",
+      "status": "modified",
+      "bytes": 24818,
+      "baseGitBlob": "a10d89c0c3a9acf9f4b9f9a3403f61917083021f",
+      "baseSha256": "360df5b433b1ab7f991a5bfd41554bfa590bc92e427a1702e83b0f973124171d",
+      "worktreeSha256": "cc5b1e21d60ef11aceefd15b5a2d3a3b207bdd3d66e7806f31da2255d020683e",
+      "gitDiffSha256": "037a02e42210744ac403096280bf635ac695d3542ea594013a1ba52f39e9475a",
+      "change": "COMPILER=8; build() y fixtures() conservan los artefactos históricos S1/S2 tras introducir c9."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php",
+      "status": "modified",
+      "bytes": 45277,
+      "baseGitBlob": "85b8705c7ab8b4d3532abace19d4a0a77e03181c",
+      "baseSha256": "d0ab61125c421e41fd4c311ce581c6517539868880c1759be36e1a47025a3588",
+      "worktreeSha256": "5bca59c20e9259833166e6bfcb50d0a88d42b072c752871bad3e906dc759c476",
+      "gitDiffSha256": "b48cd519e3c4e8ecc7bf2e7fe2cc7d6d2f014151123f7783200ec1f4bdf0d7ad",
+      "change": "build(): conserva el compilador histórico en los metadatos de S2."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronCommitService.php",
+      "status": "modified",
+      "bytes": 334862,
+      "baseGitBlob": "cfd5d8193e91975c0011a4eec41f8d948b0c9598",
+      "baseSha256": "9821cfe3d2bc74c066ebdf229ba9818837cf10dcfcfa2728c83091349d746583",
+      "worktreeSha256": "52764baeb5ab43696b987384b8ee42459d2116290764d5569360e0d6e8adfafa",
+      "gitDiffSha256": "3791bba5de85440c3bc27f013c69f68d7a7fff12f5b2f5ef7e522b05c85078a0",
+      "change": "execute() y listaDelModelo(): exigen ranura explícita para c9 y conservan la obligación de lista ante herramientas compatibles."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDecideService.php",
+      "status": "modified",
+      "bytes": 44767,
+      "baseGitBlob": "800ac6b15713402e4b42aca01e952b2cec59e550",
+      "baseSha256": "e0b8bed34490124a6c45bf84d8ba6029bac49f5d4ec41d366f34f16fc85ec93f",
+      "worktreeSha256": "541498ebbbcf093d3b2e404a79f90ddc6aa1d71efc40b334e317cebdf8b4c2f6",
+      "gitDiffSha256": "750fb3875dd28ae47c0d9deaa24f8117e3d804d109067bb2749db10c17533763",
+      "change": "listaDelPanorama() y decide(): calculan el contrato y presupuesto previo a generar y aplican la negociación del consumidor."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftCheck.php",
+      "status": "modified",
+      "bytes": 20282,
+      "baseGitBlob": "95144c07186954e53faaf32b40dd475180c2ba6d",
+      "baseSha256": "7e696e7113a2cd2236c83fcd9804d2ef0b9309ccf3e462176910714375794891",
+      "worktreeSha256": "35b6610904693eb1d6fedc2adc482527d1a94c07b4a6f35e4402167033627d6d",
+      "gitDiffSha256": "7d90552604c27a173f69a32524be9b2a89cdc6076b361303702b38b2ee8cab11",
+      "change": "expandido(): utiliza el renderer con la exigencia de ranura explícita c9."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftDefects.php",
+      "status": "modified",
+      "bytes": 25481,
+      "baseGitBlob": "aed320b6424a4818f15e6ac036efce354156b7c4",
+      "baseSha256": "863438c13f2e6510cc7f91060828621df46b74318c26f489d6d60decb4e02e17",
+      "worktreeSha256": "b9fee4dcc835cceee2df9f82279df048035d84a39abe19b4597d7c23a3be66b8",
+      "gitDiffSha256": "2255500b39e73de6501444ffb5531604ee330b5a5aa64462d811c3b3d16d5225",
+      "change": "of() e isListFinal(): validan la ranura y longitud c9 y producen notas coherentes con el contrato inicial."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListCriticGate.php",
+      "status": "new",
+      "bytes": 2376,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "9e81ad3f9a3357aecc491b366e7ee14d67ce375533a80f3264e4bb98794c143b",
+      "gitDiffSha256": null,
+      "change": "allows() y javascript(): arbitraje compartido del Gate 1 sobre una lista ya validada por el backend; conserva vetos graves."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListTurnContract.php",
+      "status": "new",
+      "bytes": 11205,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "c67c0613460dacced3ee3444fadb6d29b2c689104732d64e50262ba6ac8e8246",
+      "gitDiffSha256": null,
+      "change": "build(), fromPayload() y javascript(): contrato y presupuesto inicial verificable, con reserva opcional de APP_LINKS."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronPlansOverview.php",
+      "status": "modified",
+      "bytes": 47741,
+      "baseGitBlob": "c1cce0c21a1c0bdc576ef7bcc0ddd5eac7f92e53",
+      "baseSha256": "bd3ffd0e87d92e912e37578478e9d967b97b26a27084da668ae56872aac63838",
+      "worktreeSha256": "2d7a558d9943e47b6b3439815f38c3f8819991bccf9fe0d211feadb12e1f10cd",
+      "gitDiffSha256": "f7294357735bd77ade4fcaf5990a3a7577a06d81e64e9aadb8230e08ad7af6ea",
+      "change": "requiresExplicitSlot(), render() y verify(): exigen el marcador literal una vez en c9 y eliminan su inserción implícita."
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php",
+      "status": "modified",
+      "bytes": 30090,
+      "baseGitBlob": "667d54328934dee30b61ced3a069efd4e5328a78",
+      "baseSha256": "34cb9afe8738170d0b3eb1d1a6946b705c62bae9d36c932c7ed9886339eba2bd",
+      "worktreeSha256": "cc02d56838b741ad8c1a2e6f440a4fc4dd3fe77e86819d4814b88ed6c364c4f0",
+      "gitDiffSha256": "8e1a8b51fecfe278bb6b00f235c232cae86cc2e2925a4e33c0024e14ec9c0db0",
+      "change": "explicitListNote(): notas específicas de sintaxis, lista completa, límite y presupuesto, incluida la factibilidad de APP_LINKS."
+    }
+  ],
+  "packageManifest": [
+    {
+      "path": "backend/app/Console/Commands/Marketing/UltronPromptsN8n.php",
+      "status": "modified",
+      "bytes": 20589,
+      "baseGitBlob": "186ba2e4b69da10bc4457a8127cf59e95cd7be0e",
+      "baseSha256": "cea46fcf55562c0e2d848352b4d39a00e3905fbd6b76a2f0936fdee6eec064c7",
+      "worktreeSha256": "a4fb6fd2b07b9caba6607ecd311d9a12be189adb5a48d89a12fa19fdd142448e",
+      "gitDiffSha256": "9ea0eb58b9a7f622a17aa81434e8be466ad21ab9ae55fc6c896872aeb3ea75aa"
+    },
+    {
+      "path": "backend/app/Http/Controllers/Api/Internal/UltronController.php",
+      "status": "modified",
+      "bytes": 30021,
+      "baseGitBlob": "69e6a83fc31a7d88735081faad608183990a6fe4",
+      "baseSha256": "f2f1fa63ea07a1204c0b4e1e281c358288a41b7d450b2990c89feaf539a94c61",
+      "worktreeSha256": "e64ad3e9ed6b8ff7b089ab6f266d9de86fd4609b52214e71f01bd31f49973ac4",
+      "gitDiffSha256": "6964eeffd3967db9c9cdfde84813fa3d90d53bfff4a598f0567c0b114488b18b"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronListTurnPrompts.php",
+      "status": "new",
+      "bytes": 9914,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "7f7da5f47dbebc1b18fab675c8792e10e4de8ff31149c8d95829323966f7d56f",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php",
+      "status": "modified",
+      "bytes": 61284,
+      "baseGitBlob": "66bd74045d08c8b908636025e7299c4b0dcbbcd1",
+      "baseSha256": "3cf63bbe53182d9318b9c86b1b190a40d51ff4a4cbdf60ce9ca9076cfcdf65d5",
+      "worktreeSha256": "b96bc99422156ab5874fc8aca2efd0041e292414bbedd8075a79d884de11fa47",
+      "gitDiffSha256": "3a21fe93181be67562c36dc6cb81f26cd2c20d1bd23ce2fd60d8952b53972bdf"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php",
+      "status": "modified",
+      "bytes": 14301,
+      "baseGitBlob": "b90916b0d96fb9096c427cc7ae192951fe3f483b",
+      "baseSha256": "cf02237c0391f5b3cfee101c21e0226b2394a7cf2c90f80c6f1fcab78014bfdf",
+      "worktreeSha256": "69ca2d4ea96c887e9e8825982abe8aa5a56a35170ac1248c3887f589d9419729",
+      "gitDiffSha256": "3dfe046a7c4b119349273ff0480ab950b0a7c0f957b8de8747ae51e75c8de27f"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php",
+      "status": "modified",
+      "bytes": 24818,
+      "baseGitBlob": "a10d89c0c3a9acf9f4b9f9a3403f61917083021f",
+      "baseSha256": "360df5b433b1ab7f991a5bfd41554bfa590bc92e427a1702e83b0f973124171d",
+      "worktreeSha256": "cc5b1e21d60ef11aceefd15b5a2d3a3b207bdd3d66e7806f31da2255d020683e",
+      "gitDiffSha256": "037a02e42210744ac403096280bf635ac695d3542ea594013a1ba52f39e9475a"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/Prompts/UltronRegenN8nFlow.php",
+      "status": "modified",
+      "bytes": 45277,
+      "baseGitBlob": "85b8705c7ab8b4d3532abace19d4a0a77e03181c",
+      "baseSha256": "d0ab61125c421e41fd4c311ce581c6517539868880c1759be36e1a47025a3588",
+      "worktreeSha256": "5bca59c20e9259833166e6bfcb50d0a88d42b072c752871bad3e906dc759c476",
+      "gitDiffSha256": "b48cd519e3c4e8ecc7bf2e7fe2cc7d6d2f014151123f7783200ec1f4bdf0d7ad"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronCommitService.php",
+      "status": "modified",
+      "bytes": 334862,
+      "baseGitBlob": "cfd5d8193e91975c0011a4eec41f8d948b0c9598",
+      "baseSha256": "9821cfe3d2bc74c066ebdf229ba9818837cf10dcfcfa2728c83091349d746583",
+      "worktreeSha256": "52764baeb5ab43696b987384b8ee42459d2116290764d5569360e0d6e8adfafa",
+      "gitDiffSha256": "3791bba5de85440c3bc27f013c69f68d7a7fff12f5b2f5ef7e522b05c85078a0"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDecideService.php",
+      "status": "modified",
+      "bytes": 44767,
+      "baseGitBlob": "800ac6b15713402e4b42aca01e952b2cec59e550",
+      "baseSha256": "e0b8bed34490124a6c45bf84d8ba6029bac49f5d4ec41d366f34f16fc85ec93f",
+      "worktreeSha256": "541498ebbbcf093d3b2e404a79f90ddc6aa1d71efc40b334e317cebdf8b4c2f6",
+      "gitDiffSha256": "750fb3875dd28ae47c0d9deaa24f8117e3d804d109067bb2749db10c17533763"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftCheck.php",
+      "status": "modified",
+      "bytes": 20282,
+      "baseGitBlob": "95144c07186954e53faaf32b40dd475180c2ba6d",
+      "baseSha256": "7e696e7113a2cd2236c83fcd9804d2ef0b9309ccf3e462176910714375794891",
+      "worktreeSha256": "35b6610904693eb1d6fedc2adc482527d1a94c07b4a6f35e4402167033627d6d",
+      "gitDiffSha256": "7d90552604c27a173f69a32524be9b2a89cdc6076b361303702b38b2ee8cab11"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronDraftDefects.php",
+      "status": "modified",
+      "bytes": 25481,
+      "baseGitBlob": "aed320b6424a4818f15e6ac036efce354156b7c4",
+      "baseSha256": "863438c13f2e6510cc7f91060828621df46b74318c26f489d6d60decb4e02e17",
+      "worktreeSha256": "b9fee4dcc835cceee2df9f82279df048035d84a39abe19b4597d7c23a3be66b8",
+      "gitDiffSha256": "2255500b39e73de6501444ffb5531604ee330b5a5aa64462d811c3b3d16d5225"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListCriticGate.php",
+      "status": "new",
+      "bytes": 2376,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "9e81ad3f9a3357aecc491b366e7ee14d67ce375533a80f3264e4bb98794c143b",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronListTurnContract.php",
+      "status": "new",
+      "bytes": 11205,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "c67c0613460dacced3ee3444fadb6d29b2c689104732d64e50262ba6ac8e8246",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronPlansOverview.php",
+      "status": "modified",
+      "bytes": 47741,
+      "baseGitBlob": "c1cce0c21a1c0bdc576ef7bcc0ddd5eac7f92e53",
+      "baseSha256": "bd3ffd0e87d92e912e37578478e9d967b97b26a27084da668ae56872aac63838",
+      "worktreeSha256": "2d7a558d9943e47b6b3439815f38c3f8819991bccf9fe0d211feadb12e1f10cd",
+      "gitDiffSha256": "f7294357735bd77ade4fcaf5990a3a7577a06d81e64e9aadb8230e08ad7af6ea"
+    },
+    {
+      "path": "backend/app/Services/Marketing/Ultron/UltronRegenerationNotes.php",
+      "status": "modified",
+      "bytes": 30090,
+      "baseGitBlob": "667d54328934dee30b61ced3a069efd4e5328a78",
+      "baseSha256": "34cb9afe8738170d0b3eb1d1a6946b705c62bae9d36c932c7ed9886339eba2bd",
+      "worktreeSha256": "cc02d56838b741ad8c1a2e6f440a4fc4dd3fe77e86819d4814b88ed6c364c4f0",
+      "gitDiffSha256": "8e1a8b51fecfe278bb6b00f235c232cae86cc2e2925a4e33c0024e14ec9c0db0"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineCase.php",
+      "status": "modified",
+      "bytes": 16939,
+      "baseGitBlob": "881bd61abcf49f5dc7bc2eb3be8ac902b087f41e",
+      "baseSha256": "c18586a623bae4f6a411141cff439ab795a777b92af77d43a749e7b17f0c7410",
+      "worktreeSha256": "1de00c04f3a86944d12925d3e26c0a7c1c7e81cf57cf5caac0eccc455c0df589",
+      "gitDiffSha256": "4e0365f19e909a32a556451e6d2248d167c3f758684211b5ada267e6717a5b44"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineCheck.php",
+      "status": "modified",
+      "bytes": 26768,
+      "baseGitBlob": "115b1ce2bd0df4b45e0d266bc36deb10ce8321c8",
+      "baseSha256": "e8179c59dfb1bb71d22f9b1519d75a48bc9e57e6c916ed93f99060a36ac74643",
+      "worktreeSha256": "e1011f57c85dc298aac38322d944bac11b1ab18dbd4cc376d2ac5e62c8dba38c",
+      "gitDiffSha256": "a958be7d4908016facf42f5c6cc7502e504df18418cafdce2951d795aa057e33"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineContext.php",
+      "status": "modified",
+      "bytes": 24381,
+      "baseGitBlob": "98587bbd865bc049326fabad555531047f1076ad",
+      "baseSha256": "f9d6f7b53a89e42d56d5a1fae64afa2aeefc7783bd43bd0ec994e4dc7bcef388",
+      "worktreeSha256": "2a74b929c01f9a83f112593dfc60c0b7e6cfd57f2b5d958e58b6ed1ba26c40dd",
+      "gitDiffSha256": "23a9c069b45228f955c027531347cbba02a4ec74fccc20b7783788bfc440664a"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineFlow.php",
+      "status": "modified",
+      "bytes": 58741,
+      "baseGitBlob": "77091d1c25726e911ea79928de58055c247bf943",
+      "baseSha256": "5b7270ea1018e5669367fd827ad2d233fd7b6d65eca1f2de3ad384033363dcce",
+      "worktreeSha256": "26c35ff8d21f56114c8f9d9220fabf195b64f641b207ce024bd7319506e30c43",
+      "gitDiffSha256": "1a900d738a4b3b581fcf085d16ee4a84f2bf160591a0ffa6793cf9f4c5e4f8da"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineModelClient.php",
+      "status": "modified",
+      "bytes": 2519,
+      "baseGitBlob": "0132a0e1c96cf9bdf988c10610324e0da37ca28b",
+      "baseSha256": "d2a58a977ded3296fa72d599a5780138d85632bfd6ba3a6298d2d20721e29bad",
+      "worktreeSha256": "080bfdba459e8fc8bb4e00b673fca9499d2856e229b06d71bafe4df268f2efc1",
+      "gitDiffSha256": "a778637a709bcc47572ef0684dd627259f8d34a11fea289185f615b0fc5eac9b"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabEngineTransport.php",
+      "status": "new",
+      "bytes": 6273,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "f16b6ca5a4c855e56e125add703c128e1e4bd9c15c9b4677822b60c24facd992",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabOpenAiClient.php",
+      "status": "modified",
+      "bytes": 16474,
+      "baseGitBlob": "16caf9fb0b8a20380357377f4e8f730d092472f1",
+      "baseSha256": "9f3951a5b8c5da2eb6b7663426f26fba233ca5d0609bf57849ad8735bc196f8d",
+      "worktreeSha256": "deb29571204ee658e379a4bf394f84021149d5aa1c412b023e13c38be3df3c68",
+      "gitDiffSha256": "0f62654856ca9baced2f53f5bdec10c7deb3819ab010d4f4fe839d6fc77877a8"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabPrompts.php",
+      "status": "modified",
+      "bytes": 61560,
+      "baseGitBlob": "94db2875ae41dad97381bdc274df737eea851f0c",
+      "baseSha256": "f2495914ed438c8900e0febefe7ba76ee8c296b1c69ebeabca15d22ee77bfd01",
+      "worktreeSha256": "b53e421e5971c2119c209e711b504aba4ac1d8d98701d521e6a20ac0e2b30364",
+      "gitDiffSha256": "b223ee443090ea7cfd7d94972bd6219349831a2280f37c88cee1e3bf4576b198"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabRunner.php",
+      "status": "modified",
+      "bytes": 48095,
+      "baseGitBlob": "40006c7c770b31c1271be7f409988fbdc4c46406",
+      "baseSha256": "c57521e451f152f0178350e0c9bdd86a8760059dee5246da15955dd6baef0761",
+      "worktreeSha256": "60d80ddfe571bbd0c7a85344a442e82c3e73d9228780e5119337f8a14c6aa1aa",
+      "gitDiffSha256": "dfa0bd053ef8527f47cbe8c2a9ef6222968e50bfc5051aabb6d2be36e82012d2"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioLabRuns.php",
+      "status": "modified",
+      "bytes": 69886,
+      "baseGitBlob": "78d827119763228dcdeaf2eab479eaada5955057",
+      "baseSha256": "a0c9f240c775c4eebbd481b24429389f0aca49a647d5a89e92b0edc5275180d5",
+      "worktreeSha256": "e820980444776cf296fcc43b37bb108b5fdd3e2cc101434492eb44cb75ab56dd",
+      "gitDiffSha256": "abb089346e76ac8abd596d0f0e162c2a39a6981dd6b5000f0bf271d2c323515a"
+    },
+    {
+      "path": "backend/app/Services/UltronStudio/StudioListN8nFlow.php",
+      "status": "new",
+      "bytes": 15530,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "486e2329bb10d92ab6d9c6fe7161194ff830e61cacd2be69f288b5b246b3985e",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/docs/ultron-studio/ops/motores/generar-flujo-s3.php",
+      "status": "new",
+      "bytes": 2682,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "94cc0167b3bfae9937cf341b9e096a1d0b7c854f8de627bf0a5603763b581301",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/docs/ultron-studio/ops/motores/verificar-flujo-s3.cjs",
+      "status": "new",
+      "bytes": 939,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "f878a5d04d7bdcb59b1e55835551dcc6ceae44a131076d3f57d18ee9d25812e5",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/docs/ultron-studio/plans/informes-motores/cierre-tecnico-pt17-c9.md",
+      "status": "new",
+      "bytes": 19846,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "67ddbde7d10792c748174e3568dd263fea5debdc93c8b6e9b50b010a68107f9e",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/docs/ultron-studio/plans/informes-motores/pt17-c9-verificacion-local.json",
+      "status": "new",
+      "bytes": 14048,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "d22f12b00f1793ce61bc82a8eb85c5ede142b041ba5225fb4e8429cb40c6ad0a",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/CriticListTurnVetoTest.php",
+      "status": "modified",
+      "bytes": 19936,
+      "baseGitBlob": "194ab48af4c70615acaf2fbf50f8dc3c6d8e7027",
+      "baseSha256": "d33f248b4ff4319d65395b5d6695463d5a3f36acc52a97f5373c43766d5f2224",
+      "worktreeSha256": "5c59311e4e35b66a8d4485e59de271128fe7602c487f688d91fffd74f75a790b",
+      "gitDiffSha256": "14f9673c70a2352af7e3edb34e78227053b8787085df8bb8315b15817b8a87fc"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StrategyHintsListTurnTest.php",
+      "status": "modified",
+      "bytes": 12939,
+      "baseGitBlob": "74bb77800c257c1d9ad089c88e648d2201acb2bf",
+      "baseSha256": "29b1f9b053aaddb2ad3522c545976602063f364b4939841acb8277bf65b2480c",
+      "worktreeSha256": "06d100daff21dda36ead85afc6432d7f237ee8a56b4d042094d2ed8461311136",
+      "gitDiffSha256": "8665ed361dd4edc965594021d8f1ca640d82edac2782ec2eff02542763f28106"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StudioLabEngineCheckParityTest.php",
+      "status": "modified",
+      "bytes": 33026,
+      "baseGitBlob": "39d78869b5f14210be201e728dc0f6041608a4c2",
+      "baseSha256": "7920075ac8426da9aac3637a46fb30010b7450f8a412b83fc6173c0dd6559e74",
+      "worktreeSha256": "b446a554e11aa640d38b17e8236725af3073f83e9b3e0f07d7e4f6b737d1b60b",
+      "gitDiffSha256": "7a7ed49ce10958be98f4a69364a0b8ca67e6f5b2aa84cc8e055e570502120eb1"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/StudioLabEngineContextParityTest.php",
+      "status": "modified",
+      "bytes": 25264,
+      "baseGitBlob": "fafb5dd4aa4ec577cc43309711c0248bbdade1f6",
+      "baseSha256": "cb98d8ea93eebe6ae527d9ee0a09fe74c56a87beae0fd2d1e4fbe51def9667cf",
+      "worktreeSha256": "e3fcd3cfd4b690c851df1fd52e6b424a0adc8098e237221d39b22dc46b8d3290",
+      "gitDiffSha256": "6ede474b9c3802ffc225ef52c72d5e9962c80ca39653713df60f9a2631aa4e80"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php",
+      "status": "modified",
+      "bytes": 59773,
+      "baseGitBlob": "0b05212d5d8a8bc8e142bf9ff71b0489e9f5489a",
+      "baseSha256": "3a0442bc4a9f6004c03fce7d764aaa46f3ef7248187fea426ade67c362369701",
+      "worktreeSha256": "941513441e3f4868ea12387483c05c0c73a28afaa1fef32913d48ed172749e45",
+      "gitDiffSha256": "e431ef6c71aa0ebee41dc9b9556451ea2291b000ea6589fb371f8afa66d43911"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php",
+      "status": "modified",
+      "bytes": 74557,
+      "baseGitBlob": "0748717bf1f13fef36d5176bffcd9560c0f5cd1f",
+      "baseSha256": "88ccb149763ad9422e81882378aeb481fc029c3e479e3575b85d0324dc5a8f10",
+      "worktreeSha256": "9c30cda8d92e6b9980461ce4e67411e408e0346d73ed101321d2aad74e1e7d00",
+      "gitDiffSha256": "e715aab0647579501305c5047b1d27630762dbc8f13a95aef234da86ff7fd137"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4NotasDelServidorTest.php",
+      "status": "modified",
+      "bytes": 32058,
+      "baseGitBlob": "71a7cdca3a48001ded93af674b2f24e171d0f767",
+      "baseSha256": "19056204145bce3f202215ff6f96bbae1faf15177b59e47d0968fe8395dcbf1e",
+      "worktreeSha256": "feba029106410c6bad4f617537734a0346f32abb116ee3c40bc12796ed4c0e28",
+      "gitDiffSha256": "0b4a9c173414661c812bb92cd34462e75541bda8ec6a352f948d55d7a5bd2115"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php",
+      "status": "modified",
+      "bytes": 126764,
+      "baseGitBlob": "56439fe0785feb8ca238848b17471dbf773214be",
+      "baseSha256": "d2beeecede183a2e8ad4519aea46e825d50a003b0519135cb05a3d5284ddff75",
+      "worktreeSha256": "a25e1a47e1aa47c7d1a5874b14297a012bf83dd415249b08d20d7d9671aca8f5",
+      "gitDiffSha256": "cc74456941109186624662a37e57219f438c5e6d17d0e6aae8a41dba8e6dbd4c"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckCommitParityTest.php",
+      "status": "modified",
+      "bytes": 46624,
+      "baseGitBlob": "1c0471b7efd1330e33a021867f3d87414232ca37",
+      "baseSha256": "dcd8bfd610e05048a81368ed67c23372f52d9f637da3e4a51aa20ea273f17cf3",
+      "worktreeSha256": "1de25c9d2407f094cd07ba47793733cc532ff50f70b20757b7024f67c41c43cb",
+      "gitDiffSha256": "ba91f95e213d020714179b652d3174dca88d87402ed2cd450230ed642c71b1c2"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckEndpointTest.php",
+      "status": "modified",
+      "bytes": 60988,
+      "baseGitBlob": "211a862d4d7ba6972fa3aab38db1b25773649712",
+      "baseSha256": "acbdca9d3193410af6876d1fd60f7dfd4fef3c4707dcfc7dc64a810229ba3a70",
+      "worktreeSha256": "0c65f9c93e824d358e7647c0d2efadf97b37c11f11dd19eb11f71e7a13210b25",
+      "gitDiffSha256": "1cd1afb414ee0a485777ad8a425d2eabeb3e5cff628573d6bb1e26451aa514a8"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCheckListFinalTest.php",
+      "status": "modified",
+      "bytes": 17922,
+      "baseGitBlob": "b1ac3185534eebe45ad0f8c77a762dd7ecdfcfca",
+      "baseSha256": "285931af9e2d90899b255ab6d5ad74390d3666cd0f2bcb520562daae09c48a8c",
+      "worktreeSha256": "c81015f88cd4e91b113c9a4199d6e88a68b0d1cf6209222794e62afb7017b62c",
+      "gitDiffSha256": "e8446a395f60ccab426bb135020cc5148fc48ae9233ae5277293b2ea9538500e"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronCommitPromptsTest.php",
+      "status": "modified",
+      "bytes": 24936,
+      "baseGitBlob": "f1142e544018dd363746ee146b38e86f4bc31238",
+      "baseSha256": "52249832772316689cd121ee1ee39b793c17aab128472475e8fd6a02b1f2c022",
+      "worktreeSha256": "77a514012bdf6dcac90442faeb2206636664cf8c93af28a1141649fe07c57584",
+      "gitDiffSha256": "77c2339d08935a4c855b7556561fc8e8887bd571c523a450772c7d31e3730d2d"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronDecidePromptsTest.php",
+      "status": "modified",
+      "bytes": 20742,
+      "baseGitBlob": "4d2c380bbcbcb72df59d2b82a386d762479e082f",
+      "baseSha256": "d74b5a3d08cf6f42c80f09dc04cc1f7acc471a9dba20ebd8d0d07045ea69b81d",
+      "worktreeSha256": "9df0a5421238a42e4659b4c8f1035b02ced0dd140f717e55f71b3b04246e76a9",
+      "gitDiffSha256": "34c6f4c5356a001833b5eb890b390ce439c8d0b3c7d7166b69a493867f36732b"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnCapTest.php",
+      "status": "modified",
+      "bytes": 23552,
+      "baseGitBlob": "675db5108276e144456ab4b6aebfff78eedb1e40",
+      "baseSha256": "d4190e3d4d3fe2e0099ac9a03402d13d2c1baef5660b4340da9e0b8ce240ae2b",
+      "worktreeSha256": "e1b171c30741055e9c2466276631a5f7bffb80a9656751c018e87f6343ec48c4",
+      "gitDiffSha256": "c4d078955d2f19eab2073f6a866669af693806cc8f56129553351a3dd18baf16"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnExplicitSlotTest.php",
+      "status": "new",
+      "bytes": 10629,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "f0c1f810732cce2927c7b4b7d8d287956ca7cdc661e9ff6ef58565c92ff7f6e4",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListTurnShapesTest.php",
+      "status": "modified",
+      "bytes": 48168,
+      "baseGitBlob": "6d1f58e3705dc118bd6fe957514179380ae8423b",
+      "baseSha256": "f10937ea416720cf13f11126eadc0cbcb0fbc832d8a2fae59e43322f1fd4c84a",
+      "worktreeSha256": "bfb8b006f2ee1730cd35827a6eb6fa05fa8b7b74a93a45021cf478cb1241fbbc",
+      "gitDiffSha256": "25b2ea3048bc42f91194efbff1ab34ebb3a83bd516b96d766e2311f402ce5fdd"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronListaDelServidorTest.php",
+      "status": "modified",
+      "bytes": 54117,
+      "baseGitBlob": "d6ab0fc4df4fa153c7fe9cb3588d6bc824b89b38",
+      "baseSha256": "198905bc7d53fa9d16bbf3e48b9672a56705cdc20c46da678072104c45d88b23",
+      "worktreeSha256": "907da37f4bf1cac52292960591b8ece06d013df1f9c73cb7cee71b54e9e5dd6d",
+      "gitDiffSha256": "4861c312d7b58a9ad97f7dff522ec25090db74b3be969fa2be1e248059b51d2b"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPlansListCapFlowTest.php",
+      "status": "modified",
+      "bytes": 31130,
+      "baseGitBlob": "1f740b24732e362d3fd2fdf5af9018e038733ce1",
+      "baseSha256": "0b494dac626373a46cb92781a2213a003dffc81807b65b1564fcccebd310f967",
+      "worktreeSha256": "f88dbbdd9110eddb18ed25b371f39c5c1ab3ef227c7135d4b3f95a8018bcd054",
+      "gitDiffSha256": "38d6fb7114c9c81ceec61899b1fcf26f03bacf5df52615893b48071d4d551afc"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPromptsTraceCommandTest.php",
+      "status": "modified",
+      "bytes": 10861,
+      "baseGitBlob": "6576f3b365211cc93bc1cc0af370434ad285d3c8",
+      "baseSha256": "621fbba0ff403c648d4640dd441c3d2f3f2d6af1cc09a8d772679e3ead48a245",
+      "worktreeSha256": "5aaebb292b4743d67b3cc1df277b17a631fe68c71b886a3cf841cfb196b20b1e",
+      "gitDiffSha256": "9f56d51a50ff8d71fdf18224438d94ef343473516e68cfe492a135803e5520e3"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronPt17cEstrategiaDeListaFlowTest.php",
+      "status": "modified",
+      "bytes": 15793,
+      "baseGitBlob": "dec7e5fbb1dbfdeee293a3ea9703083e9f57f331",
+      "baseSha256": "d5dd6251cfef69f4b4c6f0e7b68617b482da7ed303d7528e1434a75e9e5623a7",
+      "worktreeSha256": "d4756dff55b509ee465de766dd99c2e6309bb8884ae812f03dd7c5cce9137de1",
+      "gitDiffSha256": "d8f67c85568398bcf1da21a4e773406903397aa303267dbd831f520c20f57038"
+    },
+    {
+      "path": "backend/tests/Feature/Marketing/UltronRegenerationCommitTest.php",
+      "status": "modified",
+      "bytes": 29099,
+      "baseGitBlob": "c38e47cd53659578a838ef8b85815f47f41d9a92",
+      "baseSha256": "69b5f0fc39a4b569fc0d47083842b1f0fda1c139262c0042b9174caaec58859f",
+      "worktreeSha256": "4afb0677b11e307303595a8749cf33a4dc717984bcb871717a513f30b968ef83",
+      "gitDiffSha256": "59db192c0fe9b63e1317497ef8e087ea8bd6ba3a1d8dfddf67caf472fcf3b3a9"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php",
+      "status": "modified",
+      "bytes": 76925,
+      "baseGitBlob": "fa53278f49af9665aa5ffad49593fb1b6a00b500",
+      "baseSha256": "4857258cb8bd57f589c2176633989a7d72f74c449fcd38198bef3b590b46703f",
+      "worktreeSha256": "6c331db036cb21afc37d3bc62efc3d2c375887c091235142c4bf0b70b5ab5ca8",
+      "gitDiffSha256": "4fcd4a16659207409e0bc8c75e0f379f46a7732c0c8cd438491de313df91ec5c"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioLabEngineInvariantsTest.php",
+      "status": "modified",
+      "bytes": 15239,
+      "baseGitBlob": "a28c99a0eaa8e6ae7dc5943874255d24b2442e95",
+      "baseSha256": "a8a5814824b84147667feb0bd31515f9c1ce7562d3cbc992d23c3576fd512ce8",
+      "worktreeSha256": "c1354097cc9a05fa091d0ae420a37508311972bec315128c8982a73662d10da9",
+      "gitDiffSha256": "27db9bda245dd1ad15c4a3166b90a5975146f5208914e3907e7a8dcd023634f2"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioLabEngineRunnerTest.php",
+      "status": "modified",
+      "bytes": 20803,
+      "baseGitBlob": "008fb48bcccb2a34be850351435aa3ddb88232b0",
+      "baseSha256": "a3f64cf16f1b5333704976dc53e64864b0ae7e664256c472b34673edbd9b91e0",
+      "worktreeSha256": "87812186cd42971627436456feab7dba9c831a7cb8db55682997621693c195ca",
+      "gitDiffSha256": "308b61a77aac6fa70441f524974d7542ca26d50c6fa119364ed0da395fab2aca"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php",
+      "status": "modified",
+      "bytes": 23709,
+      "baseGitBlob": "d53ad9b0c7c43a0999076251d00af370dc5d3c9e",
+      "baseSha256": "1def29e19df234725f217b7a18f179c3ed3bb05c9fe8afb0c55463c001484982",
+      "worktreeSha256": "db47068cf91bc627781b369662ff6792648ce5c7fd1b36473ed8fe7a83d390a0",
+      "gitDiffSha256": "a524637de220e374f6ddacb9fcf04dffba1748ad5be5be9c4c70d0194a5ffdf6"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php",
+      "status": "modified",
+      "bytes": 38279,
+      "baseGitBlob": "22e5e9624d6d2e8893427354973f6f6be2776d21",
+      "baseSha256": "49efdf90ce8a25e2408b40ff1ed785924af313ac73fe0b546ffc8b9a66189a90",
+      "worktreeSha256": "ac6ac29c8bd6e443dc8b68373ee5f7de34765aaa91b0389b3886f946ee946fd7",
+      "gitDiffSha256": "2dfa3bbaf37f2bc2d8b23488b67e74a10993942b79fd20f5e02e07cfc97a5c1f"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioPublicationV2Test.php",
+      "status": "modified",
+      "bytes": 13866,
+      "baseGitBlob": "8f8ac906997c7b66dfadec1cf0cd2667b3a71118",
+      "baseSha256": "d15a94f8e74473f80a89dd4451278a951328901f7073febde9d0c82cea411e40",
+      "worktreeSha256": "d41617b4ec9bf46e2f409697045be2d4ac6047cf060c4b068efb37b59f68c4d1",
+      "gitDiffSha256": "e0ff106ed91299c4fbd61a53a301905f29fcee1635950879078b3f3cc7a66d32"
+    },
+    {
+      "path": "backend/tests/Feature/UltronStudio/UltronStudioStatusCatalogTest.php",
+      "status": "modified",
+      "bytes": 8446,
+      "baseGitBlob": "c82d2bb31ffd034a866c09fa3719b9bf4fc4fc19",
+      "baseSha256": "5a25f836bea0fa47fd547ba3964891d41e9f9f20ee574ce7bde0ed580d875a6d",
+      "worktreeSha256": "68f517f8b5afacf07513524a48dd86c354dfc3f09a044dd8975a0aa9eb012499",
+      "gitDiffSha256": "e9f21bb1bdd1159274dc30b677e0b050275a733a1656abe0167cdcec0df81af7"
+    },
+    {
+      "path": "backend/tests/Support/HistoricalListTurn.php",
+      "status": "new",
+      "bytes": 2950,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "b24c2410251c352cfa7a4bb88a52c72ddb91d3bf763577177b4d2e8333986e41",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronInitialListPromptsTest.php",
+      "status": "new",
+      "bytes": 8653,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "b2cbf4a95029c1445796ed62e732927c06f35c6e3e384fe1e46c3ec86cdeaf47",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompileCasesTest.php",
+      "status": "modified",
+      "bytes": 10603,
+      "baseGitBlob": "371fe55a33d9531f5535d89fa692ce382f56205e",
+      "baseSha256": "381a8c270da8d891ad70e1b8b797a24d0053f555b8787d8cec1eeb98776b51b1",
+      "worktreeSha256": "82ace216701b4494e24452aa554db6af4849bfe4af868deeb341e95fa84316fd",
+      "gitDiffSha256": "4b260781ecc2b48db71d9a26d40fa1227233a19a7e78c429054e38e4019d36de"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompiler8Test.php",
+      "status": "modified",
+      "bytes": 77370,
+      "baseGitBlob": "8ce913667e93f70ab5b6aebdb5b3633b606959e8",
+      "baseSha256": "217b6c7b6025645af03293b4e5da8df8505be7429d156d7bde500c072db12129",
+      "worktreeSha256": "21135b1fe999e737db73d4d2901e5b1615f4c2fc05869b667a371636e7c78122",
+      "gitDiffSha256": "4cf3ef93b7596026230ceeeb46bb2c6d2048008b23fdb4be3b7ae4c25f1b1081"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php",
+      "status": "modified",
+      "bytes": 41019,
+      "baseGitBlob": "cffecda3d5b258bd5276e39ac2bf87c00e0c7859",
+      "baseSha256": "9f678e7cc72f14cec2ce44a59259457fa65989ae7340c35b75f46a8d8558df3c",
+      "worktreeSha256": "e2446403888f5c85158dac83d897dc2bf7fa66d3c1e7a3b712af2105768b2114",
+      "gitDiffSha256": "6f776107cb532ba1efaf41e2df1e636b2d8e2bc6a54236b7fcddccdaf3c664c3"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php",
+      "status": "modified",
+      "bytes": 52154,
+      "baseGitBlob": "a8174059c079d1d27725d408938fccb11043f51e",
+      "baseSha256": "920ecebe9222f98f4b3ac0eca984217eeea91784755b76554de21e822c144a89",
+      "worktreeSha256": "3b3e754fe3c1d703b090f7bb66713903568a7e47d9fa6ed345e871a3636892c9",
+      "gitDiffSha256": "e9b057378e2a8596221205e581b6373a040555d3aa5787974f8e4642799d4dcc"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptEnginePatchTest.php",
+      "status": "modified",
+      "bytes": 24937,
+      "baseGitBlob": "244731d43b26100ce43d2cd11211842e5e62911c",
+      "baseSha256": "15f14a23db9eb921bb9d435a2c90879124ec3fde9919db66420305fdd1ff083c",
+      "worktreeSha256": "1df4819c20c701a5c68d0eb04686218382bc4f50e29fdd8b914e7799b833b79a",
+      "gitDiffSha256": "3bba6c8f1737fa744e21d672cb3f6ba9b06145fb9879a2e63dec6605feea7d2b"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptOfferEngineTest.php",
+      "status": "modified",
+      "bytes": 5301,
+      "baseGitBlob": "08f3772561e238f68595cf6d64f33ebcdb187a3e",
+      "baseSha256": "f791503b278f8b127fbf34f1449d57b816373a79ac67a1ca2f73f6db70741079",
+      "worktreeSha256": "22710dae3ffc81fa30aa2168eb3961975ea9d16345224cb74c716cb548f021ee",
+      "gitDiffSha256": "6b0d8b1f300cbe75147ac9296d4842512d259c9c5ad460dd40a56ab69014c3f1"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/Prompts/UltronPublishedConfigPhrasesTest.php",
+      "status": "modified",
+      "bytes": 21271,
+      "baseGitBlob": "fd391a75f5a1995dc988cbe50c901877a34fb4d4",
+      "baseSha256": "15f4610cf1e863251c5d5ef5d4bf1a8f50682d1700567463e3c959ddac691f4d",
+      "worktreeSha256": "a3a5e8976ff98301dd8847ff10eaf76e58b10b75584c8d38d26d9d0b58c7d8c4",
+      "gitDiffSha256": "a1c8e362217bcc32833dd40f767a510a5b52f35239e4d3b5c5e8604a7e8c3f69"
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListCriticGateTest.php",
+      "status": "new",
+      "bytes": 2736,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "ec6dc2a199b0e1489552f2dec3f27cac0b606a0377a935f57aad451884ddcd9d",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListTurnContractTest.php",
+      "status": "new",
+      "bytes": 13688,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "e39006801c863c14949bb10a0b839971791102197363976c9fb64298a1a6d1c8",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/Marketing/Ultron/UltronListTurnExplicitSlotTest.php",
+      "status": "new",
+      "bytes": 5542,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "5d60ee8218c837f17d9a1b27f037b14b1ff41b3219cff911658aead2dd83d54e",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php",
+      "status": "modified",
+      "bytes": 13054,
+      "baseGitBlob": "5cc7c550ea466a6efaf3f8c17f4a21c77c86cec7",
+      "baseSha256": "2dc8f67b363820126c2f1e69f3f05d5c7909eddb35bff950e16a8f958bb61f88",
+      "worktreeSha256": "49c929f5903ef42d2e6ea37225b185805a688659a605d7d845258c416f12ce5e",
+      "gitDiffSha256": "0451c7b23ef78799928dab321292373d578ab1c258b2cac5a39a6de0b68d920a"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineFlowParityTest.php",
+      "status": "modified",
+      "bytes": 36346,
+      "baseGitBlob": "ab438d0ef8d5d09e37e3b575387580a22c4f1b50",
+      "baseSha256": "f42fd1442676a93ac44f0cea688db322db40d64cb41470b20689cb5e22ab78a2",
+      "worktreeSha256": "42a25237142f8cba78f2e62415343f7d47ef752db674e036b3bb6f49ce1d10b3",
+      "gitDiffSha256": "7aa654d54b365d917fc3ed347da340390022f6bafca6b2fe23380a951e6eeef7"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineJudgeTest.php",
+      "status": "new",
+      "bytes": 7096,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "41945a15f917c212661b6f00c3990bac383a6eeb1420756839af60e5e62bb431",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineListaDelServidorTest.php",
+      "status": "modified",
+      "bytes": 10188,
+      "baseGitBlob": "dde996c22365755e7bc7b00ca84f3f4940a42519",
+      "baseSha256": "80502ede2439b8aaeb07ec5476039d39100ef91f5501185eba1d520e5abbd64c",
+      "worktreeSha256": "4ed09a1c9a19a10ed0b91b39738b2ea0bead50372cbc254c89812d8daf1c00ad",
+      "gitDiffSha256": "b9bcdd5215e10473a7b2060034e7a59ef6d502ed27b585aabf9873d5b4d0e848"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEnginePlansListCapTest.php",
+      "status": "modified",
+      "bytes": 16260,
+      "baseGitBlob": "8d0507ab77313f5de256fbb451a26c021008edcb",
+      "baseSha256": "a964850b8a37ac173c60e66dffe574dbd954c4d8fe2e99aab5a33de3b2965fcb",
+      "worktreeSha256": "7025c731d2bf5585fb57862a9f06d0622b265e9279eac91d25fa8139fda091c3",
+      "gitDiffSha256": "9e1b8dffad0532da57a044e77e5a349692410d4954cd4da0fad4a89b4f32ad36"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEnginePt17C8CorpusTest.php",
+      "status": "new",
+      "bytes": 8826,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "c27413ee1bf4d96aa81301efa091143a0747cd94ee8d6f63d67c8e72f797db94",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabEngineTransportTest.php",
+      "status": "new",
+      "bytes": 9398,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "a4597f823d00dffec80ae0d9ec342f24b764686ed130c8b2173cd1dc486ac3c8",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioLabIsolationTest.php",
+      "status": "modified",
+      "bytes": 10053,
+      "baseGitBlob": "678261980da2f444d236aa1d2aea9ea721c0b33c",
+      "baseSha256": "5737957d8c6f85723214e02b976e5046df64c206abf4535107fcb3d97e8c3ef3",
+      "worktreeSha256": "baa5347aa8f91944972da0dfffbbb7a00c43a47c3686450dc507409580172643",
+      "gitDiffSha256": "867e2bfd66c59828f4b966bd1fd3674edd8330cea0a3ce79cf23c896df514438"
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioListN8nFlowTest.php",
+      "status": "new",
+      "bytes": 19169,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "fed7950da0829060684e4b2833bb1ebcc3a15a539ac0cc09c3474883c7ddcaa7",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php",
+      "status": "modified",
+      "bytes": 31290,
+      "baseGitBlob": "5f5adb342ea54eb0a3695c0823dbca6217fe0ac4",
+      "baseSha256": "62ffc8a5e2fb004c8128db8dfc85710eb514ea2594117ce6417f217912438a5b",
+      "worktreeSha256": "f9b04cebaadf79df0dde5e236e4de59b0aab67b0082a11768ff2b7fef0977aee",
+      "gitDiffSha256": "e4ce9dbe73e8a6665a291c1d64b2e6863a667a4e0efd0054a1eea4c2901227dd"
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/pt17-borradores-reales-c8.README.md",
+      "status": "new",
+      "bytes": 1169,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "7ebf36e185e7e176594eab814af19dfd1a1953b9a125a33870a540d8f6df85f4",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/pt17-borradores-reales-c8.json",
+      "status": "new",
+      "bytes": 123573,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "4511c892b1e6e3eed0158384f7a8ef7dd911dca2b5b7a4d58e1e0aca07cc86ad",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/tools/ejecutar-s3-node.cjs",
+      "status": "new",
+      "bytes": 802,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "d517f26cf1e6a65b2e6160693879f28944e9815d8380fc7e0e67aecaffb3995f",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "backend/tests/fixtures/ultron-studio/tools/recorrer-s3-lab.cjs",
+      "status": "new",
+      "bytes": 4726,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "bc12ca1058844ef8e84cab219de4b36675b68ce3e1b6026e5c30b954761c72ae",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "n8n/flujos/ultron-studio-s3/LEEME.md",
+      "status": "new",
+      "bytes": 1954,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "9018e19ed57d535f665c5ac27d2bfcccbd271f71b411649c7e03d013dd76679f",
+      "gitDiffSha256": null
+    },
+    {
+      "path": "n8n/flujos/ultron-studio-s3/flujo-s3.json",
+      "status": "new",
+      "bytes": 300230,
+      "baseGitBlob": null,
+      "baseSha256": null,
+      "worktreeSha256": "51b6d1c2bf0c8224e92c2b684e29b2a7758007bf9f0579f8bea1f4a8ee84daa3",
+      "gitDiffSha256": null
+    }
+  ],
+  "guards": {
+    "files": [
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/OutreachFlagsGuardTest.php",
+        "sha256": "dc13cadce13d1dde4ffb437243676972cf0388eba986eaa017c402826f59d465",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/OutreachFourEyesGuardTest.php",
+        "sha256": "aea1a0ac17d5bd8e367c9a208e11497535cb5648f42a1826b53e26f82a657a90",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/OutreachPersonalDataGuardTest.php",
+        "sha256": "7da5653a2fec3a0d376b1e860aae08cbbc98afb90ab2136a38c900469743e9b6",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/OutreachRoutesMapGuardTest.php",
+        "sha256": "89f33e11f83de98753296b424239635fd144bc9a0956c3399d406ab0708d6dd9",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/OutreachStaticGuardsTest.php",
+        "sha256": "2f5914cb9e619dfffe8f0a3aea4512ad2d6eac54b49d95a15ae5ce460008fc02",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/Guards/ReplyClassifierStaticGuardsTest.php",
+        "sha256": "b119db7bfa7bdf22e29a987198705ca3fa65eb8f8991ba3267b6a3322c877ffc",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/Outreach/W9/WhatsappW9IsolationTest.php",
+        "sha256": "2aa887fafab4e746bb83c586614916e532ad03b599741314df53367c52b8ce0d",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/UltronStudio/OutreachIsolationTest.php",
+        "sha256": "3c41ba74197516dc582173f3c3d3fd9807c362051fa8556593625aad89b9098a",
+        "matchesBase": true
+      },
+      {
+        "path": "backend/tests/Feature/UltronStudio/UltronEngineIsolationTest.php",
+        "sha256": "b3cceb61b6adcd4c24609473c31e40dd906205ec99faf08fd09cf1adb652e551",
+        "matchesBase": true
+      }
+    ],
+    "diffGateUnchanged": true,
+    "originMainUnchanged": true,
+    "stagedIndexEntriesSha256": "e6034f4210a5ebf87803e156240b1f069e89d7db85aea73a1c06b766cd75cbf4",
+    "normativeDocumentsBefore": [
+      {
+        "path": "backend/docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md",
+        "beforeSha256": "049dc4dd63405bb814701cc8c1822e4ad480e3c98fd04e1c6bd38524523c66f6",
+        "baseSha256": "049dc4dd63405bb814701cc8c1822e4ad480e3c98fd04e1c6bd38524523c66f6"
+      },
+      {
+        "path": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+        "beforeSha256": "9982c39e17e557c05dbfbfe5efe8d7be346de179efa3755d5299b302f44e520e",
+        "baseSha256": "9982c39e17e557c05dbfbfe5efe8d7be346de179efa3755d5299b302f44e520e"
+      }
+    ]
+  },
+  "evidence": {
+    "originalVerification": "backend/docs/ultron-studio/plans/informes-motores/pt17-c9-verificacion-local.json",
+    "originalTests": {
+      "log": "backend/storage/test-results/pt17-c9-final-combined.xml",
+      "stdout": "backend/storage/test-results/pt17-c9-final-combined.txt",
+      "tests": 8443,
+      "assertions": 492742,
+      "errors": 0,
+      "failures": 1,
+      "skipped": 279,
+      "seconds": 423.795665,
+      "passed": 8163,
+      "failedCases": [
+        "Tests\\Feature\\UltronStudio\\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros"
+      ]
+    },
+    "testsRerunForDocumentaryAmendment": false,
+    "h9DiffResult": "FAIL registrado; pendiente de incorporación real autorizada a main. La autorización documental no lo convierte en PASS.",
+    "originalFinalReport": "backend/docs/ultron-studio/plans/informes-motores/cierre-tecnico-pt17-c9.md",
+    "originalReportsRemainHistorical": true,
+    "s3": {
+      "path": "n8n/flujos/ultron-studio-s3/flujo-s3.json",
+      "sha256": "51b6d1c2bf0c8224e92c2b684e29b2a7758007bf9f0579f8bea1f4a8ee84daa3",
+      "active": false
+    }
+  },
+  "acceptance": {
+    "finalModelListsMinimum": "17/20",
+    "firstModelDraftsMinimum": "12/20",
+    "maxCharacters": 320,
+    "severeFailures": 0,
+    "trims": 0,
+    "unjustifiedFallbacks": 0,
+    "certified": false,
+    "paidMeasurementAuthorized": false
+  },
+  "verdict": {
+    "documentaryAuthorization": "APPROVED_BY_OWNER",
+    "documentaryVerification": "Se acredita por el sello separado y la comprobación final del worktree.",
+    "integration": "NOT READY — no autorizada; H9 rojo pendiente de incorporación real.",
+    "commercialAcceptance": "NOT CERTIFIED"
+  }
+}

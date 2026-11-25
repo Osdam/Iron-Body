@@ -228,7 +228,7 @@ final class StudioLabEngineCheck
          * tumbándola: en el commit son un 422. Lo que lleve forma de marcador
          * lo para la red del commit (E10 de `UltronCheckCommitParityTest`).
          */
-        $sinPanorama = UltronPlansOverview::serverList($sp) && $draft['tools_requested'] !== [];
+        $sinPanorama = UltronPlansOverview::serverList($sp) && ! UltronPlansOverview::requiresExplicitSlot($sp) && $draft['tools_requested'] !== [];
         $codigos = [];
         foreach ($defectos as $d) {
             $fatal = match (true) {
@@ -283,9 +283,25 @@ final class StudioLabEngineCheck
         if (! UltronPlansOverview::serverList($turn['sp']) || $po === []) {
             return [];
         }
-        $r = UltronPlansOverview::render((string) $draft['reply_draft'], $po, $this->listTexts($po), $turn['catalog'], true);
+        $r = UltronPlansOverview::render((string) $draft['reply_draft'], $po, $this->listTexts($po), $turn['catalog'], true, UltronPlansOverview::requiresExplicitSlot($turn['sp']));
 
         return ['list' => ['shape' => $r['shape'], 'slot' => $r['slot']]];
+    }
+
+    /**
+     * El candidato renderizado para el juez, antes de los ajustes finales del
+     * commit. Comparte el renderer de las guardas; no simula un respaldo ni
+     * modifica el borrador, la predicción ni los contadores de aceptación.
+     * Sólo hace las mismas lecturas del catálogo que la comprobación.
+     */
+    public function judgeText(array $turn, string $raw, array $strategy, mixed $recommendedPlanId): string
+    {
+        return $this->expanded($turn, [
+            'reply_draft' => $raw,
+            'intent' => (string) ($strategy['intent'] ?? ''),
+            'tools_requested' => array_values((array) ($strategy['tools_requested'] ?? [])),
+            'recommended_plan_id' => $recommendedPlanId,
+        ]);
     }
 
     /**
@@ -432,7 +448,7 @@ final class StudioLabEngineCheck
 
         if ($po !== []) {
             // El mismo punto que el motor (PT-17, puerta 2, L1): forma A, sus marcadores; forma B, la lista entera en su sitio.
-            $texto = UltronPlansOverview::render($texto, $po, $listTexts ?? $this->listTexts($po), $turn['catalog'], UltronPlansOverview::serverList($turn['sp']))['text'];
+            $texto = UltronPlansOverview::render($texto, $po, $listTexts ?? $this->listTexts($po), $turn['catalog'], UltronPlansOverview::serverList($turn['sp']), UltronPlansOverview::requiresExplicitSlot($turn['sp']))['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {

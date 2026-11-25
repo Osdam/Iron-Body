@@ -6,6 +6,7 @@ use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use Illuminate\Database\Events\QueryExecuted;
@@ -194,7 +195,7 @@ class UltronDecidePromptsTest extends TestCase
         // `regeneration`, detrás de la oferta; en Legacy, ni la clave (n8n no pregunta al servidor).
         $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', ...($motivo === 'studio' ? ['regeneration'] : []), 'superseded'], array_keys($res->json()));
         $this->assertSame($motivo === 'studio' ? ['contract' => 'ultron-regen/1', 'max_drafts' => 3] : null, $res->json('regeneration'));
-        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 8], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 8 (PT-17, puerta 2)');
+        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 9], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 9 con las variantes firmadas');
 
         if ($motivo === 'studio') {
             $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, $gobernados));
@@ -205,7 +206,7 @@ class UltronDecidePromptsTest extends TestCase
             $this->assertSame(UltronPromptBase::bundleHash($oferta['roles']), $oferta['bundle_hash'], 'la huella es la de lo que viaja');
             $this->assertSame([self::VERSION_B, hash('sha256', self::VERSION_B), 1], [$oferta['version'], $oferta['content_hash'], $oferta['seq']]);
             $this->assertIsString($oferta['entry']);
-            $this->assertStringContainsString('REGISTRO PUBLICADO: profesional', $oferta['roles']['composer']);
+            $this->assertStringContainsString('REGISTRO PUBLICADO: profesional', UltronListTurnPrompts::select('composer', $oferta['roles']['composer'], false));
         } else {
             $this->assertSame('legacy', $oferta['mode']);
             $this->assertSame($motivo, $oferta['reason']);
@@ -221,8 +222,8 @@ class UltronDecidePromptsTest extends TestCase
         // Apartado 4 del cierre V2 (D-2): en `studio` con un tope distinto de la línea base, `n` (aquí 200); Legacy, sin la clave.
         // Y H4-9 (T-1): con un tono distinto de la línea base, `t` (aquí «profesional»); Legacy, sin la clave.
         // Y «regenerar antes de sustituir» (P-3): con el parche del motor de la lista de planes, `o` = 1; Legacy, sin la clave.
-        // Y PT-17b (Enmienda A4-6): en `studio`, `k` = la versión del compilador (el tope de la lista de planes; desde la puerta 2 de PT-17, el 8); Legacy, sin la clave.
-        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 8] : []), $sp);
+        // The negotiated current package signs compiler 9; Legacy has no list compiler.
+        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 9] : []), $sp);
 
         // Una sentencia sobre la cadena solo si se llegó a leerla (paso 4), y de lectura.
         $leeLaCadena = $prompts === 'canary' && $config !== 'off' && $conversacion === 'canaria';
@@ -279,7 +280,7 @@ class UltronDecidePromptsTest extends TestCase
         $oferta = $this->decide($m, ['prompt_contract' => 'ultron-prompts/1'])->assertOk()->json('studio_prompts');
 
         $this->assertSame(['studio', self::VERSION_A, $resto['prompts']['bundleHash']], [$oferta['mode'], $oferta['version'], $oferta['bundle_hash']]);
-        $this->assertStringContainsString('Sin emojis: ninguno, en ningun mensaje.', $oferta['roles']['composer']);
+        $this->assertStringContainsString('Sin emojis: ninguno, en ningun mensaje.', UltronListTurnPrompts::select('composer', $oferta['roles']['composer'], false));
     }
 
     public function test_una_version_con_la_linea_base_ofrece_la_huella_legacy(): void
@@ -338,6 +339,10 @@ class UltronDecidePromptsTest extends TestCase
     /** @param array<string,mixed> $extra */
     private function decide(MarketingMessage $m, array $extra = []): TestResponse
     {
+        if (($extra['prompt_contract'] ?? null) === 'ultron-prompts/1') {
+            $extra += ['generation_contract' => 'ultron-list-turn/1'];
+        }
+
         return $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $m->conversation_id, 'message_id' => $m->id,
         ] + $extra, ['Authorization' => 'Bearer '.self::SECRET]);

@@ -2,17 +2,21 @@
 
 namespace Tests\Unit\UltronStudio;
 
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
+use App\Services\Marketing\Ultron\UltronListCriticGate;
+use App\Services\Marketing\Ultron\UltronListTurnContract;
 use App\Services\UltronStudio\StudioLabEngineFlow as F;
-use App\Services\UltronStudio\StudioPromptBundle;
+use App\Services\UltronStudio\StudioLabEngineTransport;
 use Illuminate\Support\Facades\Process;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * T2 Y T3 DEL APARTADO 5 (diseño `plans/informes-cierre/diseno-arq-lab.md`
- * §3.4): EL PORT DEL RECORRIDO S2 ES EL FLUJO REAL.
+ * Historical S2 parity remains pinned to compiler 8. It verifies preservation
+ * of that artifact and the old route, not deployment or c9/S3 equivalence.
+ * StudioListN8nFlowTest executes the separately generated S3 artifact.
  *
  * T2 · Los siete nodos de OpenAI de {@see F::NODES} (rol, modelo, temperatura,
  * `maxTokens`, `store`, esquema byte a byte, claves del segundo mensaje y el
@@ -147,9 +151,9 @@ class StudioLabEngineFlowParityTest extends TestCase
     public function test_t2_la_revision_la_base_el_compilador_y_la_huella_de_los_nodos(): void
     {
         $f = self::flujo();
-        $this->assertSame([F::FLOW_REV, F::BASE, F::COMPILER, F::CHECK_CONTRACT], [$f['_generado']['flowRev'], $f['_generado']['base'], $f['_generado']['compiler'], $f['_generado']['contract']]);
+        $this->assertSame(['S2', F::BASE, 8, F::CHECK_CONTRACT], [$f['_generado']['flowRev'], $f['_generado']['base'], $f['_generado']['compiler'], $f['_generado']['contract']], 'S2 is the preserved historical artifact, not the new workflow');
         $this->assertSame([UltronPromptCompiler::BASE, UltronPromptCompiler::VERSION], [F::BASE, F::COMPILER], 'el flujo es el del compilador de hoy');
-        $this->assertSame('motor-S2-c8-'.F::VERSION, F::promptVersion());
+        $this->assertSame('motor-'.F::FLOW_REV.'-c9-'.F::VERSION, F::promptVersion());
         $this->assertLessThanOrEqual(32, strlen(F::promptVersion()), 'cabe en la columna');
         $this->assertTrue(F::isEnginePromptVersion(F::promptVersion()));
         $this->assertFalse(F::isEnginePromptVersion('2026-11-12.6'));
@@ -173,7 +177,13 @@ class StudioLabEngineFlowParityTest extends TestCase
             $aristas[$nodo] = array_map(static fn (array $s): array => array_map(static fn (array $c): string => $c['node'], $s), $f['connections'][$nodo]['main']);
         }
         $codigo = array_map(static fn (string $n): string => hash('sha256', $nodos[$n]['parameters']['jsCode']), array_combine(array_keys(F::PORTED_CODE_SHA256), array_keys(F::PORTED_CODE_SHA256)));
-        $this->assertSame(hash('sha256', F::encode(['flowRev' => $f['_generado']['flowRev'], 'nodes' => $desdeElFlujo, 'connections' => $aristas, 'code' => $codigo])), F::nodesHash());
+        $this->assertSame(hash('sha256', F::encode([
+            'flowRev' => F::FLOW_REV, 'nodes' => $desdeElFlujo, 'connections' => $aristas, 'code' => $codigo,
+            'generation' => ['envelope' => UltronListTurnPrompts::ENVELOPE, 'contract' => UltronListTurnContract::CONTRACT,
+                'transport' => StudioLabEngineTransport::artifactDefinition(), 'criticGate' => hash('sha256', UltronListCriticGate::javascript()),
+                'roleSelector' => hash('sha256', UltronListTurnPrompts::javascript()),
+                'renderContract' => hash('sha256', UltronListTurnContract::javascript())],
+        ])), F::nodesHash(), 'the current seal adds explicit c9 semantics to the preserved node graph');
     }
 
     // ── T3 ──────────────────────────────────────────────────────────────────
@@ -359,7 +369,7 @@ class StudioLabEngineFlowParityTest extends TestCase
     /** @return array<string,string> los cinco prompts de una versión «profesional, 200» */
     private static function roles(): array
     {
-        return StudioPromptBundle::rolesFor(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]))['roles'];
+        return UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8)['roles'];
     }
 
     /**
@@ -372,7 +382,7 @@ class StudioLabEngineFlowParityTest extends TestCase
     private static function decide(string $modo, array $mundo = []): array
     {
         $d = json_decode((string) file_get_contents(self::root().'/'.self::FIXTURES.'/decide-studio.json'), true, 512, JSON_THROW_ON_ERROR);
-        $paquete = StudioPromptBundle::rolesFor(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8);
         $d['studio_prompts'] = array_replace($d['studio_prompts'], ['mode' => 'studio', 'reason' => null, 'bundle_hash' => $paquete['bundleHash'], 'roles' => $paquete['roles']]);
         $d['allowed_staff_review_reasons'] = ['customer_requested_review'];
         $d['decision'] = ['intent' => $mundo['decision_intent'] ?? 'general_info', 'confidence' => 0.8];

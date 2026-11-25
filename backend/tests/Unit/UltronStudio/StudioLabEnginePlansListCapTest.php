@@ -4,7 +4,6 @@ namespace Tests\Unit\UltronStudio;
 
 use App\Models\MarketingKnowledgeItem;
 use App\Models\Plan;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler as C;
 use App\Services\Marketing\Ultron\UltronPlansOverview as O;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes as N;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
@@ -104,7 +103,8 @@ class StudioLabEnginePlansListCapTest extends TestCase
     {
         $parte = self::parteV2(self::VERSION, $gobernados);
 
-        return StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
+        // Esta suite reproduce borradores anteriores al contrato de ranura explícita c9.
+        return ['k' => 8] + StudioPromptBundle::rolesFor($parte['governed'], self::VERSION, $parte['contentHash'])['sp'];
     }
 
     /** @return array<string,mixed> el turno de E-001 para ese `sp` */
@@ -158,7 +158,7 @@ class StudioLabEnginePlansListCapTest extends TestCase
         $this->assertCount(24, $f['cases']);
 
         $sp = self::sp(self::V4);
-        $this->assertSame([200, 'profesional', 1, C::VERSION], [$sp['n'], $sp['t'], $sp['o'], $sp['k']], 'el sello de la v4 con el compilador 6');
+        $this->assertSame([200, 'profesional', 1, 8], [$sp['n'], $sp['t'], $sp['o'], $sp['k']], 'el sello histórico anterior al contrato c9');
         $turno = $this->turno($sp);
         $this->assertSame($f['po'], $turno['po'], 'la lista de E-001 con este catálogo');
 
@@ -241,7 +241,7 @@ class StudioLabEnginePlansListCapTest extends TestCase
     {
         $sp = self::sp(['persona.tone' => 'profesional', 'persona.maxChars' => 320]);
         $this->assertArrayNotHasKey('n', $sp, 'el tope de la línea base no se firma, como en `decide`');
-        $this->assertSame(['profesional', 1, C::VERSION], [$sp['t'], $sp['o'], $sp['k']]);
+        $this->assertSame(['profesional', 1, 8], [$sp['t'], $sp['o'], $sp['k']]);
         $turno = $this->turno($sp);
         $de310 = self::listaDe(310, $turno['po']);
         $de450 = self::listaDe(450, $turno['po']);

@@ -237,7 +237,7 @@ final class UltronPromptCompiler
      * anclas. Lo firmado con otro compilador cae a Legacy
      * (`compiler_changed`) hasta publicar una versión nueva.
      */
-    public const VERSION = 8;
+    public const VERSION = 9;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -553,14 +553,28 @@ final class UltronPromptCompiler
      *
      * @throws UltronPromptException valores fuera del contrato, base ilegible o alterada, ancla ausente o repetida, o un tope superado
      */
-    public static function compile(array $governed): array
+    public static function compile(array $governed, int $compiler = self::VERSION): array
     {
+        // Compiler 8 remains reproducible for archived evidence and outstanding
+        // signed tokens. New publications/offers always request VERSION.
+        if (! in_array($compiler, [8, self::VERSION], true)) {
+            throw new UltronPromptException(UltronPromptException::INVALID_GOVERNED, 'Versión de compilador no reproducible.');
+        }
         $valores = self::validate($governed);
         $parches = self::patches($valores);
         $roles = UltronPromptBase::roles();
 
         foreach ($parches as $parche) {
             $roles[$parche['role']] = self::apply($roles[$parche['role']], $parche);
+        }
+
+        // Both alternatives are signed. Selection happens before inference;
+        // the generic quotation prompt is never sent on the list route.
+        // Baseline/Legacy stays byte-for-byte identical to its historical base.
+        if ($compiler >= UltronListTurnPrompts::SINCE_COMPILER && $parches !== []) {
+            foreach ($roles as $rol => $texto) {
+                $roles[$rol] = UltronListTurnPrompts::pack($rol, $texto, $valores);
+            }
         }
 
         $total = 0;
@@ -577,7 +591,7 @@ final class UltronPromptCompiler
         return [
             'contract' => UltronPromptBase::CONTRACT,
             'base' => self::BASE,
-            'compiler' => self::VERSION,
+            'compiler' => $compiler,
             'governed' => $valores,
             'roles' => $roles,
             'bundleHash' => UltronPromptBase::bundleHash($roles),

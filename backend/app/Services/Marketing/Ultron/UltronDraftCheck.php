@@ -291,7 +291,7 @@ final class UltronDraftCheck
 
         if ($po !== []) {
             // Solo se sustituyen los marcadores que lleva el borrador (forma A); con la forma B, la lista entera en su sitio.
-            $texto = UltronPlansOverview::render($texto, $po, $textosDeLaLista, $catalog, UltronPlansOverview::serverList($sp))['text'];
+            $texto = UltronPlansOverview::render($texto, $po, $textosDeLaLista, $catalog, UltronPlansOverview::serverList($sp), UltronPlansOverview::requiresExplicitSlot($sp))['text'];
         }
 
         if ($this->placeholders->needsPlan($texto)) {

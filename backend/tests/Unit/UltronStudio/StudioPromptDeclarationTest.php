@@ -64,6 +64,8 @@ class StudioPromptDeclarationTest extends TestCase
      */
     private const G8_HASH = '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa';
 
+    private const G8_C9_HASH = '863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505';
+
     /** La de G8 con el compilador 7. */
     private const G8_HASH_COMPILADOR_7 = '200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631';
 
@@ -95,9 +97,9 @@ class StudioPromptDeclarationTest extends TestCase
     }
 
     /** Una parte `/2` firmada con el compilador de hoy (8: las cinco claves, como desde el 2). */
-    private static function partActual(string $version = self::V, array $governed = self::G8_C2, string $hash = self::G8_HASH): array
+    private static function partActual(string $version = self::V, array $governed = self::G8_C2, string $hash = self::G8_C9_HASH): array
     {
-        return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 8]);
+        return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 9]);
     }
 
     private static function fixture(): array
@@ -333,14 +335,14 @@ class StudioPromptDeclarationTest extends TestCase
         $legacy = B::compile(B::governedFrom(['configs' => StudioCatalog::baseline()['configs']]));
         $this->assertTrue($legacy['baseline']);
         $this->assertSame([], $legacy['changes']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 8], $legacy['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 9], $legacy['prompts']);
         $this->assertSame(array_sum(UltronPromptBase::BYTES), $legacy['bytes']);
 
         $g8 = B::compile(array_reverse(self::G8_C2, true));
         $this->assertFalse($g8['baseline']);
         $this->assertSame(self::G8_C2, $g8['governed']);
-        $this->assertSame(self::G8_HASH, $g8['prompts']['bundleHash']);
-        $this->assertSame(123254, $g8['bytes'], '113 672 con los compiladores 1 y 2; 114 206 con el 3, que alarga el texto del tope en los dos Composer; 115 446 con el 4, que alarga los dos textos del tono profesional en los cuatro roles; 117 746 con su parche del motor de la lista de planes (que la vista previa no enseña); 120 097 con el del 5, 2 351 más (Strategist y redactores); con el del 6, 2 070 más (redactores y revisores); con el del 7, 411 más (solo el Strategist); con el del 8, 676 más (los siete textos del motor y el sufijo del tope)');
+        $this->assertSame(self::G8_C9_HASH, $g8['prompts']['bundleHash']);
+        $this->assertSame(142394, $g8['bytes'], 'c9 firma las variantes general/lista; c8 conserva sus 123254 bytes en los tests históricos');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($g8['changes'], 'param'));
         $this->assertSame(['profesional', 200], array_column($g8['changes'], 'value'));
         foreach ($g8['changes'] as $cambio) {
@@ -441,7 +443,7 @@ class StudioPromptDeclarationTest extends TestCase
         $compilador7['prompts']['compiler'] = 7;
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador7))));
         $compilador = self::partActual();
-        $compilador['prompts']['compiler'] = 9;
+        $compilador['prompts']['compiler'] = UltronPromptCompiler::VERSION + 1;
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador))));
         $this->assertSame('error', $motivo(B::offer($on, $canary, true, $ok(self::partActual(governed: array_replace(self::G8_C2, ['persona.tone' => 'serio']))))));
         $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::LEGACY_HASH)))));
@@ -452,8 +454,8 @@ class StudioPromptDeclarationTest extends TestCase
         $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::G8_HASH_COMPILADOR_6)))));
         $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::G8_HASH_COMPILADOR_7)))));
 
-        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, $canary, true, $ok(self::partActual())));
-        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, StudioPublishing::SCOPE_ALL, true, $ok(self::partActual())));
+        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_C9_HASH, 'reason' => null], B::offer($on, $canary, true, $ok(self::partActual())));
+        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_C9_HASH, 'reason' => null], B::offer($on, StudioPublishing::SCOPE_ALL, true, $ok(self::partActual())));
         $this->assertSame(['mode' => 'legacy', 'version' => null, 'bundleHash' => null, 'reason' => 'prompts_off'], B::offer($off, $canary, true, $sin));
     }
 }
