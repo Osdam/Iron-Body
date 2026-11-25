@@ -30,6 +30,7 @@ use App\Services\Marketing\Ultron\PaymentStatusProvider;
 use App\Services\Marketing\Ultron\ReferenceResolver;
 use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronDecideService;
+use App\Services\Marketing\Ultron\UltronListTurnContract;
 use App\Services\Marketing\Ultron\UltronPlansOverview;
 use App\Services\Marketing\Ultron\UltronSalesPlaybook;
 use InvalidArgumentException;
@@ -275,11 +276,13 @@ final class StudioLabEngineContext
             return null;
         }
 
+        $renderContract = UltronListTurnContract::build($sp, $po, $activePlans, $intent);
+
         return ['po' => $po, 'overview' => [
             // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), sin marcadores: como `decide`.
             'plans' => UltronPlansOverview::items($po, $activePlans, ! UltronPlansOverview::serverList($sp)),
             'price_asked' => $intent === SalesIntents::PRICING_QUESTION || CommercialTurnPolicy::preguntaPorPrecio($inbound),
-        ]];
+        ] + ($renderContract === null ? [] : ['render_contract' => $renderContract])];
     }
 
     /**

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\HistoricalListTurn;
 use Tests\Support\UltronTurnEvents;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
@@ -47,6 +48,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronRegenerationCommitTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
     use UltronTurnEvents;
@@ -452,11 +454,11 @@ class UltronRegenerationCommitTest extends TestCase
     private function decide(MarketingMessage $m): string
     {
         $decide = $this->postJson('/api/internal/marketing/ai/decide', [
-            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1',
+            'conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1',
         ], $this->headers())->assertOk()->json();
         $this->assertSame(['contract' => 'ultron-regen/1', 'max_drafts' => 3], $decide['regeneration'] ?? null, 'decide ofrece el contrato');
 
-        return $decide['decide_token'];
+        return $this->historicalListTurn($decide, $m)['decide_token'];
     }
 
     /** `decide` de un turno sin la oferta del Studio: sin negociar, o negociado con los prompts del Studio apagados. */

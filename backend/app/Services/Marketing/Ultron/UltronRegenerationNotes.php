@@ -339,6 +339,37 @@ final class UltronRegenerationNotes
         return self::rellena($code, $plantilla, $tipos, $params);
     }
 
+    /** c9 repeats the complete initial contract for every list defect. */
+    public static function explicitListNote(string $code, ?string $detail, array $params): string
+    {
+        self::entrada($code, $detail);
+        $n = self::entero($params['N'] ?? null);
+        $x = self::entero($params['X'] ?? null);
+        $r = self::entero($params['R'] ?? null);
+        $app = max(0, (int) $r - UltronListTurnContract::appLinksReservedChars());
+        $appBudget = (int) $r < UltronListTurnContract::appLinksReservedChars() ? '; APP_LINKS no cabe' : ', o '.$app.' con {{APP_LINKS}} (maximo uno)';
+        if ($code === self::LENGTH_OVER_CAP) {
+            $l = self::entero($params['L'] ?? null);
+
+            $appLength = (int) $r < UltronListTurnContract::appLinksReservedChars() ? '; APP_LINKS no cabe' : ", o {$app} con APP_LINKS";
+
+            return "DEMASIADO LARGO: mide {$l}; limite {$n}. Prosa como mucho {$r}{$appLength}. No recortes ni quites planes.";
+        }
+        if ($code !== self::PLANS_OVERVIEW) {
+            throw new InvalidArgumentException('Not an explicit-list defect.');
+        }
+        $reason = match ($detail) {
+            UltronPlansOverview::MISSING => 'FALTA LA LISTA DE PLANES',
+            UltronPlansOverview::MIXED => 'MARCADORES MEZCLADOS',
+            UltronPlansOverview::NAME_WRITTEN => 'NOMBRE DUPLICADO',
+            UltronPlansOverview::UNKNOWN_MARKER => 'MARCADOR INEXISTENTE',
+            UltronPlansOverview::NO_LIST => 'SIN LISTA DE PLANES',
+            UltronPlansOverview::PRICE_WRITTEN => 'SIN CIFRAS',
+        };
+
+        return $reason.': usa {{LISTA_DE_PLANES}} exactamente una vez, sin espacios dentro. Sin PLAN_, nombres de plan ni precios a mano. Lista entera '.$x.'; limite '.$n.'; prosa maximo '.$r.$appBudget.'. Todo espacio y signo fuera de los marcadores cuenta. Sin insercion automatica.';
+    }
+
     /**
      * Una plantilla con sus parámetros: exactamente los que declara, cada uno
      * con su tipo ({@see self::note()}).

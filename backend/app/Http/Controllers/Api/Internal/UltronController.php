@@ -148,7 +148,8 @@ class UltronController extends Controller
         $negociaPrompts = $request->input('prompt_contract') === UltronPromptBase::CONTRACT;
 
         return response()->json(array_merge(
-            $this->decide->decide($conversation, $message, $negociaPrompts),
+            $this->decide->decide($conversation, $message, $negociaPrompts,
+                is_string($request->input('generation_contract')) ? $request->input('generation_contract') : null),
             ['superseded' => false],
         ));
     }

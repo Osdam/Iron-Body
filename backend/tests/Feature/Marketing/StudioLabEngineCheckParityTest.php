@@ -22,6 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -43,6 +44,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class StudioLabEngineCheckParityTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -211,8 +213,7 @@ class StudioLabEngineCheckParityTest extends TestCase
     public function test_t4_el_laboratorio_contesta_lo_mismo_que_ai_check(string $entrante, string $intent, string $borrador, ?int $plan, array $tools, int $intento, int $segundos): void
     {
         $m = $this->entrante($entrante);
-        $token = (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1'], $this->headers())
-            ->assertOk()->json('decide_token');
+        $token = $this->historicalToken($m);
         Carbon::setTestNow(now()->addSeconds($segundos));
 
         $real = $this->postJson('/api/internal/marketing/ai/check', [
@@ -236,7 +237,7 @@ class StudioLabEngineCheckParityTest extends TestCase
         $codigos = [];
         foreach (self::borradores() as [$entrante, $intent, $borrador, $plan, $tools, $intento, $segundos]) {
             $m = $this->entrante($entrante);
-            $token = (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1'], $this->headers())->json('decide_token');
+            $token = $this->historicalToken($m);
             $r = app(StudioLabEngineCheck::class)->check($this->turnoDe($m, $token), $intento, ['reply_draft' => $borrador, 'intent' => $intent, 'recommended_plan_id' => $plan, 'tools_requested' => $tools], $segundos);
             foreach ($r['defects'] as $d) {
                 $codigos[$d['code']] = true;
@@ -311,7 +312,7 @@ class StudioLabEngineCheckParityTest extends TestCase
         $this->conversation = MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false]);
         config()->set('marketing.ultron.canary_conversation_id', $this->conversation->id);
         $m = $this->entrante($entrante);
-        $token = (string) $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id, 'prompt_contract' => 'ultron-prompts/1'], $this->headers())->assertOk()->json('decide_token');
+        $token = $this->historicalToken($m);
         $critic = ['verdict' => $veredicto === 'pass' ? 'pass' : 'fail', 'attempt' => $veredicto === 'pass' ? 1 : 3, 'score' => $veredicto === 'pass' ? 0.9 : 0.2, 'notes' => '', 'issues' => $veredicto === 'veto' ? ['naturalness', 'factuality'] : [], 'hard_fail' => $veredicto === 'grave' ? 'customer_misfit' : null];
         $prediccion = app(StudioLabEngineCheck::class)->predict($this->turnoDe($m, $token), ['reply_draft' => $borrador, 'recommended_plan_id' => $plan, 'critic' => $critic], ['intent' => $intent, 'tools_requested' => $tools]);
 
@@ -363,6 +364,14 @@ class StudioLabEngineCheckParityTest extends TestCase
      *
      * @return array<string,mixed>
      */
+    private function historicalToken(MarketingMessage $message): string
+    {
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id,
+            'message_id' => $message->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'], $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $message)['decide_token'];
+    }
+
     private function turnoDe(MarketingMessage $m, string $token): array
     {
         $firmado = app(UltronDecideToken::class)->peek($token, (int) $m->conversation_id, (int) $m->id);

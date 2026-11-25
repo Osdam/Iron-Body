@@ -45,7 +45,7 @@ class StudioLabIsolationTest extends TestCase
      */
     private const NUCLEO = [
         'StudioLabCatalog.php', 'StudioLabChecks.php', 'StudioLabConfig.php', 'StudioLabCost.php', 'StudioLabEngineCase.php', 'StudioLabEngineChecks.php', 'StudioLabEngineFlow.php',
-        'StudioLabEngineModelClient.php', 'StudioLabFakeClient.php',
+        'StudioLabEngineModelClient.php', 'StudioLabEngineTransport.php', 'StudioLabFakeClient.php',
         'StudioLabModelClient.php', 'StudioLabOpenAiClient.php', 'StudioLabOutcome.php', 'StudioLabPersonalData.php', 'StudioLabPrompts.php',
     ];
 
@@ -63,7 +63,7 @@ class StudioLabIsolationTest extends TestCase
      * guardas (Hito 4) y, por la Enmienda 9 de H4 (22-11-2026), los lectores
      * del recorrido del motor.
      */
-    private const NOMBRAN_EL_MOTOR = ['StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php'];
+    private const NOMBRAN_EL_MOTOR = ['StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioLabEngineFlow.php', 'StudioLabEngineTransport.php'];
 
     /** @return array<string,string> nombre → ruta */
     private static function ficheros(): array

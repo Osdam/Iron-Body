@@ -2,6 +2,9 @@
 
 namespace App\Services\UltronStudio;
 
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
+use App\Services\Marketing\Ultron\UltronListCriticGate;
+use App\Services\Marketing\Ultron\UltronListTurnContract;
 use InvalidArgumentException;
 
 /**
@@ -43,20 +46,20 @@ use InvalidArgumentException;
  *
  * VERSIÓN. Cambiar un nodo, una arista o un port obliga a subir
  * {@see VERSION}: va en el `prompt_version` de las ejecuciones del motor
- * (`motor-S2-c8-<VERSION>`), así que nunca se comparan dos recorridos
+ * (`motor-S3-c9-<VERSION>`), así que nunca se comparan dos recorridos
  * distintos con el mismo nombre.
  */
 final class StudioLabEngineFlow
 {
-    public const VERSION = '2026-11-22.1';
+    public const VERSION = '2026-11-24.1';
 
     /** La revisión del flujo que se porta. */
-    public const FLOW_REV = 'S2';
+    public const FLOW_REV = 'S3';
 
     /** La base y el compilador con los que se generó ese flujo (`_generado`). */
     public const BASE = 'n8n-29de5119';
 
-    public const COMPILER = 8;
+    public const COMPILER = 9;
 
     /** El contrato de la comprobación del servidor (`ultron-regen/1`). */
     public const CHECK_CONTRACT = 'ultron-regen/1';
@@ -273,7 +276,12 @@ final class StudioLabEngineFlow
      */
     public static function nodesHash(): string
     {
-        return hash('sha256', self::encode(['flowRev' => self::FLOW_REV, 'nodes' => self::NODES, 'connections' => self::CONNECTIONS, 'code' => self::PORTED_CODE_SHA256]));
+        return hash('sha256', self::encode(['flowRev' => self::FLOW_REV, 'nodes' => self::NODES, 'connections' => self::CONNECTIONS, 'code' => self::PORTED_CODE_SHA256,
+            'generation' => ['envelope' => UltronListTurnPrompts::ENVELOPE, 'contract' => UltronListTurnContract::CONTRACT,
+                'transport' => StudioLabEngineTransport::artifactDefinition(), 'criticGate' => hash('sha256', UltronListCriticGate::javascript()),
+                'roleSelector' => hash('sha256', UltronListTurnPrompts::javascript()),
+                'renderContract' => hash('sha256', UltronListTurnContract::javascript())],
+        ]));
     }
 
     // ── Los mensajes de cada nodo de OpenAI ────────────────────────────────
@@ -316,6 +324,21 @@ final class StudioLabEngineFlow
             };
             if ($valor[0]) {
                 $out[$clave] = $valor[1];
+            }
+        }
+
+        if (UltronListTurnContract::fromPayload($ctx) !== null) {
+            // Every role sees the same authoritative list contract, including
+            // critics whose historical policy subset intentionally omits it.
+            $out['commercial_turn_policy'] = $ctx['commercial_turn_policy'];
+            if (in_array($node, self::CRITICS, true)) {
+                $attempt = array_search($node, self::CRITICS, true) + 1;
+                $checked = $ran[$attempt === 1 ? self::READ_1 : self::READ_2]['ultron_check'] ?? null;
+                $out['backend_list_check'] = is_array($checked) ? [
+                    'checked' => ($checked['error'] ?? true) === false,
+                    'codes' => $checked['codes'] ?? [],
+                    'reason' => ($checked['may_rewrite'] ?? true) === false && ($checked['codes'] ?? []) === [] ? 'list_final' : null,
+                ] : ['checked' => false, 'codes' => [], 'reason' => null];
             }
         }
 
@@ -703,7 +726,9 @@ final class StudioLabEngineFlow
                     return $fin('done', ['commit' => $commit]);
                 }
                 if (isset(self::NODES[$nodo])) {
-                    $sistema = (string) ($roles[self::NODES[$nodo]['role']] ?? '');
+                    $role = self::NODES[$nodo]['role'];
+                    $sistema = UltronListTurnPrompts::select($role, (string) ($roles[$role] ?? ''),
+                        UltronListTurnContract::fromPayload((array) ($decide['context'] ?? [])) !== null);
                     $usuario = self::encode(self::userPayload($nodo, $decide, $inbound, $ran, $entrada));
                     $enviados[$nodo] = ['system' => $sistema, 'user' => $usuario];
                     $r = $model($nodo, $sistema, $usuario);
@@ -718,7 +743,11 @@ final class StudioLabEngineFlow
                     $cuerpos[$nodo] = $cuerpo;
                     $salidas = [$check($k, $cuerpo)];
                 } elseif (in_array($nodo, [self::IF_CHECK_1, self::IF_CHECK_2, self::IF_REWRITE_1, self::IF_REWRITE_2, self::IF_CRITIC, self::IF_THIRD], true)) {
-                    $salidas = self::evaluateIf($nodo, $entrada, $decide) ? [$entrada, null] : [null, $entrada];
+                    $listTurn = UltronListTurnContract::fromPayload((array) ($decide['context'] ?? [])) !== null;
+                    $passes = $nodo === self::IF_CRITIC && $listTurn
+                        ? UltronListCriticGate::allows(self::modelText($entrada) ?? [], true, $ran[self::CHECK_1] ?? null)
+                        : self::evaluateIf($nodo, $entrada, $decide);
+                    $salidas = $passes ? [$entrada, null] : [null, $entrada];
                 } else {
                     $salidas = [match ($nodo) {
                         self::VALIDATE => self::validateStrategy($decide, $entrada),

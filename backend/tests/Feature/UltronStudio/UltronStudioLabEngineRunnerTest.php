@@ -9,9 +9,12 @@ use App\Models\UltronStudio\StudioLabRun;
 use App\Models\UltronStudio\StudioLabRunCase;
 use App\Models\UltronStudio\StudioLabScenario;
 use App\Models\UltronStudio\StudioVersion;
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
 use App\Services\UltronStudio\StudioLabCost;
 use App\Services\UltronStudio\StudioLabEngineCase;
 use App\Services\UltronStudio\StudioLabEngineFlow;
+use App\Services\UltronStudio\StudioLabPrompts;
+use App\Services\UltronStudio\StudioLabRunner;
 use App\Services\UltronStudio\StudioLabRuns;
 use App\Services\UltronStudio\StudioLabScenarios;
 use App\Services\UltronStudio\StudioPromptBundle;
@@ -22,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -109,13 +113,63 @@ class UltronStudioLabEngineRunnerTest extends TestCase
         // Lo que recibió cada nodo: el prompt compilado de su rol de ESTA versión, con un timeout de 15 s.
         $roles = StudioPromptBundle::rolesFor($run->target_snapshot['engine']['governed'])['roles'];
         foreach ($cliente->engineCalls as $l) {
-            $this->assertSame($roles[StudioLabEngineFlow::NODES[$l['node']]['role']], $l['system']);
+            $role = StudioLabEngineFlow::NODES[$l['node']]['role'];
+            $this->assertSame(UltronListTurnPrompts::select($role, $roles[$role], false), $l['system'], 'en este escenario de saludo se invoca la variante general firmada');
             $this->assertSame(StudioLabEngineCase::CALL_TIMEOUT_SECONDS, $l['timeout']);
         }
         $this->assertSame([0, 0], [$cliente->remaining(), count($cliente->engineScript)]);
 
         // T8 (parte): solo escribe en las tablas del laboratorio (y la cola falsa), y no sale a la red.
         $this->assertSame([], array_values(array_filter($escrituras(), static fn (string $t): bool => ! str_starts_with($t, 'ultron_studio_lab_') && ! in_array($t, ['cache', 'cache_locks'], true))));
+        Http::assertNothingSent();
+    }
+
+    public function test_c9_firma_el_juez_y_una_huella_distinta_detiene_el_caso_antes_de_llamar(): void
+    {
+        $client = $this->script([]);
+        $run = $this->launchEngine(['C-01']);
+        $target = $run->target_snapshot;
+        $this->assertSame(StudioLabPrompts::ENGINE_JUDGE_VERSION, $target['engine']['judgeVersion']);
+        $this->assertSame(StudioLabPrompts::engineJudgeHash(), $target['engine']['judgeHash']);
+        $target['engine']['judgeHash'] = str_repeat('0', 64);
+        // Se prueba la defensa del worker con una copia en memoria, sin violar la inmutabilidad de la fila.
+        $case = StudioLabRunCase::query()->where('run_id', $run->id)->sole();
+        StudioLabRun::advance($run->id, [StudioLabRun::STATUS_QUEUED], ['status' => StudioLabRun::STATUS_RUNNING, 'started_at' => now()]);
+        StudioLabRunCase::advance($case->id, [StudioLabRunCase::STATUS_PENDING], ['status' => StudioLabRunCase::STATUS_RUNNING, 'started_at' => now()]);
+        $run->setAttribute('target_snapshot', $target);
+        (new \ReflectionMethod(StudioLabRunner::class, 'processEngine'))->invoke(app(StudioLabRunner::class), $run, $case);
+        $case->refresh();
+        $this->assertSame(['error', 'internal_error', [], 0], [$case->status, $case->error_code, $case->calls, (int) $case->cost_micros]);
+        $this->assertSame([], $client->engineCalls);
+        $this->assertSame([], $client->calls);
+        Http::assertNothingSent();
+    }
+
+    public static function rawFueraDeAuditoria(): array
+    {
+        return ['2001 caracteres' => [2001], '4000 caracteres del contrato HTTP' => [4000]];
+    }
+
+    #[DataProvider('rawFueraDeAuditoria')]
+    public function test_c9_no_recorta_un_raw_largo_y_liquida_sin_aceptar_un_segundo_borrador_ni_llamar_al_juez(int $chars): void
+    {
+        $client = $this->script([]);
+        $raw = str_repeat('x', $chars);
+        $client->engineScript = [
+            self::paso(StudioLabEngineFlow::STRATEGIST, self::estrategia(), [3000, 200]),
+            self::paso(StudioLabEngineFlow::COMPOSER, self::borrador($raw), [4000, 700]),
+            self::paso(StudioLabEngineFlow::RETRY, self::borrador(self::DE_USTED), [4100, 50]),
+            self::paso(StudioLabEngineFlow::CRITIC_2, self::revisor('pass'), [3500, 40]),
+        ];
+        $run = $this->drain($this->launchEngine(['C-01'])->uuid);
+        $case = StudioLabRunCase::query()->where('run_id', $run->id)->sole();
+        $this->assertSame(['error', 'invalid_output', null, null], [$case->status, $case->error_code, $case->reply, $case->engine]);
+        $this->assertSame(['strategist', 'composer'], array_column($case->calls, 'role'));
+        $this->assertGreaterThan(0, (int) $case->cost_micros);
+        $this->assertSame((int) $case->cost_micros, (int) $run->cost_micros);
+        $this->assertSame([], $client->calls, 'el juez no recibe una versión truncada del texto');
+        $this->assertCount(2, $client->engineCalls);
+        $this->assertCount(2, $client->engineScript, 'el segundo borrador válido permanece sin invocar');
         Http::assertNothingSent();
     }
 

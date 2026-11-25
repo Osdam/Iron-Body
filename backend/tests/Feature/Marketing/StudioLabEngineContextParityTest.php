@@ -9,6 +9,7 @@ use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\UltronDecideToken;
+use App\Services\Marketing\Ultron\UltronListTurnContract;
 use App\Services\UltronStudio\StudioLabEngineContext;
 use App\Services\UltronStudio\StudioPromptBundle;
 use Illuminate\Database\Events\QueryExecuted;
@@ -197,6 +198,33 @@ class StudioLabEngineContextParityTest extends TestCase
         $this->assertStringContainsString('3209876543', json_encode($d['context']['knowledge_base'], JSON_UNESCAPED_UNICODE));
     }
 
+    public function test_list_contract_is_present_before_the_first_model_call_in_both_contexts(): void
+    {
+        $turns = [['role' => 'prospect', 'text' => '¿Qué planes tienen y cuánto cuestan?']];
+        [$real] = $this->decideReal($turns);
+        $part = self::parteV2(self::VERSION, self::GOBERNADO);
+        $bundle = StudioPromptBundle::rolesFor($part['governed'], self::VERSION, $part['contentHash']);
+        $this->assertGreaterThanOrEqual(UltronListTurnContract::SINCE_COMPILER, $bundle['sp']['k']);
+        $lab = app(StudioLabEngineContext::class)->build(['turns' => $turns, 'facts' => ['paymentState' => 'none', 'handoffRequested' => false]], $bundle['sp']);
+
+        $contract = UltronListTurnContract::fromPayload($real['context']);
+        $this->assertSame($contract, UltronListTurnContract::fromPayload($lab['decide']['context']));
+        $this->assertSame([
+            'contract' => 'ultron-list-turn/1', 'slot' => '{{LISTA_DE_PLANES}}', 'placement' => 'explicit_slot',
+            'final_limit' => 320, 'list_chars' => 75, 'prose_budget' => 245, 'slot_chars' => 19,
+            'raw_draft_limit' => 264, 'separator_chars' => 0,
+            'app_links_reserved_chars' => 46, 'app_links_fits' => true, 'prose_budget_with_app_links' => 199,
+            'app_links_slot' => '{{APP_LINKS}}', 'app_links_slot_chars' => 13, 'raw_draft_limit_with_app_links' => 231,
+        ], $contract);
+        $overview = $real['context']['commercial_turn_policy']['plans_overview'];
+        $this->assertSame([3, 4, 8], array_column($overview['plans'], 'plan_id'));
+        foreach ($overview['plans'] as $plan) {
+            $this->assertArrayNotHasKey('price', $plan);
+            $this->assertArrayNotHasKey('marker', $plan);
+        }
+        $this->assertStringNotContainsString('$', json_encode($overview, JSON_THROW_ON_ERROR));
+    }
+
     /**
      * Revisión de seguridad automática sobre `8a084f8c`, reforzada con la sonda
      * de NB5 de la revisión de seguridad del apartado 5
@@ -367,7 +395,7 @@ class StudioLabEngineContextParityTest extends TestCase
                 'body' => $t['text'], 'meta_message_id' => 'wamid.ctx.'.$i.'.'.uniqid(), 'status' => $persona ? 'received' : 'sent',
             ]);
         }
-        $real = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $c->id, 'message_id' => $ultimo->id, 'prompt_contract' => 'ultron-prompts/1'],
+        $real = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $c->id, 'message_id' => $ultimo->id, 'prompt_contract' => 'ultron-prompts/1', 'generation_contract' => UltronListTurnContract::CONTRACT],
             ['Authorization' => 'Bearer '.self::SECRET])->assertOk()->json();
         $this->assertSame('studio', $real['studio_prompts']['mode'], 'decide ofrece la versión');
 

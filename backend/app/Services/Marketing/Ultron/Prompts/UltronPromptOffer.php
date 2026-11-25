@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Ultron\Prompts;
 
+use App\Services\Marketing\Ultron\UltronListTurnContract;
 use App\Services\Marketing\Ultron\UltronPublishedConfig;
 use App\Services\Observability\ChannelLog;
 use Throwable;
@@ -48,6 +49,20 @@ use Throwable;
  */
 final class UltronPromptOffer
 {
+    public const GENERATION_CONTRACT_MISSING = 'generation_contract_missing';
+
+    /** Old workflows cannot interpret signed role alternatives. Fail closed. */
+    public static function forRuntime(array $offer, ?string $generationContract): array
+    {
+        if (($offer['sp']['m'] ?? null) === self::MODE_STUDIO
+            && ($offer['sp']['k'] ?? 0) >= UltronListTurnPrompts::SINCE_COMPILER
+            && $generationContract !== UltronListTurnContract::CONTRACT) {
+            return self::legacy(self::GENERATION_CONTRACT_MISSING);
+        }
+
+        return $offer;
+    }
+
     /** Los dos valores de la llave. Cualquier otra cosa es `off`. */
     public const KEY_OFF = 'off';
 

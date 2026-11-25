@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioPublication;
 use App\Models\UltronStudio\StudioRule;
 use App\Models\UltronStudio\StudioVersion;
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptOffer;
@@ -64,7 +65,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
     use StudioFixtures;
 
     /** «profesional + 200» con el compilador 8 (compile-cases.json, c074); con el 4 sin el motor era `7b09b89c…cc35`. */
-    private const G8_HASH = '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa';
+    private const G8_HASH = '863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505';
 
     /** La misma con el compilador 7. */
     private const G8_HASH_COMPILADOR_7 = '200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631';
@@ -211,7 +212,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
             ['role' => 'critic_retry', 'operation' => 'insert_after_line', 'anchor' => 'naturalness:', 'text' => self::CRITIC.$lista],
         ], $frases['patches']);
         $huella = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200, UltronPromptCompiler::PHRASES => $esperadas]))['bundleHash'];
-        $this->assertSame([$huella, 8, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
+        $this->assertSame([$huella, 9, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
         $this->assertNotSame(self::G8_HASH, $huella);
 
         // Reconocer las reglas que ya entran en los prompts no vale.
@@ -227,15 +228,15 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         $cabeza = $this->headEntry();
         $this->assertSame([D::CONTRACT_V2, D::CONTRACT_V2], [$cabeza['column'], $cabeza['contract']]);
         $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => $esperadas, 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 8], $cabeza['canary']['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 9], $cabeza['canary']['prompts']);
 
         // Escritor → lector → oferta de `decide`: la huella de la vista previa y las frases en los prompts.
         $this->assertSame(['applied', $v->uuid], [$this->engineStamp(self::CANARY_ID)['state'], $this->engineStamp(self::CANARY_ID)['version']]);
         $this->assertSame($esperadas, app(UltronPublishedConfig::class)->partFor(self::CANARY_ID)['governed']['rules.forbiddenPhrases']);
         $o = $this->decide();
         $this->assertSame(['studio', $huella], [$o['mode'], $o['bundle_hash']]);
-        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", $o['roles']['composer']);
-        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", $o['roles']['critic']);
+        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", UltronListTurnPrompts::select('composer', $o['roles']['composer'], false));
+        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", UltronListTurnPrompts::select('critic', $o['roles']['critic'], false));
         $this->assertSame($this->decideOffer(), $this->statusCurrent());
         $this->assertSame(StudioPublications::ENGINE_MESSAGES_PROMPTS['canary'], $this->studio('GET', 'status', $this->pub)->json('data.engine.message'));
         $this->assertStringContainsString('reglas S-NNN', StudioPublications::ENGINE_MESSAGES_PROMPTS['canary']);
@@ -404,7 +405,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         // (el ejemplo del informe): las frases entran en `bundleHash` y, con
         // ella, en `previewHash`.
         $conFrases = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [UltronPromptCompiler::PHRASES => ['gratis', 'te lo regalo']]))['bundleHash'];
-        $this->assertSame('d2fa10db5e94664227956aecd546aa26e60354b17e164cac8780a735a8eaa4fb', $conFrases, 'con los textos de las frases del compilador 4 y el parche del motor del 8 (con los del 2 y el 3, fbd3c91c…; con el 4 sin el motor, 5a3957ee…; con el 4 y su motor, 705b65c9…; con el 5, 32680afa…; con el 6, 3e4c7586…; con el 7, c1d69156…)');
+        $this->assertSame('afe7d5d067738debf1753fae2b8227b0384277567c5e817801753475c1ad0050', $conFrases, 'paquete c9 con las frases del contenido arrastrado');
         $this->assertNotSame(UltronPromptBase::LEGACY_BUNDLE_HASH, $conFrases);
         $this->assertSame([
             'versionUuid' => $v0->uuid,
@@ -445,10 +446,10 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         $this->assertSame(['mode' => 'studio', 'version' => $v0->uuid, 'bundleHash' => $conFrases, 'reason' => null], $this->decideOffer());
         $o = $this->decide();
         $lista = '"gratis", "te lo regalo".';
-        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", $o['roles']['composer']);
-        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", $o['roles']['composer_retry']);
-        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", $o['roles']['critic']);
-        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", $o['roles']['critic_retry']);
+        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", UltronListTurnPrompts::select('composer', $o['roles']['composer'], false));
+        $this->assertStringContainsString("\n".self::COMPOSER.$lista."\n", UltronListTurnPrompts::select('composer_retry', $o['roles']['composer_retry'], false));
+        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", UltronListTurnPrompts::select('critic', $o['roles']['critic'], false));
+        $this->assertStringContainsString("\n".self::CRITIC.$lista."\n", UltronListTurnPrompts::select('critic_retry', $o['roles']['critic_retry'], false));
         $this->assertSame(['gratis', 'te lo regalo'], app(UltronPublishedConfig::class)->partFor(self::CANARY_ID)['governed']['rules.forbiddenPhrases']);
     }
 
@@ -497,6 +498,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
             'compilador 5 (los cinco, sin frases; lo que midió el laboratorio en la v4)' => [5, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADOR_5],
             'compilador 6 (los cinco, sin frases; la versión 4 del canario)' => [6, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADOR_6],
             'compilador 7 (los cinco, sin frases)' => [7, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], self::G8_HASH_COMPILADOR_7],
+            'compilador 8 (medición c8 original)' => [8, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa'],
         ];
     }
 

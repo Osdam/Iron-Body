@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -50,6 +51,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronA4ListaDelModeloTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -946,9 +948,11 @@ class UltronA4ListaDelModeloTest extends TestCase
 
     private function decide(MarketingMessage $m, bool $negocia): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
-        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []), $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     /** La carga firmada del token (`x`). */

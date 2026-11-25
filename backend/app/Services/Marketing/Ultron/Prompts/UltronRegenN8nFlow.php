@@ -330,7 +330,7 @@ final class UltronRegenN8nFlow
         $flujo['updatedAt'] = null;
         $flujo['_generado'] = [
             'from' => UltronPromptsN8nFlow::FLOW_REV, 'fromVersion' => UltronPromptsN8nFlow::SOURCE_VERSION, 'flowRev' => self::FLOW_REV,
-            'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION, 'contract' => self::CONTRACT,
+            'base' => UltronPromptBase::ID, 'compiler' => UltronPromptsN8nFlow::COMPILER, 'contract' => self::CONTRACT,
             'nota' => 'Para el comprobador y para importarlo como copia NUEVA e INACTIVA (id, versionId y sin _generado: ops/motores/n8n-copia-s2/LEEME.md). Nunca encima de un flujo publicado ni como vuelta atrás.',
         ];
 

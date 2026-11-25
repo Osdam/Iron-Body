@@ -91,7 +91,7 @@ class UltronStudioPublicationV2Test extends TestCase
         $caso = $this->compileCase('profesional', true, 200, 'cita');
 
         $p = $this->previewOf($this->pub, $v->uuid)['prompts'];
-        $this->assertSame([$caso['expect']['bundleHash'], $caso['expect']['bytes'], false], [$p['bundleHash'], $p['bytes'], $p['baseline']]);
+        $this->assertSame(['863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505', 142394, false], [$p['bundleHash'], $p['bytes'], $p['baseline']], 'la vista previa firma ambas variantes c9; los parches generales se verifican abajo con la fixture independiente c8');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($p['changes'], 'param'), 'en el orden de aplicación');
 
         $textos = self::compile()['texts'];
@@ -245,7 +245,15 @@ class UltronStudioPublicationV2Test extends TestCase
 
     private function bundleOf(string $tone, bool $emojis, int $maxChars, string $goal): string
     {
-        return $this->compileCase($tone, $emojis, $maxChars, $goal)['expect']['bundleHash'];
+        // Instantáneas c9 de los cuatro contenidos usados por esta suite.
+        // compile-cases.json conserva los 306 paquetes históricos c8 sin sobrescribirlos.
+        return match ([$tone, $emojis, $maxChars, $goal]) {
+            ['cercano', true, 320, 'cita'] => '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902',
+            ['entusiasta', true, 320, 'cita'] => 'c17138380f53b6ebb7708114851d5c013214bac7ddbb1c3469c616c1657a1599',
+            ['cercano', false, 320, 'cita'] => '5a705de01cfc04c9700642d8cd903bf205fadee0477be03f13d8104355973f6c',
+            ['profesional', true, 200, 'cita'] => '863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505',
+            default => throw new \InvalidArgumentException('Contenido sin instantánea c9 en esta prueba.'),
+        };
     }
 
     private static function at(string $iso): void

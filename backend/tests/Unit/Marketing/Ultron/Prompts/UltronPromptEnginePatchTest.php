@@ -58,6 +58,7 @@ use PHPUnit\Framework\TestCase;
  *  4. La vista previa del Studio NO enseña el parche del motor (no es un
  *     parámetro): agrupa por `PARAMETERS`, y la huella que firma sí lo lleva.
  */
+/** Contrato histórico c8 explícito: las firmas y los bytes grabados no se actualizan a c9. */
 class UltronPromptEnginePatchTest extends TestCase
 {
     /** §B.3, «Compilador 8» (la lista del Strategist, el marcador, «Elige el plan…», el precio, la guía y los dos del revisor), «Compilador 5» («Presentalo…») y «Compilador 6» (la frase de suggested_question), copiados a mano. */
@@ -151,7 +152,7 @@ class UltronPromptEnginePatchTest extends TestCase
 
     public function test_la_linea_base_sigue_sin_parches_y_con_la_huella_legacy(): void
     {
-        $c = C::compile(C::BASELINE);
+        $c = C::compile(C::BASELINE, 8);
         $this->assertSame([], $c['patches']);
         $this->assertSame(Base::roles(), $c['roles'], 'byte a byte la base');
         $this->assertSame(self::LEGACY, $c['bundleHash']);
@@ -159,7 +160,7 @@ class UltronPromptEnginePatchTest extends TestCase
         $this->assertSame([], C::patches(C::BASELINE));
         $this->assertSame([], C::changedRoles(C::BASELINE));
         $this->assertTrue(C::isBaseline(C::BASELINE));
-        $this->assertSame(8, C::VERSION, 'el 4 llegó a la v3 publicada y el 6 a la v4: cambiar el parche del motor obliga a subirla (Enmienda A4-5 y, otra vez, A4-6, A4-7 y la puerta 2 de PT-17)');
+        $this->assertSame(9, C::VERSION, 'el 4 llegó a la v3 publicada y el 6 a la v4: cambiar el parche del motor obliga a subirla (Enmienda A4-5 y, otra vez, A4-6, A4-7 y la puerta 2 de PT-17)');
         $this->assertSame('engine.plansOverview', C::ENGINE);
         $this->assertNotContains(C::ENGINE, C::PARAMETERS, 'el del motor no es un parámetro gobernado');
     }
@@ -179,7 +180,7 @@ class UltronPromptEnginePatchTest extends TestCase
             $this->assertCount(15, array_filter($p, fn (array $x) => $x['parameter'] === C::ENGINE), 'las quince, una vez: '.$nombre);
             $this->assertNotSame([], array_filter(array_slice($p, 0, -15), fn (array $x) => in_array($x['parameter'], C::PARAMETERS, true)), 'hay algún parche gobernado delante');
 
-            $c = C::compile($g);
+            $c = C::compile($g, 8);
             $this->assertSame($p, $c['patches']);
             foreach (self::ANCLAS as $rol => [$ancla, $textos]) {
                 $textos = array_map(fn (string $t): string => $t === self::PLANS_COMPOSER ? self::guia($g[C::MAX_CHARS]) : $t, $textos);
@@ -232,7 +233,7 @@ class UltronPromptEnginePatchTest extends TestCase
 
     public function test_el_orden_tras_la_misma_ancla_con_el_tope_y_las_frases(): void
     {
-        $c = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::EMOJIS => false, C::MAX_CHARS => 200, C::PHRASES => ['gratis']]));
+        $c = C::compile(array_replace(C::BASELINE, [C::TONE => 'profesional', C::EMOJIS => false, C::MAX_CHARS => 200, C::PHRASES => ['gratis']]), 8);
         // Compilador 6: bajo FORMA: quedan las frases (la última aplicada de esa ancla) y el tope; la guía del motor, al final.
         $composer = explode("\n", $c['roles']['composer']);
         $i = array_key_first(array_filter($composer, fn (string $l) => str_contains($l, 'FORMA:')));
@@ -257,7 +258,7 @@ class UltronPromptEnginePatchTest extends TestCase
         $frases = array_map(static fn (string $l): string => str_repeat('ñ', 59).$l, ['á', 'é', 'í', 'ó', 'ú', 'ü', 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ü']);
         sort($frases, SORT_STRING);
         $peor = [C::TONE => 'profesional', C::EMOJIS => false, C::MAX_CHARS => 480, C::GOAL => 'venta', C::PHRASES => $frases];
-        $c = C::compile($peor);
+        $c = C::compile($peor, 8);
 
         $this->assertCount(4 + 4 + 6 + 1 + 4 + 15, $c['patches'], 'tono 4, emojis 4, tope 6, objetivo 1, frases 4 y motor 15');
         $this->assertSame([1887, 1887, 1932, 1932], array_map(static fn (array $x): int => strlen($x['text']), array_values(array_filter($c['patches'], fn (array $x) => $x['parameter'] === C::PHRASES))));
@@ -277,13 +278,13 @@ class UltronPromptEnginePatchTest extends TestCase
     {
         $g = array_replace(C::BASELINE, [C::TONE => 'profesional', C::MAX_CHARS => 200]);
         $vista = StudioPromptBundle::compile($g);
-        $c = C::compile($g);
+        $c = C::compile($g, 8);
 
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($vista['changes'], 'param'), 'solo lo gobernado');
         $this->assertSame(count($c['patches']) - 15, array_sum(array_map(fn (array $x) => count($x['patches']), $vista['changes'])));
         $this->assertStringNotContainsString('LISTA DE PLANES DEL BACKEND', json_encode($vista['changes'], JSON_UNESCAPED_UNICODE));
-        $this->assertSame($c['bundleHash'], $vista['prompts']['bundleHash'], 'pero la huella que se firma es la del paquete entero, con el del motor');
-        $this->assertSame($c['bytes'], $vista['bytes']);
+        $this->assertSame(C::compile($g)['bundleHash'], $vista['prompts']['bundleHash'], 'la publicación firma el paquete actual c9 completo; arriba se conservan los parches históricos c8');
+        $this->assertSame(C::compile($g)['bytes'], $vista['bytes']);
         $this->assertFalse($vista['baseline']);
 
         $linea = StudioPromptBundle::compile(C::BASELINE);

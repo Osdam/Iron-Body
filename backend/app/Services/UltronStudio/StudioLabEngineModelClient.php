@@ -20,6 +20,14 @@ namespace App\Services\UltronStudio;
  * verificar la versión de n8n que corre en producción: la divergencia posible
  * queda dicha en el informe.
  *
+ * PT-17, contrato inicial: los prompts especializados que empiezan por
+ * `ULTRON_LIST_TURN/1`, acompañados por un `render_contract` válido del
+ * backend, usan {@see StudioLabEngineTransport}: instrucciones separadas
+ * del único mensaje de datos y esquema estricto. Es un perfil versionado;
+ * los prompts Legacy y las llamadas sin ese contrato conservan el cuerpo
+ * histórico descrito arriba. La selección nunca depende solo del texto de
+ * la persona ni activa un cambio global del transporte de n8n.
+ *
  * El resultado tiene la forma de {@see StudioLabModelClient::complete()} y
  * tampoco lanza: todo fallo vuelve clasificado.
  */

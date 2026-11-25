@@ -11,7 +11,6 @@ use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\Ultron\ConversationMemoryService;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\UltronCommitService;
 use App\Services\Marketing\Ultron\UltronRegenerationNotes as N;
 use App\Services\Marketing\Ultron\UltronReplyFitter;
@@ -19,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -59,6 +59,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronPlansListCapFlowTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -155,11 +156,11 @@ class UltronPlansListCapFlowTest extends TestCase
 
     // ── 1 · `decide` ─────────────────────────────────────────────────────────
 
-    public function test_decide_firma_el_compilador_solo_en_studio_y_la_respuesta_a_n8n_no_cambia(): void
+    public function test_el_turno_historico_firma_el_compilador_8_solo_en_studio_y_conserva_la_respuesta_a_n8n(): void
     {
         $decide = $this->decide($this->entrante(self::PANORAMA), true);
         $sp = self::cargaDelToken($decide['decide_token'])['x']['sp'];
-        $this->assertSame(['studio', 200, 'profesional', 1, UltronPromptCompiler::VERSION], [$sp['m'], $sp['n'], $sp['t'], $sp['o'], $sp['k']]);
+        $this->assertSame(['studio', 200, 'profesional', 1, 8], [$sp['m'], $sp['n'], $sp['t'], $sp['o'], $sp['k']]);
         $this->assertSame(8, $sp['k'], 'el compilador 8 (PT-17, puerta 2): la regla del tope de lista sigue (k ≥ 6)');
         $this->assertSame(['contract', 'mode', 'reason', 'base', 'compiler', 'bundle_hash', 'version', 'content_hash', 'entry', 'seq', 'roles'], array_keys($decide['studio_prompts']), 'la respuesta a n8n, con su forma de siempre');
         $this->assertSame(self::PO, self::cargaDelToken($decide['decide_token'])['x']['po']);
@@ -270,7 +271,7 @@ class UltronPlansListCapFlowTest extends TestCase
         $m = $this->entrante(self::PANORAMA);
         $token = $this->decide($m, true)['decide_token'];
         $sp = self::cargaDelToken($token)['x']['sp'];
-        $this->assertSame(['studio', 'profesional', 1, UltronPromptCompiler::VERSION], [$sp['m'], $sp['t'], $sp['o'], $sp['k']]);
+        $this->assertSame(['studio', 'profesional', 1, 8], [$sp['m'], $sp['t'], $sp['o'], $sp['k']]);
         $this->assertArrayNotHasKey('n', $sp, 'el tope de la línea base no se firma');
         $this->assertSame(self::PO, self::cargaDelToken($token)['x']['po']);
 
@@ -444,9 +445,11 @@ class UltronPlansListCapFlowTest extends TestCase
 
     private function decide(MarketingMessage $m, bool $negocia): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', [
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', [
             'conversation_id' => $this->conversation->id, 'message_id' => $m->id,
-        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []), $this->headers())->assertOk()->json();
+        ] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []), $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     private function check(MarketingMessage $m, string $token, string $borrador, int $attempt = 1, string $intent = SalesIntents::PRICING_QUESTION): TestResponse

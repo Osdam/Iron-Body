@@ -84,7 +84,7 @@ class UltronStudioLabEngineInvariantsTest extends TestCase
     public function test_el_compilador_la_base_y_la_huella_legacy_solo_se_leen(): void
     {
         // El compilador es el 8 desde la puerta 2 de PT-17 (L5, la lista la escribe el backend): lo sube el motor, no el laboratorio.
-        $this->assertSame(8, UltronPromptCompiler::VERSION);
+        $this->assertSame(9, UltronPromptCompiler::VERSION);
         $this->assertSame('n8n-29de5119', UltronPromptCompiler::BASE);
         $this->assertSame('n8n-29de5119', UltronPromptBase::ID);
         $this->assertSame(['strategist', 'composer', 'critic', 'composer_retry', 'critic_retry'], UltronPromptBase::ROLES);

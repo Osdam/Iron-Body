@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\HistoricalListTurn;
 use Tests\TestCase;
 use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
 
@@ -48,6 +49,7 @@ use Tests\Unit\Marketing\Ultron\Prompts\PromptPublications;
  */
 class UltronCheckListFinalTest extends TestCase
 {
+    use HistoricalListTurn;
     use PromptPublications;
     use RefreshDatabase;
 
@@ -238,8 +240,10 @@ class UltronCheckListFinalTest extends TestCase
     /** @return array<string,mixed> */
     private function decide(MarketingMessage $m, bool $negocia): array
     {
-        return $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1'] : []),
+        $decide = $this->postJson('/api/internal/marketing/ai/decide', ['conversation_id' => $this->conversation->id, 'message_id' => $m->id] + ($negocia ? ['prompt_contract' => 'ultron-prompts/1', 'generation_contract' => 'ultron-list-turn/1'] : []),
             $this->headers())->assertOk()->json();
+
+        return $this->historicalListTurn($decide, $m);
     }
 
     private function check(MarketingMessage $m, string $token, string $borrador, int $intento, string $intent): TestResponse

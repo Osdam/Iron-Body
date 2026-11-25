@@ -708,7 +708,8 @@ class UltronCommitService
          * lista. Todo lo que viene detrás (estilo, novedad, política, longitud,
          * registro, guardas) ve el texto que va a salir.
          */
-        $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida, $listaDelServidor, (int) $conversation->id);
+        $listaRanuraExplicita = UltronPlansOverview::requiresExplicitSlot(is_array($token['extra']['sp'] ?? null) ? $token['extra']['sp'] : []);
+        $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida, $listaDelServidor, (int) $conversation->id, $listaRanuraExplicita);
         /*
          * EL TOPE DE LA LISTA (Enmienda A4-6 del H5, PT-17b; decisión B del
          * propietario). Con el compilador 6 (`sp.k`), un tope publicado (el
@@ -1874,7 +1875,8 @@ class UltronCommitService
         $conHerramientas = (array) ($decision['tools_requested'] ?? []) !== [] || $handoffAutorizado
             || $this->executedTools($executed) !== []
             || ($enlaces['status'] ?? null) === 'executed' || ($cobro['status'] ?? null) === 'inlined';
-        $panorama = $turno['studio'] && ! $conHerramientas && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
+        $panorama = $turno['studio'] && (! $conHerramientas || ($listaRanuraExplicita && $listaDelTurno !== []))
+            && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
         /*
          * Y SI LA LISTA LA REDACTÓ EL MODELO («regenerar antes de sustituir»,
          * P-3, cambio 7): con una lista VÁLIDA (al menos dos marcadores
@@ -5989,7 +5991,7 @@ class UltronCommitService
      * @param  int  $conversationId  para el aviso
      * @return array{text:string,textos:array<int,string>,trace:array{offered:list<int>,used:list<int>,valid:bool,detail:?string,shape?:string,slot?:bool}}
      */
-    private function listaDelModelo(string $borrador, array $po, array $ofrecida, bool $delServidor = false, int $conversationId = 0): array
+    private function listaDelModelo(string $borrador, array $po, array $ofrecida, bool $delServidor = false, int $conversationId = 0, bool $requireSlot = false): array
     {
         if ($po === []) {
             return ['text' => $borrador, 'textos' => [], 'trace' => ['offered' => $ofrecida, 'used' => [], 'valid' => false, 'detail' => self::LISTA_EN_COBRO]];
@@ -6006,7 +6008,7 @@ class UltronCommitService
             }
         }
         $activos = $this->knowledge->activePlans();
-        $puesta = UltronPlansOverview::render($borrador, $po, $textos, $activos, $delServidor);
+        $puesta = UltronPlansOverview::render($borrador, $po, $textos, $activos, $delServidor, $requireSlot);
         // Con la lista del servidor, el texto de un plan que no puede salir (M2): el aviso dice cuál, por su id y sin el nombre.
         $inseguros = $delServidor ? array_keys(array_filter($textos, UltronPlansOverview::unsafeListText(...))) : [];
         if ($inseguros !== []) {
@@ -6018,8 +6020,8 @@ class UltronCommitService
             // Forma B: si la lista no se puede componer entera, la del catálogo de ahora (todo o nada, P-2).
             $formaB && UltronPlansOverview::compose($po, $textos) === null => self::LISTA_NO_VENDIBLE,
             // Con los planes que conoce el servidor: tampoco se escribe a mano uno que no se vende ahora (revisión final, I1-a).
-            $formaB => UltronPlansOverview::verify($borrador, $po, $activos, true, $this->knowledge->knownPlans()) ?? ($puesta['placed'] ? null : UltronPlansOverview::MISSING),
-            default => UltronPlansOverview::verify($borrador, $po, $activos, $delServidor),
+            $formaB => UltronPlansOverview::verify($borrador, $po, $activos, true, $this->knowledge->knownPlans(), $requireSlot) ?? ($puesta['placed'] ? null : UltronPlansOverview::MISSING),
+            default => UltronPlansOverview::verify($borrador, $po, $activos, $delServidor, null, $requireSlot),
         };
 
         return [

@@ -108,6 +108,7 @@ final class UltronDraftDefects
         // Con la lista del servidor (`k` ≥ 8; PT-17, puerta 2, L1), (a) y (c) van con sus reglas y sus notas.
         $servidor = UltronPlansOverview::serverList($sp);
         $deLaLista = $servidor && $po !== [] && $tope !== null ? self::serverListBudget($po, $listTexts, $tope) : null;
+        $explicitContract = UltronPlansOverview::requiresExplicitSlot($sp) && $deLaLista !== null;
 
         /*
          * EL PRESUPUESTO DE LA LISTA (corrección (1) del turno 2 de la tercera
@@ -142,10 +143,14 @@ final class UltronDraftDefects
              * notas, las de la ranura, con lo que ocupa la lista compuesta si
              * falta o va mezclada.
              */
-            $delServidor = UltronPlansOverview::verify($raw, $po, $catalog, true, $knownPlans);
+            $delServidor = UltronPlansOverview::verify($raw, $po, $catalog, true, $knownPlans, UltronPlansOverview::requiresExplicitSlot($sp));
             if ($delServidor !== null) {
                 $params = in_array($delServidor, [UltronPlansOverview::MISSING, UltronPlansOverview::MIXED], true) ? ($deLaLista ?? []) : [];
-                $defectos[] = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $delServidor, $params, false, true);
+                $defect = self::defecto(UltronRegenerationNotes::PLANS_OVERVIEW, $delServidor, $params, false, true);
+                if ($explicitContract) {
+                    $defect['note'] = UltronRegenerationNotes::explicitListNote(UltronRegenerationNotes::PLANS_OVERVIEW, $delServidor, $deLaLista);
+                }
+                $defectos[] = $defect;
             }
         } elseif ($po === []) {
             $detalle = UltronPlansOverview::verify($raw, [], $catalog);
@@ -178,11 +183,15 @@ final class UltronDraftDefects
         // (c) La longitud; con la lista, con su presupuesto (con la lista del servidor, su nota: no se quitan planes).
         if ($tope !== null && UltronReplyFitter::measure($expanded) > $tope) {
             $params = ['L' => UltronReplyFitter::measure($expanded), 'N' => $tope, 'M' => UltronPromptCompiler::composerTargetChars($tope)];
-            $defectos[] = match (true) {
+            $lengthDefect = match (true) {
                 $deLaLista !== null => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, ['L' => $params['L']] + $deLaLista, false, true),
                 $presupuesto !== null => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params + ['X' => $presupuesto['X'], 'R' => $presupuesto['R']], true),
                 default => self::defecto(UltronRegenerationNotes::LENGTH_OVER_CAP, null, $params),
             };
+            if ($explicitContract) {
+                $lengthDefect['note'] = UltronRegenerationNotes::explicitListNote(UltronRegenerationNotes::LENGTH_OVER_CAP, null, ['L' => $params['L']] + $deLaLista);
+            }
+            $defectos[] = $lengthDefect;
         }
 
         // (d) El beneficio de otro plan: el primero, con el marcador si la frase nombra el plan por él.
@@ -308,7 +317,7 @@ final class UltronDraftDefects
         return $defects === []
             && $po !== []
             && UltronReplyFitter::plansListCap($sp, $po) !== null
-            && UltronPlansOverview::verify($raw, $po, $catalog, $servidor) === null
+            && UltronPlansOverview::verify($raw, $po, $catalog, $servidor, null, UltronPlansOverview::requiresExplicitSlot($sp)) === null
             && (! $servidor || UltronPlansOverview::shape($raw) === UltronPlansOverview::SHAPE_MARKERS || UltronPlansOverview::hasSlot($raw));
     }
 

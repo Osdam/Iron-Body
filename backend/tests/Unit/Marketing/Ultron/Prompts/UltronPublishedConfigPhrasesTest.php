@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Marketing\Ultron\Prompts;
 
+use App\Services\Marketing\Ultron\Prompts\UltronListTurnPrompts;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptOffer;
 use App\Services\Marketing\Ultron\UltronPublishedConfig as Lector;
@@ -66,16 +67,16 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $parte = (new Lector)->partFor($this->canario);
         $this->assertSame([Lector::APPLIED, Lector::CONTRACT_V2], [$parte['state'], $parte['contract']]);
         $this->assertSame(['gratis', 'te lo regalo'], $parte['governed'][UltronPromptCompiler::PHRASES], 'la lista llega como lista, en su orden');
-        $this->assertSame(8, $parte['prompts']['compiler']);
+        $this->assertSame(9, $parte['prompts']['compiler']);
 
         $o = $this->oferta()['response'];
-        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 8], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
-        $this->assertStringContainsString('FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: "gratis", "te lo regalo".', $o['roles']['composer']);
-        $this->assertStringContainsString('Las frases: "gratis", "te lo regalo".', $o['roles']['critic_retry']);
+        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 9], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
+        $this->assertStringContainsString('FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: "gratis", "te lo regalo".', UltronListTurnPrompts::select('composer', $o['roles']['composer'], false));
+        $this->assertStringContainsString('Las frases: "gratis", "te lo regalo".', UltronListTurnPrompts::select('critic_retry', $o['roles']['critic_retry'], false));
         $this->assertSame(['m' => 'studio', 'h' => $canaria['prompts']['bundleHash']], array_intersect_key($this->oferta()['sp'], ['m' => 1, 'h' => 1]));
     }
 
-    public function test_el_compilador_8_sin_frases_ofrece_la_huella_de_sus_textos(): void
+    public function test_el_compilador_vigente_sin_frases_ofrece_la_huella_de_sus_textos(): void
     {
         $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), null);
 
@@ -84,7 +85,7 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         // con el 4 antes del parche del motor de la lista de planes, 7b09b89c…cc35; con el 4 y su motor
         // (lo que firmó la v3), 26d57565…1075; con el 5 (Enmienda A4-5), 2eb9be6f…09c0; con el 6 (Enmienda A4-6, lo que firmó
         // la v4), 962902ab…73a4; con el 7 (Enmienda A4-7), 200019e4…3631; con el 8 (PT-17, puerta 2), 8200e50e…3caa.
-        $this->assertSame(['studio', '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa'], [$o['mode'], $o['bundle_hash']]);
+        $this->assertSame(['studio', '863bc1f617e179a7cd41201ac0cd44cd7b3e7beb1c40eead9d11e3c902ea9505'], [$o['mode'], $o['bundle_hash']]);
         $this->assertStringNotContainsString('FRASES PROHIBIDAS', implode("\n", $o['roles']));
     }
 
@@ -129,7 +130,7 @@ class UltronPublishedConfigPhrasesTest extends TestCase
      * ofrece, con `o`, `n`, `t` y `k` en la firma. Es el orden de despliegue
      * del 8.
      */
-    public function test_n3_lo_firmado_con_el_compilador_4_5_6_o_7_cae_a_compiler_changed_y_lo_mismo_con_el_8_se_ofrece(): void
+    public function test_n3_lo_firmado_con_los_compiladores_4_a_8_cae_a_compiler_changed_y_lo_mismo_con_el_9_se_ofrece(): void
     {
         $v3 = ['persona.tone' => 'profesional', 'persona.maxChars' => 200];
         $fila = $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, $v3, ['compiler' => 4, 'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075']), null);
@@ -165,8 +166,11 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $this->assertSame(['legacy', 'compiler_changed', null, null], [$o['response']['mode'], $o['response']['reason'], $o['response']['bundle_hash'], $o['response']['roles']]);
         $this->assertSame([], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]), 'Legacy: sin n, sin t, sin o y sin k');
 
-        // La versión que se publique ahora: el mismo contenido, firmado con el compilador 8.
-        $v4 = self::parteV2(self::VERSION_A, $v3, ['compiler' => 8]);
+        // El contenido firmado con c8 también exige publicación nueva con c9.
+        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, $v3, ['compiler' => 8, 'bundleHash' => '8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa']), null);
+        $this->assertSame('compiler_changed', $this->oferta()['response']['reason']);
+        // La versión que se publique ahora: el mismo contenido firmado con c9.
+        $v4 = self::parteV2(self::VERSION_A, $v3, ['compiler' => 9]);
         $this->assertNotSame('26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075', $v4['prompts']['bundleHash'], 'el 5 cambió la huella');
         $this->assertNotSame('2eb9be6f5d3e6b509b3410457b291c7d582aa73be08f0c9dd00f42229bb909c0', $v4['prompts']['bundleHash'], 'y el 6 otra vez');
         $this->assertNotSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $v4['prompts']['bundleHash'], 'y el 7 otra vez');
@@ -176,9 +180,9 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $sello = (new Lector)->forConversation($this->canario);
         $this->assertSame([Lector::APPLIED, self::VERSION_A, $fila4['uuid']], [$sello['state'], $sello['version'], $sello['entry']]);
         $o = $this->oferta();
-        $this->assertSame(['studio', null, $v4['prompts']['bundleHash'], 8], [$o['response']['mode'], $o['response']['reason'], $o['response']['bundle_hash'], $o['response']['compiler']]);
-        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 8], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]));
-        $this->assertStringContainsString('LISTA DE PLANES DEL BACKEND:', $o['response']['roles']['strategist'], 'el estratega también lleva la lista');
+        $this->assertSame(['studio', null, $v4['prompts']['bundleHash'], 9], [$o['response']['mode'], $o['response']['reason'], $o['response']['bundle_hash'], $o['response']['compiler']]);
+        $this->assertSame(['n' => 200, 't' => 'profesional', 'o' => 1, 'k' => 9], array_intersect_key($o['sp'], ['n' => 1, 't' => 1, 'o' => 1, 'k' => 1]));
+        $this->assertStringContainsString('LISTA DE PLANES DEL BACKEND:', UltronListTurnPrompts::select('strategist', $o['response']['roles']['strategist'], false), 'el contrato general histórico se conserva dentro del paquete firmado');
     }
 
     public function test_lo_firmado_con_el_compilador_1_sigue_aplicado_en_el_sello_y_cae_a_compiler_changed(): void
@@ -196,7 +200,7 @@ class UltronPublishedConfigPhrasesTest extends TestCase
 
     public function test_un_compilador_posterior_con_las_cinco_claves_se_lee_y_cae_a_compiler_changed(): void
     {
-        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => 9]), null);
+        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => UltronPromptCompiler::VERSION + 1]), null);
 
         $this->assertSame(Lector::APPLIED, (new Lector)->forConversation($this->canario)['state']);
         $this->assertSame(['legacy', 'compiler_changed'], [$this->oferta()['response']['mode'], $this->oferta()['response']['reason']]);

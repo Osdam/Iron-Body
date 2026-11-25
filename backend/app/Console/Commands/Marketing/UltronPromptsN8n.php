@@ -3,7 +3,6 @@
 namespace App\Console\Commands\Marketing;
 
 use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
-use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptsN8nFlow;
 use App\Services\Marketing\Ultron\Prompts\UltronRegenN8nFlow;
 use Illuminate\Console\Command;
@@ -297,7 +296,7 @@ MD;
         foreach ($h['baseSha256'] as $rol => $sha) {
             $base .= "| `{$rol}` | {$h['nodes'][$rol]} | {$h['baseBytes'][$rol]} | `{$sha}` |\n";
         }
-        $compilador = UltronPromptCompiler::VERSION;
+        $compilador = UltronPromptsN8nFlow::COMPILER;
 
         return <<<MD
 # ULTRON STUDIO · cambio «S1» del flujo de n8n (GENERADO)

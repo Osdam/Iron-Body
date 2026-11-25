@@ -126,7 +126,8 @@ final class StudioLabOpenAiClient implements StudioLabEngineModelClient, StudioL
 
     /**
      * Un nodo de OpenAI del flujo S2 ({@see StudioLabEngineModelClient}): el
-     * cuerpo que envía n8n, con la clave, la URL, los tiempos y la
+     * cuerpo histórico de n8n o el perfil explícito del contrato inicial de
+     * lista, con la clave, la URL, los tiempos y la
      * clasificación de siempre. El modelo es el del nodo: quien crea la
      * ejecución exige que sea el configurado (los precios son los suyos).
      */
@@ -137,18 +138,14 @@ final class StudioLabOpenAiClient implements StudioLabEngineModelClient, StudioL
         if (! $config->isOpenAi() || ! $config->configured() || $config->model !== $spec['model']) {
             return self::result(self::CLASS_NOT_CONFIGURED);
         }
-        $esquema = StudioLabEngineFlow::schemaOf($node);
-        $cuerpo = [
-            'model' => $spec['model'],
-            'input' => [
-                ['role' => 'user', 'content' => [['type' => 'input_text', 'text' => $system]]],
-                ['role' => 'user', 'content' => [['type' => 'input_text', 'text' => $user]]],
-            ],
-            'temperature' => $spec['temperature'],
-            'max_output_tokens' => $spec['maxTokens'],
-            'store' => $spec['store'],
-            'text' => ['format' => ['type' => 'json_schema', 'name' => $spec['schemaName'], 'schema' => $esquema]],
-        ];
+        try {
+            $cuerpo = StudioLabEngineTransport::body($node, $system, $user);
+        } catch (InvalidArgumentException) {
+            // Defensa local: un prompt especializado sin su contrato no se
+            // degrada al perfil Legacy ni sale al proveedor.
+            return self::result(self::CLASS_BAD_REQUEST);
+        }
+        $esquema = $cuerpo['text']['format']['schema'];
 
         $inicio = hrtime(true);
         try {

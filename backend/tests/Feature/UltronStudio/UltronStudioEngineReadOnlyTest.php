@@ -108,7 +108,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      */
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
-        'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        'StudioLabEngineCheck.php', 'StudioLabEngineChecks.php', 'StudioLabEngineContext.php', 'StudioLabEngineFlow.php', 'StudioLabEngineTransport.php', 'StudioListN8nFlow.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
         // PT-14 (cambio de requisito del propietario; diseño `plans/informes-cierre/diseno-arq-pt14.md` D15): la
         // publicación de la voz LEE el texto comercial de los planes (`Plan`), y nada más del motor. Ver abajo.
         'StudioVoicePublications.php', 'StudioVoicePublishing.php',

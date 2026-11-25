@@ -539,6 +539,14 @@ final class StudioLabRunner
         $precios = ['input' => (int) ($run->prices['input'] ?? 0), 'output' => (int) ($run->prices['output'] ?? 0)];
         $maxJuez = (int) ($run->prices['judgeMaxOutputTokens'] ?? StudioLabConfig::DEFAULT_JUDGE_MAX_OUTPUT_TOKENS);
         $reserva = (int) $caso->reserved_micros;
+        if (StudioLabPrompts::engineJudgeEnabled($target)
+            && (($motor['judgeVersion'] ?? null) !== StudioLabPrompts::ENGINE_JUDGE_VERSION
+                || ! is_string($motor['judgeHash'] ?? null)
+                || ! hash_equals(StudioLabPrompts::engineJudgeHash(), $motor['judgeHash']))) {
+            $this->settle($run, $caso, self::errorValues(self::CLASS_INTERNAL_ERROR, [], 0, $reserva));
+
+            return StudioLabOutcome::EFFECT_CONTINUE;
+        }
         // NB4: el caso entero cabe en el job. El recorrido acaba, como muy tarde, aquí; lo que
         // queda del plazo es del juez (su tiempo configurado, ≤ 60 s).
         $limite = ($this->clockMs)() + max(0, StudioLabEngineCase::CASE_BUDGET_SECONDS - StudioLabConfig::current()->timeoutSeconds) * 1000;
@@ -587,9 +595,20 @@ final class StudioLabRunner
             ];
             $criterios = array_values(array_filter(is_array($escenario['criteria'] ?? null) ? $escenario['criteria'] : [], 'is_array'));
             $reglas = array_values(array_filter(is_array($target['rules'] ?? null) ? $target['rules'] : [], 'is_array'));
-            $entradaJuez = StudioLabPrompts::judgeInput($target, $escenario, $reply);
-            $topeJuez = StudioLabCost::callEstimate(intdiv(strlen(StudioLabPrompts::JUDGE_INSTRUCTIONS.$entradaJuez), 3) + 1, $maxJuez, $precios)['maxMicros'];
-            $j = $this->client($run, $target)->complete(StudioLabPrompts::ROLE_JUDGE, StudioLabPrompts::JUDGE_INSTRUCTIONS, $entradaJuez, StudioLabPrompts::judgeSchema(), $maxJuez);
+            $instruccionesJuez = StudioLabPrompts::engineJudgeInstructions($target);
+            try {
+                $entradaJuez = StudioLabPrompts::engineJudgeInput($target, $escenario, $reply, (array) ($r['judgment'] ?? []));
+            } catch (InvalidArgumentException) {
+                // Un contrato del juez incompleto no se reconstruye desde el borrador ni se reintenta pagando otra vez.
+                $this->settle($run, $caso, self::errorValues(self::CLASS_INTERNAL_ERROR, $llamadas, array_sum(array_column($llamadas, 'costMicros')), $reserva));
+
+                return StudioLabOutcome::EFFECT_CONTINUE;
+            }
+            $tokensJuez = StudioLabPrompts::engineJudgeEnabled($target)
+                ? StudioLabCost::estimatedInputTokens(StudioLabCost::callBytes($instruccionesJuez, $entradaJuez, StudioLabPrompts::judgeSchema()))
+                : intdiv(strlen($instruccionesJuez.$entradaJuez), 3) + 1;
+            $topeJuez = StudioLabCost::callEstimate($tokensJuez, $maxJuez, $precios)['maxMicros'];
+            $j = $this->client($run, $target)->complete(StudioLabPrompts::ROLE_JUDGE, $instruccionesJuez, $entradaJuez, StudioLabPrompts::judgeSchema(), $maxJuez);
             $juez = StudioLabPrompts::readJudgeCall($j, array_column($criterios, 'id'), array_column($reglas, 'code'));
             $llamadas[] = $this->call($run, $caso, StudioLabPrompts::ROLE_JUDGE, $juez['class'], $j, $topeJuez, $precios);
             $clase = $juez['class'];

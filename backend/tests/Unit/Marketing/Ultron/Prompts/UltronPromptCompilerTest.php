@@ -70,6 +70,7 @@ use ReflectionMethod;
  *     redactor, que suma un sufijo; las quince entradas, sus anclas y su
  *     orden, como en el 6 y el 7.
  */
+/** Contrato histórico c8 explícito: las firmas y los bytes grabados no se actualizan a c9. */
 class UltronPromptCompilerTest extends TestCase
 {
     /**
@@ -225,7 +226,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_la_linea_base_compila_a_la_base_byte_a_byte_y_a_la_huella_legacy(): void
     {
-        $paquete = C::compile(self::BASE);
+        $paquete = C::compile(self::BASE, 8);
 
         $this->assertSame(Base::roles(), $paquete['roles']);
         foreach (Base::ROLES as $rol) {
@@ -239,7 +240,7 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(8, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista; la 7, la lista del estratega coherente con la del servidor; la 8, la lista la escribe el backend');
+        $this->assertSame(9, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional; la 5, el parche del motor del turno de planes; la 6, ese parche al final del prompt y con el tope de la lista; la 7, la lista del estratega coherente con la del servidor; la 8, la lista la escribe el backend');
         $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3, ni el 4, ni el 5, ni el 6, ni el 7, ni el 8 la mueven');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
@@ -247,7 +248,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_la_huella_del_paquete_es_la_de_la_base_sobre_sus_roles(): void
     {
-        $paquete = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $paquete = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8);
 
         $this->assertSame(Base::bundleHash($paquete['roles']), $paquete['bundleHash']);
         $this->assertNotSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
@@ -281,7 +282,7 @@ class UltronPromptCompilerTest extends TestCase
     public function test_cada_valor_cambia_solo_sus_roles(array $cambio, array $tocados): void
     {
         $base = Base::roles();
-        $paquete = C::compile(self::con($cambio));
+        $paquete = C::compile(self::con($cambio), 8);
 
         $this->assertSame(Base::ROLES, C::changedRoles(self::con($cambio)), 'con el parche del motor, los cinco');
         foreach (Base::ROLES as $rol) {
@@ -303,7 +304,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_tono_profesional(): void
     {
-        $r = C::compile(self::con(['persona.tone' => 'profesional']))['roles'];
+        $r = C::compile(self::con(['persona.tone' => 'profesional']), 8)['roles'];
         $base = Base::roles();
 
         foreach (['composer', 'composer_retry'] as $rol) {
@@ -319,7 +320,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_tono_entusiasta(): void
     {
-        $r = C::compile(self::con(['persona.tone' => 'entusiasta']))['roles'];
+        $r = C::compile(self::con(['persona.tone' => 'entusiasta']), 8)['roles'];
         $base = Base::roles();
 
         foreach (['composer', 'composer_retry'] as $rol) {
@@ -334,7 +335,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_sin_emojis(): void
     {
-        $r = C::compile(self::con(['persona.emojis' => false]))['roles'];
+        $r = C::compile(self::con(['persona.emojis' => false]), 8)['roles'];
         $base = Base::roles();
 
         foreach (['composer', 'composer_retry'] as $rol) {
@@ -353,7 +354,7 @@ class UltronPromptCompilerTest extends TestCase
     {
         $base = Base::roles();
         foreach (['venta' => self::VENTA, 'informar' => self::INFORMAR] as $objetivo => $texto) {
-            $s = C::compile(self::con(['strategy.goal' => $objetivo]))['roles']['strategist'];
+            $s = C::compile(self::con(['strategy.goal' => $objetivo]), 8)['roles']['strategist'];
             $this->assertSame($texto, self::lineaTras($s, 'PRINCIPIO:'), $objetivo);
             $this->assertSame($base['strategist'], str_replace("\n".$texto, '', self::sinMotor('strategist', $s)), $objetivo.': quitando la línea (y el motor), la base');
         }
@@ -374,7 +375,7 @@ class UltronPromptCompilerTest extends TestCase
     public function test_los_17_valores_de_max_chars(int $n): void
     {
         $this->assertCount(17, self::longitudes());
-        $paquete = C::compile(self::con(['persona.maxChars' => $n]));
+        $paquete = C::compile(self::con(['persona.maxChars' => $n]), 8);
         $r = $paquete['roles'];
         $base = Base::roles();
 
@@ -435,7 +436,7 @@ class UltronPromptCompilerTest extends TestCase
     #[DataProvider('textosDelTopeCompilados')]
     public function test_el_texto_del_tope_del_redactor_compilado_tal_cual(int $n, string $texto): void
     {
-        $paquete = C::compile(self::con(['persona.maxChars' => $n]));
+        $paquete = C::compile(self::con(['persona.maxChars' => $n]), 8);
 
         foreach (['composer', 'composer_retry'] as $rol) {
             $this->assertSame($texto, self::lineaTras($paquete['roles'][$rol], 'FORMA:'), $rol.': pegado a FORMA: (la guía del motor va al final desde el compilador 6)');
@@ -452,7 +453,7 @@ class UltronPromptCompilerTest extends TestCase
     public function test_dos_inserciones_tras_la_misma_linea_quedan_en_orden_inverso_al_de_aplicacion(): void
     {
         // Tono (primero) y emojis (después) insertan los dos tras «naturalness:» en los Critic.
-        $r = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false]))['roles'];
+        $r = C::compile(self::con(['persona.tone' => 'profesional', 'persona.emojis' => false]), 8)['roles'];
 
         foreach (['critic', 'critic_retry'] as $rol) {
             $lineas = explode("\n", $r[$rol]);
@@ -464,7 +465,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_el_cambio_de_aceptacion_profesional_y_200(): void
     {
-        $paquete = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $paquete = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8);
 
         $this->assertStringContainsString(self::PRO_COMPOSER, $paquete['roles']['composer']);
         $this->assertStringContainsString(self::maxComposer(200), $paquete['roles']['composer']);
@@ -477,7 +478,7 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_el_texto_del_tono_profesional_compilado_tal_cual(): void
     {
-        $paquete = C::compile(self::con(['persona.tone' => 'profesional']));
+        $paquete = C::compile(self::con(['persona.tone' => 'profesional']), 8);
 
         foreach (['composer', 'composer_retry'] as $rol) {
             $this->assertSame(self::PRO_COMPOSER, self::lineaTras($paquete['roles'][$rol], 'COMO SUENAS:'), $rol);
@@ -510,7 +511,7 @@ class UltronPromptCompilerTest extends TestCase
      */
     public function test_las_huellas_del_compilador_8_con_el_parche_del_motor(): void
     {
-        $huella = static fn (array $cambios): string => C::compile(self::con($cambios))['bundleHash'];
+        $huella = static fn (array $cambios): string => C::compile(self::con($cambios), 8)['bundleHash'];
 
         $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy: no se mueve');
         $c001 = $huella(['persona.maxChars' => 160]);
@@ -528,7 +529,7 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertNotSame('10417eaa561c9efcad29a2d96d9e6d7daf42dcbf77e803454d3a2521cdf4a21e', $c304, 'la del compilador 4 con su motor');
         $this->assertNotSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $c304);
         // «profesional + 200» (c074).
-        $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]), 8);
         $this->assertSame('8200e50e3da7f6fe7cfb0e21d1d93705d8eb824fb5e1cb7887ee3c2e557d3caa', $g8['bundleHash'], 'profesional · 200, compilador 8');
         $this->assertNotSame('200019e4a89013b9502007622c6d62965bb3178e1359efadb7d79c6193113631', $g8['bundleHash'], 'la del compilador 7');
         $this->assertNotSame('962902aba8923e2264e9c7483aabad666f9851a66382e88c213119f189f973a4', $g8['bundleHash'], 'la del compilador 6: la que firmó la v4');
@@ -537,7 +538,7 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertNotSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'la del 4 sin el motor');
         $this->assertNotSame('af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51', $g8['bundleHash'], 'la del compilador 3');
         $this->assertSame(123254, $g8['bytes'], '115 446 sin el motor; 117 746 con el del 4 (más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)); 120 097 con el del 5 (2 351 más); 122 167 con el del 6 (2 070 más); con el del 7, 411 más (la lista del Strategist); con el del 8, 676 más (Strategist −90, Composer +250, Composer Reintento +238 y cada Critic +139)');
-        $this->assertSame([121236, 122363], [C::compile(self::con(['persona.maxChars' => 160]))['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']))['bytes']], 'c001 y c304: con el 6, 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope); con el 7, 411 más (la lista del Strategist); con el 8, 676 más');
+        $this->assertSame([121236, 122363], [C::compile(self::con(['persona.maxChars' => 160]), 8)['bytes'], C::compile(self::con(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']), 8)['bytes']], 'c001 y c304: con el 6, 2 070 más que con el 5 (la guía mide lo mismo con cualquier tope); con el 7, 411 más (la lista del Strategist); con el 8, 676 más');
     }
 
     // ── 4 · Anclas únicas; la matriz entera compila ───────────────────────────
@@ -574,7 +575,7 @@ class UltronPromptCompilerTest extends TestCase
             foreach ([true, false] as $emojis) {
                 for ($n = 160; $n <= 480; $n += 20) {
                     foreach (C::GOALS as $objetivo) {
-                        $p = C::compile(self::con(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo]));
+                        $p = C::compile(self::con(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo]), 8);
                         $huellas[$p['bundleHash']] = true;
                         $mayorRol = max($mayorRol, ...array_values(array_map('strlen', $p['roles'])));
                         $mayorPaquete = max($mayorPaquete, $p['bytes']);
@@ -593,11 +594,11 @@ class UltronPromptCompilerTest extends TestCase
     public function test_el_orden_de_las_claves_no_cambia_nada(): void
     {
         $valores = ['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 260, 'rules.forbiddenPhrases' => ['gratis'], 'strategy.goal' => 'informar'];
-        $uno = C::compile($valores);
-        $otro = C::compile(array_reverse($valores, true));
+        $uno = C::compile($valores, 8);
+        $otro = C::compile(array_reverse($valores, true), 8);
 
         $this->assertSame($uno, $otro);
-        $this->assertSame(C::compile(self::BASE), C::compile(array_reverse(self::BASE, true)));
+        $this->assertSame(C::compile(self::BASE, 8), C::compile(array_reverse(self::BASE, true), 8));
         $this->assertSame(['persona.emojis', 'persona.maxChars', 'persona.tone', 'rules.forbiddenPhrases', 'strategy.goal'], array_keys($uno['governed']), 'orden canónico');
     }
 

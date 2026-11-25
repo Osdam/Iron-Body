@@ -803,7 +803,10 @@ final class StudioLabRuns
             'governed' => $gobernado,
             'version' => $objetivo['version']?->uuid,
             'contentHash' => $objetivo['contentHash'],
-        ];
+        ] + (StudioPromptBundle::compilerVersion() >= 9 ? [
+            'judgeVersion' => StudioLabPrompts::ENGINE_JUDGE_VERSION,
+            'judgeHash' => StudioLabPrompts::engineJudgeHash(),
+        ] : []);
 
         return $objetivo;
     }
@@ -899,7 +902,9 @@ final class StudioLabRuns
             $usuario = StudioLabEngineFlow::encode(StudioLabEngineFlow::userPayload($nodo, $ctx['decide'], $ctx['inbound'], [], []));
             $llamadas[] = StudioLabCost::engineCallEstimate($paquete['roles'][$spec['role']], $usuario, $spec['schema'], $spec['maxTokens'], $precios);
         }
-        $juez = StudioLabCost::judgeInputTokens(StudioLabCost::callBytes(StudioLabPrompts::JUDGE_INSTRUCTIONS, StudioLabPrompts::judgeEstimateInput($snapshot, $escenario), StudioLabPrompts::judgeSchema()), StudioLabEngineFlow::NODES[StudioLabEngineFlow::COMPOSER]['maxTokens']);
+        $juez = StudioLabPrompts::engineJudgeEnabled($snapshot)
+            ? StudioLabCost::estimatedInputTokens(StudioLabCost::callBytes(StudioLabPrompts::engineJudgeInstructions($snapshot), StudioLabPrompts::engineJudgeEstimateInput($snapshot, $escenario), StudioLabPrompts::judgeSchema()) + 2 * StudioLabPrompts::ENGINE_JUDGE_TEXT_MAX * 6 + StudioLabPrompts::ENGINE_JUDGE_FACT_BYTES)
+            : StudioLabCost::judgeInputTokens(StudioLabCost::callBytes(StudioLabPrompts::JUDGE_INSTRUCTIONS, StudioLabPrompts::judgeEstimateInput($snapshot, $escenario), StudioLabPrompts::judgeSchema()), StudioLabEngineFlow::NODES[StudioLabEngineFlow::COMPOSER]['maxTokens']);
         $llamadas[] = StudioLabCost::callEstimate($juez, $cfg->judgeMaxOutputTokens, $precios);
 
         return StudioLabCost::sum($llamadas);
